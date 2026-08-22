@@ -1,27 +1,62 @@
-# Move closed issues to the right board column.
+# Keep the project board in sync with issue state.
 #
-# GitHub's built-in "Item closed" project workflow sets a single Status value, so it cannot
-# distinguish an issue closed as completed from one closed as not planned. This reads
-# `state_reason` and sets Status accordingly.
+# Two things GitHub's built-in project workflows cannot do for a user-owned project, both of
+# which are UI-only to configure and therefore easy to lose:
+#   1. "Item closed" sets a single Status value, so it cannot distinguish an issue closed as
+#      completed from one closed as not planned.
+#   2. "Auto-add to project" cannot be enabled through the API at all.
+# Doing both here keeps the board's behaviour in version control.
 name: project-status
 
 on:
   issues:
-    types: [closed, reopened]
+    types: [opened, closed, reopened]
+
+env:
+  GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+  PROJECT_ID: ${{ vars.PROJECT_ID }}
+  STATUS_FIELD_ID: ${{ vars.STATUS_FIELD_ID }}
+  ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
 
 jobs:
-  set-status:
+  add-to-project:
+    if: github.event.action == 'opened'
     runs-on: ubuntu-latest
     steps:
-      - name: Set project Status from the issue's state reason
+      - name: Add the new issue to the board as Backlog
         env:
-          GH_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-          PROJECT_ID: ${{ vars.PROJECT_ID }}
-          STATUS_FIELD_ID: ${{ vars.STATUS_FIELD_ID }}
+          BACKLOG_OPTION_ID: ${{ vars.BACKLOG_OPTION_ID }}
+        run: |
+          set -euo pipefail
+
+          ITEM_ID=$(gh api graphql -f query='
+            mutation($project: ID!, $content: ID!) {
+              addProjectV2ItemById(input: { projectId: $project, contentId: $content }) {
+                item { id }
+              }
+            }' -F project="$PROJECT_ID" -F content="$ISSUE_NODE_ID" \
+            --jq '.data.addProjectV2ItemById.item.id')
+
+          gh api graphql -f query='
+            mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+              updateProjectV2ItemFieldValue(input: {
+                projectId: $project, itemId: $item, fieldId: $field
+                value: { singleSelectOptionId: $option }
+              }) { projectV2Item { id } }
+            }' -F project="$PROJECT_ID" -F item="$ITEM_ID" \
+               -F field="$STATUS_FIELD_ID" -F option="$BACKLOG_OPTION_ID" >/dev/null
+
+          echo "Added item $ITEM_ID to the board as Backlog"
+
+  set-status:
+    if: github.event.action != 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Status from the issue's state reason
+        env:
           DONE_OPTION_ID: ${{ vars.DONE_OPTION_ID }}
           NOT_PLANNED_OPTION_ID: ${{ vars.NOT_PLANNED_OPTION_ID }}
           IN_PROGRESS_OPTION_ID: ${{ vars.IN_PROGRESS_OPTION_ID }}
-          ISSUE_NODE_ID: ${{ github.event.issue.node_id }}
           ACTION: ${{ github.event.action }}
           STATE_REASON: ${{ github.event.issue.state_reason }}
         run: |
@@ -35,13 +70,11 @@ jobs:
             OPTION="$DONE_OPTION_ID"
           fi
 
-          # Read the project item straight off the issue rather than paginating project items.
+          # Read the project item off the issue rather than paginating project items.
           ITEM_ID=$(gh api graphql -f query='
             query($issue: ID!) {
               node(id: $issue) {
-                ... on Issue {
-                  projectItems(first: 20) { nodes { id project { id } } }
-                }
+                ... on Issue { projectItems(first: 20) { nodes { id project { id } } } }
               }
             }' -F issue="$ISSUE_NODE_ID" \
             --jq ".data.node.projectItems.nodes[] | select(.project.id == \"$PROJECT_ID\") | .id")
@@ -54,12 +87,10 @@ jobs:
           gh api graphql -f query='
             mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) {
               updateProjectV2ItemFieldValue(input: {
-                projectId: $project
-                itemId: $item
-                fieldId: $field
+                projectId: $project, itemId: $item, fieldId: $field
                 value: { singleSelectOptionId: $option }
               }) { projectV2Item { id } }
             }' -F project="$PROJECT_ID" -F item="$ITEM_ID" \
-               -F field="$STATUS_FIELD_ID" -F option="$OPTION" --jq '.data.updateProjectV2ItemFieldValue.projectV2Item.id'
+               -F field="$STATUS_FIELD_ID" -F option="$OPTION" >/dev/null
 
           echo "Set Status for item $ITEM_ID (action=$ACTION, state_reason=${STATE_REASON:-none})"

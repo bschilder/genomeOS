@@ -55,13 +55,22 @@ issues rather than hierarchy.
 
 ## Automation
 
-`.github/workflows/project-status.yml` sets board Status on issue close and reopen. It exists
-because GitHub's built-in "Item closed" workflow sets a single Status value and therefore cannot
-distinguish an issue closed as *completed* from one closed as *not planned*. This reads
-`state_reason` and routes to `Done` or `Not planned`; reopening routes to `In progress`.
+`.github/workflows/project-status.yml` does two jobs that GitHub's built-in project workflows
+cannot, both of which are UI-only to configure and therefore easy to lose:
 
-Configuration lives in repository variables (`PROJECT_ID`, `STATUS_FIELD_ID`, `DONE_OPTION_ID`,
-`NOT_PLANNED_OPTION_ID`, `IN_PROGRESS_OPTION_ID`), already set. It needs one secret:
+- **`add-to-project`** — puts every newly opened issue on the board as `Backlog`. The built-in
+  "Auto-add to project" workflow cannot be enabled through the API at all, so doing it here keeps
+  it in version control.
+- **`set-status`** — routes closes and reopens. The built-in "Item closed" workflow sets a single
+  Status value and therefore cannot distinguish an issue closed as *completed* from one closed as
+  *not planned*. This reads `state_reason` → `Done` / `Not planned`; reopening → `In progress`.
+
+Verified end to end: close-as-not-planned → `Not planned`, reopen → `In progress`,
+close-as-completed → `Done`, new issue → on the board as `Backlog`.
+
+Configuration lives in repository variables (`PROJECT_ID`, `STATUS_FIELD_ID`,
+`BACKLOG_OPTION_ID`, `DONE_OPTION_ID`, `NOT_PLANNED_OPTION_ID`, `IN_PROGRESS_OPTION_ID`),
+already set. It needs one secret:
 
 ```bash
 # Classic token — NOT fine-grained. See below.
@@ -83,9 +92,11 @@ issue's `projectItems` connection — required because this repository is privat
 If we later move the repo and project to an organisation, a fine-grained token scoped to that
 org's `Projects: Read and write` becomes viable and would be the better choice.
 
-## Two manual steps
+## One manual step
 
-1. **Set the secret above** — the workflow no-ops without it.
-2. **Set the board's sort.** Open the board view → *Group by* `Status` → *Sort by* `Priority`
-   ascending (Critical first). Projects v2 view configuration — grouping and sorting — is not
-   writable through the API, so this is a one-time UI step.
+**Set the board's sort.** Open the board view → *Group by* `Status` → *Sort by* `Priority`
+ascending (Critical first). Projects v2 view configuration — grouping and sorting — is not
+writable through the API, so this is the one thing that has to be done in the UI.
+
+(The `PROJECT_TOKEN` secret is set, and auto-add is handled by the workflow above rather than by
+the UI-only built-in.)
