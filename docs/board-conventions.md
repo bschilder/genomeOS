@@ -63,12 +63,25 @@ distinguish an issue closed as *completed* from one closed as *not planned*. Thi
 Configuration lives in repository variables (`PROJECT_ID`, `STATUS_FIELD_ID`, `DONE_OPTION_ID`,
 `NOT_PLANNED_OPTION_ID`, `IN_PROGRESS_OPTION_ID`), already set. It needs one secret:
 
-```
-gh secret set PROJECT_TOKEN -R bschilder/genomeOS   # a PAT with `project` scope
+```bash
+# Classic token — NOT fine-grained. See below.
+# github.com/settings/tokens -> "Tokens (classic)" -> scopes: repo + project
+gh secret set PROJECT_TOKEN -R bschilder/genomeOS
 ```
 
-The default `GITHUB_TOKEN` cannot write to user-owned Projects v2, which is why this needs a PAT
-rather than the ambient token.
+**It must be a classic PAT.** Two separate limitations stack here:
+
+1. The default `GITHUB_TOKEN` cannot write to user-owned Projects v2 at all.
+2. **Fine-grained PATs cannot access Projects owned by a user account.** The `Projects`
+   permission on fine-grained tokens is *organisation*-only — there is no equivalent checkbox
+   for user-owned projects, so no fine-grained token can be configured to work here. This is a
+   documented gap, not a misconfiguration.
+
+Scopes needed on the classic token: **`project`** (the mutation) and **`repo`** (reading the
+issue's `projectItems` connection — required because this repository is private).
+
+If we later move the repo and project to an organisation, a fine-grained token scoped to that
+org's `Projects: Read and write` becomes viable and would be the better choice.
 
 ## Two manual steps
 
