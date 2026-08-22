@@ -45,6 +45,7 @@ These are design inputs, not caveats. Each has a structural answer in the archit
 | PRS portability collapses across ancestries; between-group mean differences are unidentifiable | Multi-ancestry portability studies; PGS Catalog ancestry-normalisation work | Polygenic layers excluded from v1 entirely. When they arrive (P8), within-population variance renders alongside any between-population comparison, and the GWAS-Catalog ancestry composition of the underlying evidence is itself a togglable map layer. |
 | Geographic precision is a per-region property, not a global setting | Locator; IBD localisation in UK Biobank (median 45 km); Elhaik GPS (Sardinian villages ≤50 km) | Rendered resolution is driven by local observation density (§7), not by zoom level. Zooming in past the data does not invent detail; it reveals the mask. |
 | Population *labels* are not coordinates, and sampling location ≠ ancestral location | 1KG labels such as GBR/ASW are diaspora/urban sampling sites | P0 registry carries an explicit `location_type` (`sampling` \| `ancestral` \| `inferred`) and an `uncertainty_radius_km` on every entry. Surfaces weight observations by that radius. |
+| Reference panels are deliberately depleted for disease alleles, and the curated variant set is itself geographically biased | gnomAD excludes severe pediatric disease cases *and their first-degree relatives* by policy; ClinVar ascertainment tracks access to clinical genetics services | Four biases separated and handled distinctly in §7.1: cohort depletion as a modelled fixed effect, sparsity as a `prior_dominated` mask state, variant-set discovery bias as a rendered *clinical testing intensity* layer, founder over-sampling via cohort-level effects. Golden test 3 (§8) validates the correction against screening-programme truth. |
 | Several of the best georeferenced panels are indigenous-population data | CARE Principles; FAIR/CARE operationalisation | Registry schema carries provenance and a Biocultural Notice field; entries derived from HGDP/SGDP/AADR/AFND link to source consent terms (§13). |
 
 ## 5. Architecture
@@ -96,9 +97,17 @@ sources: gnomAD HGDP+1KG · AFND · AADR · MAP HbS/G6PD surveys · GAsP · MCPS
 
 `variant_id` (chr-pos-ref-alt, GRCh38) · `rsid` · `population_id` · `lat` · `lon` · `radius_km` · `ac` · `an` · `source` · `assay` (array/exome/genome/HLA-typing) · `date_lower`, `date_upper` (years BP; modern = 0, ancient from AADR) · `ingest_version`
 
+**Ascertainment fields** — required, and load-bearing for §7.1. Without them none of the four ascertainment biases is modellable:
+
+| column | type | notes |
+|---|---|---|
+| `sampling_design` | enum | `population_random` \| `healthy_reference` \| `clinical_case` \| `clinical_control` \| `newborn_screening` \| `carrier_screening` \| `convenience` |
+| `disease_ascertainment_excluded` | bool | true for gnomAD and any panel that removed disease cohorts by policy |
+| `cohort_id` | string | identifies the contributing cohort, so cohort-level effects are estimable |
+
 **P2 — `surfaces`** (parquet, keyed by `variant_id`, `h3_res`, `h3_parent`)
 
-`h3_index` · `post_mean` · `post_sd` · `q025` · `q975` · `support` (enum `observed` \| `interpolated` \| `unknown`) · `dist_nearest_obs_km` · `eff_n_in_range` · `model_version` · `registry_version`
+`h3_index` · `post_mean` · `post_sd` · `q025` · `q975` · `support` (enum `observed` \| `interpolated` \| `prior_dominated` \| `unknown`) · `posterior_contraction` · `dist_nearest_obs_km` · `eff_n_in_range` · `expected_alt_count` · `beta_design_applied` · `de_novo_dominated` · `model_version` · `registry_version`
 
 **P3 — `burden`** — same key, plus `metric` (`carrier_count` \| `affected_count` \| `carrier_freq` \| `affected_freq`), `mean`, `q025`, `q975`, `denominator_source`, `penetrance_source`.
 
@@ -111,9 +120,11 @@ sources: gnomAD HGDP+1KG · AFND · AADR · MAP HbS/G6PD surveys · GAsP · MCPS
 **Model.** Binomial likelihood with a logit-link Gaussian process over space:
 
 ```
-AC_i ~ Binomial(AN_i, expit(f(s_i)))
+AC_i ~ Binomial(AN_i, expit(f(s_i) + β_design[i] + β_cohort[i]))
 f    ~ GP(μ, Matérn-3/2(range ρ, marginal variance σ²))
 ```
+
+The two offset terms are the ascertainment correction specified in §7.1.
 
 **Fit.** INLA with SPDE approximation. Chosen over MCMC (Piel's approach) and over variational GPs because it gives proper marginal posteriors at batch-feasible cost, and because it is the same lineage the model-based geostatistics literature in this exact application already uses — which matters for defensibility.
 
@@ -121,10 +132,33 @@ f    ~ GP(μ, Matérn-3/2(range ρ, marginal variance σ²))
 
 **Observation weighting.** Each observation is placed as a disc of radius `uncertainty_radius_km`, not a point, so a country-wide sample does not act as a pinpoint measurement.
 
+### 7.1 Ascertainment correction
+
+Reference panels are built to be depleted for disease alleles. Four distinct biases follow, and they need distinct treatment — a single fudge factor would conflate them.
+
+**(a) Cohort depletion.** gnomAD excludes severe pediatric disease cases and their first-degree relatives by design; its own guidance notes dominant-disease frequencies may be underestimated or the variant absent entirely. Magnitude depends on inheritance class:
+
+- **Recessive.** Removing affected individuals removes homozygotes at rate p², i.e. alt alleles at rate ~2p² against a total ~2p — **relative depletion of order p**. Excluding obligate-carrier parents roughly doubles it; still O(p). At p = 0.01 this is a ~2% relative error on carrier frequency, roughly an order of magnitude below the posterior width contributed by spatial sparsity. **Recessive carrier surfaces are therefore effectively unbiased, and this is a statement we can defend rather than a bias we absorb.**
+- **Adult-onset dominant.** gnomAD's exclusion targets *severe pediatric* disease, so BRCA1/2, Lynch, HCM, LQTS and similar are not systematically depleted — which is why gnomAD is standard practice for exactly these.
+- **Severe pediatric-onset dominant.** Depletion is O(1). Additionally, where de novo mutation dominates transmission, allele frequency is a weak generative model regardless of ascertainment. These variants are still fitted and published (see policy below) but carry `de_novo_dominated`, and the UI states that allele frequency is a poor model for them.
+
+**Correction.** `β_design` is a fixed effect per `sampling_design`, with an informative prior per inheritance class — centred near zero for recessive carrier states, negative and wide for pediatric dominants. `β_cohort` absorbs residual cohort-level effects. Cohorts of differing design sampled at the same location identify both. The correction is thus an **estimated, auditable parameter** rather than a hidden adjustment, and it is recorded per artifact in `beta_design_applied`.
+
+**(b) Sparsity is not depletion.** HGDP is n = 929; a variant at 1/1000 is expected ~2 times across the whole panel. Zero observations is weak evidence, not evidence of absence — the binomial likelihood handles this correctly precisely because it models AC given AN rather than AC/AN. But for rare variants the posterior may barely move from the prior, and rendering a prior as though it were data is the interpolation-artifact failure in a new costume.
+
+**Policy: model everything, publish everything, label prior-dominance.** Every variant in the curated set is fitted and published regardless of class or data volume; credible intervals carry the uncertainty. Honesty is enforced by *labelling*, not by withholding: each cell records `posterior_contraction` (posterior sd ÷ prior sd) and `expected_alt_count`. Cells whose posterior has not meaningfully contracted are marked `prior_dominated` — a third mask state, rendered distinctly from `interpolated` and `unknown`, and **excluded from aggregation statistics on the same footing as `unknown`**. Nothing is hidden and nothing pretends to be data.
+
+**(c) Variant-set discovery bias.** ClinVar reflects access to clinical genetics services, so a pathogenic variant common in West Africa or Melanesia may have no entry at all — a bias no frequency correction can touch, because the variant has no map. Two responses, both P1 work: render **clinical testing intensity** as its own map layer (ClinVar submissions by submitter country, cohort counts per region) so *absent here* is visually distinguishable from *unstudied here*; and deliberately ingest disease-variant sets ascertained outside Western clinical genetics — GenomeIndia's medically-relevant variant list, IndiGen, MCPS, H3Africa, Qatar Genome.
+
+**(d) Founder-population over-sampling.** Clinically motivated studies over-sample known founder groups, so Ashkenazi, Finnish, Amish and Afrikaner frequencies rest on dense targeted screening while neighbouring populations rest on nothing — producing sharp apparent frequency cliffs that are study-design artifacts. Absorbed by `β_cohort` plus `sampling_design`; residual cliffs remain visible as adjacent `observed` and `prior_dominated` cells rather than being smoothed away.
+
 **Data-support mask.** Per cell: `dist_nearest_obs_km` and `eff_n_in_range` (sum of `an` within ρ, distance-weighted). Then:
 - `observed` — an observation centre falls within the cell
-- `interpolated` — nearest observation within 2ρ
-- `unknown` — otherwise; **rendered hatched, and excluded from every aggregation statistic**
+- `interpolated` — nearest observation within 2ρ, and the posterior has contracted meaningfully
+- `prior_dominated` — an observation is in range but `posterior_contraction` fails its threshold: the value shown is mostly prior (§7.1b)
+- `unknown` — no observation within 2ρ
+
+`prior_dominated` and `unknown` are both **rendered hatched (distinguishably) and excluded from every aggregation statistic.**
 
 **Resolution promotion.** A cell is emitted at res 5 or 6 only if `eff_n_in_range` at that resolution exceeds a threshold set during the HbS calibration (§8). Elsewhere the res-4 value is authoritative and the client does not subdivide it.
 
@@ -142,6 +176,10 @@ Acceptance:
 - global totals agree within the published uncertainty.
 
 **Golden test 2 — G6PD deficiency.** Same structure against Howes et al. Run second; it exercises X-linked inheritance, which HbS does not.
+
+**Golden test 3 — carrier-frequency parity against screening programmes.** CFTR F508del, SMN1, HEXA, and β-thalassaemia have carrier frequencies measured directly by population carrier- and newborn-screening programmes in defined regions. Our ascertainment-corrected estimates, fitted from healthy-reference panel data, must reproduce those screening-derived frequencies within overlapping intervals.
+
+This is the **only** test that validates §7.1. Golden tests 1 and 2 do not exercise it at all — the MAP HbS and G6PD surveys are population screening surveys and are already well ascertained, so they pass regardless of whether `β_design` is right.
 
 **Calibration outputs.** These two fits set the resolution-promotion thresholds (§7) and the consanguinity-correction defaults (§9). They are calibration data, not just tests.
 
@@ -195,7 +233,8 @@ deck.gl over MapLibre GL. Layers, all independently togglable, never blended:
 - **Observations** — `ScatterplotLayer`, radius = sampling extent, opacity = sample size. Always available, whole genome.
 - **Surface** — `H3HexagonLayer` coloured by `post_mean`, resolution selected per frame from viewport scale (the same pattern hg-horizon-web already uses for its bp-per-pixel zoom pyramid).
 - **Uncertainty** — toggle between colouring by `post_mean` and colouring by `post_sd`; the two-panel comparison is the default for first-time views of any surface.
-- **Data support** — hatched overlay for `unknown`, on by default and requiring an explicit click to hide.
+- **Data support** — hatched overlay, visually distinguishing `unknown` (no data in range) from `prior_dominated` (data in range but the posterior is mostly prior). On by default; hiding it requires an explicit click.
+- **Clinical testing intensity** — choropleth of how much clinical genetics testing a region has received (§7.1c), so *absent here* reads differently from *unstudied here*.
 - **Burden** — `H3HexagonLayer` on the burden artifact, metric selector (carrier/affected × count/frequency).
 - **Admin aggregation** — country / province choropleth from precomputed GADM rollups, statistic selector (sum, mean, per-capita, per-sq-mile).
 
@@ -210,7 +249,7 @@ deck.gl over MapLibre GL. Layers, all independently togglable, never blended:
 | Failure | Detection | Behaviour |
 |---|---|---|
 | Population label with no coordinate | P0 validation, blocking | Ingest fails loudly; the observation is not silently dropped |
-| Variant observed in <3 georeferenced populations | P2 precondition | No surface fitted; observations layer still serves it |
+| Variant observed in very few georeferenced populations | `posterior_contraction` per cell | Surface still fitted and published; affected cells marked `prior_dominated`, hatched, and excluded from aggregates |
 | INLA fit fails to converge | Per-variant job exit status | Variant excluded from the surface set; logged to a published exclusion list |
 | Penetrance missing | P3 precondition | Carrier layers ship; affected-count layers do not |
 | Registry version bump changes coordinates | Artifact key includes `registry_version` | Old surfaces remain valid and citable; new ones are published alongside |
@@ -240,9 +279,9 @@ Each has a named next step, not an open ended one.
 | | Done when |
 |---|---|
 | **P0** | Every population label across the Tier-A sources resolves to coordinates + radius + provenance; validation suite passes; registry is versioned and published |
-| **P1** | Observations table built from gnomAD HGDP+1KG, AFND, AADR, GAsP, MCPS, IndiGen, and the MAP survey sets; curated variant set defined and frozen for v1 |
-| **P2** | HbS and G6PD surfaces reproduce their published frequency maps; resolution-promotion thresholds calibrated; full curated set fitted with an exclusion list published |
-| **P3** | **HbS parity achieved (§8)**; G6PD parity achieved; refusal conditions verified by test |
+| **P1** | Observations table built from gnomAD HGDP+1KG, AFND, AADR, GAsP, MCPS, IndiGen, and the MAP survey sets, **every row carrying `sampling_design` + `cohort_id`**; non-Western disease-variant sets ingested (§7.1c); clinical testing intensity layer built; curated variant set defined and frozen for v1 |
+| **P2** | HbS and G6PD surfaces reproduce their published frequency maps; resolution-promotion and `posterior_contraction` thresholds calibrated; `β_design` priors set per inheritance class; full curated set fitted, with the `prior_dominated` fraction reported per variant |
+| **P3** | **HbS parity achieved (§8)**; G6PD parity achieved; **carrier-screening parity achieved (golden test 3)**; refusal conditions verified by test |
 | **P4** | All endpoints serve p95 <150ms warm and <500ms cache-cold at res 4; `/aggregate` returns the unmapped fraction; batch orchestration reproducible from a clean project |
 | **P5** | All six layers render; lasso aggregation works; every view is URL-round-trippable; the data-support mask is on by default |
 
