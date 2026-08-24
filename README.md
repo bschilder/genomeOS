@@ -1,6 +1,4 @@
-# genomeOS
-
-> **Explore the genome; worldwide.** 🧬🌍🧬
+![genomeOS — Explore genomes across the world](docs/images/genomeos-banner.png)
 
 An open atlas of human genetic variation — across the world's populations, and inside the
 cell — where every number can be traced back to the measurement behind it.
