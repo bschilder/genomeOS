@@ -188,10 +188,15 @@ These are hard constraints, not preferences:
 Nothing is committed directly to `main`.**
 
 - **Branch, push, open a PR.** One PR per task or coherent unit of work.
-- **State the issues the PR closes explicitly: `Closes #14, closes #15, closes #16`.** Repeat
-  the keyword for every issue — GitHub only parses it for the *first* issue in a comma-separated
-  list, so `Closes #14, #15` silently links only #14 and leaves the rest open. If a PR advances
-  an issue without finishing it, say so in words instead, so it is not auto-closed.
+- **State the issues the PR closes explicitly, repeating the keyword for each one:**
+  `Closes #14, closes #15, closes #16`. This is GitHub's documented syntax — a bare comma list
+  like `Closes #14, #15` links only #14 in the PR's linked-issues panel.
+- **Put a `closes #N` in the commit message too**, on the commit that does the work. This is the
+  more reliable half: a squash merge concatenates the commit messages, so per-commit keywords
+  reach the merge commit even when the PR body's linking was incomplete. One commit per issue
+  makes this automatic.
+- If a PR *advances* an issue without finishing it, say so in words instead, so it is not
+  auto-closed.
 - Say which design sections you implemented.
 - State what you verified and how. If a test fails or you skipped part of the scope, say so
   plainly with the output — an unverified claim of completion is worse than an honest partial.
