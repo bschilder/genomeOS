@@ -15,6 +15,7 @@ surfaces. Two properties are load-bearing:
 from __future__ import annotations
 
 import pandera.pandas as pa
+from pandera import extensions
 
 SAMPLING_DESIGNS: tuple[str, ...] = (
     "population_random",
@@ -28,6 +29,24 @@ SAMPLING_DESIGNS: tuple[str, ...] = (
 
 # chr-pos-ref-alt on GRCh38 (Global Constraints).
 VARIANT_ID_PATTERN = r"^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ACGT]+-[ACGT]+$"
+
+# Registered via the extension API rather than written as inline lambdas. An anonymous
+# lambda check is dropped by `schema.to_json()`, so it would be absent from the frozen
+# contract — and a check whose removal never appears in a diff defeats the point of freezing
+# the contract at all. Registration also makes them available to Plan 3's client.
+
+
+@extensions.register_check_method(check_type="vectorized")
+def ac_le_an(df):
+    """Allele count may not exceed the number of alleles examined."""
+    return df["ac"] <= df["an"]
+
+
+@extensions.register_check_method(check_type="vectorized")
+def date_lower_le_upper(df):
+    """Years BP: the lower bound may not postdate the upper bound."""
+    return df["date_lower"] <= df["date_upper"]
+
 
 OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
     {
@@ -55,12 +74,8 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         "ingest_version": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
     },
     checks=[
-        pa.Check(lambda df: df["ac"] <= df["an"], name="ac_le_an", error="ac must not exceed an"),
-        pa.Check(
-            lambda df: df["date_lower"] <= df["date_upper"],
-            name="date_lower_le_upper",
-            error="date_lower must not exceed date_upper",
-        ),
+        pa.Check.ac_le_an(error="ac must not exceed an"),
+        pa.Check.date_lower_le_upper(error="date_lower must not exceed date_upper"),
     ],
     strict=True,
     coerce=True,

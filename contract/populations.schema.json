@@ -1,0 +1,64 @@
+{
+  "coerce": true,
+  "columns": {
+    "biocultural_notice": {
+      "dtype": "string[pyarrow]",
+      "nullable": true
+    },
+    "lat": {
+      "dtype": "float64",
+      "in_range": {
+        "include_max": true,
+        "include_min": true,
+        "max_value": 90.0,
+        "min_value": -90.0
+      }
+    },
+    "location_type": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "sampling",
+        "ancestral",
+        "inferred"
+      ]
+    },
+    "lon": {
+      "dtype": "float64",
+      "in_range": {
+        "include_max": true,
+        "include_min": true,
+        "max_value": 180.0,
+        "min_value": -180.0
+      }
+    },
+    "population_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$",
+      "unique": true
+    },
+    "provenance": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "registry_version": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "uncertainty_radius_km": {
+      "dtype": "float64",
+      "greater_than": 0.0
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "populations",
+  "schema_type": "dataframe",
+  "strict": true
+}

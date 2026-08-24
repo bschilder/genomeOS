@@ -1,4 +1,5 @@
 import pandas as pd
+import pandera.errors
 import pytest
 
 from genomeos.registry.build import AliasCollisionError, build_registry
@@ -41,7 +42,9 @@ def test_same_source_label_mapped_to_two_ids_is_a_hard_error():
 
 
 def test_duplicate_population_id_across_sources_is_a_hard_error():
-    with pytest.raises(Exception):
+    # Specific rather than blind: "it raised something" would also be satisfied by an
+    # unrelated bug, and the point of this test is that the *uniqueness* check fires.
+    with pytest.raises(pandera.errors.SchemaError):
         build_registry(
             [_source("hgdp-yoruba", "hgdp", "Yoruba"), _source("hgdp-yoruba", "afnd", "Yoruba*")]
         )
