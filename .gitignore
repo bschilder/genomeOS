@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.env
+.venv/
+.local/
+.agents/
+.codex/
+.nvim-chatgpt/
+dist/
+build/
+*.egg-info/
+*.db
+.DS_Store
