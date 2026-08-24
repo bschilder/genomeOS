@@ -92,30 +92,56 @@ them requires an issue and a decision, not a commit.
 
 ## Repository layout
 
-**Current state.** `genomeos/` is the Pan-UKB evidence API — a flat package installed with
-setuptools. It is the trait and effect-size layer of the atlas (category E in #3), and it works.
+One installable package, `genomeos/`, holding both workstreams:
 
-**Planned state.** The Atlas data foundation lands as `src/genomeos/` with `uv`, `pandera`
-schemas frozen into `contract/`, `ruff`, and `pyright` — specified in Plan 1, Task 1. **That
-migration has not happened.** Do not partially migrate the repo as a side effect of another
-task, and do not "fix" the current layout to match the plan unless you are working Task 1.
+```
+genomeos/
+  api.py cli.py db.py ingest.py models.py schemas.py tabix.py   # Pan-UKB evidence API
+  registry/      schema.py build.py sources/                    # P0 — population registry
+  observations/  schema.py ingest.py sources/                   # P1 — observations store
+  geo/           h3util.py                                      # H3 indexing
+contract/        *.schema.json      # frozen pandera schemas; CI fails on drift
+scripts/         build_registry.py build_observations.py freeze_contract.py
+```
+
+**Note for anyone reading the plans:** Plan 1 specifies `src/genomeos/` with `uv` and hatchling,
+because it was written when the repo was empty. The Pan-UKB service landed first, and moving it
+to a `src/` layout would have broken a deployed container for no design benefit — the import
+paths are identical either way. The Atlas modules are therefore subpackages of the flat
+`genomeos/` package. **Do not migrate the layout** as a side effect of another task.
+
+The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the `atlas` extra so
+the API container does not carry what it never uses. Install both with `.[dev,atlas]`.
 
 ## Commands
 
 Current, and what CI must keep passing:
 
 ```bash
-python -m pip install -e '.[dev]'   # add [postgres] or [tabix] as needed
-genomeos init-db
+python -m pip install -e '.[dev,atlas]'   # add [postgres] or [tabix] as needed
+ruff check .                              # lint; CI runs this
+python scripts/freeze_contract.py --check # contract drift; CI runs this
+pytest                                    # CI runs this
+
+genomeos init-db                          # Pan-UKB API
 uvicorn genomeos.api:app --reload
-pytest
 ```
+
+Rebuild the Atlas stores from fixtures (the end-to-end check):
+
+```bash
+python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv --out data/registry
+python scripts/build_observations.py --registry data/registry \
+  --gnomad tests/fixtures/gnomad_hgdp_1kg_freqs.tsv \
+  --map-surveys tests/fixtures/map_hbs_surveys.tsv --out data/observations
+```
+
+**If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
+diff.** That diff is the review surface for schema change; CI fails if it is stale.
 
 `sqlite:///./genomeos.db` is the local default; production requires a PostgreSQL `DATABASE_URL`.
 GCP operations must go through the [repository-local gcloud wrapper](docs/repo-gcloud-auth.md) —
 never bare `gcloud`.
-
-Once the Atlas package lands: `uv sync` · `uv run pytest` · `uv run ruff check` · `uv run pyright`.
 
 ## Code conventions
 
