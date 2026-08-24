@@ -188,7 +188,11 @@ These are hard constraints, not preferences:
 Nothing is committed directly to `main`.**
 
 - **Branch, push, open a PR.** One PR per task or coherent unit of work.
-- Reference the issue you are closing, and say which design sections you implemented.
+- **State the issues the PR closes explicitly: `Closes #14, closes #15, closes #16`.** Repeat
+  the keyword for every issue — GitHub only parses it for the *first* issue in a comma-separated
+  list, so `Closes #14, #15` silently links only #14 and leaves the rest open. If a PR advances
+  an issue without finishing it, say so in words instead, so it is not auto-closed.
+- Say which design sections you implemented.
 - State what you verified and how. If a test fails or you skipped part of the scope, say so
   plainly with the output — an unverified claim of completion is worse than an honest partial.
 - Do not widen scope silently. If you find a real problem outside your task, **open an issue**
