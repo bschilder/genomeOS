@@ -26,6 +26,12 @@ atlas = [
   "duckdb>=1.1",
   "h3>=4.1",
 ]
+# Surface inference (P2). Separate from [atlas] because PyMC/PyTensor is a large
+# dependency that only the offline fitting jobs need -- never the serving path (§5).
+surfaces = [
+  "pymc>=5.16",
+  "arviz>=0.18",
+]
 dev = ["httpx>=0.28,<1", "pytest>=8.4,<9", "ruff>=0.6"]
 
 [project.scripts]

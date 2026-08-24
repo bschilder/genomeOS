@@ -99,6 +99,7 @@ genomeos/
   api.py cli.py db.py ingest.py models.py schemas.py tabix.py   # Pan-UKB evidence API
   registry/      schema.py build.py sources/                    # P0 — population registry
   observations/  schema.py ingest.py sources/                   # P1 — observations store
+  surfaces/      fit.py                                         # P2 — surface inference
   geo/           h3util.py                                      # H3 indexing
 contract/        *.schema.json      # frozen pandera schemas; CI fails on drift
 scripts/         build_registry.py build_observations.py freeze_contract.py
@@ -110,15 +111,20 @@ to a `src/` layout would have broken a deployed container for no design benefit 
 paths are identical either way. The Atlas modules are therefore subpackages of the flat
 `genomeos/` package. **Do not migrate the layout** as a side effect of another task.
 
-The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the `atlas` extra so
-the API container does not carry what it never uses. Install both with `.[dev,atlas]`.
+The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the `atlas` extra,
+and PyMC/PyTensor in a further `surfaces` extra, so the API container carries neither. Install
+everything with `.[dev,atlas,surfaces]`.
+
+**Inference engine:** PyMC with a Hilbert-space GP (HSGP), *not* R-INLA-SPDE, despite what
+design §7 names. The reasoning and the rejected alternatives are in #34; do not reintroduce an R
+toolchain without reopening that decision.
 
 ## Commands
 
 Current, and what CI must keep passing:
 
 ```bash
-python -m pip install -e '.[dev,atlas]'   # add [postgres] or [tabix] as needed
+python -m pip install -e '.[dev,atlas,surfaces]'   # add [postgres] or [tabix] as needed
 ruff check .                              # lint; CI runs this
 python scripts/freeze_contract.py --check # contract drift; CI runs this
 pytest                                    # CI runs this
