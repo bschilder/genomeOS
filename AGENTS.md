@@ -16,6 +16,40 @@ Read it fully before writing code; it is short on purpose.
    it explains what every source is for and what its access terms are.
 5. [`docs/panukb-architecture.md`](docs/panukb-architecture.md) if you are touching `genomeos/`.
 
+## Check the issues before you start — open *and* closed
+
+The [issue tracker](https://github.com/bschilder/genomeOS/issues) is the project's record of what
+has been done, what was decided and why, and what still needs doing. Search it before writing
+anything.
+
+```bash
+gh issue list --state all --search "registry adapter"   # or the GitHub UI
+```
+
+- **Open issues are the work queue** — 64 of them across 4 milestones, each with a sub-project,
+  a skill, and a priority. Everything planned for v1 is already logged.
+- **Closed issues carry the decisions.** Closed as *completed* means the work exists — read it
+  rather than redoing it, and note that its approach is probably the house pattern. Closed as
+  *not planned* means it was considered and rejected; reopening that needs an argument in the
+  issue, not a fresh PR.
+- If what you are about to do has no issue, that is a signal. Either you have found a genuine
+  gap — file it — or the work is out of scope.
+
+## Filing work
+
+- **Found a bug?** Open an issue. Include what you ran, what happened, and what you expected. If
+  it breaks an invariant below, say which one.
+- **Want a new feature?** **Open an issue first and let it be triaged** — do not arrive with an
+  unrequested feature PR. Priority here is derived from the dependency graph, so unscheduled
+  features displace critical-path work even when they are good ideas. Check the deferred list in
+  [`docs/overview.md`](docs/overview.md) first: P6–P12 are deliberately out of scope for v1, and
+  their absence is a decision rather than an oversight.
+- **Improving the design, the dataset scores in
+  [#3](https://github.com/bschilder/genomeOS/issues/3), or the statistics?** Very welcome — comment
+  on the relevant issue or open a new one.
+- New issues are auto-added to the board as `Backlog`. Apply the four label families if you can;
+  if you cannot, say so in the issue body so it can be triaged.
+
 ## Invariants
 
 Violating one of these is a bug, not a style choice. They exist because the failure modes they
@@ -124,12 +158,19 @@ These are hard constraints, not preferences:
 
 ## Pull requests
 
-- **Branch; never commit to `main`.** One PR per task or coherent unit of work.
+**Every change to this repository goes through a pull request — code, docs, config, all of it.
+Nothing is committed directly to `main`.**
+
+- **Branch, push, open a PR.** One PR per task or coherent unit of work.
 - Reference the issue you are closing, and say which design sections you implemented.
 - State what you verified and how. If a test fails or you skipped part of the scope, say so
   plainly with the output — an unverified claim of completion is worse than an honest partial.
-- Do not widen scope silently. If you find a real problem outside your task, open an issue.
+- Do not widen scope silently. If you find a real problem outside your task, **open an issue**
+  and keep going on the task you were given.
 - Commit messages: `type: summary` (`docs:`, `feat:`, `fix:`, `chore:`, `ci:`), imperative mood.
+- Closing a PR closes its issue and the board automation routes the status: closed as *completed*
+  → `Done`, closed as *not planned* → `Not planned`, reopened → `In progress`. Close issues with
+  the right reason so the board stays truthful.
 
 ## Definition of done
 
