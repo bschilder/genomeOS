@@ -8,7 +8,6 @@ import os
 import subprocess
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 REPO_GCLOUD_CONFIG = ROOT / ".local" / "gcloud" / "genomeos"
 DEFAULT_ACCOUNT = "dawei.lin100@gmail.com"

@@ -14,7 +14,7 @@ class Region:
     end: int
 
     @classmethod
-    def parse(cls, value: str) -> "Region":
+    def parse(cls, value: str) -> Region:
         try:
             chromosome, interval = value.split(":", 1)
             start, end = (int(part.replace(",", "")) for part in interval.split("-", 1))
@@ -39,7 +39,11 @@ class TabixRegionReader:
             columns = header[-1].split("\t") if header else []
             for line in tabix.fetch(region.chromosome, region.start - 1, region.end):
                 values = line.split("\t")
-                rows.append(dict(zip(columns, values)) if columns else {"raw": line})
+                # strict=False preserves the existing behaviour exactly; tightening this to
+                # strict=True would change how malformed source rows are handled.
+                rows.append(
+                    dict(zip(columns, values, strict=False)) if columns else {"raw": line}
+                )
                 if len(rows) >= limit:
                     break
         return rows

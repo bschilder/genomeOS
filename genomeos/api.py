@@ -12,6 +12,7 @@ from .models import Association, Phenotype, SourceAsset, SourceRelease, Variant
 from .schemas import AssociationOut, Page, PhenotypeOut, ProvenanceOut
 from .tabix import Region, RegionQueryUnavailable, TabixRegionReader
 
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     init_db()
@@ -112,7 +113,9 @@ def top_associations(
     if population:
         statement = statement.where(Association.population_code == population.upper())
     if not include_low_confidence:
-        statement = statement.where(or_(Association.low_confidence.is_(False), Association.low_confidence.is_(None)))
+        statement = statement.where(
+            or_(Association.low_confidence.is_(False), Association.low_confidence.is_(None))
+        )
     count = session.scalar(select(func.count()).select_from(statement.subquery())) or 0
     associations = session.scalars(
         statement.order_by(Association.neg_log10_p.desc()).offset(offset).limit(limit)
