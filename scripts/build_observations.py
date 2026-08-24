@@ -30,12 +30,16 @@ def main() -> None:
     populations = pd.read_parquet(args.registry / "populations.parquet")
     aliases = pd.read_parquet(args.registry / "population_aliases.parquet")
 
+    surveys, survey_report = map_surveys.load(args.map_surveys, VERSION)
     frames = [
         gnomad.load(args.gnomad, populations, aliases, VERSION),
-        map_surveys.load(args.map_surveys, VERSION),
+        surveys,
     ]
     obs = pd.concat(frames, ignore_index=True)
     write_observations(obs, args.out)
+
+    # Printed, never swallowed: a refused survey is a decision the operator should see (§12).
+    print(f"MAP HbS surveys: {survey_report}")
 
     by_design = obs["sampling_design"].value_counts().to_dict()
     print(f"observations v{VERSION}: {len(obs)} rows, {obs['variant_id'].nunique()} variants")
