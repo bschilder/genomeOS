@@ -1,0 +1,3 @@
+trait_type	phenocode	pheno_sex	coding	modifier	description	description_more	category	in_max_independent_set	pops	n_cases_AFR	n_controls_AFR	phenotype_qc_AFR	lambda_gc_AFR	n_cases_EUR	n_controls_EUR	phenotype_qc_EUR	lambda_gc_EUR	aws_link
+continuous	21001	both_sexes		irnt	Body mass index	BMI after inverse-rank normalization	Physical measures	true	AFR,EUR	6200		PASS	1.01	400000		PASS	1.03	https://example.test/bmi.tsv.bgz
+phecode	480	both_sexes			Pneumonia	Phecode-defined pneumonia	Respiratory	false	AFR,EUR	120	6000	PASS	1.00	9000	380000	PASS	1.02	https://example.test/pneumonia.tsv.bgz

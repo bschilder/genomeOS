@@ -1,0 +1,36 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: genomeos-api
+  annotations:
+    run.googleapis.com/launch-stage: BETA
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/maxScale: "10"
+        run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:INSTANCE_NAME
+    spec:
+      containerConcurrency: 40
+      timeoutSeconds: 300
+      serviceAccountName: genomeos-api@PROJECT_ID.iam.gserviceaccount.com
+      containers:
+        - image: REGION-docker.pkg.dev/PROJECT_ID/genomeos/genomeos-api:IMAGE_TAG
+          ports:
+            - containerPort: 8080
+          env:
+            - name: GENOMEOS_ENV
+              value: production
+            - name: PANUKB_REGION_QUERY_ENABLED
+              value: "true"
+            - name: PANUKB_REGION_MAX_ROWS
+              value: "10000"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: genomeos-database-url
+                  key: latest
+          resources:
+            limits:
+              cpu: "2"
+              memory: 2Gi

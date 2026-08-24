@@ -209,6 +209,14 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Local workspace and application state
+.agents/
+.codex/
+.local/
+.nvim-chatgpt/
+*.db
+.DS_Store
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
