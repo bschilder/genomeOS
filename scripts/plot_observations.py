@@ -23,6 +23,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 from genomeos.observations.sources import map_surveys  # noqa: E402
+from genomeos.viz.basemap import draw_countries  # noqa: E402
 
 
 def plot(observations, report, out: Path, title: str) -> None:
@@ -35,27 +36,29 @@ def plot(observations, report, out: Path, title: str) -> None:
 
     ax.set_facecolor("#f6f8fa")
     for lat in (-60, -30, 0, 30, 60):
-        ax.axhline(lat, color="#d0d7de", lw=0.6, zorder=0)
+        ax.axhline(lat, color="#e4e8ec", lw=0.6, zorder=0)
     for lon in range(-180, 181, 30):
-        ax.axvline(lon, color="#d0d7de", lw=0.6, zorder=0)
+        ax.axvline(lon, color="#e4e8ec", lw=0.6, zorder=0)
+    draw_countries(ax)
 
-    # AC=0 is measured absence, not missing data (§7.1b). Plotting it as the bottom of a
-    # sequential colour ramp makes the strongest negative evidence in the corpus invisible, so
-    # it gets its own marker.
+    # Presence and absence get different marker *shapes*, following the benchmark figure
+    # (Piel et al. 2013, Figure 1A). AC=0 is measured absence, not missing data (§7.1b): plotted
+    # as the bottom of a sequential colour ramp, the strongest negative evidence in the corpus
+    # becomes invisible. Shape carries the categorical distinction; colour carries the magnitude.
     absent = frequency == 0.0
     ax.scatter(
         observations["lon"][absent], observations["lat"][absent],
-        s=size[absent], facecolor="none", edgecolor="#57606a", linewidth=0.9,
-        label=f"measured absent — AC=0 ({int(absent.sum())} surveys)", zorder=2,
+        s=size[absent], marker="^", facecolor="#2f6fdb", edgecolor="#0b3d91", linewidth=0.3,
+        alpha=0.85, label=f"absence — AC=0 ({int(absent.sum())} surveys)", zorder=2,
     )
     scatter = ax.scatter(
         observations["lon"][~absent], observations["lat"][~absent],
         # YlOrRd, not a reversed ramp: pale-to-saturated reads as low-to-high without having to
         # consult the legend, and matches the convention of the prevalence-mapping literature.
-        c=frequency[~absent], s=size[~absent], cmap="YlOrRd",
+        c=frequency[~absent], s=size[~absent], cmap="YlOrRd", marker="o",
         vmin=0.0, vmax=float(frequency.max()),
         edgecolor="#24292f", linewidth=0.35, alpha=0.95, zorder=3,
-        label=f"measured present ({int((~absent).sum())} surveys)",
+        label=f"presence — AC>0 ({int((~absent).sum())} surveys)",
     )
     ax.set_xlim(-180, 180)
     ax.set_ylim(-60, 80)

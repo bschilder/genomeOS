@@ -9,8 +9,15 @@ The open georeferenced HbS survey database behind Piel et al. 2010/2013, publish
    ``population_random`` design. ``β_design`` (§7.1a) is identified by contrast *between*
    designs, so without a well-ascertained anchor the correction is unidentifiable.
 
-Survey sites carry their own coordinates, so this adapter needs no registry join. Each site is
-its own ``cohort_id``: survey-level effects are exactly what ``β_cohort`` absorbs (§7.1d).
+Survey sites carry their own coordinates, so this adapter needs no registry join.
+
+``cohort_id`` is the **contributing study**, not the survey site. The two differ: 332 retained
+surveys come from 151 studies, and 41 studies contribute more than one site. Keying cohorts by
+site would give one cohort level per observation, which is not a cohort effect at all — it is an
+observation-level overdispersion term, unidentifiable as the study-level effect §7.1d wants and
+free to absorb the spatial signal the GP exists to explain. Grouping by study leaves cohort
+effects estimable, because replicated studies supply the within-cohort contrast that identifies
+them.
 
 Allele counts come from the reported genotypes: ``ac = hbas + 2·hbss`` over ``an = 2·sample_size``.
 
@@ -52,14 +59,22 @@ HBS_VARIANT_ID = "chr11-5227002-T-A"  # rs334, HBB Glu6Val, GRCh38
 RSID = "rs334"
 
 #: MAP's area classes, mapped to the radius of a circle of the class's upper-bound area. The
-#: upper bound is used because a survey labelled "≤10 km²" may occupy any of it. The ">100 km²"
-#: class has no upper bound and is refused rather than guessed at.
+#: upper bound is used because a survey labelled "≤10 km²" may occupy any of it.
 _AREA_KM2_UPPER: dict[str, float] = {
     "point": 10.0,
     "wide-area": 25.0,
     "small polygon": 100.0,
 }
 _UNBOUNDED_AREA = "large polygon"
+
+#: ">100 km²" has no upper bound, and 301 otherwise-usable surveys carry no area class at all.
+#: Refusing both discarded 388 real measurements over a metadata gap. Instead they are assigned
+#: a deliberately coarse extent: §7 places each observation as a disc of this radius, so a
+#: too-large radius makes a survey *less* influential and spreads its evidence, while a too-small
+#: one lets a diffuse survey act as a pinpoint measurement. Erring coarse is the safe direction,
+#: and the assumption is visible here rather than buried in a default.
+_UNBOUNDED_AREA_KM2 = 500.0
+_UNKNOWN_AREA_KM2 = 500.0
 
 #: Minimum share of `sample_size` that the reported genotypes must account for.
 DEFAULT_MIN_GENOTYPED_FRACTION = 0.9
@@ -70,8 +85,6 @@ REFUSAL_REASONS: tuple[str, ...] = (
     "missing_sample_size",
     "genotypes_exceed_sample",
     "partially_genotyped",
-    "no_area_type",
-    "unbounded_area",
     "excluded_from_piel_2013",
 )
 
@@ -83,6 +96,8 @@ class IngestReport:
     total: int
     retained: int
     refusals: dict[str, int]
+    #: Surveys whose hbss was fixed at zero by subtraction rather than by assumption.
+    derived_hbss: int = 0
 
     @property
     def retained_fraction(self) -> float:
@@ -90,24 +105,42 @@ class IngestReport:
 
     def __str__(self) -> str:
         lines = [f"{self.retained}/{self.total} surveys retained ({self.retained_fraction:.0%})"]
+        if self.derived_hbss:
+            lines.append(f"  {self.derived_hbss} hbss values derived by subtraction (hbaa+hbas==n)")
         for reason, count in sorted(self.refusals.items(), key=lambda kv: -kv[1]):
             lines.append(f"  refused {count:>5}  {reason}")
         return "\n".join(lines)
 
 
-def _radius_km(area_type: object) -> float | None:
-    """Radius of a circle with the area class's upper-bound area, or None if not placeable."""
+def _radius_km(area_type: object) -> float:
+    """Radius of a circle with the area class's upper-bound area.
+
+    Unclassed and unbounded surveys get a deliberately coarse extent rather than a refusal; see
+    the note on `_UNKNOWN_AREA_KM2`.
+    """
     if not isinstance(area_type, str) or not area_type.strip():
-        return None
+        return math.sqrt(_UNKNOWN_AREA_KM2 / math.pi)
     key = re.split(r"[(]", area_type.strip().lower())[0].strip()
     if key.startswith(_UNBOUNDED_AREA):
-        return None
-    area = _AREA_KM2_UPPER.get(key)
-    return math.sqrt(area / math.pi) if area is not None else None
+        return math.sqrt(_UNBOUNDED_AREA_KM2 / math.pi)
+    area = _AREA_KM2_UPPER.get(key, _UNKNOWN_AREA_KM2)
+    return math.sqrt(area / math.pi)
 
 
-def _cohort_id(survey_id: object) -> str:
+def _population_id(survey_id: object) -> str:
+    """One id per survey *site* — this is a location, not a cohort."""
     return f"map-hbs-{int(survey_id)}"
+
+
+def _cohort_id(study: object, survey_id: object) -> str:
+    """One id per contributing *study*; see the module docstring on why not per site.
+
+    Falls back to the survey id where a study accession is missing, so such a row becomes its own
+    singleton cohort rather than being silently pooled with unrelated surveys.
+    """
+    if isinstance(study, str) and study.strip():
+        return f"map-study-{study.strip()}"
+    return f"map-study-unaccessioned-{int(survey_id)}"
 
 
 def load(
@@ -126,7 +159,10 @@ def load(
         raise ValueError("min_genotyped_fraction must be in (0, 1]")
 
     raw = pd.read_csv(path)
-    required = {"id", "latitude", "longitude", "sample_size", "hbaa", "hbas", "hbss", "area_type"}
+    required = {
+        "id", "latitude", "longitude", "sample_size", "hbaa", "hbas", "hbss", "area_type",
+        "source",
+    }
     missing = required - set(raw.columns)
     if missing:
         raise ValueError(f"{path}: missing required columns {sorted(missing)}")
@@ -134,6 +170,21 @@ def load(
     total = len(raw)
     refusals: dict[str, int] = {}
     keep = pd.Series(True, index=raw.index)
+
+    # Where the reported genotypes already account for the whole sample, hbss is determined by
+    # subtraction: it must be zero. That is arithmetic, not the "assume blank means zero"
+    # judgement #89 asks an expert to rule on, and it recovers 317 surveys that were being
+    # refused for a value the data already fixes.
+    raw = raw.copy()
+    derivable = (
+        raw["hbss"].isna()
+        & raw["hbaa"].notna()
+        & raw["hbas"].notna()
+        & raw["sample_size"].notna()
+        & ((raw["hbaa"] + raw["hbas"]) == raw["sample_size"])
+    )
+    raw.loc[derivable, "hbss"] = 0.0
+    derived_hbss = int(derivable.sum())
 
     def refuse(mask: pd.Series, reason: str) -> None:
         hit = mask & keep
@@ -155,18 +206,13 @@ def load(
     refuse(genotyped < min_genotyped_fraction * raw["sample_size"], "partially_genotyped")
 
     radius = raw["area_type"].map(_radius_km)
-    is_unbounded = (
-        raw["area_type"].astype(str).str.strip().str.lower().str.startswith(_UNBOUNDED_AREA)
-    )
-    refuse(is_unbounded, "unbounded_area")
-    refuse(radius.isna(), "no_area_type")
 
     rows = raw[keep]
     obs = pd.DataFrame(
         {
             "variant_id": HBS_VARIANT_ID,
             "rsid": RSID,
-            "population_id": rows["id"].map(_cohort_id),
+            "population_id": rows["id"].map(_population_id),
             "lat": rows["latitude"].astype(float),
             "lon": rows["longitude"].astype(float),
             "radius_km": radius[keep].astype(float),
@@ -178,9 +224,14 @@ def load(
             "date_upper": 0,
             "sampling_design": "population_random",
             "disease_ascertainment_excluded": False,
-            "cohort_id": rows["id"].map(_cohort_id),
+            "cohort_id": [
+                _cohort_id(study, sid)
+                for study, sid in zip(rows["source"], rows["id"], strict=True)
+            ],
             "ingest_version": ingest_version,
         }
     )
     validated = OBSERVATIONS_SCHEMA.validate(obs.reset_index(drop=True))
-    return validated, IngestReport(total=total, retained=len(validated), refusals=refusals)
+    return validated, IngestReport(
+        total=total, retained=len(validated), refusals=refusals, derived_hbss=derived_hbss
+    )

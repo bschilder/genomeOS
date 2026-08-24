@@ -91,14 +91,26 @@ def classify_support(
     return states
 
 
-def candidate_cells(observations: pd.DataFrame, config: MaskConfig | None = None) -> list[str]:
+def candidate_cells(
+    observations: pd.DataFrame,
+    config: MaskConfig | None = None,
+    correlation_range_km: float | None = None,
+) -> list[str]:
     """Cells worth evaluating: everything within 2ρ of any observation, plus their own cells.
 
     Cells beyond this are ``unknown`` by construction, so enumerating them buys nothing — the
     client renders absence of a cell and absence of data identically.
+
+    Pass the **fitted** ``correlation_range_km`` whenever a fit exists. Without it the reach
+    falls back to the largest stated observation radius, which is the survey's own extent (a few
+    km) rather than the distance over which the field is correlated (hundreds to thousands of
+    km) — so the candidate set collapses to roughly the observation cells themselves.
     """
     config = config or MaskConfig()
-    reach_km = config.range_multiplier * _fallback_range_km(observations)
+    reach_km = config.range_multiplier * (
+        correlation_range_km if correlation_range_km is not None
+        else _fallback_range_km(observations)
+    )
     cells: set[str] = set()
     for lat, lon in zip(observations["lat"], observations["lon"], strict=True):
         cells.update(cells_within_km(float(lat), float(lon), reach_km, config.resolution))
@@ -134,14 +146,24 @@ def evaluate_cells(
     range_km = fit.correlation_range_km
     dist = np.empty(len(cells))
     eff_n = np.empty(len(cells))
-    for i, (cell_lat, cell_lon) in enumerate(zip(lat, lon, strict=True)):
-        d = np.array(
-            [_haversine_km(cell_lat, cell_lon, a, o) for a, o in zip(obs_lat, obs_lon, strict=True)]
+
+    # Chunked broadcasting rather than a Python loop per cell: the full (cells x observations)
+    # matrix is the natural formulation but would be gigabytes on a global grid, so it is walked
+    # in blocks. Same arithmetic, no approximation.
+    chunk = max(1, 4_000_000 // max(len(obs_lat), 1))
+    for start in range(0, len(cells), chunk):
+        stop = min(start + chunk, len(cells))
+        block = _haversine_km(
+            lat[start:stop, None], lon[start:stop, None], obs_lat[None, :], obs_lon[None, :]
         )
-        dist[i] = d.min() if len(d) else np.inf
+        if block.shape[1] == 0:
+            dist[start:stop] = np.inf
+            eff_n[start:stop] = 0.0
+            continue
+        dist[start:stop] = block.min(axis=1)
         # Distance-weighted allele count within one correlation range: §7's `eff_n_in_range`.
-        within = d <= range_km
-        eff_n[i] = float((obs_an[within] * (1.0 - d[within] / range_km)).sum()) if within.any() else 0.0
+        weight = np.clip(1.0 - block / range_km, 0.0, None)
+        eff_n[start:stop] = (obs_an[None, :] * weight).sum(axis=1)
 
     contraction = (predicted["post_sd"] / fit.prior_frequency_sd).to_numpy()
 

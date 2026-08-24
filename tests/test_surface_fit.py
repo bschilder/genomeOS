@@ -6,17 +6,20 @@ import pandera.errors
 import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
-from genomeos.surfaces.fit import FitConfig, fit_surface
+from genomeos.surfaces.fit import ConvergenceError, FitConfig, fit_surface
 
-FAST_CONFIG = FitConfig(draws=150, tune=150, chains=2)
+# Enough draws to actually converge: fit_surface now refuses a fit that has not mixed (§12),
+# so a too-short chain is a failure rather than a fast approximation. numpyro keeps it quick.
+FAST_CONFIG = FitConfig(draws=800, tune=1000, chains=4)
 
 HBS = "chr11-5227002-T-A"
 
 
 def _observations(
-    n: int = 40,
+    n: int = 70,
     beta_design: float = -1.0,
     designs: tuple[str, ...] = ("population_random", "healthy_reference"),
+    concentration: float = 40.0,
     seed: int = 7,
 ) -> pd.DataFrame:
     """Synthetic observations with a known east-west cline and a known design effect.
@@ -30,7 +33,11 @@ def _observations(
     logit = -1.5 + 0.15 * lon + beta_design * (design_idx != 0)
     p = 1.0 / (1.0 + np.exp(-logit))
     an = np.full(n, 200)
-    ac = rng.binomial(an, p)
+    # Overdispersed, like the real corpus: two surveys of one locality differ by more than
+    # binomial sampling error, because they differ in method, sub-population and decade. Exactly
+    # binomial fixtures would also leave the beta-binomial concentration unidentified at the top
+    # end, so the fixture matches both reality and the default likelihood.
+    ac = rng.binomial(an, rng.beta(p * concentration, (1.0 - p) * concentration))
 
     return OBSERVATIONS_SCHEMA.validate(
         pd.DataFrame(
@@ -75,17 +82,31 @@ def test_fit_records_which_designs_were_applied(fit):
 
 def test_predictions_carry_uncertainty_and_lie_on_the_frequency_scale(fit):
     pred = fit.predict(lat=[0.0, 5.0], lon=[-8.0, 8.0])
-    assert list(pred.columns) == ["lat", "lon", "post_mean", "post_sd", "q025", "q975"]
-    assert ((pred["post_mean"] > 0) & (pred["post_mean"] < 1)).all()
+    assert list(pred.columns) == [
+        "lat", "lon", "post_median", "post_mean", "post_sd", "q025", "q975", "q25", "q75",
+    ]
+    for column in ("post_median", "post_mean"):
+        assert ((pred[column] > 0) & (pred[column] < 1)).all()
     assert (pred["post_sd"] > 0).all()
-    assert (pred["q025"] < pred["post_mean"]).all()
-    assert (pred["post_mean"] < pred["q975"]).all()
+    assert (pred["q025"] <= pred["q25"]).all()
+    assert (pred["q25"] <= pred["post_median"]).all()
+    assert (pred["post_median"] <= pred["q75"]).all()
+    assert (pred["q75"] <= pred["q975"]).all()
+
+
+def test_the_median_is_reported_because_the_mean_is_skewed_where_data_is_thin(fit):
+    """Allele frequency is bounded and its posterior is right-tailed, so the mean runs high
+    exactly where there is least data — the failure Piel et al. document in their appendix (#102).
+    """
+    pred = fit.predict(lat=[0.0], lon=[0.0])
+    assert "post_median" in pred.columns
+    assert "q25" in pred.columns and "q75" in pred.columns, "IQR needed for like-for-like §8 (#92)"
 
 
 def test_prediction_follows_the_simulated_cline(fit):
     """The synthetic surface rises west-to-east; the fit must reproduce that ordering."""
     pred = fit.predict(lat=[0.0, 0.0], lon=[-8.0, 8.0])
-    assert pred["post_mean"].iloc[0] < pred["post_mean"].iloc[1]
+    assert pred["post_median"].iloc[0] < pred["post_median"].iloc[1]
 
 
 def test_fit_is_deterministic_given_the_same_seed():
@@ -106,7 +127,7 @@ def test_single_design_omits_beta_design_rather_than_pretending_to_estimate_it()
 def test_beta_binomial_likelihood_is_selectable():
     """Overdispersion relative to binomial is a documented failure mode here (#83)."""
     obs = _observations()
-    fit = fit_surface(obs, FitConfig(draws=150, tune=150, chains=2, likelihood="beta_binomial"))
+    fit = fit_surface(obs, FitConfig(draws=800, tune=1000, chains=4, likelihood="beta_binomial"))
     assert fit.config.likelihood == "beta_binomial"
     assert (fit.predict(lat=[0.0], lon=[0.0])["post_sd"] > 0).all()
 
@@ -129,3 +150,19 @@ def test_an_invalid_observation_frame_is_refused():
 def test_unknown_likelihood_is_refused():
     with pytest.raises(ValueError, match="likelihood"):
         fit_surface(_observations(n=20), FitConfig(likelihood="poisson"))
+
+
+def test_a_fit_that_has_not_converged_is_refused_not_published():
+    """§12: a variant whose fit does not converge is excluded from the surface set.
+
+    A non-converged chain produces a confident-looking map that nothing downstream can
+    distinguish from a good one, so this has to fail loudly at the source.
+    """
+    with pytest.raises(ConvergenceError, match="did not converge"):
+        fit_surface(_observations(n=30), FitConfig(draws=5, tune=5, chains=4))
+
+
+def test_the_binomial_likelihood_remains_selectable():
+    """Beta-binomial is the default, but the binomial §7 specifies must stay reachable (#83)."""
+    assert FitConfig().likelihood == "beta_binomial"
+    assert FitConfig(likelihood="binomial").likelihood == "binomial"

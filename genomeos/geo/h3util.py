@@ -11,9 +11,8 @@ is the finest v1 emits — finer exceeds what any open georeferenced panel justi
 
 from __future__ import annotations
 
-from math import asin, cos, radians, sin, sqrt
-
 import h3
+import numpy as np
 
 GLOBAL_RESOLUTION: int = 4
 RESOLUTION_LADDER: tuple[int, ...] = (4, 5, 6)
@@ -26,10 +25,18 @@ def _check_resolution(res: int) -> None:
         raise ValueError(f"resolution {res} is not in the ladder {RESOLUTION_LADDER}")
 
 
-def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    dlat, dlon = radians(lat2 - lat1), radians(lon2 - lon1)
-    a = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) ** 2
-    return 2 * _EARTH_RADIUS_KM * asin(sqrt(a))
+def _haversine_km(lat1, lon1, lat2, lon2):
+    """Great-circle distance in km. Numpy-based so it broadcasts over arrays as well as scalars —
+    the mask evaluates a (cells x observations) block at a time, and a scalar-only implementation
+    forced a Python loop over both.
+    """
+    lat1, lon1, lat2, lon2 = (np.asarray(v, dtype=float) for v in (lat1, lon1, lat2, lon2))
+    dlat, dlon = np.radians(lat2 - lat1), np.radians(lon2 - lon1)
+    a = (
+        np.sin(dlat / 2) ** 2
+        + np.cos(np.radians(lat1)) * np.cos(np.radians(lat2)) * np.sin(dlon / 2) ** 2
+    )
+    return 2 * _EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
 
 
 def cell_for(lat: float, lon: float, res: int) -> str:
