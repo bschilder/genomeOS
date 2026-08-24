@@ -41,6 +41,10 @@ LIKELIHOODS: tuple[str, ...] = ("binomial", "beta_binomial")
 #: screening surveys are the reference and their offset is fixed at zero (§7.1a).
 REFERENCE_DESIGN = "population_random"
 
+#: Great-circle km per degree of latitude. Used only to report the fitted correlation range in
+#: human units; the model itself works in standardised coordinates.
+_KM_PER_DEGREE = 111.19
+
 
 @dataclass(frozen=True)
 class FitConfig:
@@ -75,6 +79,15 @@ class SurfaceFit:
     #: one sampling design. Written to the artifact as `beta_design_applied` (§6).
     beta_design_applied: bool
     design_levels: tuple[str, ...]
+    #: Prior sd of allele frequency at a location, the denominator of `posterior_contraction`
+    #: (§7.1b). A single scalar because the GP prior is stationary and the mean function is
+    #: location-independent, so the marginal prior is identical everywhere.
+    prior_frequency_sd: float
+    #: Fitted spatial correlation range in km — §7's ρ, and what "within 2ρ" is measured
+    #: against. Converted from the standardised model scale via a 111 km/degree approximation,
+    #: which is exact at the equator and shrinks with latitude; adequate for a mask threshold,
+    #: not for distance arithmetic.
+    correlation_range_km: float
     idata: Any = field(repr=False)
     _model: Any = field(repr=False)
     _centre: np.ndarray = field(repr=False)
@@ -215,6 +228,9 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         f_pred = gp.conditional("f_pred", Xnew=x_pred)
         pm.Deterministic("freq_pred", pm.math.invlogit(intercept + f_pred))
 
+        prior = pm.sample_prior_predictive(
+            draws=500, var_names=["freq_pred"], random_seed=config.seed
+        )
         idata = pm.sample(
             draws=config.draws,
             tune=config.tune,
@@ -225,11 +241,17 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             compute_convergence_checks=False,
         )
 
+    prior_sd = float(np.std(prior.prior["freq_pred"].to_numpy()))
+    lengthscale_mean = float(idata.posterior["lengthscale"].mean())
+    correlation_range_km = lengthscale_mean * float(np.mean(scale)) * _KM_PER_DEGREE
+
     return SurfaceFit(
         variant_id=str(variants[0]),
         config=config,
         beta_design_applied=beta_design_applied,
         design_levels=non_reference,
+        prior_frequency_sd=prior_sd,
+        correlation_range_km=correlation_range_km,
         idata=idata,
         _model=model,
         _centre=centre,
