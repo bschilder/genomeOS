@@ -19,5 +19,11 @@ jobs:
         run: ruff check .
       - name: Contract not drifted
         run: python scripts/freeze_contract.py --check
+      - name: Module size
+        run: python scripts/check_module_size.py
+      - name: Private-file gate
+        run: python scripts/check_private_files.py
+      - name: Smoke
+        run: python scripts/smoke.py
       - name: Test
         run: pytest -v

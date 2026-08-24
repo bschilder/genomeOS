@@ -6,15 +6,31 @@ Read it fully before writing code; it is short on purpose.
 ## Read first
 
 1. [`docs/overview.md`](docs/overview.md) — what the project is and why. Non-negotiable context.
-2. [`docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md`](docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md)
+2. [`docs/scientific-engineering-objectives.md`](docs/scientific-engineering-objectives.md) —
+   the scientific claims, engineering deliverables, interfaces, and acceptance evidence for P0–P5.
+3. [`docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md`](docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md)
    — the Atlas design. **Cite the section you are implementing in your module docstring**, e.g.
    `design §7.1`.
-3. The plan for your sub-project, e.g.
+4. The plan for your sub-project, e.g.
    [`docs/superpowers/plans/2026-08-22-atlas-data-foundation.md`](docs/superpowers/plans/2026-08-22-atlas-data-foundation.md)
    (P0 + P1). Plans are task-by-task with tests specified; follow them rather than improvising.
-4. [Issue #3](https://github.com/bschilder/genomeOS/issues/3) if you are touching data ingestion —
+5. [Issue #3](https://github.com/bschilder/genomeOS/issues/3) if you are touching data ingestion —
    it explains what every source is for and what its access terms are.
-5. [`docs/panukb-architecture.md`](docs/panukb-architecture.md) if you are touching `genomeos/`.
+6. [`docs/panukb-architecture.md`](docs/panukb-architecture.md) if you are touching the
+   Pan-UKB evidence slice.
+
+## Scientific contract before implementation
+
+Every task must state four things before methods are chosen:
+
+1. the scientific objective or product claim;
+2. the measurable output and acceptance evidence;
+3. the engineering component and public interface that produce it;
+4. the assumptions, refusal conditions, and downstream consumers.
+
+Prefer the smallest implementation or experiment that can reject or support the claim. A model
+metric without a scientific interpretation target is not an objective. Never silently substitute
+a dataset, method, coordinate, default, or success criterion when the specified one is unavailable.
 
 ## Check the issues before you start — open *and* closed
 
@@ -77,6 +93,27 @@ prevent are documented and expensive (design §4).
 - **Determinism.** `SEED = 42` in any module with a stochastic path. Offline functions must be
   deterministic given `(config, data_version, seed)`.
 
+## Module and configuration boundaries
+
+- Each module has one scientific or engineering responsibility and an explicit typed interface.
+  Dependencies point inward toward schemas and domain functions; orchestration, storage, HTTP,
+  and UI remain adapters around them.
+- Connect modules through versioned schemas or artifact contracts, not imports of private
+  implementation details. Keep observations, surfaces, burden, serving, and rendering independently
+  replaceable.
+- Configuration enters at composition boundaries through typed settings or explicit function
+  arguments. Do not read environment variables, global state, networks, or files from pure science
+  modules. Do not add a config switch for a scientific or governance invariant.
+- Avoid optional abstractions, registries, factories, and fallback paths until two real consumers
+  require them. Modularity means narrow contracts, not more layers.
+- Keep files agent-readable. Target at most 500 logical lines per production module. At 800 lines
+  or 50 KiB, split by responsibility before adding features unless a documented reason makes the
+  split less coherent. Generated files and frozen contracts are exempt. Run
+  `python scripts/check_module_size.py`.
+- A module must be understandable from its docstring, public types/functions, and directly relevant
+  tests without loading the whole repository. If not, narrow the module or add a short focused design
+  note; do not compensate with a larger prompt.
+
 ## Deliberate behaviours — do not "fix" these
 
 These look like missing error handling or missing defaults. They are the design. Changing any of
@@ -127,6 +164,9 @@ Current, and what CI must keep passing:
 python -m pip install -e '.[dev,atlas,surfaces]'   # add [postgres] or [tabix] as needed
 ruff check .                              # lint; CI runs this
 python scripts/freeze_contract.py --check # contract drift; CI runs this
+python scripts/check_module_size.py        # agent-readable module budget; CI runs this
+python scripts/check_private_files.py      # tracked-file privacy gate; CI runs this
+python scripts/smoke.py                    # mandatory fast verification; CI runs this
 pytest                                    # CI runs this
 
 genomeos init-db                          # Pan-UKB API
@@ -148,6 +188,22 @@ diff.** That diff is the review surface for schema change; CI fails if it is sta
 `sqlite:///./genomeos.db` is the local default; production requires a PostgreSQL `DATABASE_URL`.
 GCP operations must go through the [repository-local gcloud wrapper](docs/repo-gcloud-auth.md) —
 never bare `gcloud`.
+
+## Mandatory smoke and privacy gates
+
+- Run `python scripts/smoke.py` after every code, configuration, schema, dependency, or runtime
+  change. Run the focused tests for the touched behavior as well. Before a PR, also run the full CI
+  commands above. Never claim completion without reporting exactly what ran.
+- Before every commit and push, run `python scripts/check_private_files.py`. Inspect staged paths
+  with `git diff --cached --name-only`; an ignored file is not proof that it was never force-added.
+- Never commit or upload `.codex/`, `.agents/`, real `.env` files, auth/session/history stores,
+  credentials, tokens, API keys, private keys, cloud service-account files, personal caches, or
+  generated data containing restricted information. This applies to every branch and the full Git
+  history, not only `main`.
+- Only `.env.example`-style templates with obvious placeholders may be tracked. Examples must never
+  contain a usable endpoint credential, account token, or personal secret.
+- If private material is staged or committed, stop. Do not push. Remove it from the index and, if it
+  entered any commit, rotate the credential and clean the affected history before continuing.
 
 ## Code conventions
 
