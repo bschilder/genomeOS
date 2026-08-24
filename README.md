@@ -105,9 +105,16 @@ people who can open doors to datasets.
 1. **Introduce yourself** in [Discussions](https://github.com/bschilder/genomeOS/discussions/76).
 2. **Read [the overview](docs/overview.md)**, which ends with a per-skill list of the issues
    that actually block progress.
-3. **Pick something up** from the [project board](https://github.com/users/bschilder/projects/8).
+3. **Check [the issues](https://github.com/bschilder/genomeOS/issues?q=is%3Aissue)** — open
+   *and* closed. Open issues are the work queue; closed ones record what was already done and
+   what was considered and rejected, so search before starting anything.
+4. **Pick something up** from the [project board](https://github.com/users/bschilder/projects/8).
    Filter by `skill:*` to find what you can do; `Ready` means fully specified and unblocked, so
    take it without asking.
+
+**Found a bug, or want a feature?** Open an issue. Features get triaged before implementation —
+priority here is derived from the dependency graph, so please don't arrive with an unrequested
+feature PR. **All changes to the repository go through a pull request**, including docs.
 
 Issues labelled `wants-expert-review` are the highest-leverage contribution a specialist can
 make — you don't have to write the code to make the difference. Corrections to the design, the
