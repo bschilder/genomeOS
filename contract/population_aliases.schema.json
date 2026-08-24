@@ -1,0 +1,33 @@
+{
+  "coerce": true,
+  "columns": {
+    "label": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "population_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "source": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "population_aliases",
+  "schema_type": "dataframe",
+  "strict": true,
+  "unique": [
+    "source",
+    "label"
+  ]
+}

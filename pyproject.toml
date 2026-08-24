@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "genomeos"
 version = "0.1.0"
-description = "Provenance-first genomic evidence API"
+description = "Provenance-first atlas of human genetic variation"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi>=0.115,<1",
@@ -17,7 +17,16 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
 tabix = ["pysam>=0.23,<1"]
-dev = ["httpx>=0.28,<1", "pytest>=8.4,<9"]
+# Atlas data foundation (P0/P1). Kept out of the default install so the Pan-UKB
+# API container does not carry pyarrow/duckdb, which it never uses.
+atlas = [
+  "pandera[pandas]>=0.23,<1",
+  "pandas>=2.2",
+  "pyarrow>=17",
+  "duckdb>=1.1",
+  "h3>=4.1",
+]
+dev = ["httpx>=0.28,<1", "pytest>=8.4,<9", "ruff>=0.6"]
 
 [project.scripts]
 genomeos = "genomeos.cli:main"
@@ -28,3 +37,14 @@ include = ["genomeos*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Depends()/Query() in argument defaults is the canonical FastAPI idiom, not a mutable default.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]

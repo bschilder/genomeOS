@@ -3,8 +3,9 @@ from __future__ import annotations
 import csv
 import gzip
 import math
+from collections.abc import Iterable
 from pathlib import Path
-from typing import IO, Iterable
+from typing import IO
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -149,7 +150,10 @@ def ingest_phenotype_manifest(
             phenotype.summary_stats_index_uri = _text(row.get("aws_link_tabix")) or None
         listed = {_text(code) for code in _text(row.get("pops")).split(",") if _text(code)}
         for code in POPULATIONS:
-            if code not in listed and not any(row.get(f"{prefix}_{code}") for prefix in ("n_cases", "n_controls", "phenotype_qc")):
+            has_any = any(
+                row.get(f"{prefix}_{code}") for prefix in ("n_cases", "n_controls", "phenotype_qc")
+            )
+            if code not in listed and not has_any:
                 continue
             population = next((item for item in phenotype.populations if item.code == code), None)
             if population is None:
@@ -259,7 +263,12 @@ def ingest_associations(
                     )
                     session.add(variant)
                     session.flush()
-                kind = "meta_hq" if population == "meta_hq" else "meta" if population == "meta" else "population"
+                if population == "meta_hq":
+                    kind = "meta_hq"
+                elif population == "meta":
+                    kind = "meta"
+                else:
+                    kind = "population"
                 population_code = population.upper()
                 assoc = session.scalar(
                     select(Association).where(
