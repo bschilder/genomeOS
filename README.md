@@ -2,8 +2,8 @@
 
 > **Explore the genome; worldwide.** 🧬🌍🧬
 
-An open, provenance-first atlas of human genetic variation — across the world's
-populations, and inside the cell.
+An open atlas of human genetic variation — across the world's populations, and inside the
+cell — where every number can be traced back to the measurement behind it.
 
 ---
 
