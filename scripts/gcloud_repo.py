@@ -10,7 +10,6 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 REPO_GCLOUD_CONFIG = ROOT / ".local" / "gcloud" / "genomeos"
-DEFAULT_ACCOUNT = "dawei.lin100@gmail.com"
 DEFAULT_REGION = "us-east1"
 
 
@@ -31,13 +30,18 @@ def configured_project(explicit: str | None) -> str | None:
     return explicit or os.getenv("GENOMEOS_GCP_PROJECT")
 
 
+def configured_account(explicit: str | None) -> str | None:
+    return explicit or os.getenv("GENOMEOS_GCP_ACCOUNT")
+
+
 def command_info() -> int:
     project = configured_project(None) or "<not selected>"
+    account = configured_account(None) or "<not selected>"
     print(
         "\n".join(
             [
                 f"CLOUDSDK_CONFIG={REPO_GCLOUD_CONFIG}",
-                f"default_account={DEFAULT_ACCOUNT}",
+                f"account={account}",
                 f"project={project}",
                 f"default_region={DEFAULT_REGION}",
                 "",
@@ -51,8 +55,13 @@ def command_info() -> int:
     return 0
 
 
-def command_init(project: str | None) -> int:
-    status = run_gcloud(["config", "set", "account", DEFAULT_ACCOUNT])
+def command_init(project: str | None, account: str | None) -> int:
+    selected_account = configured_account(account)
+    if not selected_account:
+        raise SystemExit(
+            "init requires --account or GENOMEOS_GCP_ACCOUNT; account identity is not stored in Git"
+        )
+    status = run_gcloud(["config", "set", "account", selected_account])
     if status:
         return status
     selected_project = configured_project(project)
@@ -75,6 +84,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     init = subparsers.add_parser("init")
     init.add_argument("--project")
+    init.add_argument("--account")
 
     run = subparsers.add_parser("run")
     run.add_argument("gcloud_arguments", nargs=argparse.REMAINDER)
@@ -86,11 +96,9 @@ def main() -> int:
     if arguments.command == "info":
         return command_info()
     if arguments.command == "init":
-        return command_init(arguments.project)
+        return command_init(arguments.project, arguments.account)
     if arguments.command == "auth":
         auth_arguments = arguments.auth_arguments or ["login"]
-        if auth_arguments[0] == "login" and len(auth_arguments) == 1:
-            auth_arguments.append(DEFAULT_ACCOUNT)
         return run_gcloud(["auth", *auth_arguments])
     if not arguments.gcloud_arguments:
         raise SystemExit("run requires gcloud arguments")
