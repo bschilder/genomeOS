@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: genomeos
+      POSTGRES_USER: genomeos
+      POSTGRES_PASSWORD: genomeos-local
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U genomeos"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - genomeos-postgres:/var/lib/postgresql/data
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://genomeos:genomeos-local@postgres:5432/genomeos
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  genomeos-postgres:

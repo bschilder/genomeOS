@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "genomeos"
+version = "0.1.0"
+description = "Provenance-first genomic evidence API"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "pydantic>=2.11,<3",
+  "sqlalchemy>=2.0,<3",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4"]
+tabix = ["pysam>=0.23,<1"]
+dev = ["httpx>=0.28,<1", "pytest>=8.4,<9"]
+
+[project.scripts]
+genomeos = "genomeos.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["genomeos*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
