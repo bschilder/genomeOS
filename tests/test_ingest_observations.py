@@ -12,7 +12,8 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture
 def obs() -> pd.DataFrame:
-    return map_surveys.load(FIXTURES / "map_hbs_surveys.tsv", "0.1.0")
+    observations, _report = map_surveys.load(FIXTURES / "map_hbs_surveys.csv", "0.1.0")
+    return observations
 
 
 def test_write_partitions_by_chromosome(tmp_path, obs):
@@ -30,7 +31,7 @@ def test_round_trip_preserves_row_count_and_counts(tmp_path, obs):
 def test_read_can_filter_to_one_variant(tmp_path, obs):
     write_observations(obs, tmp_path)
     back = read_observations(tmp_path, variant_id=map_surveys.HBS_VARIANT_ID)
-    assert len(back) == 3
+    assert len(back) == len(obs)
     assert read_observations(tmp_path, variant_id="chr1-1-A-T").empty
 
 
