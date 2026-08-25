@@ -171,7 +171,12 @@ pytest                                    # CI runs this
 
 genomeos init-db                          # Pan-UKB API
 uvicorn genomeos.api:app --reload
+python scripts/http_smoke.py --base-url http://127.0.0.1:8000  # live API + preview proof
 ```
+
+The fixture-backed diagnostic preview is at `/preview`. It proves the P4 read path only and is
+not the P5 product UI. Demo artifacts are synthetic, mounted read-only in containers, and must
+never be presented as scientific results.
 
 Rebuild the Atlas stores from fixtures (the end-to-end check):
 

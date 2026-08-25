@@ -27,3 +27,14 @@ jobs:
         run: python scripts/smoke.py
       - name: Test
         run: pytest -v
+      - name: Container HTTP smoke
+        run: |
+          set -euo pipefail
+          docker build -t genomeos-smoke .
+          CONTAINER=$(docker run -d --read-only --tmpfs /tmp \
+            -e DATABASE_URL=sqlite:////tmp/genomeos.db \
+            -e ATLAS_ARTIFACT_ROOT=/artifacts \
+            -v "$PWD/demo/artifacts:/artifacts:ro" \
+            -p 8080:8080 genomeos-smoke)
+          trap 'docker logs "$CONTAINER"; docker rm -f "$CONTAINER"' EXIT
+          python scripts/http_smoke.py

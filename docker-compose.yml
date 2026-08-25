@@ -19,8 +19,11 @@ services:
     build: .
     environment:
       DATABASE_URL: postgresql+psycopg://genomeos:genomeos-local@postgres:5432/genomeos
+      ATLAS_ARTIFACT_ROOT: /artifacts
     ports:
       - "8080:8080"
+    volumes:
+      - ./demo/artifacts:/artifacts:ro
     depends_on:
       postgres:
         condition: service_healthy

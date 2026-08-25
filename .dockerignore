@@ -1,0 +1,17 @@
+.git
+.agents
+.codex
+.local
+.nvim-chatgpt
+.env
+.env.*
+!.env.example
+__pycache__
+.pytest_cache
+*.db
+*.key
+*.pem
+*.p12
+*.pfx
+data
+demo

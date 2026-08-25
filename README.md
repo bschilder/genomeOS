@@ -74,8 +74,8 @@ tests blocks publication of anything else.
 
 | | |
 |---|---|
-| **Atlas (Map mode)** | Design approved, task-level plan written, 64 issues across 4 milestones. **No code yet — the data foundation is the open frontier.** |
-| **Pan-UKB evidence API** | Running. Provenance-first API over Pan-UK Biobank metadata and selectively indexed ancestry-stratified GWAS associations — the trait and effect-size layer of the atlas. Full summary-statistics files stay in public object storage and are queried by genomic region through a [Tabix](https://www.htslib.org/doc/tabix.html) boundary. This is what the code in this repo currently does. |
+| **Atlas** | P0/P1 data contracts and adapters, P2 surface kernels, P3 burden kernels, and a fixture-backed P4 read path are implemented. The diagnostic preview proves browser → API → DuckDB → immutable Parquet; it is not the product map. |
+| **Pan-UKB evidence API** | Running. Provenance-first API over Pan-UK Biobank metadata and selectively indexed ancestry-stratified GWAS associations — the trait and effect-size layer of the atlas. Full summary-statistics files stay in public object storage and are queried by genomic region through a [Tabix](https://www.htslib.org/doc/tabix.html) boundary. |
 
 ## Documentation
 
@@ -121,12 +121,17 @@ dataset scores, and the statistics are actively wanted.
 ## Local development
 
 ```bash
-python -m pip install -e '.[dev]'
+python -m pip install -e '.[dev,read]'
 genomeos init-db
 uvicorn genomeos.api:app --reload
-pytest
+python scripts/http_smoke.py --base-url http://127.0.0.1:8000
 ```
 
-By default the service uses `sqlite:///./genomeos.db` for local development. Production requires
-a PostgreSQL `DATABASE_URL`. GCP operations must use the
+Open [http://127.0.0.1:8000/preview](http://127.0.0.1:8000/preview) for the infrastructure
+preview. The checked-in demo artifacts are synthetic and diagnostic; they are not scientific
+results. Run `python scripts/smoke.py` after changes and the full `pytest` suite before a PR.
+
+By default the service uses `sqlite:///./genomeos.db` and `demo/artifacts` for local development.
+Production requires a PostgreSQL `DATABASE_URL` and an explicit `ATLAS_ARTIFACT_ROOT`. GCP
+operations must use the
 [repository-local gcloud wrapper](docs/repo-gcloud-auth.md).
