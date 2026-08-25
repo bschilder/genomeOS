@@ -75,22 +75,27 @@ def _observation_markers(ax, obs) -> None:
     visual signal that the model is smoothing over contrary evidence, and it disappears entirely
     if every observation is drawn as the same dot.
 
-    Translucent white fill with an opaque dark edge, because these markers have to stay legible
-    over four different backgrounds: turbo's dark navy low end, its bright yellow middle, its dark
-    red top, and the light grey no-claim land. White alone vanishes on the yellow and the grey;
-    dark alone vanishes on the navy and the red. The fill is passed as RGBA rather than through
-    `alpha=` so that the edge stays fully opaque instead of fading with it.
+    Translucent white fill with an opaque dark stroke, because these markers have to stay legible
+    over five different backgrounds: turbo's dark navy low end, its bright yellow middle, its dark
+    red top, the light grey no-claim land, and white water. White alone vanishes on the yellow,
+    the grey and the water; dark alone vanishes on the navy and the red. The fill is passed as
+    RGBA rather than through `alpha=` so the stroke stays fully opaque instead of fading with it.
+
+    The stroke is deliberately heavy relative to the marker. Over open water the white fill
+    contributes nothing at all, so the stroke is the entire marker — and that is the case for the
+    island surveys of maritime Southeast Asia, whose land cells are too small to render beneath
+    them. A hairline stroke loses precisely the points that have no other visual support.
     """
     absent = (obs["ac"] == 0).to_numpy()
     fill = (1.0, 1.0, 1.0, 0.75)
     ax.scatter(
-        obs["lon"][~absent], obs["lat"][~absent], s=7, marker="o",
-        facecolor=[fill], edgecolor="#11151a", linewidth=0.3, zorder=4,
+        obs["lon"][~absent], obs["lat"][~absent], s=9, marker="o",
+        facecolor=[fill], edgecolor="#11151a", linewidth=0.55, zorder=4,
         label=f"presence ({int((~absent).sum())})",
     )
     ax.scatter(
-        obs["lon"][absent], obs["lat"][absent], s=16, marker="^",
-        facecolor=[fill], edgecolor="#11151a", linewidth=0.5, zorder=5,
+        obs["lon"][absent], obs["lat"][absent], s=19, marker="^",
+        facecolor=[fill], edgecolor="#11151a", linewidth=0.75, zorder=5,
         label=f"absence — AC=0 ({int(absent.sum())})",
     )
 
