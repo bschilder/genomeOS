@@ -1,7 +1,7 @@
 """Held-out predictive validation of the HbS surface (design §7, §8).
 
     python scripts/validate_holdout.py --observations data/raw/map_hbs_surveys.csv \
-        --out data/validation --n-folds 5 --n-inducing 800
+        --out data/validation --n-folds 5 --n-inducing 150
 
 Runs both spatially blocked and random folds. The gap between them is the point: random folds
 leak neighbours across the split, so the difference measures how much apparent skill is spatial
@@ -24,7 +24,11 @@ def main() -> None:
     ap.add_argument("--observations", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--n-folds", type=int, default=5)
-    ap.add_argument("--n-inducing", type=int, default=800)
+    # 150, not 800. Inducing points closer together than ~0.25 of the fitted correlation range
+    # (~600 km for HbS) are redundant: they correlate at ~0.99, K_uu goes near-singular and NUTS
+    # grinds at maximum tree depth. At M=800 the spacing is far inside that and a single fold
+    # takes hours; at M=150 it is minutes. See `MIN_SPACING_FRACTION` in surfaces.fit.
+    ap.add_argument("--n-inducing", type=int, default=150)
     ap.add_argument("--draws", type=int, default=600)
     args = ap.parse_args()
 
