@@ -24,7 +24,9 @@ FAST = FitConfig(draws=300, tune=600, chains=4, approximation="inducing", n_indu
 
 def _fold(**kwargs) -> FoldResult:
     defaults = dict(
-        fold=0, n_train=80, n_test=20, coverage_95=0.95, coverage_50=0.5,
+        fold=0, n_train=80, n_test=20,
+        coverage_95_predictive=0.95, coverage_50_predictive=0.5,
+        coverage_95_latent=0.30, coverage_50_latent=0.10,
         mae=0.01, rmse=0.02, log_score=-2.0, baseline_mae=0.05, baseline_log_score=-3.0,
     )
     defaults.update(kwargs)
@@ -88,7 +90,7 @@ def test_skill_is_positive_only_when_the_model_beats_the_constant_baseline():
 def test_the_summary_names_the_calibration_targets():
     """Calibration is the headline: §4's defence rests on the uncertainty being real."""
     text = str(CrossValidation("spatial", [_fold()]))
-    assert "coverage of 95% interval" in text
+    assert "predictive coverage  95%" in text
     assert "target 0.95" in text
 
 
@@ -105,8 +107,9 @@ def test_cross_validation_runs_and_reports_coverage_between_zero_and_one():
     result = cross_validate(observations, FAST, n_folds=3, strategy="spatial")
     assert len(result.folds) == 3
     for fold in result.folds:
-        assert 0.0 <= fold.coverage_95 <= 1.0
-        assert 0.0 <= fold.coverage_50 <= 1.0
+        assert 0.0 <= fold.coverage_95_predictive <= 1.0
+        assert 0.0 <= fold.coverage_50_predictive <= 1.0
+        assert 0.0 <= fold.coverage_95_latent <= 1.0
         assert fold.mae >= 0.0
         assert fold.n_train + fold.n_test == len(observations)
 
@@ -129,13 +132,29 @@ def test_a_non_converged_fold_is_recorded_not_fatal():
 def test_failed_folds_are_excluded_from_the_means_not_averaged_in():
     result = CrossValidation(
         "spatial",
-        folds=[_fold(coverage_95=0.9)],
+        folds=[_fold(coverage_95_predictive=0.9)],
         failures=[FoldFailure(1, 80, 20, "boom")],
     )
-    assert result._mean("coverage_95") == pytest.approx(0.9)
+    assert result._mean("coverage_95_predictive") == pytest.approx(0.9)
 
 
 def test_a_run_where_nothing_converged_says_so_rather_than_reporting_nan():
     result = CrossValidation("spatial", folds=[], failures=[FoldFailure(0, 80, 20, "boom")])
     assert "no fold converged" in str(result)
     assert np.isnan(result._mean("mae"))
+
+
+def test_predictive_coverage_exceeds_latent_coverage_on_the_same_data():
+    """The predictive interval must be wider than the latent one, always.
+
+    The latent interval describes the underlying frequency; the observed frequency is a noisy
+    realisation of it, carrying binomial sampling noise and its own cohort offset. An interval
+    missing those components cannot cover the data as often as one that includes them. This is
+    the defect in #110 stated as an invariant: if this assertion ever fails, the predictive path
+    has stopped adding the variance it exists to add.
+    """
+    observations = _observations(n=90)
+    result = cross_validate(observations, FAST, n_folds=3, strategy="spatial")
+    predictive = result._mean("coverage_95_predictive")
+    latent = result._mean("coverage_95_latent")
+    assert predictive >= latent, f"predictive {predictive:.2f} < latent {latent:.2f}"
