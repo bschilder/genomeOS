@@ -227,3 +227,4 @@ __marimo__/
 
 # Atlas pipeline outputs
 data/
+*.pkl
