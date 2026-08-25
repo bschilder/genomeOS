@@ -55,6 +55,9 @@ IMAGE = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
 
 JOB_COMMANDS = {
+    # Cheap and decisive: prints the device list and times the inducing GP's inner loop on each
+    # backend. Run this before believing any GPU claim.
+    "gpucheck": "run python scripts/gpu_check.py",
     "fit": (
         "run python scripts/plot_surface.py "
         "--observations /workspace/data/map_hbs_surveys.csv "

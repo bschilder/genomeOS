@@ -268,3 +268,13 @@ def test_h3_is_the_default_placement():
 def test_an_unknown_placement_is_refused():
     with pytest.raises(ValueError, match="inducing_placement"):
         FitConfig(inducing_placement="poisson-disc")
+
+
+def test_too_many_inducing_points_for_the_data_is_refused():
+    """M approaching N is not a sparse approximation, and it does not converge.
+
+    M=800 against N=857 gave ESS 80 after 97 minutes of sampling; M=400 converges in minutes.
+    """
+    observations = _observations(n=50)
+    with pytest.raises(ValueError, match="too close to the"):
+        fit_surface(observations, FitConfig(approximation="inducing", n_inducing=45))

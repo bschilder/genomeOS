@@ -89,6 +89,11 @@ INDUCING_PLACEMENTS: tuple[str, ...] = ("h3", "kmeans")
 #: inducing points land close together.
 JITTER = 1e-6
 
+#: Ceiling on inducing points as a fraction of observations. Above roughly this, the latent
+#: dimension rivals the data and the posterior geometry degrades badly — see the check in
+#: `fit_surface`. Not a performance guideline: M=800 against N=857 simply does not converge.
+MAX_INDUCING_FRACTION = 0.6
+
 #: The well-ascertained anchor. β_design is a contrast *against* this level, so population
 #: screening surveys are the reference and their offset is fixed at zero (§7.1a).
 REFERENCE_DESIGN = "population_random"
@@ -414,6 +419,15 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     ac = obs["ac"].to_numpy(dtype=int)
     an = obs["an"].to_numpy(dtype=int)
 
+    if config.approximation == "inducing" and config.n_inducing > MAX_INDUCING_FRACTION * len(obs):
+        raise ValueError(
+            f"n_inducing={config.n_inducing} is too close to the {len(obs)} observations. A sparse "
+            f"approximation needs M well below N: at M=800 against N=857 the model carries more "
+            f"latent parameters than data points, NUTS hits maximum tree depth fighting the "
+            f"geometry, and a fit that converges in minutes at M=400 does not converge at all. "
+            f"Keep n_inducing <= {int(MAX_INDUCING_FRACTION * len(obs))} here, or add data."
+        )
+
     if config.approximation != "inducing":
         inducing = np.zeros((0, 3))
     elif config.inducing_placement == "h3":
@@ -526,6 +540,12 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             sample_kwargs["cores"] = 1
         else:
             sample_kwargs["nuts_sampler"] = config.nuts_sampler
+            # chain_method="vectorized" batches every chain into one device. The default,
+            # "parallel", wants one device per chain and silently falls back to drawing them
+            # *sequentially* when there is only one — which is what a single GPU looks like, so
+            # three quarters of the available speedup was being left on the table with a warning
+            # that reads like a note about CPUs.
+            sample_kwargs["nuts"] = {"chain_method": "vectorized"}
         idata = pm.sample(**sample_kwargs)
 
     _check_convergence(idata, config)
