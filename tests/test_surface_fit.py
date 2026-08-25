@@ -12,6 +12,8 @@ from genomeos.surfaces.fit import (
     fit_surface,
     h3_inducing_points,
     inducing_points,
+    load_fit,
+    save_fit,
     to_unit_sphere,
 )
 
@@ -268,3 +270,44 @@ def test_h3_is_the_default_placement():
 def test_an_unknown_placement_is_refused():
     with pytest.raises(ValueError, match="inducing_placement"):
         FitConfig(inducing_placement="poisson-disc")
+
+
+def test_too_many_inducing_points_for_the_data_is_refused():
+    """M approaching N is not a sparse approximation, and it does not converge.
+
+    M=800 against N=857 gave ESS 80 after 97 minutes of sampling; M=400 converges in minutes.
+    """
+    observations = _observations(n=50)
+    with pytest.raises(ValueError, match="too close to the"):
+        fit_surface(observations, FitConfig(approximation="inducing", n_inducing=45))
+
+
+def test_a_saved_fit_predicts_identically_to_the_original(fit, tmp_path):
+    """The point of persisting a fit is to avoid refitting, so the reloaded model has to give the
+    same answer — a round trip that merely produces *plausible* predictions would silently change
+    every figure and validation number made after it."""
+    lat = np.array([9.0, 20.0, -4.0])
+    lon = np.array([0.0, 78.0, 22.0])
+    before = fit.predict(lat=lat, lon=lon)
+
+    path = save_fit(fit, tmp_path / "surface.pkl")
+    reloaded = load_fit(path)
+    after = reloaded.predict(lat=lat, lon=lon)
+
+    for column in ("post_median", "post_sd", "q025", "q975"):
+        np.testing.assert_allclose(before[column], after[column])
+    assert reloaded.correlation_range_km == fit.correlation_range_km
+    assert reloaded.prior_frequency_sd == fit.prior_frequency_sd
+    assert reloaded.design_levels == fit.design_levels
+
+
+def test_loading_something_that_is_not_a_fit_is_refused(tmp_path):
+    """A cache file is environment-coupled and can be stale after a PyMC upgrade. Refusing beats
+    returning a half-initialised object that fails later, somewhere less obvious."""
+    import cloudpickle
+
+    path = tmp_path / "wrong.pkl"
+    with path.open("wb") as stream:
+        cloudpickle.dump({"format": 999, "fit": None}, stream)
+    with pytest.raises(ValueError, match="not a surface fit"):
+        load_fit(path)

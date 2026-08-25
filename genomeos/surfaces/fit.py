@@ -32,7 +32,9 @@ with no HTTP or I/O dependency (§5).
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -85,9 +87,23 @@ APPROXIMATIONS: tuple[str, ...] = ("hsgp", "inducing")
 #: placement depends on a seed and does not align with the artifact grid.
 INDUCING_PLACEMENTS: tuple[str, ...] = ("h3", "kmeans")
 
-#: Added to the inducing covariance diagonal so its Cholesky stays positive definite when two
-#: inducing points land close together.
-JITTER = 1e-6
+#: Added to the inducing covariance diagonal. Not merely a positive-definiteness guard: with
+#: inducing points spaced well inside the correlation range, K_uu is genuinely near-singular
+#: (cond ~6e5 at M=400 here) and 1e-6 does not touch it. 1e-4 cuts that ~4x at negligible cost
+#: to the model.
+JITTER = 1e-4
+
+#: Inducing spacing below this fraction of the fitted correlation range means the points are
+#: redundant: adjacent ones correlate at ~0.99, so they add parameters without adding
+#: information, K_uu approaches singular, and NUTS grinds against a near-degenerate posterior.
+#: An M=400 fit at spacing/rho = 0.24 took 80 minutes on a saturated GPU; the same model at
+#: spacing/rho ~ 0.65 is 40x better conditioned. More inducing points is not better.
+MIN_SPACING_FRACTION = 0.25
+
+#: Ceiling on inducing points as a fraction of observations. Above roughly this, the latent
+#: dimension rivals the data and the posterior geometry degrades badly — see the check in
+#: `fit_surface`. Not a performance guideline: M=800 against N=857 simply does not converge.
+MAX_INDUCING_FRACTION = 0.6
 
 #: The well-ascertained anchor. β_design is a contrast *against* this level, so population
 #: screening surveys are the reference and their offset is fixed at zero (§7.1a).
@@ -129,7 +145,7 @@ class FitConfig:
     inducing_placement: str = "h3"
     #: Budget on inducing points. The M^3 Cholesky per leapfrog step is the cost, so this is the
     #: accuracy/cost dial that replaces hsgp_m (#39).
-    n_inducing: int = 400
+    n_inducing: int = 200
     #: How far beyond the observations to place inducing points, as a multiple of the largest
     #: observation radius. Cells further out get no degrees of freedom, which is the point.
     inducing_reach_km: float = 1500.0
@@ -205,6 +221,9 @@ class SurfaceFit:
     #: (§7.1b). A single scalar because the GP prior is stationary and the mean function is
     #: location-independent, so the marginal prior is identical everywhere.
     prior_frequency_sd: float
+    #: Median inducing-point spacing divided by the fitted correlation range. Below
+    #: `MIN_SPACING_FRACTION` the inducing set is over-dense for the field it represents.
+    inducing_spacing_ratio: float | None
     #: Fitted spatial correlation range in km — §7's ρ, and what "within 2ρ" is measured
     #: against. Converted from the standardised model scale via a 111 km/degree approximation,
     #: which is exact at the equator and shrinks with latitude; adequate for a mask threshold,
@@ -414,6 +433,15 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     ac = obs["ac"].to_numpy(dtype=int)
     an = obs["an"].to_numpy(dtype=int)
 
+    if config.approximation == "inducing" and config.n_inducing > MAX_INDUCING_FRACTION * len(obs):
+        raise ValueError(
+            f"n_inducing={config.n_inducing} is too close to the {len(obs)} observations. A sparse "
+            f"approximation needs M well below N: at M=800 against N=857 the model carries more "
+            f"latent parameters than data points, NUTS hits maximum tree depth fighting the "
+            f"geometry, and a fit that converges in minutes at M=400 does not converge at all. "
+            f"Keep n_inducing <= {int(MAX_INDUCING_FRACTION * len(obs))} here, or add data."
+        )
+
     if config.approximation != "inducing":
         inducing = np.zeros((0, 3))
     elif config.inducing_placement == "h3":
@@ -526,6 +554,12 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             sample_kwargs["cores"] = 1
         else:
             sample_kwargs["nuts_sampler"] = config.nuts_sampler
+            # chain_method="vectorized" batches every chain into one device. The default,
+            # "parallel", wants one device per chain and silently falls back to drawing them
+            # *sequentially* when there is only one — which is what a single GPU looks like, so
+            # three quarters of the available speedup was being left on the table with a warning
+            # that reads like a note about CPUs.
+            sample_kwargs["nuts"] = {"chain_method": "vectorized"}
         idata = pm.sample(**sample_kwargs)
 
     _check_convergence(idata, config)
@@ -536,15 +570,71 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     lengthscale_mean = float(idata.posterior["lengthscale"].mean())
     correlation_range_km = lengthscale_mean * EARTH_RADIUS_KM
 
+    spacing_ratio = None
+    if len(inducing) > 1:
+        gaps = np.linalg.norm(inducing[:, None, :] - inducing[None, :, :], axis=-1)
+        np.fill_diagonal(gaps, np.inf)
+        median_spacing_km = float(np.median(gaps.min(axis=1))) * EARTH_RADIUS_KM
+        spacing_ratio = median_spacing_km / max(correlation_range_km, 1e-9)
+        if spacing_ratio < MIN_SPACING_FRACTION:
+            warnings.warn(
+                f"inducing points are {median_spacing_km:.0f} km apart against a fitted "
+                f"correlation range of {correlation_range_km:.0f} km "
+                f"(ratio {spacing_ratio:.2f} < {MIN_SPACING_FRACTION}). They are redundant: "
+                f"adjacent points correlate at ~0.99, K_uu is near-singular, and sampling will "
+                f"be far slower than a smaller n_inducing. Reduce n_inducing.",
+                stacklevel=2,
+            )
+
     return SurfaceFit(
         variant_id=str(variants[0]),
         config=config,
         beta_design_applied=beta_design_applied,
         design_levels=non_reference,
         prior_frequency_sd=prior_sd,
+        inducing_spacing_ratio=spacing_ratio,
         correlation_range_km=correlation_range_km,
         idata=idata,
         _model=model,
         _centre=centre,
         _scale=scale,
     )
+
+
+#: Bumped whenever `SurfaceFit`'s fields change in a way that makes an older file unreadable.
+FIT_FORMAT = 1
+
+
+def save_fit(fit: SurfaceFit, path: str | Path) -> Path:
+    """Persist a trained surface so predictions cost seconds instead of a refit.
+
+    `SurfaceFit.predict` runs `sample_posterior_predictive` against a live PyMC model, so the
+    model object and the posterior have to travel together — writing the InferenceData alone
+    would leave nothing able to use it. cloudpickle handles the PyMC/pytensor graph that plain
+    `pickle` cannot.
+
+    Two limits worth knowing. The file is **coupled to this environment**: a PyMC or pytensor
+    upgrade can make it unreadable, so it is a cache, never an archival artifact — §6 artifacts
+    are the parquet outputs, not this. And pickle executes arbitrary code on load, so only ever
+    load files you produced yourself.
+    """
+    import cloudpickle
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("wb") as stream:
+        cloudpickle.dump({"format": FIT_FORMAT, "fit": fit}, stream)
+    return path
+
+
+def load_fit(path: str | Path) -> SurfaceFit:
+    """Reload a surface written by `save_fit`. See its warning about trust and versioning."""
+    import cloudpickle
+
+    with Path(path).open("rb") as stream:
+        payload = cloudpickle.load(stream)
+    if not isinstance(payload, dict) or payload.get("format") != FIT_FORMAT:
+        raise ValueError(
+            f"{path} is not a surface fit of format {FIT_FORMAT}; refit rather than guessing at it"
+        )
+    return payload["fit"]

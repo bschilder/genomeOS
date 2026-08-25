@@ -99,3 +99,45 @@ def land_mask(lons, lats):
         index = np.flatnonzero(candidate)
         on_land[index] = path.contains_points(points[index])
     return on_land.reshape(np.asarray(lons).shape)
+
+
+def h3_land_cells(resolution: int) -> list[str]:
+    """Every H3 cell at `resolution` whose centre falls on land.
+
+    The model is defined on H3, so the figure should be too: a lat/lon pcolormesh has cells that
+    stretch at the equator and shrink toward the poles, which is precisely the distortion the
+    spherical kernel and geodesic placement exist to remove. Rendering onto it reintroduces the
+    distortion at the last step.
+    """
+    import h3
+    import numpy as np
+
+    cells = [
+        child
+        for base in h3.get_res0_cells()
+        for child in h3.cell_to_children(base, resolution)
+    ]
+    centres = np.array([h3.cell_to_latlng(cell) for cell in cells], dtype=float)
+    on_land = land_mask(centres[:, 1], centres[:, 0])
+    return [cell for cell, keep in zip(cells, on_land, strict=True) if keep]
+
+
+def h3_polygons(cells) -> tuple[list, list[int]]:
+    """Cell boundaries as (lon, lat) polygons, dropping any that cross the antimeridian.
+
+    A cell straddling +-180 has vertices near both +179 and -179; drawn as-is it becomes a
+    full-width streak across the map. There are only a handful, all in the Pacific, so they are
+    dropped rather than split. Returns the polygons and the indices they came from, so callers
+    can subset their values to match.
+    """
+    import h3
+
+    polygons, kept = [], []
+    for index, cell in enumerate(cells):
+        boundary = h3.cell_to_boundary(cell)
+        lons = [point[1] for point in boundary]
+        if max(lons) - min(lons) > 180.0:
+            continue
+        polygons.append([(point[1], point[0]) for point in boundary])
+        kept.append(index)
+    return polygons, kept

@@ -54,14 +54,82 @@ GPU_PREFERENCE: tuple[tuple[str, float], ...] = (
 IMAGE = "runpod/pytorch:1.0.2-cu1281-torch280-ubuntu2404"
 
 
+JOB_COMMANDS = {
+    # Cheap and decisive: prints the device list and times the inducing GP's inner loop on each
+    # backend. Run this before believing any GPU claim.
+    "gpucheck": "run python scripts/gpu_check.py",
+    "fit": (
+        "run python scripts/plot_surface.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out/hbs_surface_{approximation}.png "
+        "--approximation {approximation} --n-inducing {n_inducing} --hsgp-m {hsgp_m} "
+        "--draws {draws} --contraction-threshold 0.5"
+    ),
+    # Both, in one pod: the validation numbers and the figure they describe should come from the
+    # same code at the same M, and a second pod launch is a second chance to forget to stop one.
+    # Figure FIRST, validation second. A watchdog or a capacity loss truncates the tail, so the
+    # single-fit deliverable must not be at the end: the one job that was ordered the other way
+    # was killed at 50 minutes having written nothing, because validation only saves at the end.
+    "validate+fit": (
+        "echo '--- figure (1 fit) ---'; date; "
+        "run python scripts/plot_surface.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out/hbs_surface_geodesic.png "
+        "--approximation inducing --n-inducing {n_inducing} --hsgp-m {hsgp_m} "
+        "--draws {draws} --contraction-threshold 0.5 ; "
+        "echo '--- figure done ---'; date; "
+        "echo '--- validation ({n_folds} folds x 2 strategies) ---'; "
+        "run python scripts/validate_holdout.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out --n-folds {n_folds} "
+        "--n-inducing {n_inducing_fold} --draws {draws} ; "
+        "echo '--- validation done ---'; date"
+    ),
+    # The results are echoed to the pod log on purpose. Nothing copies /workspace/out back, so
+    # without this the numbers die with the pod — which is how an earlier 8.9-hour run returned
+    # nothing at all. `cat` is guarded because a strategy that failed writes no file.
+    "validate": (
+        "run python scripts/validate_holdout.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out --n-folds {n_folds} "
+        "--n-inducing {n_inducing} --draws {draws} ; "
+        "echo '===== RESULTS BEGIN ====='; "
+        "cat /workspace/out/crossval_summary.json 2>/dev/null || echo 'no summary written'; "
+        "echo '--- spatial ---'; cat /workspace/out/crossval_spatial.csv 2>/dev/null; "
+        "echo '--- random ---'; cat /workspace/out/crossval_random.csv 2>/dev/null; "
+        "echo '===== RESULTS END ====='"
+    ),
+}
+
+
 def entrypoint(args) -> str:
     """Pod start command.
 
     Deliberately no `set -x`: it echoes expanded variables, and this script sees a GitHub token.
     Progress is marked with explicit echo lines instead.
     """
+    # Folds train on (k-1)/k of the data, so the per-fold inducing budget must be smaller to
+    # stay under fit_surface's M<<N guard.
+    n_inducing_fold = int(args.n_inducing * (args.n_folds - 1) / args.n_folds)
+    job_command = JOB_COMMANDS[args.job].format(
+        approximation=args.approximation,
+        n_inducing=args.n_inducing,
+        n_inducing_fold=n_inducing_fold,
+        hsgp_m=args.hsgp_m,
+        draws=args.draws,
+        n_folds=args.n_folds,
+    )
     return textwrap.dedent(f"""
-        set -euo pipefail
+        set -uo pipefail
+        # NOT `set -e` around the whole script. Under it, any failure exits the container, Runpod
+        # restarts it, and the entrypoint re-clones and re-fails on a loop — billing the entire
+        # time. One such loop ran 4.3 hours unnoticed. Failures are trapped and the pod is held
+        # open instead, so the error can be read and the pod stopped deliberately.
+        hold() {{
+            echo "===== HELD (exit ${{1:-0}}) — pod is idle; stop it when done ====="
+            sleep infinity
+        }}
+        run() {{ "$@" || {{ echo "!!!!! FAILED: $* (exit $?)"; hold $?; }}; }}
         echo "===== ENV ====="
         nvidia-smi || echo "no GPU visible"
         if [[ -n "${{BSCHILDER_GITHUB2:-}}" ]]; then
@@ -76,25 +144,24 @@ def entrypoint(args) -> str:
         # /workspace is a persistent volume, so a restarted pod finds the clone already there and
         # `git clone` fails the whole entrypoint under `set -e`. Make it idempotent.
         rm -rf /workspace/genomeOS
-        git clone --depth 1 --branch {args.ref} https://github.com/bschilder/genomeOS /workspace/genomeOS
-        cd /workspace/genomeOS
+        run git clone --depth 1 --branch {args.ref} https://github.com/bschilder/genomeOS /workspace/genomeOS
+        cd /workspace/genomeOS || hold 1
 
         echo "===== INSTALL ====="
-        pip install --no-cache-dir -e '.[atlas,surfaces,geo,figures]'
+        # Only extras that exist on this branch: pip *warns* about unknown extras rather than
+        # failing, so a typo or an unmerged extra shows up later as a ModuleNotFoundError.
+        run pip install --no-cache-dir -e '.[atlas,surfaces,figures]'
+        run python -c "import matplotlib, pandera, pymc, numpyro; print('imports OK')"
         # CUDA-enabled JAX. numpyro picks the device up automatically; no model change needed.
-        pip install --no-cache-dir --upgrade "jax[cuda12]"
-        python -c "import jax; print('jax devices:', jax.devices())"
+        run pip install --no-cache-dir --upgrade "jax[cuda12]"
+        # Recorded explicitly: a GPU claim is worthless unless the device list is in the log.
+        run python -c "import jax; print('JAX DEVICES:', jax.devices())"
 
         echo "===== FETCH DATA ====="
-        python scripts/fetch_map_hbs.py --layer hbs --out /workspace/data/map_hbs_surveys.csv
+        run python scripts/fetch_map_hbs.py --layer hbs --out /workspace/data/map_hbs_surveys.csv
 
-        echo "===== FIT ({args.approximation}, draws={args.draws}) ====="
-        python scripts/plot_surface.py \\
-            --observations /workspace/data/map_hbs_surveys.csv \\
-            --out /workspace/out/hbs_surface_{args.approximation}.png \\
-            --approximation {args.approximation} \\
-            --n-inducing {args.n_inducing} --hsgp-m {args.hsgp_m} \\
-            --draws {args.draws} --contraction-threshold 0.5
+        echo "===== {args.job} ====="
+        {job_command}
 
         echo "===== DONE ====="
         ls -la /workspace/out
@@ -120,7 +187,7 @@ def _request(path: str, payload: dict | None = None) -> dict:
 def plan(args) -> dict:
     gpu_ids = [gpu for gpu, _ in GPU_PREFERENCE]
     return {
-        "name": f"genomeos-hbs-{args.approximation}",
+        "name": f"genomeos-hbs-{args.job}",
         "imageName": IMAGE,
         "gpuTypeIds": gpu_ids,
         "gpuCount": 1,
@@ -141,8 +208,10 @@ def plan(args) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--job", choices=tuple(JOB_COMMANDS), default="fit")
+    ap.add_argument("--n-folds", type=int, default=5)
     ap.add_argument("--approximation", choices=("hsgp", "inducing"), default="inducing")
-    ap.add_argument("--n-inducing", type=int, default=1500,
+    ap.add_argument("--n-inducing", type=int, default=400,
                     help="inducing points; the M^3 Cholesky per leapfrog step is the GPU work")
     ap.add_argument("--hsgp-m", type=int, default=12, help="HSGP basis functions per dimension")
     ap.add_argument("--draws", type=int, default=1000)

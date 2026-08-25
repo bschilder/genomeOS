@@ -153,7 +153,7 @@ paths are identical either way. The Atlas modules are therefore subpackages of t
 
 The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the `atlas` extra,
 PyMC/PyTensor in a `surfaces` extra, and rasterio in a `geo` extra, so the API container carries
-none of them. Install everything with `.[dev,atlas,surfaces,geo]`.
+none of them. Install everything with `.[dev,atlas,surfaces,geo,figures]`.
 
 **Inference engine:** PyMC with a Hilbert-space GP (HSGP), *not* R-INLA-SPDE, despite what
 design §7 names. The reasoning and the rejected alternatives are in #34; do not reintroduce an R
@@ -164,7 +164,7 @@ toolchain without reopening that decision.
 Current, and what CI must keep passing:
 
 ```bash
-python -m pip install -e '.[dev,atlas,surfaces,geo]'   # add [postgres] or [tabix] as needed
+python -m pip install -e '.[dev,atlas,surfaces,geo,figures]'   # add [postgres] or [tabix] as needed
 ruff check .                              # lint; CI runs this
 python scripts/freeze_contract.py --check # contract drift; CI runs this
 python scripts/check_module_size.py        # agent-readable module budget; CI runs this
