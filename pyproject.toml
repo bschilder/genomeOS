@@ -35,6 +35,13 @@ surfaces = [
   # than through PyTensor, and it is the same code path that runs on a GPU.
   "numpyro>=0.15",
 ]
+# Review figures. Not optional in practice on a remote runner: plot_surface imports matplotlib
+# at module scope, so a missing extra is a crash rather than a degraded run — which is exactly
+# how one pod died after the warning "does not provide the extra 'figures'" was dismissed as
+# cosmetic two runs earlier.
+figures = [
+  "matplotlib>=3.8",
+]
 dev = ["httpx>=0.28,<1", "pytest>=8.4,<9", "ruff>=0.6"]
 
 [project.scripts]

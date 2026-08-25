@@ -140,7 +140,10 @@ def entrypoint(args) -> str:
         cd /workspace/genomeOS || hold 1
 
         echo "===== INSTALL ====="
-        run pip install --no-cache-dir -e '.[atlas,surfaces,geo,figures]'
+        # Only extras that exist on this branch: pip *warns* about unknown extras rather than
+        # failing, so a typo or an unmerged extra shows up later as a ModuleNotFoundError.
+        run pip install --no-cache-dir -e '.[atlas,surfaces,figures]'
+        run python -c "import matplotlib, pandera, pymc, numpyro; print('imports OK')"
         # CUDA-enabled JAX. numpyro picks the device up automatically; no model change needed.
         run pip install --no-cache-dir --upgrade "jax[cuda12]"
         # Recorded explicitly: a GPU claim is worthless unless the device list is in the log.
