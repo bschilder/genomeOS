@@ -1,7 +1,8 @@
 # GCP deployment
 
 GenomeOS is intended to run on Cloud Run with Cloud SQL for PostgreSQL. The
-deployment account is `dawei.lin100@gmail.com`; do not deploy into a project
+deployment account must be supplied locally through `--account` or `GENOMEOS_GCP_ACCOUNT`;
+do not deploy into a project
 owned by another active account.
 
 ## Required setup

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Provenance-first atlas of human genetic variation"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115,<1",
+  "fastapi>=0.115,<0.120",
   "pydantic>=2.11,<3",
   "sqlalchemy>=2.0,<3",
   "uvicorn>=0.34,<1",
@@ -17,6 +17,7 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
 tabix = ["pysam>=0.23,<1"]
+read = ["duckdb>=1.1"]
 # Atlas data foundation (P0/P1). Kept out of the default install so the Pan-UKB
 # API container does not carry pyarrow/duckdb, which it never uses.
 atlas = [
@@ -35,6 +36,10 @@ surfaces = [
   # than through PyTensor, and it is the same code path that runs on a GPU.
   "numpyro>=0.15",
 ]
+# Raster handling for the population denominators (P3, §9). Offline batch only.
+geo = [
+  "rasterio>=1.3",
+]
 dev = ["httpx>=0.28,<1", "pytest>=8.4,<9", "ruff>=0.6"]
 
 [project.scripts]
@@ -42,6 +47,9 @@ genomeos = "genomeos.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["genomeos*"]
+
+[tool.setuptools.package-data]
+genomeos = ["static/*.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
