@@ -81,7 +81,7 @@ def _observation_markers(ax, obs) -> None:
     the grey and the water; dark alone vanishes on the navy and the red. The fill is passed as
     RGBA rather than through `alpha=` so the stroke stays fully opaque instead of fading with it.
 
-    The stroke is deliberately heavy relative to the marker. Over open water the white fill
+    The stroke carries more weight than it looks like it should. Over open water the white fill
     contributes nothing at all, so the stroke is the entire marker — and that is the case for the
     island surveys of maritime Southeast Asia, whose land cells are too small to render beneath
     them. A hairline stroke loses precisely the points that have no other visual support.
@@ -90,12 +90,12 @@ def _observation_markers(ax, obs) -> None:
     fill = (1.0, 1.0, 1.0, 0.75)
     ax.scatter(
         obs["lon"][~absent], obs["lat"][~absent], s=9, marker="o",
-        facecolor=[fill], edgecolor="#11151a", linewidth=0.55, zorder=4,
+        facecolor=[fill], edgecolor="#11151a", linewidth=0.4, zorder=4,
         label=f"presence ({int((~absent).sum())})",
     )
     ax.scatter(
         obs["lon"][absent], obs["lat"][absent], s=19, marker="^",
-        facecolor=[fill], edgecolor="#11151a", linewidth=0.75, zorder=5,
+        facecolor=[fill], edgecolor="#11151a", linewidth=0.55, zorder=5,
         label=f"absence — AC=0 ({int(absent.sum())})",
     )
 
