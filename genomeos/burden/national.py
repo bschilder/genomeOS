@@ -42,12 +42,30 @@ returned alongside it. Two shares are returned, and only one of them governs:
 
 **Below `MIN_MAPPED_POPULATION_FRACTION` of mapped population, the country gets no number.** The
 three things this rollup must never do instead are all tempting and all forbidden by §4 and §9:
-fill masked cells with the prior and total them (that is what `prior_dominated` *means*); assume
-the mapped part's rate applies to the unmapped part; or scale the mapped total up by the inverse
-coverage. Each produces a confident national number out of an absence of data. A refusal is a
-valid output, and it is correctly self-penalising — `score_parity` left-joins on every published
-country, so a country we refuse counts against us — which is exactly why coverage must not be
-widened to improve a score.
+fill masked cells with a point value and total them (that is what `prior_dominated` *means*);
+assume the mapped part's rate applies to the unmapped part; or scale the mapped total up by the
+inverse coverage. Each produces a confident national number out of an absence of data. A refusal
+is a valid output, and it is correctly self-penalising — `score_parity` left-joins on every
+published country, so a country we refuse counts against us — which is exactly why coverage must
+not be widened to improve a score.
+
+**Two methods, one of which is an experiment.** Partial coverage has a second possible answer,
+and which one scores better on §8 is an empirical question rather than a matter of taste, so both
+are implemented and compared:
+
+- `national_totals` — **Method A**, the default and the only one any existing call site reaches.
+  Supported cells only, refusal below the coverage threshold. This is §4/§10 as written.
+- `national_totals_propagating_masked` — **Method B**. Every populated cell, masked ones
+  included, each carrying its full posterior rather than a point value. A masked cell's posterior
+  has barely moved off the prior, so it contributes a wide distribution and the national interval
+  widens with the unmapped share; every country gets a number, and a badly covered one gets an
+  interval that is visibly untrustworthy.
+
+**Method B does not satisfy the invariant that masked cells are excluded from every aggregation
+statistic.** It is here to be measured against Method A, not to be adopted: adopting it for
+published artifacts needs its own issue and a decision (#113). The two are separate functions
+rather than a flag precisely so that no call site can reach B by accident, and the method is
+recorded on every result and every row written to disk.
 
 **What the emitted number covers.** `point` is the burden over the country's *mapped* population
 only, never an extrapolation to the whole country, so it is systematically low against Piel's
@@ -92,6 +110,19 @@ MIN_MAPPED_POPULATION_FRACTION: float = 0.80
 
 REQUIRED_COLUMNS: tuple[str, ...] = ("h3_index", "iso3", "support", "denominator")
 
+#: **Method A**, and the only one any default reaches: total the supported cells, refuse a
+#: country whose mapped population share is too small to stand for it. Satisfies §4/§10 as
+#: written — masked cells are excluded from every aggregation statistic.
+SUPPORTED_ONLY = "supported_only"
+#: **Method B**, an experiment (#113): total every populated cell, masked ones included, carrying
+#: their full posteriors so the national interval widens with the unmapped share. Reachable only
+#: through `national_totals_propagating_masked`, never by passing a flag to the default path.
+PROPAGATE_MASKED = "propagate_masked"
+COVERAGE_METHODS: tuple[str, ...] = (SUPPORTED_ONLY, PROPAGATE_MASKED)
+
+#: Any support state outside `mask.MASKED_STATES`; see `_included`.
+_UNMASKED_PROBE = "interpolated"
+
 #: A country with a posterior over too little of its population to stand for the country (§9).
 #: Distinct from `propagate.REFUSAL_UNSUPPORTED`, which is a *cell* having no usable posterior:
 #: this one is about what a national total is allowed to claim.
@@ -116,9 +147,13 @@ class NationalRollup:
     """
 
     metric: str
+    #: Which of `COVERAGE_METHODS` produced these rows. Recorded so a frame written to disk
+    #: cannot be read back without knowing whether masked cells are inside its totals.
+    method: str
     n_draws: int
     quantiles: tuple[float, float]
-    min_mapped_population: float
+    #: `None` under Method B, which has no coverage refusal.
+    min_mapped_population: float | None
     denominator_source: str | None
     hwe_assumed: bool
     global_total: tuple[float, float, float] | None
@@ -136,10 +171,15 @@ class NationalRollup:
         countries = len(self.per_country)
         mapped = self.per_country["mapped_population_fraction"].median()
         total = "refused" if self.global_total is None else f"{self.global_total[0]:,.0f}"
+        bar = (
+            "no coverage refusal"
+            if self.min_mapped_population is None
+            else f"refusing below {self.min_mapped_population:.0%}"
+        )
         return (
-            f"{self.metric}: {self.n_estimated} of {countries} countries estimated from "
-            f"{self.n_draws} draws; global total {total}; median mapped population "
-            f"{mapped:.1%} (refusing below {self.min_mapped_population:.0%})"
+            f"{self.metric} [{self.method}]: {self.n_estimated} of {countries} countries "
+            f"estimated from {self.n_draws} draws; global total {total}; median mapped "
+            f"population {mapped:.1%} ({bar})"
         )
 
 
@@ -151,7 +191,10 @@ def national_totals(
     quantiles: tuple[float, float] = IQR_QUANTILES,
     min_mapped_population: float = MIN_MAPPED_POPULATION_FRACTION,
 ) -> NationalRollup:
-    """Total the per-cell burden inside each country, draw by draw (§9).
+    """**Method A.** Total the per-cell burden inside each country, draw by draw (§9).
+
+    Supported cells only: masked cells are excluded from the sum, as §4 and §10 require, and a
+    country whose *mapped population* share falls below `min_mapped_population` gets no number.
 
     `frequency_draws` is `(n_draws, n_cells)` of posterior allele frequency, column-aligned with
     `cells`. `cells` carries `h3_index`, `iso3` (see `geo.countries.assign_countries`), `support`
@@ -167,6 +210,71 @@ def national_totals(
     on the result, so every rollup states the coverage bar it was produced under rather than
     leaving a reader to assume one.
     """
+    return _rollup(
+        cells,
+        frequency_draws,
+        config,
+        quantiles=quantiles,
+        method=SUPPORTED_ONLY,
+        min_mapped_population=min_mapped_population,
+    )
+
+
+def national_totals_propagating_masked(
+    cells: pd.DataFrame,
+    frequency_draws: np.ndarray,
+    config: BurdenConfig,
+    *,
+    quantiles: tuple[float, float] = IQR_QUANTILES,
+) -> NationalRollup:
+    """**Method B — an experiment, not the default.** Total over every populated cell, masked
+    ones included, carrying each cell's full posterior rather than a point value.
+
+    **This does not satisfy the §4/§10 invariant that masked cells are excluded from every
+    aggregation statistic.** It is built to be compared against `national_totals` (Method A), not
+    to be adopted: no existing call site reaches it, and adopting it for published artifacts
+    needs its own issue and a decision (#113). Read the module docstring's argument for and
+    against before using it for anything.
+
+    **What makes it honest, and where that rests.** Nothing is imputed and no point value is
+    substituted: the masked cells' own draws go through the burden expression per draw, exactly
+    as the supported cells' do, and the national quantiles are taken afterwards. A masked cell's
+    posterior has by construction barely moved off the prior — that is what `prior_dominated`
+    means, and an `unknown` cell has no observation within 2ρ — so it contributes a wide
+    distribution, and a country's interval widens roughly in proportion to how much of its
+    population sits in unmapped territory. Every country gets a number, and a country with poor
+    coverage gets an interval wide enough to be visibly untrustworthy.
+
+    That argument rests entirely on the caller's draws actually being near-prior in masked cells.
+    They are for a posterior sampled at those cells (`SurfaceFit.prior_frequency_sd` is the prior
+    scale the mask's `posterior_contraction` is measured against). They are not if a caller
+    passes draws that were narrowed, clipped or filled elsewhere — and this function cannot tell,
+    which is one of the arguments against adopting it.
+
+    Denominator and penetrance refusals still stand: masked support is the only reason this
+    method sets aside, and `mapped_population_fraction` is reported exactly as Method A reports
+    it, so the coverage a number rests on travels with it either way.
+    """
+    return _rollup(
+        cells,
+        frequency_draws,
+        config,
+        quantiles=quantiles,
+        method=PROPAGATE_MASKED,
+        min_mapped_population=None,
+    )
+
+
+def _rollup(
+    cells: pd.DataFrame,
+    frequency_draws: np.ndarray,
+    config: BurdenConfig,
+    *,
+    quantiles: tuple[float, float],
+    method: str,
+    min_mapped_population: float | None,
+) -> NationalRollup:
+    """The arithmetic both methods share. They differ only in which cells enter the sum."""
     if config.metric not in COUNT_METRICS:
         raise ValueError(
             f"{config.metric!r} is not a national total; expected one of {COUNT_METRICS}. "
@@ -176,30 +284,38 @@ def national_totals(
     cells = _check_cells(cells)
     if not 0.0 <= quantiles[0] < quantiles[1] <= 1.0:
         raise ValueError(f"quantiles must be an increasing pair within [0, 1]; got {quantiles}")
-    if not 0.0 <= min_mapped_population <= 1.0:
+    if min_mapped_population is not None and not 0.0 <= min_mapped_population <= 1.0:
         raise ValueError("min_mapped_population must be a fraction in [0, 1]")
 
-    refusals = cell_refusals(cells, config)
+    refusals = _method_refusals(cells, config, method)
     included = pd.isna(refusals)
     weights = cells["denominator"].to_numpy(dtype=float)
     frequency = _frequency_draws(draws, cells, config)
 
     # §10's excluded-cell fraction, from the one implementation of it (`mask.aggregate_cells`),
-    # so this rollup cannot drift from the aggregation the rest of the pipeline performs.
+    # so this rollup cannot drift from the aggregation the rest of the pipeline performs. It is
+    # reported under both methods: what Method B changes is what it *does* about the exclusion,
+    # never whether the exclusion is stated.
     support_rollup = rollup_by_country(cells, column="denominator", statistic="sum")
     unmapped = support_rollup.set_index("iso3")
+    # Coverage is always measured against the strict view, whichever method did the summing.
+    supported = pd.isna(cell_refusals(cells, config))
 
     rows = []
     for iso3, sub in cells.groupby("iso3", sort=True):
         index = sub.index.to_numpy()
         keep = index[included[index]]
-        mapped = _mapped_fraction(weights[keep], np.nansum(weights[index]))
+        # Coverage always measures the *supported* population, whichever cells were summed:
+        # under Method B it is the caveat on a number that was emitted anyway.
+        mapped = _mapped_fraction(
+            weights[index[supported[index]]], np.nansum(weights[index])
+        )
         # Order matters. With no usable cell at all the cell-level reason is the informative one
         # ("every cell was masked"); the coverage rule only has something to say about a country
         # that *did* produce cells and still cannot stand for itself.
         if not len(keep):
             refusal = _dominant_refusal(refusals[index])
-        elif mapped < min_mapped_population:
+        elif min_mapped_population is not None and mapped < min_mapped_population:
             refusal = REFUSAL_LOW_COVERAGE
         else:
             refusal = None
@@ -212,7 +328,7 @@ def national_totals(
                 "n_included": len(keep),
                 "mapped_population_fraction": mapped,
                 "unmapped_cell_fraction": float(unmapped.loc[iso3, "unmapped_fraction"]),
-                "mapped_denominator": float(np.nansum(weights[keep])),
+                "mapped_denominator": float(np.nansum(weights[index[supported[index]]])),
             }
         )
 
@@ -221,6 +337,7 @@ def national_totals(
 
     return NationalRollup(
         metric=config.metric,
+        method=method,
         n_draws=int(draws.shape[0]),
         quantiles=quantiles,
         min_mapped_population=min_mapped_population,
@@ -229,6 +346,22 @@ def national_totals(
         global_total=None if global_draws is None else _summarise(global_draws, quantiles),
         per_country=pd.DataFrame(rows),
     )
+
+
+def _method_refusals(cells: pd.DataFrame, config: BurdenConfig, method: str) -> np.ndarray:
+    """The refusal reasons a method recognises per cell — the only place the two differ.
+
+    A cell with no reason enters that method's sum, and a country with no such cell is refused
+    for the reason most of its cells give, so this decides both.
+    """
+    if method == SUPPORTED_ONLY:
+        return cell_refusals(cells, config)
+    if method != PROPAGATE_MASKED:
+        raise ValueError(f"unknown method {method!r}; expected one of {COVERAGE_METHODS}")
+    # Ask the same refusal policy what it would refuse if support were not a reason, rather than
+    # restating the denominator and penetrance rules here. `_UNMASKED_PROBE` is any state outside
+    # `mask.MASKED_STATES`; the cells themselves are untouched.
+    return cell_refusals(cells.assign(support=_UNMASKED_PROBE), config)
 
 
 def _check_draws(frequency_draws: np.ndarray, cells: pd.DataFrame) -> np.ndarray:

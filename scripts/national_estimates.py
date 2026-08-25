@@ -4,7 +4,13 @@ The pipeline #94 specifies, end to end: predict per H3 cell → weight each cell
 sum inside each country boundary → compare against Piel et al.'s published national estimates.
 
     python scripts/national_estimates.py --draws draws.npz \
-        --population-cells data/worldpop_res4.csv --out data/national_ss.csv
+        --population-cells data/worldpop_res4.csv --method both --out data/national_ss.csv
+
+`--method` selects how partial coverage is handled: `supported_only` (the default, §4/§10 as
+written — masked cells excluded, low-coverage countries refused), `propagate_masked` (the #113
+experiment — masked cells included carrying their full posteriors), or `both`, which scores each
+against Piel et al. and prints them side by side. Which one does better on §8 is an empirical
+question, which is why both can be run at once.
 
 **Two real inputs, one of which nothing in this repository can produce yet.**
 
@@ -23,6 +29,12 @@ evenly over its cells; only the country geometry, the national populations and t
 rates are real, and they are there so the arithmetic runs at a believable scale rather than to
 make the output mean something. Everything it writes is labelled `synthetic-demonstration`, and
 per AGENTS.md a synthetic artifact must never be presented as a scientific result.
+
+One property of the stand-in matters when reading a #113 comparison off it: **its draws are
+independent across cells**, while a real GP posterior is strongly correlated in space. Summing
+independent cells averages their uncertainty away, so both methods' national intervals here are
+narrower than a real run's would be — and Method B's characteristic widening with the unmapped
+share is understated rather than flattered.
 """
 
 from __future__ import annotations
@@ -33,7 +45,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from genomeos.burden.national import MIN_MAPPED_POPULATION_FRACTION, national_totals
+from genomeos.burden.national import (
+    COVERAGE_METHODS,
+    MIN_MAPPED_POPULATION_FRACTION,
+    PROPAGATE_MASKED,
+    SUPPORTED_ONLY,
+    national_totals,
+    national_totals_propagating_masked,
+)
 from genomeos.burden.propagate import BurdenConfig
 from genomeos.geo.countries import assign_countries
 from genomeos.geo.population import births_from_population
@@ -55,6 +74,11 @@ SYNTHETIC_FOCI = ((6.0, 15.0, 0.16, 2_000.0), (20.0, 78.0, 0.06, 1_200.0))
 #: patchy: a demonstration where every country is fully mapped exercises none of §10.
 SYNTHETIC_RANGE_KM = 600.0
 SYNTHETIC_SITE_STRIDE = 5
+#: Mean and sd of the stand-in prior on allele frequency. A cell whose posterior did not contract
+#: returns to these, which is what makes the #113 comparison mean anything: Method B's argument is
+#: that a masked cell contributes a *wide* distribution, so a stand-in whose masked cells were
+#: narrow would demonstrate the opposite of what a real posterior does there.
+SYNTHETIC_PRIOR = (0.03, 0.06)
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
@@ -94,22 +118,25 @@ def synthetic_inputs(resolution: int, n_draws: int) -> tuple[pd.DataFrame, np.nd
     for site_lat, site_lon, peak, width in SYNTHETIC_FOCI:
         field += peak * np.exp(-0.5 * (_haversine_km(lat, lon, site_lat, site_lon) / width) ** 2)
 
+    # Contraction grows with distance, so cells far inside the range still fall out as
+    # prior-dominated: both masked states appear, as they do in a real fit.
+    contraction = np.clip(0.3 + 0.75 * distance / SYNTHETIC_RANGE_KM, 0.0, 1.0)
     support = classify_support(
         has_observation_centre=distance < 100.0,
         dist_nearest_obs_km=distance,
-        # Contraction grows with distance, so cells far inside the range still fall out as
-        # prior-dominated: both masked states appear, as they do in a real fit.
-        posterior_contraction=np.clip(0.3 + 0.75 * distance / SYNTHETIC_RANGE_KM, 0.0, 1.2),
+        posterior_contraction=contraction,
         correlation_range_km=SYNTHETIC_RANGE_KM,
         config=MaskConfig(),
     )
 
+    # The same contraction drives the draws, so a cell the mask calls prior-dominated actually
+    # carries a near-prior posterior — wide, and centred on the prior rather than on the field.
+    # Without that the stand-in would make Method B look better than it is (#113).
+    prior_mean, prior_sd = SYNTHETIC_PRIOR
+    mean = (1.0 - contraction) * field + contraction * prior_mean
+    sd = contraction * prior_sd + 0.002
     rng = np.random.default_rng(SEED)
-    draws = np.clip(
-        rng.normal(field[None, :], 0.25 * field[None, :] + 0.002, size=(n_draws, len(cells))),
-        0.0,
-        1.0,
-    )
+    draws = np.clip(rng.normal(mean[None, :], sd[None, :], size=(n_draws, len(cells))), 0.0, 1.0)
     return pd.DataFrame({"h3_index": cells, "support": support}), draws
 
 
@@ -140,6 +167,49 @@ def load_inputs(args) -> tuple[pd.DataFrame, np.ndarray]:
     return merged, payload["draws"]
 
 
+def _comparison_table(frames: dict[str, pd.DataFrame], n: int, metric: str) -> pd.DataFrame:
+    """The largest and smallest estimates, one column pair per method, against the published ones.
+
+    Ranked by whichever method answered everywhere, so a country Method A refused still appears —
+    with its refusal beside Method B's number, which is the comparison worth looking at.
+
+    `mapped` is on every row and is not decoration: a top-ten country at 55% mapped population is
+    a different claim from one at 99%, under either method.
+    """
+    published = national_estimates().set_index("iso3")
+    indexed = {name: frame.set_index("iso3") for name, frame in frames.items()}
+    primary = indexed.get(PROPAGATE_MASKED, next(iter(indexed.values())))
+
+    ranked = primary[primary["point"].notna()].sort_values("point", ascending=False)
+    picked = ranked if len(ranked) <= 2 * n else pd.concat([ranked.head(n), ranked.tail(n)])
+
+    rows = []
+    for iso3, row in picked.iterrows():
+        entry = {"iso3": iso3, "country": row["country"]}
+        for name, frame in indexed.items():
+            entry[name] = _estimate(frame.loc[iso3]) if iso3 in frame.index else "—"
+        entry["published"] = (
+            f"{published.loc[iso3, f'{metric}_neonates_per_year']:,.0f} "
+            f"({published.loc[iso3, f'{metric}_iqr_lower']:,.0f}–"
+            f"{published.loc[iso3, f'{metric}_iqr_upper']:,.0f})"
+        )
+        entry["mapped"] = f"{row['mapped_population_fraction']:.0%}"
+        rows.append(entry)
+    return pd.DataFrame(rows)
+
+
+def _estimate(row) -> str:
+    """One method's answer for one country: the point with its IQR, or the stated refusal."""
+    if pd.isna(row["point"]):
+        return f"refused ({row['refusal']})"
+    return f"{_number(row['point'])} ({_number(row['iqr_lower'])}–{_number(row['iqr_upper'])})"
+
+
+def _number(value: float) -> str:
+    """Rounding a burden of 0.4 people to "0" would make it unreadable next to a refusal."""
+    return f"{value:,.0f}" if abs(value) >= 10 else f"{value:.2f}"
+
+
 def _markdown(frame: pd.DataFrame) -> str:
     """A markdown table without pulling in tabulate for one function."""
     header = list(frame.columns)
@@ -167,6 +237,10 @@ def main() -> None:
     ap.add_argument("--h3-res", type=int, default=4, help="resolution for --synthetic")
     ap.add_argument("--draws-n", type=int, default=200, help="draw count for --synthetic")
     ap.add_argument("--top", type=int, default=10, help="rows at each end of the printed table")
+    ap.add_argument(
+        "--method", choices=(*COVERAGE_METHODS, "both"), default=SUPPORTED_ONLY,
+        help="supported_only is §4/§10 as written; propagate_masked is the #113 experiment",
+    )
     ap.add_argument(
         "--min-mapped-population", type=float, default=MIN_MAPPED_POPULATION_FRACTION,
         help="refuse a country below this mapped population share",
@@ -208,35 +282,46 @@ def main() -> None:
     cells = births_from_population(cells, birth_rate).rename(columns={"births": "denominator"})
 
     metric, penetrance = METRICS[args.metric]
-    rollup = national_totals(
-        cells,
-        draws,
-        BurdenConfig(
-            inheritance="autosomal_recessive",
-            metric=metric,
-            penetrance=penetrance,
-            denominator_source=f"{source}+piel2013-cbr",
-        ),
-        min_mapped_population=args.min_mapped_population,
+    config = BurdenConfig(
+        inheritance="autosomal_recessive",
+        metric=metric,
+        penetrance=penetrance,
+        denominator_source=f"{source}+piel2013-cbr",
     )
-    print(rollup)
-    print(rollup.refused()["refusal"].value_counts().to_string())
 
-    frame = to_parity_frame(rollup.per_country)
-    result = score_parity(frame, metric=args.metric, global_estimate=rollup.global_total)
-    print(result)
+    methods = COVERAGE_METHODS if args.method == "both" else (args.method,)
+    rollups, frames = {}, {}
+    for name in methods:
+        if name == SUPPORTED_ONLY:
+            rollup = national_totals(
+                cells, draws, config, min_mapped_population=args.min_mapped_population
+            )
+        else:
+            rollup = national_totals_propagating_masked(cells, draws, config)
+        rollups[name] = rollup
+        frames[name] = to_parity_frame(rollup.per_country)
 
-    table = result.top_bottom(args.top)
+        print(f"\n{rollup}")
+        refusals = rollup.refused()["refusal"].value_counts()
+        print(refusals.to_string() if len(refusals) else "  no refusals")
+        print(score_parity(frames[name], metric=args.metric, global_estimate=rollup.global_total))
+
     print(f"\nTop and bottom {args.top} by estimated {args.metric.upper()} neonates/year:")
-    print(_markdown(table))
+    print(_markdown(_comparison_table(frames, args.top, args.metric)))
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        rollup.per_country.assign(
-            metric=rollup.metric,
-            denominator_source=rollup.denominator_source,
-            min_mapped_population=rollup.min_mapped_population,
-            source=source,
+        pd.concat(
+            [
+                rollup.per_country.assign(
+                    metric=rollup.metric,
+                    method=rollup.method,
+                    denominator_source=rollup.denominator_source,
+                    min_mapped_population=rollup.min_mapped_population,
+                    source=source,
+                )
+                for rollup in rollups.values()
+            ]
         ).to_csv(args.out, index=False)
         print(f"\nwrote {args.out}")
 

@@ -13,9 +13,12 @@ import pytest
 
 from genomeos.burden.national import (
     MIN_MAPPED_POPULATION_FRACTION,
+    PROPAGATE_MASKED,
     REFUSAL_LOW_COVERAGE,
+    SUPPORTED_ONLY,
     NationalRollup,
     national_totals,
+    national_totals_propagating_masked,
 )
 from genomeos.burden.propagate import (
     REFUSAL_NO_DENOMINATOR,
@@ -224,6 +227,101 @@ def test_a_country_with_no_births_at_all_reports_an_undefined_share_not_full_cov
     ghana = national_totals(cells, _draws([0.1] * 4), SS).per_country.set_index("iso3").loc["GHA"]
     assert ghana["point"] == 0.0  # nobody there is a real zero, not a refusal
     assert pd.isna(ghana["mapped_population_fraction"])
+
+
+# --- Method B: propagate the masked cells' posteriors instead of excluding them (#113) ---
+
+
+def test_method_b_totals_the_masked_cells_too():
+    cells = _cells(support=["observed", "unknown", "observed", "observed"])
+    ghana = (
+        national_totals_propagating_masked(cells, _draws([0.1] * 4), SS)
+        .per_country.set_index("iso3")
+        .loc["GHA"]
+    )
+    assert ghana["point"] == pytest.approx(11_000 * 0.1**2)
+    assert ghana["n_included"] == 2
+
+
+def test_method_b_answers_where_method_a_refuses_for_coverage():
+    """Same input, opposite outputs: that contrast is the whole reason both exist."""
+    cells = _cells(support=["observed", "unknown", "observed", "observed"])
+    strict = national_totals(cells, _draws([0.1] * 4), SS).per_country.set_index("iso3")
+    permissive = national_totals_propagating_masked(
+        cells, _draws([0.1] * 4), SS
+    ).per_country.set_index("iso3")
+
+    assert strict.loc["GHA", "refusal"] == REFUSAL_LOW_COVERAGE
+    assert permissive.loc["GHA", "refusal"] is None
+    assert pd.notna(permissive.loc["GHA", "point"])
+
+
+def test_method_b_reports_the_same_coverage_it_declined_to_act_on():
+    """The mapped share is a caveat on Method B's number, not a filter — so it still travels."""
+    cells = _cells(support=["observed", "unknown", "observed", "observed"])
+    permissive = national_totals_propagating_masked(cells, _draws([0.1] * 4), SS)
+    ghana = permissive.per_country.set_index("iso3").loc["GHA"]
+    assert ghana["mapped_population_fraction"] == pytest.approx(1_000 / 11_000)
+    assert ghana["unmapped_cell_fraction"] == pytest.approx(0.5)
+    assert permissive.min_mapped_population is None
+
+
+def test_method_b_widens_the_interval_by_the_unmapped_share():
+    """The honesty of Method B rests on this: a masked cell's posterior has barely moved off the
+    prior, so including it buys an answer at the price of a visibly wide interval."""
+    rng = np.random.default_rng(42)
+    tight = rng.normal(0.10, 0.005, size=(600, 1)).clip(0, 1)
+    near_prior = rng.uniform(0.0, 0.4, size=(600, 1))  # a posterior that never contracted
+    draws = np.hstack([tight, near_prior, tight, tight])
+
+    cells = _cells(support=["observed", "unknown", "observed", "observed"])
+    permissive = national_totals_propagating_masked(cells, draws, SS)
+    relaxed = national_totals(cells, draws, SS, min_mapped_population=0.0)
+
+    def width(rollup):
+        row = rollup.per_country.set_index("iso3").loc["GHA"]
+        return row["iqr_upper"] - row["iqr_lower"]
+
+    assert width(permissive) > 20 * width(relaxed)
+
+
+def test_method_b_still_refuses_a_cell_with_no_denominator():
+    """Masked support is the only reason Method B sets aside; §9's other refusals stand."""
+    cells = _cells(
+        support=["unknown", "unknown", "observed", "observed"],
+        denominator=[np.nan, np.nan, 5_000.0, 5_000.0],
+    )
+    ghana = (
+        national_totals_propagating_masked(cells, _draws([0.1] * 4), SS)
+        .per_country.set_index("iso3")
+        .loc["GHA"]
+    )
+    assert pd.isna(ghana["point"])
+    assert ghana["refusal"] == REFUSAL_NO_DENOMINATOR
+
+
+def test_method_b_still_refuses_a_variant_with_no_penetrance():
+    config = BurdenConfig(inheritance="autosomal_recessive", metric="affected_count")
+    rollup = national_totals_propagating_masked(_cells(), _draws([0.1] * 4), config)
+    assert set(rollup.per_country["refusal"]) == {REFUSAL_NO_PENETRANCE}
+
+
+def test_the_method_is_recorded_on_every_result():
+    """A frame on disk must not be readable without knowing whether masked cells are inside it."""
+    assert national_totals(_cells(), _draws([0.1] * 4), SS).method == SUPPORTED_ONLY
+    permissive = national_totals_propagating_masked(_cells(), _draws([0.1] * 4), SS)
+    assert permissive.method == PROPAGATE_MASKED
+    assert PROPAGATE_MASKED in str(permissive)
+
+
+def test_method_b_is_not_reachable_from_the_default_path():
+    """Two functions rather than a flag, so no call site gets Method B by accident (#113)."""
+    import inspect
+
+    parameters = inspect.signature(national_totals).parameters
+    assert "method" not in parameters
+    cells = _cells(support=["observed", "unknown", "observed", "observed"])
+    assert national_totals(cells, _draws([0.1] * 4), SS).method == SUPPORTED_ONLY
 
 
 # --- inputs that would be wrong silently (§12) ---
