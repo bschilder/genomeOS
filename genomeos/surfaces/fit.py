@@ -276,6 +276,23 @@ class SurfaceFit:
         posterior predictive, so the two align draw-for-draw."""
         return self.idata.posterior[name].to_numpy().reshape(-1)
 
+    def predict_draws(self, lat: object, lon: object) -> np.ndarray:
+        """Posterior draws of the latent frequency, shape ``(draws, points)`` (#112).
+
+        `predict` summarises these into medians and quantiles; the burden path needs the draws
+        themselves, and cannot be written any other way. A national total is a sum over cells
+        *within* a draw, and the summary of a sum is not a function of the summaries of its
+        terms — medians in particular do not sum, a shortfall #92 measures at 4-7% against Piel
+        et al.'s own national medians, which is the size of error that reads as model failure.
+
+        This exposes draws `predict` already computes rather than running new inference.
+        """
+        lat_arr = np.atleast_1d(np.asarray(lat, dtype=float))
+        lon_arr = np.atleast_1d(np.asarray(lon, dtype=float))
+        if lat_arr.shape != lon_arr.shape:
+            raise ValueError("lat and lon must have the same length")
+        return self._frequency_samples(lat_arr, lon_arr)
+
     def predict_observation(self, lat: object, lon: object, an: object) -> pd.DataFrame:
         """Posterior predictive for a **new survey** of `an` alleles at each point (§7; #110).
 
