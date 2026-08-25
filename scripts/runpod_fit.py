@@ -85,11 +85,19 @@ JOB_COMMANDS = {
         "--n-inducing {n_inducing_fold} --draws {draws} ; "
         "echo '--- validation done ---'; date"
     ),
+    # The results are echoed to the pod log on purpose. Nothing copies /workspace/out back, so
+    # without this the numbers die with the pod — which is how an earlier 8.9-hour run returned
+    # nothing at all. `cat` is guarded because a strategy that failed writes no file.
     "validate": (
         "run python scripts/validate_holdout.py "
         "--observations /workspace/data/map_hbs_surveys.csv "
         "--out /workspace/out --n-folds {n_folds} "
-        "--n-inducing {n_inducing} --draws {draws}"
+        "--n-inducing {n_inducing} --draws {draws} ; "
+        "echo '===== RESULTS BEGIN ====='; "
+        "cat /workspace/out/crossval_summary.json 2>/dev/null || echo 'no summary written'; "
+        "echo '--- spatial ---'; cat /workspace/out/crossval_spatial.csv 2>/dev/null; "
+        "echo '--- random ---'; cat /workspace/out/crossval_random.csv 2>/dev/null; "
+        "echo '===== RESULTS END ====='"
     ),
 }
 
