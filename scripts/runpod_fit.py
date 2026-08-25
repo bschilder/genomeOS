@@ -65,6 +65,19 @@ JOB_COMMANDS = {
         "--approximation {approximation} --n-inducing {n_inducing} --hsgp-m {hsgp_m} "
         "--draws {draws} --contraction-threshold 0.5"
     ),
+    # Both, in one pod: the validation numbers and the figure they describe should come from the
+    # same code at the same M, and a second pod launch is a second chance to forget to stop one.
+    "validate+fit": (
+        "run python scripts/validate_holdout.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out --n-folds {n_folds} "
+        "--n-inducing {n_inducing_fold} --draws {draws} ; "
+        "run python scripts/plot_surface.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out/hbs_surface_geodesic.png "
+        "--approximation inducing --n-inducing {n_inducing} --hsgp-m {hsgp_m} "
+        "--draws {draws} --contraction-threshold 0.5"
+    ),
     "validate": (
         "run python scripts/validate_holdout.py "
         "--observations /workspace/data/map_hbs_surveys.csv "
@@ -80,9 +93,13 @@ def entrypoint(args) -> str:
     Deliberately no `set -x`: it echoes expanded variables, and this script sees a GitHub token.
     Progress is marked with explicit echo lines instead.
     """
+    # Folds train on (k-1)/k of the data, so the per-fold inducing budget must be smaller to
+    # stay under fit_surface's M<<N guard.
+    n_inducing_fold = int(args.n_inducing * (args.n_folds - 1) / args.n_folds)
     job_command = JOB_COMMANDS[args.job].format(
         approximation=args.approximation,
         n_inducing=args.n_inducing,
+        n_inducing_fold=n_inducing_fold,
         hsgp_m=args.hsgp_m,
         draws=args.draws,
         n_folds=args.n_folds,
@@ -176,7 +193,7 @@ def main() -> None:
     ap.add_argument("--job", choices=tuple(JOB_COMMANDS), default="fit")
     ap.add_argument("--n-folds", type=int, default=5)
     ap.add_argument("--approximation", choices=("hsgp", "inducing"), default="inducing")
-    ap.add_argument("--n-inducing", type=int, default=1500,
+    ap.add_argument("--n-inducing", type=int, default=400,
                     help="inducing points; the M^3 Cholesky per leapfrog step is the GPU work")
     ap.add_argument("--hsgp-m", type=int, default=12, help="HSGP basis functions per dimension")
     ap.add_argument("--draws", type=int, default=1000)

@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from genomeos.surfaces.fit import FitConfig, fit_surface, to_unit_sphere
+from genomeos.surfaces.fit import ConvergenceError, FitConfig, fit_surface, to_unit_sphere
 
 SEED = 42
 FOLD_STRATEGIES: tuple[str, ...] = ("spatial", "random")
@@ -54,11 +54,34 @@ class FoldResult:
 
 
 @dataclass(frozen=True)
+class FoldFailure:
+    """A fold whose fit did not converge. Recorded, not fatal.
+
+    A single unconverged fold must not destroy the whole run: folds train on a fraction of the
+    data, so some will mix worse than the full fit, and eight hours of work was once lost to one
+    of them raising. The failure is reported and excluded from the means — never silently
+    averaged away as if it had succeeded.
+    """
+
+    fold: int
+    n_train: int
+    n_test: int
+    error: str
+
+
+@dataclass(frozen=True)
 class CrossValidation:
     strategy: str
     folds: list[FoldResult] = field(repr=False)
+    failures: list[FoldFailure] = field(default_factory=list, repr=False)
+
+    @property
+    def n_attempted(self) -> int:
+        return len(self.folds) + len(self.failures)
 
     def _mean(self, attribute: str) -> float:
+        if not self.folds:
+            return float("nan")
         return float(np.mean([getattr(f, attribute) for f in self.folds]))
 
     @property
@@ -71,9 +94,14 @@ class CrossValidation:
         return pd.DataFrame([f.__dict__ for f in self.folds])
 
     def __str__(self) -> str:
+        header = f"{self.strategy} cross-validation — {len(self.folds)}/{self.n_attempted} folds scored"
+        if self.failures:
+            header += f"  ({len(self.failures)} did not converge)"
+        if not self.folds:
+            return header + "\n  no fold converged; nothing to report"
         return "\n".join(
             [
-                f"{self.strategy} {len(self.folds)}-fold cross-validation",
+                header,
                 f"  coverage of 95% interval : {self._mean('coverage_95'):.2f}  (target 0.95)",
                 f"  coverage of 50% interval : {self._mean('coverage_50'):.2f}  (target 0.50)",
                 f"  MAE (allele frequency)   : {self._mean('mae'):.4f}"
@@ -131,17 +159,27 @@ def cross_validate(
 ) -> CrossValidation:
     """Fit on each fold's complement and score the held-out surveys."""
     config = config or FitConfig()
+    # Each fold trains on (k-1)/k of the data, so `n_inducing` has to satisfy fit_surface's
+    # M<<N guard against the *fold* size rather than the full dataset.
     folds = make_folds(observations, n_folds, strategy, seed)
     observations = observations.reset_index(drop=True)
 
     results: list[FoldResult] = []
+    failures: list[FoldFailure] = []
     for fold in sorted(set(folds)):
         test_mask = folds == fold
         train, test = observations[~test_mask], observations[test_mask]
         if train.empty or test.empty:
             continue
 
-        fit = fit_surface(train, config)
+        try:
+            fit = fit_surface(train, config)
+        except ConvergenceError as error:
+            # Record and continue. See FoldFailure.
+            failures.append(
+                FoldFailure(int(fold), len(train), len(test), str(error))
+            )
+            continue
         predicted = fit.predict(lat=test["lat"].to_numpy(), lon=test["lon"].to_numpy())
 
         ac = test["ac"].to_numpy(dtype=float)
@@ -168,4 +206,4 @@ def cross_validate(
                 baseline_log_score=_log_score(ac, an, np.full_like(observed, baseline_p)),
             )
         )
-    return CrossValidation(strategy=strategy, folds=results)
+    return CrossValidation(strategy=strategy, folds=results, failures=failures)

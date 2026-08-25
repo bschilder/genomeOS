@@ -45,6 +45,9 @@ def main() -> None:
         print(f"\n{result}")
         result.summary().to_csv(args.out / f"crossval_{strategy}.csv", index=False)
         summary[strategy] = {
+            "folds_scored": len(result.folds),
+            "folds_attempted": result.n_attempted,
+            "folds_failed": [f.__dict__ for f in result.failures],
             "coverage_95": result._mean("coverage_95"),
             "coverage_50": result._mean("coverage_50"),
             "mae": result._mean("mae"),
@@ -57,6 +60,14 @@ def main() -> None:
     (args.out / "crossval_summary.json").write_text(json.dumps(summary, indent=2))
     spatial, random = summary["spatial"], summary["random"]
     print("\n=== interpretation ===")
+    for strategy, block in summary.items():
+        if block["folds_scored"] == 0:
+            print(f"{strategy}: NO fold converged — nothing to conclude")
+        elif block["folds_failed"]:
+            print(
+                f"{strategy}: {block['folds_scored']}/{block['folds_attempted']} folds scored; "
+                f"{len(block['folds_failed'])} excluded for non-convergence"
+            )
     print(f"skill over baseline, spatial folds : {spatial['skill']:+.3f}")
     print(f"skill over baseline, random folds  : {random['skill']:+.3f}")
     print(

@@ -11,12 +11,15 @@ from test_surface_fit import _observations
 from genomeos.surfaces.fit import FitConfig
 from genomeos.validation.crossval import (
     CrossValidation,
+    FoldFailure,
     FoldResult,
     cross_validate,
     make_folds,
 )
 
-FAST = FitConfig(draws=300, tune=600, chains=4, approximation="inducing", n_inducing=40)
+# n_inducing must respect the M<<N guard against the *fold* size, not the full dataset: each
+# fold trains on (k-1)/k of the data, so a budget that is fine overall can be too large per fold.
+FAST = FitConfig(draws=300, tune=600, chains=4, approximation="inducing", n_inducing=25)
 
 
 def _fold(**kwargs) -> FoldResult:
@@ -106,3 +109,33 @@ def test_cross_validation_runs_and_reports_coverage_between_zero_and_one():
         assert 0.0 <= fold.coverage_50 <= 1.0
         assert fold.mae >= 0.0
         assert fold.n_train + fold.n_test == len(observations)
+
+
+# --- fold tolerance ---
+
+
+def test_a_non_converged_fold_is_recorded_not_fatal():
+    """One bad fold must not destroy the run; eight hours were once lost to exactly that."""
+    result = CrossValidation(
+        "spatial",
+        folds=[_fold(fold=0), _fold(fold=1)],
+        failures=[FoldFailure(2, 80, 20, "sampler did not converge (ESS 80 < 200)")],
+    )
+    assert result.n_attempted == 3
+    assert len(result.folds) == 2
+    assert "1 did not converge" in str(result)
+
+
+def test_failed_folds_are_excluded_from_the_means_not_averaged_in():
+    result = CrossValidation(
+        "spatial",
+        folds=[_fold(coverage_95=0.9)],
+        failures=[FoldFailure(1, 80, 20, "boom")],
+    )
+    assert result._mean("coverage_95") == pytest.approx(0.9)
+
+
+def test_a_run_where_nothing_converged_says_so_rather_than_reporting_nan():
+    result = CrossValidation("spatial", folds=[], failures=[FoldFailure(0, 80, 20, "boom")])
+    assert "no fold converged" in str(result)
+    assert np.isnan(result._mean("mae"))
