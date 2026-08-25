@@ -38,6 +38,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pymc as pm
+import pytensor.tensor as pt
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 
@@ -57,6 +58,36 @@ class ConvergenceError(RuntimeError):
 
 #: "numpyro" and "blackjax" route through JAX and will use a GPU if one is visible.
 NUTS_SAMPLERS: tuple[str, ...] = ("pymc", "numpyro", "blackjax", "nutpie")
+
+#: How the latent field is approximated.
+#:
+#: ``hsgp`` spans the ambient cube with a rectangular basis. Cost is m^3 and resolution is 2L/m
+#: *everywhere*, so most coefficients describe open ocean and the Earth's interior. m=32 buys
+#: 32,768 coefficients and still resolves only ~600 km; the 5 km the reference map renders at
+#: would need m~3,800, i.e. 5e10 coefficients. It cannot get there, and no GPU changes that.
+#:
+#: ``inducing`` represents the field by its values at M points placed by clustering the
+#: observations, so resolution follows data density rather than a global grid — fine where
+#: surveys are dense, absent over empty ocean. Cost is O(N*M^2 + M^3) and is independent of the
+#: rendering grid. Same idea as the SPDE meshes §7 originally named: put the degrees of freedom
+#: where the data is.
+APPROXIMATIONS: tuple[str, ...] = ("hsgp", "inducing")
+
+#: Where inducing points are placed.
+#:
+#: ``h3`` uses H3 cell centres. H3 is an icosahedral — geodesic — tessellation of the sphere, so
+#: spacing is near-uniform with no polar pile-up, placement is deterministic with no seed, and
+#: the inducing points *are* the cells §6 already renders. It also lets §7's resolution-promotion
+#: rule drive the model and not just the mask: start at res 4 and promote to 5/6 only where
+#: observation density supports it.
+#:
+#: ``kmeans`` clusters the observations instead. Concentrates on data more aggressively, but the
+#: placement depends on a seed and does not align with the artifact grid.
+INDUCING_PLACEMENTS: tuple[str, ...] = ("h3", "kmeans")
+
+#: Added to the inducing covariance diagonal so its Cholesky stays positive definite when two
+#: inducing points land close together.
+JITTER = 1e-6
 
 #: The well-ascertained anchor. β_design is a contrast *against* this level, so population
 #: screening surveys are the reference and their offset is fixed at zero (§7.1a).
@@ -94,9 +125,17 @@ class FitConfig:
     #: running to 11.5; beta-binomial gives r_hat 1.02 / ESS 378 with amplitude 1.79. It is the
     #: difference between a fit and a failure, not a refinement (#83, #103).
     likelihood: str = "beta_binomial"
-    #: HSGP basis functions per spatial dimension — three dimensions now, since the GP lives on
-    #: the unit sphere. Cost grows as the product, so this is the accuracy/cost dial calibrated
-    #: in #39 rather than a value chosen for elegance.
+    approximation: str = "hsgp"
+    inducing_placement: str = "h3"
+    #: Budget on inducing points. The M^3 Cholesky per leapfrog step is the cost, so this is the
+    #: accuracy/cost dial that replaces hsgp_m (#39).
+    n_inducing: int = 400
+    #: How far beyond the observations to place inducing points, as a multiple of the largest
+    #: observation radius. Cells further out get no degrees of freedom, which is the point.
+    inducing_reach_km: float = 1500.0
+    #: HSGP basis functions per spatial dimension — three dimensions, since the GP lives on the
+    #: unit sphere. Cost grows as the product, so this is the accuracy/cost dial calibrated in
+    #: #39 rather than a value chosen for elegance.
     hsgp_m: tuple[int, ...] = (6, 6, 6)
     #: Domain expansion factor. Must exceed 1 so the boundary does not distort the fit. The
     #: sphere already lies inside [-1, 1]^3, so this pads it rather than rescaling anything.
@@ -135,6 +174,17 @@ class FitConfig:
             raise ValueError("hsgp_c must be > 1 so the HSGP domain extends beyond the data")
         if self.max_rhat < 1.0:
             raise ValueError("max_rhat must be >= 1.0")
+        if self.approximation not in APPROXIMATIONS:
+            raise ValueError(
+                f"unknown approximation {self.approximation!r}; expected one of {APPROXIMATIONS}"
+            )
+        if self.n_inducing < 2:
+            raise ValueError("n_inducing must be >= 2")
+        if self.inducing_placement not in INDUCING_PLACEMENTS:
+            raise ValueError(
+                f"unknown inducing_placement {self.inducing_placement!r}; "
+                f"expected one of {INDUCING_PLACEMENTS}"
+            )
         if self.nuts_sampler not in NUTS_SAMPLERS:
             raise ValueError(
                 f"unknown nuts_sampler {self.nuts_sampler!r}; expected one of {NUTS_SAMPLERS}"
@@ -232,6 +282,85 @@ class SurfaceFit:
         )
 
 
+def h3_inducing_points(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    n_inducing: int,
+    reach_km: float,
+) -> np.ndarray:
+    """Inducing points on the H3 geodesic sphere, promoted where observations are dense.
+
+    H3 tiles the sphere by subdividing an icosahedron, so cells are near-uniform in area and
+    there is no polar pile-up — the failure mode of a lat/lon grid, where cells collapse to
+    slivers at the poles and the model spends degrees of freedom on the Arctic. The inducing
+    points are then the same cells §6 renders.
+
+    Cells are seeded at the coarse end of §6's ladder within `reach_km` of an observation, then
+    promoted to their children where the local observation count justifies it — §7's
+    resolution-promotion rule applied to the *model* and not only to the mask.
+
+    **Selection is by distance to the nearest observation, never by H3 index order.** Truncating
+    a sorted index is geographically arbitrary: it once selected a contiguous block on a single
+    icosahedral face, putting every inducing point in the Arctic a median 8,800 km from the data
+    while looking beautifully uniform. Uniform spacing is necessary and nowhere near sufficient.
+    """
+    import h3
+
+    from genomeos.geo.h3util import RESOLUTION_LADDER, _haversine_km, cells_within_km
+
+    lat = np.asarray(lat, dtype=float)
+    lon = np.asarray(lon, dtype=float)
+    base, *finer = RESOLUTION_LADDER
+
+    cells: set[str] = set()
+    for point_lat, point_lon in zip(lat, lon, strict=True):
+        cells.update(cells_within_km(float(point_lat), float(point_lon), reach_km, base))
+
+    # Promote the cells holding the most observations: that is where finer resolution can
+    # actually be identified from the data.
+    for resolution in finer:
+        if len(cells) >= n_inducing:
+            break
+        density: dict[str, int] = {}
+        for point_lat, point_lon in zip(lat, lon, strict=True):
+            cell = h3.latlng_to_cell(float(point_lat), float(point_lon), resolution - 1)
+            density[cell] = density.get(cell, 0) + 1
+        for parent in sorted(density, key=lambda c: -density[c]):
+            if len(cells) >= n_inducing or parent not in cells:
+                continue
+            cells.discard(parent)
+            cells.update(h3.cell_to_children(parent, resolution))
+
+    centres = np.array([h3.cell_to_latlng(cell) for cell in sorted(cells)], dtype=float)
+    if len(centres) == 0:
+        raise ValueError("no H3 cells within reach of the observations")
+
+    # Rank by distance to the nearest observation and keep the closest.
+    distance = _haversine_km(
+        centres[:, 0][:, None], centres[:, 1][:, None], lat[None, :], lon[None, :]
+    ).min(axis=1)
+    keep = np.argsort(distance)[:n_inducing]
+    centres = centres[keep]
+    return to_unit_sphere(centres[:, 0], centres[:, 1])
+
+
+def inducing_points(x: np.ndarray, n_inducing: int, seed: int) -> np.ndarray:
+    """Choose inducing locations on the unit sphere by clustering the observations.
+
+    Clustering rather than gridding is the whole point: it puts the field's degrees of freedom
+    where measurements are, so West Africa and the Indian tribal belt get fine spacing while the
+    Pacific gets none. Centroids are re-projected onto the sphere, since the mean of points on a
+    sphere lies inside it.
+    """
+    from scipy.cluster.vq import kmeans2
+
+    n_inducing = min(n_inducing, len(x))
+    centroids, _ = kmeans2(x, n_inducing, minit="++", seed=seed, iter=40)
+    centroids = centroids[np.isfinite(centroids).all(axis=1)]
+    norms = np.linalg.norm(centroids, axis=1)
+    return centroids[norms > 0] / norms[norms > 0, None]
+
+
 def _check_convergence(idata, config: FitConfig) -> None:
     """Raise unless every parameter mixed. See `ConvergenceError` and §12."""
     import arviz as az
@@ -285,6 +414,16 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     ac = obs["ac"].to_numpy(dtype=int)
     an = obs["an"].to_numpy(dtype=int)
 
+    if config.approximation != "inducing":
+        inducing = np.zeros((0, 3))
+    elif config.inducing_placement == "h3":
+        inducing = h3_inducing_points(
+            obs["lat"].to_numpy(), obs["lon"].to_numpy(),
+            config.n_inducing, config.inducing_reach_km,
+        )
+    else:
+        inducing = inducing_points(x, config.n_inducing, config.seed)
+
     with pm.Model() as model:
         x_data = pm.Data("x_obs", x)
         x_pred = pm.Data("x_pred", x[:1])
@@ -307,13 +446,31 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         intercept = pm.Normal("intercept", mu=-3.5, sigma=1.5)
 
         cov = amplitude**2 * pm.gp.cov.Matern52(3, ls=lengthscale)
-        gp = pm.gp.HSGP(
-            m=list(config.hsgp_m),
-            c=config.hsgp_c,
-            cov_func=cov,
-            mean_func=pm.gp.mean.Constant(intercept),
-        )
-        f = gp.prior("f", X=x_data)
+
+        if config.approximation == "hsgp":
+            gp = pm.gp.HSGP(
+                m=list(config.hsgp_m),
+                c=config.hsgp_c,
+                cov_func=cov,
+                mean_func=pm.gp.mean.Constant(intercept),
+            )
+            f = gp.prior("f", X=x_data)
+            f_pred_expr = None
+        else:
+            # Sparse GP over inducing points, deterministic training conditional:
+            #     u = L z,   f = K_fu K_uu^-1 u = K_fu L^-T z
+            # Expressed as L^-T z rather than a solve against K_uu: one Cholesky per step, and
+            # better conditioned. z is unit-normal, so this is non-centred by construction — the
+            # same reason the cohort effects are (Neal's funnel).
+            inducing_t = pt.as_tensor_variable(inducing)
+            z_u = pm.Normal("z_u", mu=0.0, sigma=1.0, shape=len(inducing))
+            chol_uu = pt.linalg.cholesky(cov(inducing_t) + JITTER * pt.eye(len(inducing)))
+            weights = pt.linalg.solve_triangular(chol_uu.T, z_u, lower=False)
+            f = pm.Deterministic("f", intercept + cov(x_data, inducing_t) @ weights)
+            # Prediction reuses the identical expression, so there is no second code path that
+            # can silently disagree with the training one.
+            f_pred_expr = intercept + cov(x_pred, inducing_t) @ weights
+
         logit = f
 
         if beta_design_applied:
@@ -350,8 +507,9 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
 
         # Prediction path: the reference design, with no cohort offset — what a well-ascertained
         # survey would have measured at that location (§7.1a).
-        f_pred = gp.conditional("f_pred", Xnew=x_pred)
-        pm.Deterministic("freq_pred", pm.math.invlogit(f_pred))
+        if f_pred_expr is None:
+            f_pred_expr = gp.conditional("f_pred", Xnew=x_pred)
+        pm.Deterministic("freq_pred", pm.math.invlogit(f_pred_expr))
 
         prior = pm.sample_prior_predictive(
             draws=500, var_names=["freq_pred"], random_seed=config.seed

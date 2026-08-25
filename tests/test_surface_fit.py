@@ -6,7 +6,14 @@ import pandera.errors
 import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
-from genomeos.surfaces.fit import ConvergenceError, FitConfig, fit_surface
+from genomeos.surfaces.fit import (
+    ConvergenceError,
+    FitConfig,
+    fit_surface,
+    h3_inducing_points,
+    inducing_points,
+    to_unit_sphere,
+)
 
 # Enough draws to actually converge: fit_surface now refuses a fit that has not mixed (§12),
 # so a too-short chain is a failure rather than a fast approximation. numpyro keeps it quick.
@@ -166,3 +173,98 @@ def test_the_binomial_likelihood_remains_selectable():
     """Beta-binomial is the default, but the binomial §7 specifies must stay reachable (#83)."""
     assert FitConfig().likelihood == "beta_binomial"
     assert FitConfig(likelihood="binomial").likelihood == "binomial"
+
+
+# --- inducing-point approximation (#103): degrees of freedom where the data is ---
+
+
+def test_inducing_points_lie_on_the_sphere_and_follow_the_data():
+    """Centroids are re-projected: the mean of points on a sphere sits inside it."""
+    observations = _observations(n=120)
+    x = to_unit_sphere(observations["lat"], observations["lon"])
+    points = inducing_points(x, 30, seed=42)
+    assert len(points) <= 30
+    assert np.allclose(np.linalg.norm(points, axis=1), 1.0)
+
+
+def test_inducing_placement_is_deterministic_given_the_seed():
+    observations = _observations(n=120)
+    x = to_unit_sphere(observations["lat"], observations["lon"])
+    assert np.allclose(inducing_points(x, 25, seed=7), inducing_points(x, 25, seed=7))
+
+
+def test_the_inducing_approximation_fits_and_predicts():
+    observations = _observations(n=70)
+    fit = fit_surface(
+        observations,
+        FitConfig(draws=400, tune=800, chains=4, approximation="inducing", n_inducing=40),
+    )
+    pred = fit.predict(lat=[0.0, 0.0], lon=[-8.0, 8.0])
+    assert ((pred["post_median"] > 0) & (pred["post_median"] < 1)).all()
+    assert pred["post_median"].iloc[0] < pred["post_median"].iloc[1], "must follow the cline"
+
+
+def test_inducing_resolution_is_set_by_point_count_not_by_a_global_grid():
+    """The whole reason for this engine: HSGP resolves 2L/m everywhere, this follows density."""
+    observations = _observations(n=200)
+    x = to_unit_sphere(observations["lat"], observations["lon"])
+    coarse = inducing_points(x, 20, seed=1)
+    fine = inducing_points(x, 80, seed=1)
+    assert len(fine) > len(coarse)
+
+
+def test_an_unknown_approximation_is_refused():
+    with pytest.raises(ValueError, match="approximation"):
+        FitConfig(approximation="kriging")
+
+
+def test_too_few_inducing_points_is_refused():
+    with pytest.raises(ValueError, match="n_inducing"):
+        FitConfig(n_inducing=1)
+
+
+# --- H3 geodesic placement ---
+
+
+def test_h3_inducing_points_cover_the_observations_not_an_arbitrary_index_block():
+    """Selecting by H3 index order once put every point in the Arctic, 8,800 km from the data.
+
+    Uniform spacing is necessary and nowhere near sufficient; coverage is the real test.
+    """
+    observations = _observations(n=120)
+    lat = observations["lat"].to_numpy()
+    lon = observations["lon"].to_numpy()
+    points = h3_inducing_points(lat, lon, 200, reach_km=1500.0)
+
+    degrees = np.degrees(
+        np.column_stack([np.arcsin(points[:, 2]), np.arctan2(points[:, 1], points[:, 0])])
+    )
+    assert degrees[:, 0].min() <= lat.min() + 15
+    assert degrees[:, 0].max() >= lat.max() - 15
+    assert np.allclose(np.linalg.norm(points, axis=1), 1.0), "must lie on the sphere surface"
+
+
+def test_h3_placement_is_deterministic_and_needs_no_seed():
+    observations = _observations(n=100)
+    lat, lon = observations["lat"].to_numpy(), observations["lon"].to_numpy()
+    first = h3_inducing_points(lat, lon, 120, reach_km=1500.0)
+    second = h3_inducing_points(lat, lon, 120, reach_km=1500.0)
+    assert np.array_equal(first, second)
+
+
+def test_more_budget_buys_finer_spacing():
+    observations = _observations(n=150)
+    lat, lon = observations["lat"].to_numpy(), observations["lon"].to_numpy()
+    assert len(h3_inducing_points(lat, lon, 300, 1500.0)) > len(
+        h3_inducing_points(lat, lon, 80, 1500.0)
+    )
+
+
+def test_h3_is_the_default_placement():
+    """It aligns with §6's artifact grid and does not depend on a seed."""
+    assert FitConfig().inducing_placement == "h3"
+
+
+def test_an_unknown_placement_is_refused():
+    with pytest.raises(ValueError, match="inducing_placement"):
+        FitConfig(inducing_placement="poisson-disc")

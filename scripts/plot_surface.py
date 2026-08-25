@@ -96,6 +96,8 @@ def main() -> None:
     ap.add_argument("--draws", type=int, default=400)
     ap.add_argument("--contraction-threshold", type=float, default=0.9)
     ap.add_argument("--hsgp-m", type=int, default=6, help="HSGP basis functions per dimension")
+    ap.add_argument("--approximation", choices=("hsgp", "inducing"), default="hsgp")
+    ap.add_argument("--n-inducing", type=int, default=400)
     args = ap.parse_args()
 
     observations, report = map_surveys.load(args.observations, "figure")
@@ -107,6 +109,8 @@ def main() -> None:
             draws=args.draws,
             tune=args.draws,
             hsgp_m=(args.hsgp_m,) * 3,  # the GP lives on the unit sphere, so three dimensions
+            approximation=args.approximation,
+            n_inducing=args.n_inducing,
         ),
     )
     print(f"correlation range {fit.correlation_range_km:.0f} km, prior sd {fit.prior_frequency_sd:.3f}")
