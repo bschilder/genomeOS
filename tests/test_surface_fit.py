@@ -10,6 +10,7 @@ from genomeos.surfaces.fit import (
     ConvergenceError,
     FitConfig,
     fit_surface,
+    h3_inducing_points,
     inducing_points,
     to_unit_sphere,
 )
@@ -220,3 +221,50 @@ def test_an_unknown_approximation_is_refused():
 def test_too_few_inducing_points_is_refused():
     with pytest.raises(ValueError, match="n_inducing"):
         FitConfig(n_inducing=1)
+
+
+# --- H3 geodesic placement ---
+
+
+def test_h3_inducing_points_cover_the_observations_not_an_arbitrary_index_block():
+    """Selecting by H3 index order once put every point in the Arctic, 8,800 km from the data.
+
+    Uniform spacing is necessary and nowhere near sufficient; coverage is the real test.
+    """
+    observations = _observations(n=120)
+    lat = observations["lat"].to_numpy()
+    lon = observations["lon"].to_numpy()
+    points = h3_inducing_points(lat, lon, 200, reach_km=1500.0)
+
+    degrees = np.degrees(
+        np.column_stack([np.arcsin(points[:, 2]), np.arctan2(points[:, 1], points[:, 0])])
+    )
+    assert degrees[:, 0].min() <= lat.min() + 15
+    assert degrees[:, 0].max() >= lat.max() - 15
+    assert np.allclose(np.linalg.norm(points, axis=1), 1.0), "must lie on the sphere surface"
+
+
+def test_h3_placement_is_deterministic_and_needs_no_seed():
+    observations = _observations(n=100)
+    lat, lon = observations["lat"].to_numpy(), observations["lon"].to_numpy()
+    first = h3_inducing_points(lat, lon, 120, reach_km=1500.0)
+    second = h3_inducing_points(lat, lon, 120, reach_km=1500.0)
+    assert np.array_equal(first, second)
+
+
+def test_more_budget_buys_finer_spacing():
+    observations = _observations(n=150)
+    lat, lon = observations["lat"].to_numpy(), observations["lon"].to_numpy()
+    assert len(h3_inducing_points(lat, lon, 300, 1500.0)) > len(
+        h3_inducing_points(lat, lon, 80, 1500.0)
+    )
+
+
+def test_h3_is_the_default_placement():
+    """It aligns with §6's artifact grid and does not depend on a seed."""
+    assert FitConfig().inducing_placement == "h3"
+
+
+def test_an_unknown_placement_is_refused():
+    with pytest.raises(ValueError, match="inducing_placement"):
+        FitConfig(inducing_placement="poisson-disc")

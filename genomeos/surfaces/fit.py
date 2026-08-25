@@ -73,6 +73,18 @@ NUTS_SAMPLERS: tuple[str, ...] = ("pymc", "numpyro", "blackjax", "nutpie")
 #: where the data is.
 APPROXIMATIONS: tuple[str, ...] = ("hsgp", "inducing")
 
+#: Where inducing points are placed.
+#:
+#: ``h3`` uses H3 cell centres. H3 is an icosahedral — geodesic — tessellation of the sphere, so
+#: spacing is near-uniform with no polar pile-up, placement is deterministic with no seed, and
+#: the inducing points *are* the cells §6 already renders. It also lets §7's resolution-promotion
+#: rule drive the model and not just the mask: start at res 4 and promote to 5/6 only where
+#: observation density supports it.
+#:
+#: ``kmeans`` clusters the observations instead. Concentrates on data more aggressively, but the
+#: placement depends on a seed and does not align with the artifact grid.
+INDUCING_PLACEMENTS: tuple[str, ...] = ("h3", "kmeans")
+
 #: Added to the inducing covariance diagonal so its Cholesky stays positive definite when two
 #: inducing points land close together.
 JITTER = 1e-6
@@ -114,9 +126,13 @@ class FitConfig:
     #: difference between a fit and a failure, not a refinement (#83, #103).
     likelihood: str = "beta_binomial"
     approximation: str = "hsgp"
-    #: Inducing points for ``approximation="inducing"``. Resolution near data is roughly the
-    #: inter-point spacing, so this is the accuracy/cost dial that replaces hsgp_m (#39).
+    inducing_placement: str = "h3"
+    #: Budget on inducing points. The M^3 Cholesky per leapfrog step is the cost, so this is the
+    #: accuracy/cost dial that replaces hsgp_m (#39).
     n_inducing: int = 400
+    #: How far beyond the observations to place inducing points, as a multiple of the largest
+    #: observation radius. Cells further out get no degrees of freedom, which is the point.
+    inducing_reach_km: float = 1500.0
     #: HSGP basis functions per spatial dimension — three dimensions, since the GP lives on the
     #: unit sphere. Cost grows as the product, so this is the accuracy/cost dial calibrated in
     #: #39 rather than a value chosen for elegance.
@@ -164,6 +180,11 @@ class FitConfig:
             )
         if self.n_inducing < 2:
             raise ValueError("n_inducing must be >= 2")
+        if self.inducing_placement not in INDUCING_PLACEMENTS:
+            raise ValueError(
+                f"unknown inducing_placement {self.inducing_placement!r}; "
+                f"expected one of {INDUCING_PLACEMENTS}"
+            )
         if self.nuts_sampler not in NUTS_SAMPLERS:
             raise ValueError(
                 f"unknown nuts_sampler {self.nuts_sampler!r}; expected one of {NUTS_SAMPLERS}"
@@ -261,6 +282,68 @@ class SurfaceFit:
         )
 
 
+def h3_inducing_points(
+    lat: np.ndarray,
+    lon: np.ndarray,
+    n_inducing: int,
+    reach_km: float,
+) -> np.ndarray:
+    """Inducing points on the H3 geodesic sphere, promoted where observations are dense.
+
+    H3 tiles the sphere by subdividing an icosahedron, so cells are near-uniform in area and
+    there is no polar pile-up — the failure mode of a lat/lon grid, where cells collapse to
+    slivers at the poles and the model spends degrees of freedom on the Arctic. The inducing
+    points are then the same cells §6 renders.
+
+    Cells are seeded at the coarse end of §6's ladder within `reach_km` of an observation, then
+    promoted to their children where the local observation count justifies it — §7's
+    resolution-promotion rule applied to the *model* and not only to the mask.
+
+    **Selection is by distance to the nearest observation, never by H3 index order.** Truncating
+    a sorted index is geographically arbitrary: it once selected a contiguous block on a single
+    icosahedral face, putting every inducing point in the Arctic a median 8,800 km from the data
+    while looking beautifully uniform. Uniform spacing is necessary and nowhere near sufficient.
+    """
+    import h3
+
+    from genomeos.geo.h3util import RESOLUTION_LADDER, _haversine_km, cells_within_km
+
+    lat = np.asarray(lat, dtype=float)
+    lon = np.asarray(lon, dtype=float)
+    base, *finer = RESOLUTION_LADDER
+
+    cells: set[str] = set()
+    for point_lat, point_lon in zip(lat, lon, strict=True):
+        cells.update(cells_within_km(float(point_lat), float(point_lon), reach_km, base))
+
+    # Promote the cells holding the most observations: that is where finer resolution can
+    # actually be identified from the data.
+    for resolution in finer:
+        if len(cells) >= n_inducing:
+            break
+        density: dict[str, int] = {}
+        for point_lat, point_lon in zip(lat, lon, strict=True):
+            cell = h3.latlng_to_cell(float(point_lat), float(point_lon), resolution - 1)
+            density[cell] = density.get(cell, 0) + 1
+        for parent in sorted(density, key=lambda c: -density[c]):
+            if len(cells) >= n_inducing or parent not in cells:
+                continue
+            cells.discard(parent)
+            cells.update(h3.cell_to_children(parent, resolution))
+
+    centres = np.array([h3.cell_to_latlng(cell) for cell in sorted(cells)], dtype=float)
+    if len(centres) == 0:
+        raise ValueError("no H3 cells within reach of the observations")
+
+    # Rank by distance to the nearest observation and keep the closest.
+    distance = _haversine_km(
+        centres[:, 0][:, None], centres[:, 1][:, None], lat[None, :], lon[None, :]
+    ).min(axis=1)
+    keep = np.argsort(distance)[:n_inducing]
+    centres = centres[keep]
+    return to_unit_sphere(centres[:, 0], centres[:, 1])
+
+
 def inducing_points(x: np.ndarray, n_inducing: int, seed: int) -> np.ndarray:
     """Choose inducing locations on the unit sphere by clustering the observations.
 
@@ -331,11 +414,15 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     ac = obs["ac"].to_numpy(dtype=int)
     an = obs["an"].to_numpy(dtype=int)
 
-    inducing = (
-        inducing_points(x, config.n_inducing, config.seed)
-        if config.approximation == "inducing"
-        else np.zeros((0, 3))
-    )
+    if config.approximation != "inducing":
+        inducing = np.zeros((0, 3))
+    elif config.inducing_placement == "h3":
+        inducing = h3_inducing_points(
+            obs["lat"].to_numpy(), obs["lon"].to_numpy(),
+            config.n_inducing, config.inducing_reach_km,
+        )
+    else:
+        inducing = inducing_points(x, config.n_inducing, config.seed)
 
     with pm.Model() as model:
         x_data = pm.Data("x_obs", x)
