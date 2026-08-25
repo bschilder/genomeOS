@@ -5,8 +5,8 @@ be mistaken for a bug in the model.
 """
 
 import numpy as np
-import pandas as pd
 import pytest
+from test_surface_fit import _observations
 
 from genomeos.surfaces.fit import FitConfig
 from genomeos.validation.crossval import (
@@ -15,7 +15,6 @@ from genomeos.validation.crossval import (
     cross_validate,
     make_folds,
 )
-from test_surface_fit import _observations
 
 FAST = FitConfig(draws=300, tune=600, chains=4, approximation="inducing", n_inducing=40)
 
