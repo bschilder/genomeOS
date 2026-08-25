@@ -41,9 +41,13 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     summary: dict[str, dict] = {}
     for strategy in ("spatial", "random"):
+        # Spatial first: it is the honest test, so if the run is cut short it is the half worth
+        # having. A previous run wrote nothing at all because results were only saved at the end.
         result = cross_validate(observations, config, args.n_folds, strategy)
         print(f"\n{result}")
         result.summary().to_csv(args.out / f"crossval_{strategy}.csv", index=False)
+        # Flush after each strategy rather than only at the end.
+        (args.out / f"crossval_{strategy}.json").write_text(str(result))
         summary[strategy] = {
             "folds_scored": len(result.folds),
             "folds_attempted": result.n_attempted,

@@ -67,16 +67,23 @@ JOB_COMMANDS = {
     ),
     # Both, in one pod: the validation numbers and the figure they describe should come from the
     # same code at the same M, and a second pod launch is a second chance to forget to stop one.
+    # Figure FIRST, validation second. A watchdog or a capacity loss truncates the tail, so the
+    # single-fit deliverable must not be at the end: the one job that was ordered the other way
+    # was killed at 50 minutes having written nothing, because validation only saves at the end.
     "validate+fit": (
-        "run python scripts/validate_holdout.py "
-        "--observations /workspace/data/map_hbs_surveys.csv "
-        "--out /workspace/out --n-folds {n_folds} "
-        "--n-inducing {n_inducing_fold} --draws {draws} ; "
+        "echo '--- figure (1 fit) ---'; date; "
         "run python scripts/plot_surface.py "
         "--observations /workspace/data/map_hbs_surveys.csv "
         "--out /workspace/out/hbs_surface_geodesic.png "
         "--approximation inducing --n-inducing {n_inducing} --hsgp-m {hsgp_m} "
-        "--draws {draws} --contraction-threshold 0.5"
+        "--draws {draws} --contraction-threshold 0.5 ; "
+        "echo '--- figure done ---'; date; "
+        "echo '--- validation ({n_folds} folds x 2 strategies) ---'; "
+        "run python scripts/validate_holdout.py "
+        "--observations /workspace/data/map_hbs_surveys.csv "
+        "--out /workspace/out --n-folds {n_folds} "
+        "--n-inducing {n_inducing_fold} --draws {draws} ; "
+        "echo '--- validation done ---'; date"
     ),
     "validate": (
         "run python scripts/validate_holdout.py "
