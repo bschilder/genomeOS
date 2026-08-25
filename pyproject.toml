@@ -32,6 +32,9 @@ atlas = [
 surfaces = [
   "pymc>=5.16",
   "arviz>=0.18",
+  # JAX-compiled NUTS. Not optional in practice: the spherical HSGP is ~80x faster through it
+  # than through PyTensor, and it is the same code path that runs on a GPU.
+  "numpyro>=0.15",
 ]
 # Raster handling for the population denominators (P3, §9). Offline batch only.
 geo = [

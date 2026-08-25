@@ -78,21 +78,31 @@ def test_internally_inconsistent_surveys_are_refused():
     assert report.refusals.get("genotypes_exceed_sample", 0) >= 1
 
 
-def test_incomplete_genotypes_are_refused_rather_than_assumed_zero(loaded):
-    """Treating a missing hbss as 0 biases frequency down exactly where HbS is common."""
+def test_genuinely_incomplete_genotypes_are_still_refused(loaded):
+    """Where hbss cannot be derived, assuming it is 0 biases frequency down where HbS is common."""
     _, report = loaded
     assert report.refusals.get("incomplete_genotypes", 0) >= 1
 
 
-def test_surveys_with_no_stated_extent_are_refused(loaded):
-    _, report = loaded
-    assert report.refusals.get("no_area_type", 0) >= 1
+def test_surveys_with_no_stated_extent_get_a_coarse_radius_not_a_refusal():
+    """Refusing a real measurement over blank metadata discarded 388 usable surveys.
+
+    §7 places each observation as a disc of `radius_km`, so a too-large radius makes a survey
+    less influential while a too-small one lets a diffuse survey act as a pinpoint. Erring
+    coarse is the safe direction.
+    """
+    obs, report = map_surveys.load(FIXTURE, "0.1.0", piel_2013_subset_only=False)
+    assert "no_area_type" not in report.refusals
+    assert "unbounded_area" not in report.refusals
+    assert (obs["radius_km"] > 0).all()
+    assert obs["radius_km"].max() > 5.0, "unclassed surveys should get a coarser extent"
 
 
-def test_unbounded_area_surveys_are_refused(loaded):
-    """'>100 km²' has no upper bound, so the disc in §7 cannot be sized honestly."""
-    _, report = loaded
-    assert report.refusals.get("unbounded_area", 0) >= 1
+def test_hbss_is_derived_by_subtraction_when_the_sample_is_fully_accounted_for():
+    """hbaa + hbas == sample_size fixes hbss at zero arithmetically — no assumption (#89)."""
+    obs, report = map_surveys.load(FIXTURE, "0.1.0", piel_2013_subset_only=False)
+    assert report.derived_hbss >= 1
+    assert len(obs) >= 1
 
 
 def test_report_accounts_for_every_input_row(loaded):

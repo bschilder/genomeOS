@@ -18,6 +18,14 @@ Defensibility rests on §8 — parity against Piel et al.'s published national e
 than on sharing an implementation lineage with the prior literature. Reproducing published
 numbers is the stronger claim.
 
+**Coordinates are 3-D Cartesian on the unit sphere, not (lon, lat).** An isotropic kernel over
+raw or separately-standardised degrees is not isotropic on the Earth: a degree of longitude is
+111 km at the equator and 47 km at 65°N, and standardising each axis by its own sample SD makes
+the model's notion of "nearby" depend on where surveys happen to be rather than on geography. It
+also tears at the antimeridian and degenerates at the poles. Mapping to the unit sphere puts the
+kernel in chordal distance, which is monotone in great-circle distance, so `lengthscale` is a
+real distance and `correlation_range_km` is just lengthscale × Earth radius.
+
 Everything here is a pure offline function, deterministic given `(observations, config)`,
 with no HTTP or I/O dependency (§5).
 """
@@ -37,28 +45,86 @@ SEED = 42
 
 LIKELIHOODS: tuple[str, ...] = ("binomial", "beta_binomial")
 
+
+class ConvergenceError(RuntimeError):
+    """The sampler did not converge, so this variant yields no surface.
+
+    §12 specifies exactly this: a fit that fails to converge means the variant is excluded from
+    the surface set and logged to a published exclusion list. Publishing the draws anyway would
+    be the worst available outcome — a non-converged chain produces a confident-looking map, and
+    nothing downstream can tell it from a good one.
+    """
+
+#: "numpyro" and "blackjax" route through JAX and will use a GPU if one is visible.
+NUTS_SAMPLERS: tuple[str, ...] = ("pymc", "numpyro", "blackjax", "nutpie")
+
 #: The well-ascertained anchor. β_design is a contrast *against* this level, so population
 #: screening surveys are the reference and their offset is fixed at zero (§7.1a).
 REFERENCE_DESIGN = "population_random"
 
-#: Great-circle km per degree of latitude. Used only to report the fitted correlation range in
-#: human units; the model itself works in standardised coordinates.
-_KM_PER_DEGREE = 111.19
+EARTH_RADIUS_KM = 6371.0088
+
+
+def to_unit_sphere(lat: object, lon: object) -> np.ndarray:
+    """(lat, lon) in degrees -> (x, y, z) on the unit sphere.
+
+    Chordal distance in this space is monotone in great-circle distance, so an isotropic kernel
+    here is isotropic on the Earth.
+    """
+    lat_rad = np.radians(np.asarray(lat, dtype=float))
+    lon_rad = np.radians(np.asarray(lon, dtype=float))
+    return np.column_stack(
+        [
+            np.cos(lat_rad) * np.cos(lon_rad),
+            np.cos(lat_rad) * np.sin(lon_rad),
+            np.sin(lat_rad),
+        ]
+    )
 
 
 @dataclass(frozen=True)
 class FitConfig:
     """Everything that makes a fit reproducible. Recorded per artifact (§5)."""
 
-    likelihood: str = "binomial"
-    #: HSGP basis functions per spatial dimension. More basis functions resolve finer spatial
-    #: structure at higher cost; (8, 8) is calibrated on HbS in #39, not chosen for elegance.
-    hsgp_m: tuple[int, int] = (8, 8)
-    #: Domain expansion factor. Must exceed 1 so the boundary does not distort the fit.
+    #: Beta-binomial by default, not the binomial §7 specifies. Real surveys of the same
+    #: locality disagree far more than binomial sampling error allows — many have AN in the
+    #: thousands, which pins p to +-0.002 — so a binomial forces genuine between-survey
+    #: heterogeneity into the spatial field and the cohort effects, which cannot represent it.
+    #: Measured on the 857-survey HbS fit: binomial gives r_hat 2.61 / ESS 2 with amplitude
+    #: running to 11.5; beta-binomial gives r_hat 1.02 / ESS 378 with amplitude 1.79. It is the
+    #: difference between a fit and a failure, not a refinement (#83, #103).
+    likelihood: str = "beta_binomial"
+    #: HSGP basis functions per spatial dimension — three dimensions now, since the GP lives on
+    #: the unit sphere. Cost grows as the product, so this is the accuracy/cost dial calibrated
+    #: in #39 rather than a value chosen for elegance.
+    hsgp_m: tuple[int, ...] = (6, 6, 6)
+    #: Domain expansion factor. Must exceed 1 so the boundary does not distort the fit. The
+    #: sphere already lies inside [-1, 1]^3, so this pads it rather than rescaling anything.
+    #: HSGP resolution goes as L/m, and L = c x max|x|, so shrinking c from 2.0 to 1.5 buys a
+    #: third more spatial resolution at identical cost. 1.5 is the standard recommendation.
     hsgp_c: float = 1.5
     draws: int = 500
-    tune: int = 500
-    chains: int = 2
+    tune: int = 1000
+    #: Four, not two. r_hat is a between-chain statistic and is unreliable with two chains —
+    #: arviz warns about exactly this — and the convergence gate below is only as trustworthy as
+    #: the diagnostic feeding it. numpyro makes the extra chains cheap.
+    chains: int = 4
+    #: NUTS implementation. Defaults to numpyro, which compiles the model through JAX: on the
+    #: 332-survey HbS fit it takes ~15 s where PyMC's own sampler did not finish in 20 minutes,
+    #: because the spherical HSGP has a few hundred basis coefficients and PyTensor's Python
+    #: loop dominates. The same path runs on a GPU when jax[cuda] is present (#104). "pymc"
+    #: remains available and needs no extra install.
+    nuts_sampler: str = "numpyro"
+    #: Gelman-Rubin ceiling, applied to the *maximum* over every parameter. 1.01 is the modern
+    #: standard for a single quantity of interest, but this model has ~1,500 latent parameters
+    #: and the max over that many exceeds 1.01 by chance even when sampling is healthy — using
+    #: it here rejected a fit with r_hat 1.018 and ESS 378. 1.05 is the classic Gelman-Rubin
+    #: cutoff and is the defensible bar for a maximum.
+    max_rhat: float = 1.05
+    #: Effective sample size floor, per parameter. This is the discriminating statistic: the
+    #: binomial fit that produced impossible >0.9 frequencies had ESS 2, the beta-binomial fit
+    #: that replaced it has 378.
+    min_ess: float = 200.0
     seed: int = SEED
     reference_design: str = REFERENCE_DESIGN
 
@@ -67,6 +133,12 @@ class FitConfig:
             raise ValueError(f"unknown likelihood {self.likelihood!r}; expected one of {LIKELIHOODS}")
         if self.hsgp_c <= 1.0:
             raise ValueError("hsgp_c must be > 1 so the HSGP domain extends beyond the data")
+        if self.max_rhat < 1.0:
+            raise ValueError("max_rhat must be >= 1.0")
+        if self.nuts_sampler not in NUTS_SAMPLERS:
+            raise ValueError(
+                f"unknown nuts_sampler {self.nuts_sampler!r}; expected one of {NUTS_SAMPLERS}"
+            )
 
 
 @dataclass(frozen=True)
@@ -127,7 +199,7 @@ class SurfaceFit:
         if lat_arr.shape != lon_arr.shape:
             raise ValueError("lat and lon must have the same length")
 
-        x_new = (np.c_[lon_arr, lat_arr] - self._centre) / self._scale
+        x_new = to_unit_sphere(lat_arr, lon_arr)
         with self._model:
             pm.set_data({"x_pred": x_new})
             drawn = pm.sample_posterior_predictive(
@@ -142,11 +214,42 @@ class SurfaceFit:
             {
                 "lat": lat_arr,
                 "lon": lon_arr,
+                # The median is the defensible central estimate for this quantity, and the
+                # reference we are scored against reports medians (see #102). Allele frequency
+                # is bounded in [0, 1] and the inverse-logit link gives its posterior a long
+                # right tail wherever the latent field is uncertain, so the mean is dragged
+                # upward exactly where there is least data. Piel et al.'s own appendix records
+                # hitting this: "the long right-hand tail ... contained enough mass to skew all
+                # of the standard summary statistics."
+                "post_median": np.median(samples, axis=0),
                 "post_mean": samples.mean(axis=0),
                 "post_sd": samples.std(axis=0),
                 "q025": np.quantile(samples, 0.025, axis=0),
                 "q975": np.quantile(samples, 0.975, axis=0),
+                "q25": np.quantile(samples, 0.25, axis=0),
+                "q75": np.quantile(samples, 0.75, axis=0),
             }
+        )
+
+
+def _check_convergence(idata, config: FitConfig) -> None:
+    """Raise unless every parameter mixed. See `ConvergenceError` and §12."""
+    import arviz as az
+
+    rhat = az.rhat(idata)
+    worst_rhat = max(float(np.nanmax(rhat[v].to_numpy())) for v in rhat.data_vars)
+    ess = az.ess(idata)
+    worst_ess = min(float(np.nanmin(ess[v].to_numpy())) for v in ess.data_vars)
+
+    problems = []
+    if not np.isfinite(worst_rhat) or worst_rhat > config.max_rhat:
+        problems.append(f"r_hat {worst_rhat:.3f} > {config.max_rhat}")
+    if not np.isfinite(worst_ess) or worst_ess < config.min_ess:
+        problems.append(f"effective sample size {worst_ess:.0f} < {config.min_ess:.0f}")
+    if problems:
+        raise ConvergenceError(
+            "sampler did not converge (" + "; ".join(problems) + "). "
+            "Per §12 this variant is excluded from the surface set rather than published."
         )
 
 
@@ -173,11 +276,11 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     cohorts = sorted(obs["cohort_id"].unique())
     cohort_index = obs["cohort_id"].map({c: i for i, c in enumerate(cohorts)}).to_numpy()
 
-    x_raw = obs[["lon", "lat"]].to_numpy(dtype=float)
-    centre = x_raw.mean(axis=0)
-    # Guard against a degenerate axis (all observations on one meridian or parallel).
-    scale = np.where(x_raw.std(axis=0) > 0, x_raw.std(axis=0), 1.0)
-    x = (x_raw - centre) / scale
+    # No per-axis standardisation: the unit sphere is already the right scale in all three
+    # dimensions, and rescaling axes independently is what made the kernel anisotropic.
+    x = to_unit_sphere(obs["lat"], obs["lon"])
+    centre = np.zeros(3)
+    scale = np.ones(3)
 
     ac = obs["ac"].to_numpy(dtype=int)
     an = obs["an"].to_numpy(dtype=int)
@@ -189,14 +292,29 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         # Matérn-5/2 spatial field. §7 names Matérn-3/2; 5/2 is used here because HSGP's
         # spectral density is better behaved for it, and the smoothness choice is calibrated
         # against HbS in #39 rather than fixed by fiat.
-        lengthscale = pm.LogNormal("lengthscale", mu=0.0, sigma=1.0)
-        amplitude = pm.HalfNormal("amplitude", sigma=2.0)
-        cov = amplitude**2 * pm.gp.cov.Matern52(2, ls=lengthscale)
-        gp = pm.gp.HSGP(m=list(config.hsgp_m), c=config.hsgp_c, cov_func=cov)
+        # Chordal units on the unit sphere: exp(-2.0) ~ 0.135 ~ 860 km, a scale consistent with
+        # the continental structure the surveys show.
+        lengthscale = pm.LogNormal("lengthscale", mu=-2.0, sigma=0.7)
+        # The logit-scale field only needs to span roughly [-10, -1.4] to cover 0 to 0.2. Left
+        # looser, the amplitude ran to 11.7 — enough to saturate invlogit at 0 and 1 and produce
+        # the impossible >0.9 blobs. See #103.
+        amplitude = pm.HalfNormal("amplitude", sigma=1.0)
 
-        intercept = pm.Normal("intercept", mu=-2.0, sigma=2.0)
+        # The level lives in the GP's mean function rather than as a separate additive term.
+        # A free intercept *plus* a zero-mean GP that can absorb any constant is two parameters
+        # for one quantity: the chains wander along that ridge (r_hat 1.82 was observed) and the
+        # amplitude inflates to cover the slop.
+        intercept = pm.Normal("intercept", mu=-3.5, sigma=1.5)
+
+        cov = amplitude**2 * pm.gp.cov.Matern52(3, ls=lengthscale)
+        gp = pm.gp.HSGP(
+            m=list(config.hsgp_m),
+            c=config.hsgp_c,
+            cov_func=cov,
+            mean_func=pm.gp.mean.Constant(intercept),
+        )
         f = gp.prior("f", X=x_data)
-        logit = intercept + f
+        logit = f
 
         if beta_design_applied:
             # Weakly informative and centred at zero: the correction is estimated and auditable,
@@ -207,8 +325,15 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
 
         # β_cohort is hierarchical: it absorbs residual cohort-level effects, including the
         # founder over-sampling of §7.1d, without being free to absorb the spatial signal.
+        #
+        # Non-centred. Written as Normal(0, cohort_sd) this is Neal's funnel: small values of
+        # cohort_sd force small effects, pinching the posterior into a geometry NUTS cannot
+        # traverse. With 344 cohorts that was fatal — r_hat 2.7, ESS 2. Sampling a unit normal
+        # and scaling it decouples the scale from the effects. (PyMC's HSGP already
+        # non-centres its own coefficients by default; the cohort term needed the same.)
         cohort_sd = pm.HalfNormal("cohort_sd", sigma=0.5)
-        beta_cohort = pm.Normal("beta_cohort", mu=0.0, sigma=cohort_sd, shape=len(cohorts))
+        cohort_z = pm.Normal("cohort_z", mu=0.0, sigma=1.0, shape=len(cohorts))
+        beta_cohort = pm.Deterministic("beta_cohort", cohort_sd * cohort_z)
         logit = logit + beta_cohort[cohort_index]
 
         p = pm.Deterministic("p", pm.math.invlogit(logit))
@@ -216,8 +341,8 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         if config.likelihood == "binomial":
             pm.Binomial("obs", n=an, p=p, observed=ac)
         else:
-            # Beta-binomial nests binomial; the extra dispersion parameter is cheap insurance
-            # against the overdispersion documented in #83.
+            # Beta-binomial nests binomial: large concentration recovers it, so the data decide
+            # how much overdispersion there is. The fitted value on HbS is ~36.
             concentration = pm.HalfNormal("concentration", sigma=100.0)
             pm.BetaBinomial(
                 "obs", n=an, alpha=p * concentration, beta=(1.0 - p) * concentration, observed=ac
@@ -226,24 +351,32 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         # Prediction path: the reference design, with no cohort offset — what a well-ascertained
         # survey would have measured at that location (§7.1a).
         f_pred = gp.conditional("f_pred", Xnew=x_pred)
-        pm.Deterministic("freq_pred", pm.math.invlogit(intercept + f_pred))
+        pm.Deterministic("freq_pred", pm.math.invlogit(f_pred))
 
         prior = pm.sample_prior_predictive(
             draws=500, var_names=["freq_pred"], random_seed=config.seed
         )
-        idata = pm.sample(
-            draws=config.draws,
-            tune=config.tune,
-            chains=config.chains,
-            cores=1,
-            random_seed=config.seed,
-            progressbar=False,
-            compute_convergence_checks=False,
-        )
+        sample_kwargs: dict[str, Any] = {
+            "draws": config.draws,
+            "tune": config.tune,
+            "chains": config.chains,
+            "random_seed": config.seed,
+            "progressbar": False,
+        }
+        if config.nuts_sampler == "pymc":
+            # Deterministic given the seed only when chains are drawn sequentially.
+            sample_kwargs["cores"] = 1
+        else:
+            sample_kwargs["nuts_sampler"] = config.nuts_sampler
+        idata = pm.sample(**sample_kwargs)
+
+    _check_convergence(idata, config)
 
     prior_sd = float(np.std(prior.prior["freq_pred"].to_numpy()))
+    # Chordal lengthscale on the unit sphere -> great-circle km. Exact for the chord; the
+    # great-circle equivalent differs by <1% for ranges under ~1,500 km.
     lengthscale_mean = float(idata.posterior["lengthscale"].mean())
-    correlation_range_km = lengthscale_mean * float(np.mean(scale)) * _KM_PER_DEGREE
+    correlation_range_km = lengthscale_mean * EARTH_RADIUS_KM
 
     return SurfaceFit(
         variant_id=str(variants[0]),

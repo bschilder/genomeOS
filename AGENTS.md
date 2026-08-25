@@ -270,6 +270,15 @@ Nothing is committed directly to `main`.**
 - Say which design sections you implemented.
 - State what you verified and how. If a test fails or you skipped part of the scope, say so
   plainly with the output — an unverified claim of completion is worse than an honest partial.
+- **Show the map.** Once a change affects something renderable — observations, a surface, a
+  mask, a burden layer — put a figure in the PR or issue rather than describing it. Generate it
+  with a script under `scripts/plot_*.py`, commit the PNG under `docs/figures/`, and embed it
+  with a raw URL (`https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/...`).
+  A committed figure is reviewable, diffable and regenerable; a pasted screenshot is none of those.
+- **Review figures obey the same invariants as the product.** Never draw a fitted surface and
+  measured observations as one layer (§4), always show where there is no data rather than
+  leaving it blank, and check the colour ramp reads low-to-high without the legend — a reversed
+  ramp inverts the meaning of the map for anyone who only glances at it.
 - Do not widen scope silently. If you find a real problem outside your task, **open an issue**
   and keep going on the task you were given.
 - Commit messages: `type: summary` (`docs:`, `feat:`, `fix:`, `chore:`, `ci:`), imperative mood.

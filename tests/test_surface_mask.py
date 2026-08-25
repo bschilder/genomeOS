@@ -15,7 +15,8 @@ from genomeos.surfaces.mask import (
     evaluate_cells,
 )
 
-FAST_CONFIG = FitConfig(draws=150, tune=150, chains=2)
+# Enough draws to converge: fit_surface refuses an unmixed fit (§12).
+FAST_CONFIG = FitConfig(draws=800, tune=1000, chains=4)
 RANGE_KM = 500.0
 
 
