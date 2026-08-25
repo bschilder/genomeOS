@@ -1,25 +1,32 @@
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from .atlas_api import router as atlas_router
 from .config import settings
 from .db import get_session, init_db
 from .models import Association, Phenotype, SourceAsset, SourceRelease, Variant
+from .observability import RequestLoggingMiddleware, configure_logging, log_event
 from .schemas import AssociationOut, Page, PhenotypeOut, ProvenanceOut
 from .tabix import Region, RegionQueryUnavailable, TabixRegionReader
 
-
+LOGGER = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    configure_logging(settings.log_level)
     init_db()
+    log_event(LOGGER, "service_started", environment=settings.environment)
     yield
 
 
 app = FastAPI(title="GenomeOS", version="0.1.0", lifespan=lifespan)
+app.add_middleware(RequestLoggingMiddleware)
+app.include_router(atlas_router)
 
 
 @app.get("/health")

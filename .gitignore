@@ -214,6 +214,14 @@ tempCodeRunnerFile.py
 .codex/
 .local/
 .nvim-chatgpt/
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*service-account*.json
 *.db
 .DS_Store
 

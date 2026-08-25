@@ -20,27 +20,29 @@ def test_gcloud_environment_is_repo_local():
     )
 
 
-def test_login_defaults_to_personal_account():
+def test_login_does_not_embed_an_account_identity():
     with patch.object(GCLOUD_REPO, "run_gcloud", return_value=0) as run:
         with patch("sys.argv", ["gcloud_repo.py", "auth", "login"]):
             assert GCLOUD_REPO.main() == 0
-    run.assert_called_once_with(["auth", "login", "dawei.lin100@gmail.com"])
+    run.assert_called_once_with(["auth", "login"])
 
 
-def test_init_does_not_guess_a_project():
+def test_init_requires_an_explicit_account():
     with patch.dict("os.environ", {}, clear=True), patch.object(
         GCLOUD_REPO, "run_gcloud", return_value=0
     ) as run:
-        assert GCLOUD_REPO.command_init(None) == 0
-    commands = [call.args[0] for call in run.call_args_list]
-    assert commands == [
-        ["config", "set", "account", "dawei.lin100@gmail.com"],
-        ["config", "set", "run/region", "us-east1"],
-    ]
+        try:
+            GCLOUD_REPO.command_init(None, None)
+        except SystemExit as error:
+            assert "requires --account" in str(error)
+        else:
+            raise AssertionError("missing account should fail closed")
+    run.assert_not_called()
 
 
-def test_init_sets_only_explicit_project():
+def test_init_sets_only_explicit_account_and_project():
     with patch.object(GCLOUD_REPO, "run_gcloud", return_value=0) as run:
-        assert GCLOUD_REPO.command_init("genomeos-project") == 0
+        assert GCLOUD_REPO.command_init("genomeos-project", "user@example.org") == 0
     commands = [call.args[0] for call in run.call_args_list]
+    assert ["config", "set", "account", "user@example.org"] in commands
     assert ["config", "set", "project", "genomeos-project"] in commands

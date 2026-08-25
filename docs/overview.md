@@ -413,10 +413,9 @@ composes is a versioned, citable artifact.
 
 ## 7. Where things stand
 
-- - **Atlas:** design approved; [Plan 1 (P0 +
-  P1)](superpowers/plans/2026-08-22-atlas-data-foundation.md)
-  written task-by-task with tests specified; 64 open issues, 12 `priority:critical`. **No Atlas
-  code has landed yet — the data foundation is the open frontier.**
+- **Atlas:** Plan 1's P0/P1 foundation has landed: strict registry and observations schemas,
+  HGDP, gnomAD HGDP+1KG, and MAP survey adapters, H3 indexing, partitioned Parquet storage, and
+  frozen contracts. Remaining work and current status are tracked in the issue board.
 - - **Pan-UKB API:** running, with tests and a [Cloud Run](https://cloud.google.com/run)
   deployment manifest.
 - **Open questions with named next steps** (spec §14): a written position on redistributing
