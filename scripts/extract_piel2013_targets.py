@@ -16,6 +16,12 @@ against these, so the comparison must be like-for-like; see #45.
 
 Transcription of published numbers, so it is committed rather than fetched: the target for the
 v1 definition of done has to be citable at a fixed version.
+
+**Every row carries an ISO3 code**, resolved through `genomeos.geo.countries`. The parity join has
+three sources spelling the same country three ways — MAP's "United Republic of Tanzania", this
+appendix's "Tanzania, United Republic of", Natural Earth's "Tanzania" — and a name that fails to
+match drops the country out of the comparison silently, which is indistinguishable from a country
+with no burden. A name that cannot be resolved therefore stops the extraction, by name (#94).
 """
 
 from __future__ import annotations
@@ -24,6 +30,8 @@ import argparse
 import csv
 import re
 from pathlib import Path
+
+from genomeos.geo.countries import resolve_iso3
 
 # The appendix uses U+2010 HYPHEN in ranges, not ASCII hyphen-minus.
 _DASH = r"[‐‑‒–-]"
@@ -44,7 +52,7 @@ ROW = re.compile(
 HEAD = re.compile(rf"^(?P<country>.+?)\s+(?P<population>{_INT})\s+(?P<cbr>{_DEC})\s+(?P<region>.+)$")
 
 FIELDS = [
-    "country", "population_thousands", "crude_birth_rate", "who_hbs_region", "surveys",
+    "country", "iso3", "population_thousands", "crude_birth_rate", "who_hbs_region", "surveys",
     "hbs_af", "hbs_af_iqr_lower", "hbs_af_iqr_upper",
     "as_neonates_per_year", "as_iqr_lower", "as_iqr_upper",
     "ss_neonates_per_year", "ss_iqr_lower", "ss_iqr_upper",
@@ -73,6 +81,9 @@ def parse(text: str) -> list[dict[str, object]]:
         rows.append(
             {
                 "country": country,
+                # Raises on a name it cannot resolve rather than writing a blank; see the
+                # module docstring for why a blank would be the expensive outcome.
+                "iso3": resolve_iso3(country),
                 "population_thousands": _int(head.group("population")),
                 "crude_birth_rate": float(head.group("cbr")),
                 "who_hbs_region": head.group("region").strip(),
@@ -96,8 +107,13 @@ def parse(text: str) -> list[dict[str, object]]:
 def check(rows: list[dict[str, object]]) -> list[str]:
     """Sanity checks. A silently dropped or merged PDF row would later read as a model failure."""
     problems = []
+    seen_iso3: dict[str, str] = {}
     for row in rows:
         country = row["country"]
+        # Two published rows sharing a code would merge into one on every downstream join.
+        first_seen = seen_iso3.setdefault(str(row["iso3"]), str(country))
+        if first_seen != country:
+            problems.append(f"{country}: ISO3 {row['iso3']} is already used by {first_seen}")
         for stem in ("hbs_af", "as", "ss"):
             lo = row[f"{stem}_iqr_lower" if stem != "hbs_af" else "hbs_af_iqr_lower"]
             hi = row[f"{stem}_iqr_upper" if stem != "hbs_af" else "hbs_af_iqr_upper"]
