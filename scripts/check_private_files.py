@@ -22,10 +22,6 @@ SECRET_PATTERNS = {
     "Google API key": re.compile(rb"AIza[0-9A-Za-z_-]{30,}"),
     "Slack token": re.compile(rb"xox[baprs]-[0-9A-Za-z-]{20,}"),
     "OpenAI-style key": re.compile(rb"sk-(?:proj-)?[A-Za-z0-9_-]{20,}"),
-    "personal email address": re.compile(
-        rb"[A-Za-z0-9._%+-]+@(?:gmail|outlook|yahoo|icloud|protonmail)\.[A-Za-z]{2,}",
-        re.IGNORECASE,
-    ),
 }
 
 

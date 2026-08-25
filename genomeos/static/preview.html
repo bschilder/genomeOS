@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GenomeOS infrastructure preview</title>
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, monospace; background: #08111f; color: #dbeafe; }
+    body { margin: 0; padding: 24px; }
+    main { max-width: 1000px; margin: auto; }
+    header, .panel { border: 1px solid #28405f; border-radius: 10px; padding: 16px; margin-bottom: 16px; background: #0d1b2d; }
+    h1 { margin: 0 0 8px; font-size: 22px; }
+    .meta { color: #93c5fd; display: flex; flex-wrap: wrap; gap: 16px; }
+    select, button { background: #132944; color: #e0f2fe; border: 1px solid #3b82f6; padding: 8px; }
+    svg { width: 100%; height: auto; background: #07101c; border: 1px solid #28405f; }
+    .grid { stroke: #1e3a5f; stroke-width: .5; }
+    .observation { fill: none; stroke: #fff; stroke-width: 2; }
+    .masked { fill: #111827; stroke: #f59e0b; stroke-width: 2; }
+    #error { color: #fca5a5; white-space: pre-wrap; }
+    code { color: #a7f3d0; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>GenomeOS infrastructure preview</h1>
+    <p>Diagnostic only: browser → API → DuckDB → immutable Parquet.</p>
+    <div class="meta">
+      <span id="readiness">checking readiness…</span>
+      <span id="versions"></span>
+      <span id="counts"></span>
+    </div>
+  </header>
+  <section class="panel">
+    <label for="variant">Variant </label><select id="variant"></select>
+    <button id="reload">Reload</button>
+  </section>
+  <section class="panel">
+    <svg id="map" viewBox="0 0 900 450" role="img" aria-label="Diagnostic world projection"></svg>
+    <p>White rings: observations. Color: posterior mean. Orange outlines: masked support.</p>
+    <div id="error"></div>
+  </section>
+</main>
+<script>
+const svg = document.querySelector("#map");
+const ns = "http://www.w3.org/2000/svg";
+const xy = (lat, lon) => [((lon + 180) / 360) * 900, ((90 - lat) / 180) * 450];
+const get = async path => {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+};
+const circle = (lat, lon, radius, css, fill) => {
+  const [cx, cy] = xy(lat, lon);
+  const node = document.createElementNS(ns, "circle");
+  Object.entries({cx, cy, r: radius, class: css, fill}).forEach(([k, v]) => node.setAttribute(k, v));
+  svg.appendChild(node);
+};
+const drawGrid = () => {
+  svg.replaceChildren();
+  for (let lon = -180; lon <= 180; lon += 30) {
+    const line = document.createElementNS(ns, "line");
+    const [x] = xy(0, lon);
+    Object.entries({x1:x, x2:x, y1:0, y2:450, class:"grid"}).forEach(([k,v]) => line.setAttribute(k,v));
+    svg.appendChild(line);
+  }
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const line = document.createElementNS(ns, "line");
+    const [, y] = xy(lat, 0);
+    Object.entries({x1:0, x2:900, y1:y, y2:y, class:"grid"}).forEach(([k,v]) => line.setAttribute(k,v));
+    svg.appendChild(line);
+  }
+};
+const color = value => `hsl(${220 - Math.min(value * 900, 180)} 80% 55%)`;
+async function render() {
+  document.querySelector("#error").textContent = "";
+  const variant = document.querySelector("#variant").value;
+  const [observations, surface] = await Promise.all([
+    get(`/v1/atlas/observations?variant_id=${encodeURIComponent(variant)}`),
+    get(`/v1/atlas/surface?variant_id=${encodeURIComponent(variant)}&resolution=4`)
+  ]);
+  drawGrid();
+  surface.items.forEach(row => {
+    const masked = ["unknown", "prior_dominated"].includes(row.support);
+    circle(row.lat, row.lon, 10, masked ? "masked" : "", masked ? "#111827" : color(row.post_mean));
+  });
+  observations.items.forEach(row => circle(row.lat, row.lon, 6, "observation", "none"));
+  document.querySelector("#versions").textContent =
+    `data ${surface.data_version} · model ${surface.model_version}`;
+  document.querySelector("#counts").textContent =
+    `${observations.count} observations · ${surface.count} cells`;
+}
+async function start() {
+  try {
+    const [ready, variants] = await Promise.all([get("/ready"), get("/v1/atlas/variants")]);
+    document.querySelector("#readiness").textContent = `● ${ready.status}`;
+    const select = document.querySelector("#variant");
+    variants.items.forEach(item => {
+      const option = document.createElement("option");
+      option.value = item.variant_id;
+      option.textContent = `${item.label} · ${item.variant_id}`;
+      select.appendChild(option);
+    });
+    await render();
+  } catch (error) {
+    document.querySelector("#readiness").textContent = "● unavailable";
+    document.querySelector("#error").textContent = error.message;
+  }
+}
+document.querySelector("#reload").addEventListener("click", () => render().catch(error => {
+  document.querySelector("#error").textContent = error.message;
+}));
+start();
+</script>
+</body>
+</html>

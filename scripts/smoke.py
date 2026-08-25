@@ -15,6 +15,9 @@ SMOKE_TESTS = (
     "tests/test_registry_schema.py",
     "tests/test_observations_schema.py",
     "tests/test_h3util.py",
+    "tests/test_artifact_catalog.py",
+    "tests/test_atlas_api.py",
+    "tests/test_observability.py",
 )
 
 
