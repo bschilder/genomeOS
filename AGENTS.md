@@ -136,8 +136,11 @@ genomeos/
   api.py cli.py db.py ingest.py models.py schemas.py tabix.py   # Pan-UKB evidence API
   registry/      schema.py build.py sources/                    # P0 — population registry
   observations/  schema.py ingest.py sources/                   # P1 — observations store
-  surfaces/      fit.py                                         # P2 — surface inference
-  geo/           h3util.py                                      # H3 indexing
+  surfaces/      fit.py mask.py                                 # P2 — surface inference
+  burden/        expressions.py propagate.py                    # P3 — burden engine
+  validation/    hbs_parity.py                                  # golden tests (§8)
+  reference/     piel2013.py                                    # published parity targets
+  geo/           h3util.py population.py                        # H3 indexing, denominators
 contract/        *.schema.json      # frozen pandera schemas; CI fails on drift
 scripts/         build_registry.py build_observations.py freeze_contract.py
 ```
@@ -149,8 +152,8 @@ paths are identical either way. The Atlas modules are therefore subpackages of t
 `genomeos/` package. **Do not migrate the layout** as a side effect of another task.
 
 The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the `atlas` extra,
-and PyMC/PyTensor in a further `surfaces` extra, so the API container carries neither. Install
-everything with `.[dev,atlas,surfaces]`.
+PyMC/PyTensor in a `surfaces` extra, and rasterio in a `geo` extra, so the API container carries
+none of them. Install everything with `.[dev,atlas,surfaces,geo]`.
 
 **Inference engine:** PyMC with a Hilbert-space GP (HSGP), *not* R-INLA-SPDE, despite what
 design §7 names. The reasoning and the rejected alternatives are in #34; do not reintroduce an R
@@ -161,7 +164,7 @@ toolchain without reopening that decision.
 Current, and what CI must keep passing:
 
 ```bash
-python -m pip install -e '.[dev,atlas,surfaces]'   # add [postgres] or [tabix] as needed
+python -m pip install -e '.[dev,atlas,surfaces,geo]'   # add [postgres] or [tabix] as needed
 ruff check .                              # lint; CI runs this
 python scripts/freeze_contract.py --check # contract drift; CI runs this
 python scripts/check_module_size.py        # agent-readable module budget; CI runs this
