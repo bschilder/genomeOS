@@ -1,0 +1,66 @@
+{
+  "files": [
+    {
+      "bytes": 436400,
+      "path": "data/raw/afnd_populations.tsv",
+      "sha256": "5da54cda65e99ba7435d268c6da8645b299bdf4ad88da453421477efb7709dfc"
+    },
+    {
+      "bytes": 416612,
+      "path": "data/raw/map_g6pd_surveys.csv",
+      "sha256": "ad473661e7ae42e5195629e0eabc24b5a882c49a41c3bbf375f382ac29b11c37"
+    },
+    {
+      "bytes": 404602,
+      "path": "data/raw/map_hbs_surveys.csv",
+      "sha256": "ab92edd3059aa59a37f3e2d10361d67e490c573fc3c03bf13eb902e3820e98fd"
+    },
+    {
+      "bytes": 1115304,
+      "path": "data/store/artifacts/chr11-5227002-T-A__v1__map-2026-08/cells.parquet",
+      "sha256": "48926282819bc0d805490d217eb6edef0875db3f37e8efc978c5cbcd50dc7f67"
+    },
+    {
+      "bytes": 408,
+      "path": "data/store/artifacts/chr11-5227002-T-A__v1__map-2026-08/manifest.json",
+      "sha256": "ff11e9fdbf503768a7bba3c3e16a676e2dafea850a99cff331d1d5f6be3ff617"
+    },
+    {
+      "bytes": 1114502,
+      "path": "data/store/artifacts/phenotype__g6pd-deficiency__v1__map-2026-08/cells.parquet",
+      "sha256": "fc204c0136918581c483a0c0e2263971227bd61906c80de5652cc38477454b11"
+    },
+    {
+      "bytes": 415,
+      "path": "data/store/artifacts/phenotype__g6pd-deficiency__v1__map-2026-08/manifest.json",
+      "sha256": "76e61383a5ec7fd647b41d74667197f9d2b719ef7ddfcd1766d42d73fd8c988a"
+    },
+    {
+      "bytes": 121009995,
+      "path": "data/store/fits/chr11-5227002-T-A.fit.pkl",
+      "sha256": "a45099d4068b78e533c6c4b3e2a4586af648afad2ce7d7d8530b67d5b77d5167"
+    },
+    {
+      "bytes": 112,
+      "path": "data/store/fits/exclusions.json",
+      "sha256": "a810061de65a3a9899d8e6c8d57c6fb2e3cd84ea97d7032f933b0d0521742cbc"
+    },
+    {
+      "bytes": 95953281,
+      "path": "data/store/fits/phenotype__g6pd-deficiency.fit.pkl",
+      "sha256": "07cefc74479eda9b89396a932e4eefcb22e4a88eb86b6c4c6c93afc38a9ee848"
+    }
+  ],
+  "generated_at": "2026-08-26T13:46:44+00:00",
+  "n_files_hashed": 10,
+  "root": "data",
+  "summarised_directories": [
+    {
+      "bytes": 35740341,
+      "files": 1825,
+      "note": "summarised, not hashed per file",
+      "path": "data/raw/afnd_cache"
+    }
+  ],
+  "total_bytes": 256191972
+}

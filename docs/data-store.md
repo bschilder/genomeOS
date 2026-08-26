@@ -30,14 +30,17 @@ docs/figures/                           committed: review figures
 |---|---|---|---|
 | `reference/`, `tests/fixtures/`, `docs/figures/` | **yes** | — | small, reviewable, diffable |
 | `data/raw/` | no | **yes**, by script | sources are versioned upstream; a committed copy goes stale silently |
-| `data/store/fits/*.pkl` | no | yes, by refitting | ~6 MB each and **environment-coupled** |
-| `data/store/artifacts/` | **candidate** | yes, from a fit | small parquet; this is the thing to publish |
+| `data/store/fits/*.pkl` | no | yes, by refitting | **~100 MB each** and environment-coupled |
+| `data/store/artifacts/` | **yes** | yes, from a fit | 1.1 MB parquet per variant — the citable output |
 
 ## A fit is not an artifact
 
 `surfaces.fit.save_fit` pickles the PyMC graph alongside the posterior so predictions are cheap to
 repeat. That is a **cache**: pickle is coupled to the installed PyMC and pytensor, and it executes
-arbitrary code on load, so it can be neither archival nor shared.
+arbitrary code on load, so it can be neither archival nor shared. It is also large — the HbS fit is
+**121 MB** against a **1.1 MB** artifact, a 110x difference, because the posterior carries a draw
+of `f`, `p` and `freq_pred` for every observation. The fits stay local; the artifacts are
+committed.
 
 The artifact is `store/artifacts/.../cells.parquet` — per-cell posterior summaries in plain
 columns, readable by anything that reads parquet, and what §5 means when it says the read API
@@ -76,6 +79,7 @@ produced where it will be kept.
 
 ## Known gap
 
-`data/` is gitignored in full, so the AFND harvest and every fit exist on one laptop with no
-off-machine copy. `INVENTORY.json` makes loss *detectable*, not *survivable*. Remote storage —
-#33 specifies GCS — is the actual fix and is not built.
+The **artifacts and the inventory are committed**, so a published surface now survives this
+laptop. The **fits (217 MB) and the AFND harvest (36 MB of cached pages) are not** — they are
+re-creatable by script, and `INVENTORY.json` makes their loss *detectable* rather than
+*survivable*. Remote storage — #33 specifies GCS — is the actual fix and is not built.

@@ -1,0 +1,18 @@
+{
+  "artifact_format": 1,
+  "correlation_range_km": 680.3,
+  "data_version": "map-2026-08",
+  "lengthscale_sigma": 0.7,
+  "likelihood": "beta_binomial",
+  "model_version": "v1",
+  "n_cells": 11680,
+  "n_observations": 1071,
+  "prior_frequency_sd": 0.12919,
+  "resolution": 3,
+  "support_counts": {
+    "interpolated": 8094,
+    "observed": 312,
+    "unknown": 3274
+  },
+  "variant_id": "chr11-5227002-T-A"
+}
