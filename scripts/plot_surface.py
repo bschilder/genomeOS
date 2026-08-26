@@ -33,7 +33,7 @@ import numpy as np  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-from genomeos.observations.sources import map_surveys  # noqa: E402
+from genomeos.observations.sources import map_g6pd, map_surveys  # noqa: E402
 from genomeos.surfaces.fit import FitConfig, fit_surface, load_fit, save_fit  # noqa: E402
 from genomeos.surfaces.mask import MaskConfig, classify_support  # noqa: E402
 from genomeos.viz.basemap import draw_countries, h3_land_cells, h3_polygons  # noqa: E402
@@ -52,6 +52,15 @@ LAND = "#e3e6ea"
 # just-noticeable threshold — so cells near 8% HbS became indistinguishable from "no data".
 # turbo never approaches grey (0.70) or white (0.80), which is what lets the land stay light.
 VALUE_CMAP = "turbo"
+
+_LAYER_TITLE = {
+    "hbs": "HbS (rs334)",
+    "g6pd": "G6PD deficiency (X-linked, hemizygous males)",
+}
+_VALUE_LABEL = {
+    "hbs": "posterior median HbS allele frequency",
+    "g6pd": "posterior median G6PD-deficiency allele frequency (males)",
+}
 # A different family for uncertainty: two panels drawn in one palette invite reading a
 # standard deviation as a frequency.
 UNCERTAINTY_CMAP = "magma"
@@ -133,6 +142,7 @@ def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None):
 
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--layer", choices=("hbs", "g6pd"), default="hbs")
     ap.add_argument("--observations", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--h3-res", type=int, default=3, help="H3 resolution for the rendered cells")
@@ -161,7 +171,8 @@ def main() -> None:
     ap.add_argument("--dpi", type=int, default=220)
     args = ap.parse_args()
 
-    observations, report = map_surveys.load(args.observations, "figure")
+    loader = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}[args.layer]
+    observations, report = loader(args.observations, "figure")
     print(report)
 
     cells = h3_land_cells(args.h3_res)
@@ -239,7 +250,7 @@ def main() -> None:
     fig, axes = plt.subplots(2, 1, figsize=(13, 13), constrained_layout=True)
     _panel(
         axes[0], polygons, central, masked, observations,
-        cmap=args.cmap, label="posterior median HbS allele frequency",
+        cmap=args.cmap, label=_VALUE_LABEL[args.layer],
         title="Fitted surface — posterior MEDIAN (grey land = no claim: unknown or prior-dominated)",
         vmax=float(central[~masked].max()),
     )
@@ -249,7 +260,7 @@ def main() -> None:
         title="Posterior uncertainty — where the surface is least trustworthy",
     )
     fig.suptitle(
-        f"HbS (rs334) fitted from {len(observations)} MAP surveys — "
+        f"{_LAYER_TITLE[args.layer]} fitted from {len(observations)} MAP surveys — "
         f"correlation range {correlation_range_km:.0f} km, "
         f"rendered on H3 res-{args.h3_res} cells",
         fontsize=13,

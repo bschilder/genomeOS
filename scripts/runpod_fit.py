@@ -88,8 +88,12 @@ JOB_COMMANDS = {
     # The results are echoed to the pod log on purpose. Nothing copies /workspace/out back, so
     # without this the numbers die with the pod — which is how an earlier 8.9-hour run returned
     # nothing at all. `cat` is guarded because a strategy that failed writes no file.
-    # Multi-variant batch: both MAP layers through `run_batch`, with the exclusion list echoed
-    # to the log so it survives the pod (nothing copies /workspace back).
+    # Multi-variant batch: both MAP layers through `run_batch`, then figures rendered from the
+    # saved fits and **pushed back to a branch**. Nothing copies /workspace off a pod, so three
+    # earlier runs produced surfaces and posterior plots that died when the pod stopped. The pod
+    # already holds a working git credential, so committing the PNGs is the shortest honest route
+    # to getting a reviewable artifact out — and it matches the repo convention that review
+    # figures live under docs/figures/ rather than being pasted as screenshots.
     "surfaces": (
         "run python scripts/fetch_map_hbs.py --layer g6pd "
         "--out /workspace/data/map_g6pd_surveys.csv ; "
@@ -97,6 +101,23 @@ JOB_COMMANDS = {
         "--hbs /workspace/data/map_hbs_surveys.csv "
         "--g6pd /workspace/data/map_g6pd_surveys.csv "
         "--out /workspace/out --n-inducing {n_inducing} --draws {draws} ; "
+        "echo '===== FIGURES ====='; "
+        "git sparse-checkout add docs ; "
+        "run python scripts/plot_surface.py --layer g6pd "
+        "--observations /workspace/data/map_g6pd_surveys.csv "
+        "--fit /workspace/out/phenotype__g6pd-deficiency.fit.pkl "
+        "--out docs/figures/g6pd_surface_geodesic.png --h3-res 3 ; "
+        "run python scripts/plot_posteriors.py "
+        "--fit /workspace/out/phenotype__g6pd-deficiency.fit.pkl "
+        "--out docs/figures/g6pd_posteriors.png "
+        "--title 'G6PD deficiency (phenotype:g6pd-deficiency)' ; "
+        "echo '===== PUSH ====='; "
+        "git config user.email 'noreply@github.com' ; "
+        "git config user.name 'genomeOS pod' ; "
+        "git checkout -B figures/g6pd-{draws} ; "
+        "git add -f docs/figures/g6pd_surface_geodesic.png docs/figures/g6pd_posteriors.png ; "
+        "git commit -m 'figs: G6PD posterior surface and parameter posteriors' ; "
+        "run git push -f origin figures/g6pd-{draws} ; "
         "echo '===== RESULTS BEGIN ====='; "
         "cat /workspace/out/exclusions.json 2>/dev/null || echo 'no exclusion list written'; "
         "echo '===== RESULTS END ====='"
