@@ -210,11 +210,20 @@ uv pip install -r requirements.lock
 python -m pip install -e '.' --no-deps
 ```
 
-Regenerate it when a dependency changes, and commit the diff:
+Regenerate it when a dependency changes, and commit the diff. **`--upgrade` is not optional**, and
+the reason is easy to miss: writing to an existing `--output-file` makes uv treat the pins already
+in it as *preferences*, so it holds versions steady to minimise churn. Without `--upgrade` a
+widened bound in `pyproject.toml` changes nothing and the lock silently keeps the old pin.
+
+That is not hypothetical — it happened while writing this section. After restoring
+`fastapi>=0.115,<1`, the regenerated lock still pinned `0.119.1`; resolving the same requirement to
+stdout gave `0.141.1`. `--refresh` (which busts uv's persistent *index* cache) is a different knob
+and did not help, because the stale value was coming from the output file, not the cache.
 
 ```bash
-uv pip compile pyproject.toml --universal --extra dev --extra atlas --extra surfaces \
-    --extra geo --extra figures --python-version 3.12 --output-file requirements.lock
+uv pip compile pyproject.toml --universal --upgrade --extra dev --extra atlas \
+    --extra surfaces --extra geo --extra figures --python-version 3.12 \
+    --output-file requirements.lock
 ```
 
 **Before arguing about library behaviour, run `python scripts/env_report.py`.** It prints the
