@@ -468,19 +468,35 @@ def inducing_points(x: np.ndarray, n_inducing: int, seed: int) -> np.ndarray:
 
 
 def _check_convergence(idata, config: FitConfig) -> None:
-    """Raise unless every parameter mixed. See `ConvergenceError` and §12."""
+    """Raise unless every parameter mixed, naming the parameter that failed.
+
+    The offending parameter is part of the message because it changes the diagnosis entirely.
+    A starved `concentration` or `cohort_sd` is a reparameterisation problem and cheap to fix; a
+    starved `z_u` is the spatial field itself failing and usually means the inducing set or the
+    sampling budget is wrong. Without the name, every failure looks like "buy more draws" (#111).
+    """
     import arviz as az
 
     rhat = az.rhat(idata)
-    worst_rhat = max(float(np.nanmax(rhat[v].to_numpy())) for v in rhat.data_vars)
     ess = az.ess(idata)
-    worst_ess = min(float(np.nanmin(ess[v].to_numpy())) for v in ess.data_vars)
+    worst_rhat, rhat_var = -np.inf, "?"
+    for name in rhat.data_vars:
+        value = float(np.nanmax(rhat[name].to_numpy()))
+        if not np.isfinite(value) or value > worst_rhat:
+            worst_rhat, rhat_var = value, name
+    worst_ess, ess_var = np.inf, "?"
+    for name in ess.data_vars:
+        value = float(np.nanmin(ess[name].to_numpy()))
+        if not np.isfinite(value) or value < worst_ess:
+            worst_ess, ess_var = value, name
 
     problems = []
     if not np.isfinite(worst_rhat) or worst_rhat > config.max_rhat:
-        problems.append(f"r_hat {worst_rhat:.3f} > {config.max_rhat}")
+        problems.append(f"r_hat {worst_rhat:.3f} > {config.max_rhat} (worst: {rhat_var})")
     if not np.isfinite(worst_ess) or worst_ess < config.min_ess:
-        problems.append(f"effective sample size {worst_ess:.0f} < {config.min_ess:.0f}")
+        problems.append(
+            f"effective sample size {worst_ess:.0f} < {config.min_ess:.0f} (worst: {ess_var})"
+        )
     if problems:
         raise ConvergenceError(
             "sampler did not converge (" + "; ".join(problems) + "). "

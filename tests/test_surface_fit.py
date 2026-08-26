@@ -334,3 +334,14 @@ def test_predict_draws_exposes_the_samples_behind_the_summary(fit):
 def test_predict_draws_refuses_mismatched_coordinates(fit):
     with pytest.raises(ValueError, match="same length"):
         fit.predict_draws(lat=np.array([1.0, 2.0]), lon=np.array([1.0]))
+
+
+def test_a_convergence_failure_names_the_parameter_that_starved():
+    """Which parameter failed changes the diagnosis, so the message must say.
+
+    A starved `concentration` or `cohort_sd` is a reparameterisation problem and cheap to fix; a
+    starved `z_u` is the spatial field itself failing. Without the name every failure reads as
+    "buy more draws", which sent one investigation down the wrong path entirely (#111).
+    """
+    with pytest.raises(ConvergenceError, match=r"worst: \w+"):
+        fit_surface(_observations(n=30), FitConfig(draws=5, tune=5, chains=4))
