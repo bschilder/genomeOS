@@ -122,6 +122,23 @@ JOB_COMMANDS = {
         "cat /workspace/out/exclusions.json 2>/dev/null || echo 'no exclusion list written'; "
         "echo '===== RESULTS END ====='"
     ),
+    # Allele screening: many AFND alleles through run_batch, with the exclusion list echoed to the
+    # log. A diagnostic sweep, so failures are the product and a modest draw budget is correct.
+    "screen": (
+        "run python scripts/fetch_afnd.py --out /workspace/data/afnd_populations.tsv "
+        "--cache /workspace/data/afnd_cache --delay 0.2 ; "
+        "run curl -sSL -o /workspace/data/afnd_frequencies.tsv "
+        "https://raw.githubusercontent.com/slowkow/allelefrequencies/main/afnd.tsv ; "
+        "run python scripts/screen_alleles.py "
+        "--frequencies /workspace/data/afnd_frequencies.tsv "
+        "--populations /workspace/data/afnd_populations.tsv "
+        "--out /workspace/out --top {n_folds} --draws {draws} "
+        "--n-inducing {n_inducing} ; "
+        "echo '===== RESULTS BEGIN ====='; "
+        "cat /workspace/out/fitted.json 2>/dev/null || echo 'no fits'; "
+        "cat /workspace/out/exclusions.json 2>/dev/null || echo 'no exclusion list'; "
+        "echo '===== RESULTS END ====='"
+    ),
     "validate": (
         "run python scripts/validate_holdout.py "
         "--observations /workspace/data/map_hbs_surveys.csv "

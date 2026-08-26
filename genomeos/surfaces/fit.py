@@ -229,6 +229,10 @@ class SurfaceFit:
     #: True when the fit could estimate β_design at all, i.e. when the data contained more than
     #: one sampling design. Written to the artifact as `beta_design_applied` (§6).
     beta_design_applied: bool
+    #: True when the cohort effect was estimated at all. False when the source gives one cohort
+    #: per observation, which is not a cohort effect but an observation-level overdispersion term
+    #: — see the note in `fit_surface`.
+    beta_cohort_applied: bool
     design_levels: tuple[str, ...]
     #: Prior sd of allele frequency at a location, the denominator of `posterior_contraction`
     #: (§7.1b). A single scalar because the GP prior is stationary and the mean function is
@@ -334,7 +338,12 @@ class SurfaceFit:
         rng = np.random.default_rng(self.config.seed)
         freq = np.clip(self._frequency_samples(lat_arr, lon_arr), _EPS, 1.0 - _EPS)
 
-        cohort_sd = self._posterior_flat("cohort_sd")
+        if not self.beta_cohort_applied:
+            # No cohort effect was estimated, so there is none to integrate over. The predictive
+            # then differs from the latent field only by sampling noise.
+            cohort_sd = np.zeros(len(freq))
+        else:
+            cohort_sd = self._posterior_flat("cohort_sd")
         if len(cohort_sd) != len(freq):
             raise RuntimeError(
                 f"posterior has {len(cohort_sd)} draws but the predictive has {len(freq)}; "
@@ -536,6 +545,16 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
 
     design_index = obs["sampling_design"].map({d: i for i, d in enumerate(design_levels)}).to_numpy()
     cohorts = sorted(obs["cohort_id"].unique())
+    # A cohort effect needs replication within cohorts to be identified. One level per observation
+    # gives none, so the term is dropped rather than fitted into a ridge.
+    beta_cohort_applied = len(cohorts) < len(obs)
+    if not beta_cohort_applied:
+        warnings.warn(
+            f"{len(cohorts)} cohorts for {len(obs)} observations: the cohort effect has no "
+            "within-cohort replication to identify it and is not estimated. Overdispersion is "
+            "carried by the likelihood instead.",
+            stacklevel=2,
+        )
     cohort_index = obs["cohort_id"].map({c: i for i, c in enumerate(cohorts)}).to_numpy()
 
     # No per-axis standardisation: the unit sphere is already the right scale in all three
@@ -630,10 +649,21 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         # traverse. With 344 cohorts that was fatal — r_hat 2.7, ESS 2. Sampling a unit normal
         # and scaling it decouples the scale from the effects. (PyMC's HSGP already
         # non-centres its own coefficients by default; the cohort term needed the same.)
-        cohort_sd = pm.HalfNormal("cohort_sd", sigma=0.5)
-        cohort_z = pm.Normal("cohort_z", mu=0.0, sigma=1.0, shape=len(cohorts))
-        beta_cohort = pm.Deterministic("beta_cohort", cohort_sd * cohort_z)
-        logit = logit + beta_cohort[cohort_index]
+        # Only when the cohorts are actually grouped. A source with one study per population —
+        # AFND is one — gives `cohort_id == population_id`, so this term would have one level per
+        # observation. That is not the study-level effect §7.1d wants: it is an observation-level
+        # overdispersion term, competing with the beta-binomial `concentration` to explain the
+        # same residual, and the two are not jointly identifiable. Screening ten HLA alleles,
+        # `cohort_sd` was the worst-mixing parameter in four of five failures (r_hat up to 1.12,
+        # ESS 23) while the same model fits MAP data, which has 419 cohorts for 1,071 surveys.
+        #
+        # Fitting it anyway does not merely waste a parameter: an unidentified per-observation
+        # term is free to absorb the spatial signal the GP exists to explain.
+        if beta_cohort_applied:
+            cohort_sd = pm.HalfNormal("cohort_sd", sigma=0.5)
+            cohort_z = pm.Normal("cohort_z", mu=0.0, sigma=1.0, shape=len(cohorts))
+            beta_cohort = pm.Deterministic("beta_cohort", cohort_sd * cohort_z)
+            logit = logit + beta_cohort[cohort_index]
 
         p = pm.Deterministic("p", pm.math.invlogit(logit))
 
@@ -704,6 +734,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         variant_id=str(variants[0]),
         config=config,
         beta_design_applied=beta_design_applied,
+        beta_cohort_applied=beta_cohort_applied,
         design_levels=non_reference,
         prior_frequency_sd=prior_sd,
         inducing_spacing_ratio=spacing_ratio,
