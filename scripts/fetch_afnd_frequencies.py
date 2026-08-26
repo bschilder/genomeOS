@@ -120,13 +120,27 @@ _COL = {"allele": 1, "population": 3, "indivs": 4, "af": 5, "n": 7}
 _MARKER = re.compile(r"\s*\(\*\)\s*$")
 
 
+def strip_separators(value: str) -> str:
+    """Remove thousand separators from a numeric field.
+
+    **AFND puts separators in every numeric column, including ones that look like indices.** This
+    has now cost data three separate times: the sample size in an earlier redistribution (33,514
+    rows read as missing), the sample size here, and the row's own line number — which past row 999
+    reads as `4,901`, so a plain `.isdigit()` test rejects the row and skips it silently. Roughly
+    97% of every locus past page ten was being dropped that way.
+
+    Anything parsing an AFND number should go through here.
+    """
+    return value.replace(",", "").strip()
+
+
 def parse_rows(body: str) -> list[tuple[str, str, str, str, str]]:
     """(allele, population, indivs_over_n, alleles_over_2n, n) per data row."""
     out = []
     for row in re.findall(r"<tr[^>]*>(.*?)</tr>", body, re.S):
         cells = [re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]*>", " ", c))).strip()
                  for c in re.findall(r"<t[dh][^>]*>(.*?)</t[dh]>", row, re.S)]
-        if len(cells) <= _COL["n"] or not cells[0].isdigit():
+        if len(cells) <= _COL["n"] or not strip_separators(cells[0]).isdigit():
             continue
         value = {k: _MARKER.sub("", cells[i]) for k, i in _COL.items()}
         if not value["allele"] or not value["population"]:
