@@ -92,6 +92,8 @@ INDUCING_PLACEMENTS: tuple[str, ...] = ("h3", "kmeans")
 #: (cond ~6e5 at M=400 here) and 1e-6 does not touch it. 1e-4 cuts that ~4x at negligible cost
 #: to the model.
 JITTER = 1e-4
+#: Keeps logit/Beta arithmetic away from the 0 and 1 boundaries in the predictive path.
+_EPS = 1e-9
 
 #: Inducing spacing below this fraction of the fitted correlation range means the points are
 #: redundant: adjacent ones correlate at ~0.99, so they add parameters without adding
@@ -256,6 +258,100 @@ class SurfaceFit:
             columns=columns,
         )
 
+    def _frequency_samples(self, lat_arr: np.ndarray, lon_arr: np.ndarray) -> np.ndarray:
+        """Posterior draws of the latent frequency, shape (draws, points)."""
+        x_new = to_unit_sphere(lat_arr, lon_arr)
+        with self._model:
+            pm.set_data({"x_pred": x_new})
+            drawn = pm.sample_posterior_predictive(
+                self.idata,
+                var_names=["freq_pred"],
+                random_seed=self.config.seed,
+                progressbar=False,
+            )
+        return drawn.posterior_predictive["freq_pred"].to_numpy().reshape(-1, len(lat_arr))
+
+    def _posterior_flat(self, name: str) -> np.ndarray:
+        """Draws of a scalar parameter, flattened in the same (chain, draw) order as the
+        posterior predictive, so the two align draw-for-draw."""
+        return self.idata.posterior[name].to_numpy().reshape(-1)
+
+    def predict_draws(self, lat: object, lon: object) -> np.ndarray:
+        """Posterior draws of the latent frequency, shape ``(draws, points)`` (#112).
+
+        `predict` summarises these into medians and quantiles; the burden path needs the draws
+        themselves, and cannot be written any other way. A national total is a sum over cells
+        *within* a draw, and the summary of a sum is not a function of the summaries of its
+        terms — medians in particular do not sum, a shortfall #92 measures at 4-7% against Piel
+        et al.'s own national medians, which is the size of error that reads as model failure.
+
+        This exposes draws `predict` already computes rather than running new inference.
+        """
+        lat_arr = np.atleast_1d(np.asarray(lat, dtype=float))
+        lon_arr = np.atleast_1d(np.asarray(lon, dtype=float))
+        if lat_arr.shape != lon_arr.shape:
+            raise ValueError("lat and lon must have the same length")
+        return self._frequency_samples(lat_arr, lon_arr)
+
+    def predict_observation(self, lat: object, lon: object, an: object) -> pd.DataFrame:
+        """Posterior predictive for a **new survey** of `an` alleles at each point (§7; #110).
+
+        `predict` describes the latent frequency — what the map claims about a place. This
+        describes what a new survey there would actually measure, which is the quantity a
+        calibration check must score against. It restores the two variance components the latent
+        interval deliberately omits:
+
+        - **a cohort offset**, drawn fresh from ``Normal(0, cohort_sd)``. A held-out survey
+          belongs to a cohort the model never saw, so reusing a fitted ``cohort_z`` would leak
+          information across the split and understate the interval.
+        - **overdispersed sampling** of `an` alleles, through the same beta-binomial the
+          likelihood uses. A beta-binomial draw is exactly ``p ~ Beta(alpha, beta)`` followed by
+          ``Binomial(n, p)``, so it composes in numpy without rebuilding the model.
+
+        Scoring observed frequencies against `predict`'s interval instead is the defect in #110:
+        it compares an interval for a mean against a noisy realisation of that mean, and
+        under-covers by construction however good the model is.
+        """
+        lat_arr = np.atleast_1d(np.asarray(lat, dtype=float))
+        lon_arr = np.atleast_1d(np.asarray(lon, dtype=float))
+        an_arr = np.atleast_1d(np.asarray(an, dtype=float))
+        if not lat_arr.shape == lon_arr.shape == an_arr.shape:
+            raise ValueError("lat, lon and an must have the same length")
+        if (an_arr <= 0).any():
+            raise ValueError("an must be positive; a survey of nobody has no predictive interval")
+
+        rng = np.random.default_rng(self.config.seed)
+        freq = np.clip(self._frequency_samples(lat_arr, lon_arr), _EPS, 1.0 - _EPS)
+
+        cohort_sd = self._posterior_flat("cohort_sd")
+        if len(cohort_sd) != len(freq):
+            raise RuntimeError(
+                f"posterior has {len(cohort_sd)} draws but the predictive has {len(freq)}; "
+                "they must align draw-for-draw"
+            )
+        logit = np.log(freq / (1.0 - freq)) + rng.normal(
+            0.0, np.broadcast_to(cohort_sd[:, None], freq.shape)
+        )
+        p = np.clip(1.0 / (1.0 + np.exp(-logit)), _EPS, 1.0 - _EPS)
+
+        if self.config.likelihood == "beta_binomial":
+            concentration = self._posterior_flat("concentration")[:, None]
+            p = np.clip(rng.beta(p * concentration, (1.0 - p) * concentration), _EPS, 1.0 - _EPS)
+        replicated = rng.binomial(np.rint(an_arr).astype(np.int64), p) / an_arr
+
+        return pd.DataFrame(
+            {
+                "lat": lat_arr,
+                "lon": lon_arr,
+                "an": an_arr,
+                "pred_median": np.median(replicated, axis=0),
+                "pred_q025": np.quantile(replicated, 0.025, axis=0),
+                "pred_q975": np.quantile(replicated, 0.975, axis=0),
+                "pred_q25": np.quantile(replicated, 0.25, axis=0),
+                "pred_q75": np.quantile(replicated, 0.75, axis=0),
+            }
+        )
+
     def predict(self, lat: object, lon: object) -> pd.DataFrame:
         """Posterior allele frequency at the given points, on the reference design.
 
@@ -268,16 +364,7 @@ class SurfaceFit:
         if lat_arr.shape != lon_arr.shape:
             raise ValueError("lat and lon must have the same length")
 
-        x_new = to_unit_sphere(lat_arr, lon_arr)
-        with self._model:
-            pm.set_data({"x_pred": x_new})
-            drawn = pm.sample_posterior_predictive(
-                self.idata,
-                var_names=["freq_pred"],
-                random_seed=self.config.seed,
-                progressbar=False,
-            )
-        samples = drawn.posterior_predictive["freq_pred"].to_numpy().reshape(-1, len(lat_arr))
+        samples = self._frequency_samples(lat_arr, lon_arr)
 
         return pd.DataFrame(
             {

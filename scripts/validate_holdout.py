@@ -56,8 +56,9 @@ def main() -> None:
             "folds_scored": len(result.folds),
             "folds_attempted": result.n_attempted,
             "folds_failed": [f.__dict__ for f in result.failures],
-            "coverage_95": result._mean("coverage_95"),
-            "coverage_50": result._mean("coverage_50"),
+            "coverage_95_predictive": result._mean("coverage_95_predictive"),
+            "coverage_50_predictive": result._mean("coverage_50_predictive"),
+            "coverage_95_latent": result._mean("coverage_95_latent"),
             "mae": result._mean("mae"),
             "rmse": result._mean("rmse"),
             "log_score": result._mean("log_score"),
@@ -84,7 +85,10 @@ def main() -> None:
         if random["skill"] > 0
         else "baseline not beaten on random folds"
     )
-    print(f"95% interval coverage, spatial     : {spatial['coverage_95']:.2f} (target 0.95)")
+    print(
+        f"95% predictive coverage, spatial   : {spatial['coverage_95_predictive']:.2f} "
+        f"(target 0.95)"
+    )
 
 
 if __name__ == "__main__":

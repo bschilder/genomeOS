@@ -311,3 +311,26 @@ def test_loading_something_that_is_not_a_fit_is_refused(tmp_path):
         cloudpickle.dump({"format": 999, "fit": None}, stream)
     with pytest.raises(ValueError, match="not a surface fit"):
         load_fit(path)
+
+
+def test_predict_draws_exposes_the_samples_behind_the_summary(fit):
+    """The burden path sums over cells within a draw, so it needs draws, not summaries (#112).
+
+    Also pins the contract that the draws and the summary describe the same thing: if these
+    diverge, national totals and the map would be telling different stories about one fit.
+    """
+    lat = np.array([9.0, 20.0, -4.0])
+    lon = np.array([0.0, 78.0, 22.0])
+    draws = fit.predict_draws(lat=lat, lon=lon)
+
+    assert draws.ndim == 2
+    assert draws.shape[1] == len(lat)
+    assert ((draws >= 0.0) & (draws <= 1.0)).all(), "allele frequency must lie in [0, 1]"
+    np.testing.assert_allclose(
+        np.median(draws, axis=0), fit.predict(lat=lat, lon=lon)["post_median"], rtol=1e-6
+    )
+
+
+def test_predict_draws_refuses_mismatched_coordinates(fit):
+    with pytest.raises(ValueError, match="same length"):
+        fit.predict_draws(lat=np.array([1.0, 2.0]), lon=np.array([1.0]))

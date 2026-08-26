@@ -17,7 +17,12 @@ worse than useless here: every credible interval on the published map would be a
 
 Reported per fold and pooled:
 
-- ``coverage_95`` / ``coverage_50`` — share of held-out observations inside the predicted
+- ``coverage_*_predictive`` — share of held-out observations inside the posterior predictive
+  interval for a survey of that size. This is the calibration statistic (#110).
+- ``coverage_*_latent`` — the same against the latent-frequency interval. Reported for
+  contrast only: it omits sampling noise and the cohort offset, so it under-covers whatever
+  the model does. Kept because the gap between the two is informative.
+- (superseded) share of held-out observations inside the predicted
   interval. Should approach 0.95 and 0.50; **below is overconfidence, above is uselessly wide**.
 - ``mae`` / ``rmse`` on the allele-frequency scale.
 - ``log_score`` — mean predictive log-likelihood of the held-out counts under the fitted
@@ -44,8 +49,15 @@ class FoldResult:
     fold: int
     n_train: int
     n_test: int
-    coverage_95: float
-    coverage_50: float
+    #: Coverage of the *posterior predictive for a new survey* — the calibration claim, and the
+    #: headline number. See `SurfaceFit.predict_observation` and #110.
+    coverage_95_predictive: float
+    coverage_50_predictive: float
+    #: Coverage of the *latent frequency* interval. Reported because it is what the map claims,
+    #: but it is not a calibration statistic: it omits sampling noise and the cohort offset that
+    #: are present in any real survey, so it under-covers by construction (#110).
+    coverage_95_latent: float
+    coverage_50_latent: float
     mae: float
     rmse: float
     log_score: float
@@ -102,8 +114,12 @@ class CrossValidation:
         return "\n".join(
             [
                 header,
-                f"  coverage of 95% interval : {self._mean('coverage_95'):.2f}  (target 0.95)",
-                f"  coverage of 50% interval : {self._mean('coverage_50'):.2f}  (target 0.50)",
+                f"  predictive coverage  95% : {self._mean('coverage_95_predictive'):.2f}"
+                f"  (target 0.95)  <- calibration",
+                f"  predictive coverage  50% : {self._mean('coverage_50_predictive'):.2f}"
+                f"  (target 0.50)",
+                f"  latent-frequency cov 95% : {self._mean('coverage_95_latent'):.2f}"
+                f"  (not a calibration statistic; see #110)",
                 f"  MAE (allele frequency)   : {self._mean('mae'):.4f}"
                 f"   baseline {self._mean('baseline_mae'):.4f}",
                 f"  RMSE                     : {self._mean('rmse'):.4f}",
@@ -180,16 +196,26 @@ def cross_validate(
                 FoldFailure(int(fold), len(train), len(test), str(error))
             )
             continue
-        predicted = fit.predict(lat=test["lat"].to_numpy(), lon=test["lon"].to_numpy())
-
+        lat, lon = test["lat"].to_numpy(), test["lon"].to_numpy()
         ac = test["ac"].to_numpy(dtype=float)
         an = test["an"].to_numpy(dtype=float)
         observed = ac / an
+
+        predicted = fit.predict(lat=lat, lon=lon)
         median = predicted["post_median"].to_numpy()
 
-        # Coverage is on the observed *frequency*, which is what the map claims about.
-        inside_95 = (observed >= predicted["q025"]) & (observed <= predicted["q975"])
-        inside_50 = (observed >= predicted["q25"]) & (observed <= predicted["q75"])
+        # Calibration is scored against the posterior predictive for a survey of this size, not
+        # against the latent-frequency interval. The latent interval describes the underlying
+        # frequency; `observed` is a noisy realisation of it, carrying binomial sampling noise
+        # and its own cohort offset. Comparing the two under-covers however good the model is,
+        # which is what produced a 0.10 coverage on the first run (#110).
+        replicated = fit.predict_observation(lat=lat, lon=lon, an=an)
+        inside_95 = (observed >= replicated["pred_q025"]) & (observed <= replicated["pred_q975"])
+        inside_50 = (observed >= replicated["pred_q25"]) & (observed <= replicated["pred_q75"])
+        # Kept for contrast: the gap between the two is the size of the components the map's
+        # interval leaves out.
+        latent_95 = (observed >= predicted["q025"]) & (observed <= predicted["q975"])
+        latent_50 = (observed >= predicted["q25"]) & (observed <= predicted["q75"])
 
         baseline_p = float(train["ac"].sum() / train["an"].sum())
         results.append(
@@ -197,8 +223,10 @@ def cross_validate(
                 fold=int(fold),
                 n_train=len(train),
                 n_test=len(test),
-                coverage_95=float(inside_95.mean()),
-                coverage_50=float(inside_50.mean()),
+                coverage_95_predictive=float(inside_95.mean()),
+                coverage_50_predictive=float(inside_50.mean()),
+                coverage_95_latent=float(latent_95.mean()),
+                coverage_50_latent=float(latent_50.mean()),
                 mae=float(np.mean(np.abs(median - observed))),
                 rmse=float(np.sqrt(np.mean((median - observed) ** 2))),
                 log_score=_log_score(ac, an, median),
