@@ -76,8 +76,17 @@ _UNBOUNDED_AREA = "large polygon"
 _UNBOUNDED_AREA_KM2 = 500.0
 _UNKNOWN_AREA_KM2 = 500.0
 
-#: Minimum share of `sample_size` that the reported genotypes must account for.
-DEFAULT_MIN_GENOTYPED_FRACTION = 0.9
+#: Minimum share of `sample_size` that the reported genotypes must account for. Below this the
+#: typed subset is assumed to be screen-positives rather than incomplete fieldwork, and the row is
+#: refused because its carrier enrichment cannot be undone. 0.5 keeps ordinary partial surveys —
+#: the real distribution has a median of 82% typed — while still refusing the newborn-screening
+#: rows that type one or two percent of a cohort.
+DEFAULT_MIN_GENOTYPED_FRACTION = 0.5
+
+#: How far the genotype total may exceed `sample_size` before the row is called inconsistent.
+#: A rounded or restated sample size sitting next to exact genotype counts produces a few percent
+#: of excess; a genuine inconsistency looks much larger.
+_MAX_GENOTYPE_EXCESS = 1.2
 
 REFUSAL_REASONS: tuple[str, ...] = (
     "incomplete_genotypes",
@@ -98,6 +107,12 @@ class IngestReport:
     refusals: dict[str, int]
     #: Surveys whose hbss was fixed at zero by subtraction rather than by assumption.
     derived_hbss: int = 0
+    #: Surveys whose hbaa was reconstructed by subtraction. hbaa never enters the allele count;
+    #: these were being refused for a field the arithmetic does not use.
+    derived_hbaa: int = 0
+    #: Retained surveys that typed fewer people than they approached, and so use the typed count
+    #: as the denominator rather than the approached count.
+    partially_typed: int = 0
 
     @property
     def retained_fraction(self) -> float:
@@ -107,6 +122,13 @@ class IngestReport:
         lines = [f"{self.retained}/{self.total} surveys retained ({self.retained_fraction:.0%})"]
         if self.derived_hbss:
             lines.append(f"  {self.derived_hbss} hbss values derived by subtraction (hbaa+hbas==n)")
+        if self.derived_hbaa:
+            lines.append(f"  {self.derived_hbaa} hbaa values reconstructed (unused by the allele count)")
+        if self.partially_typed:
+            lines.append(
+                f"  {self.partially_typed} surveys typed fewer than they approached; denominator "
+                "is the typed count"
+            )
         for reason, count in sorted(self.refusals.items(), key=lambda kv: -kv[1]):
             lines.append(f"  refused {count:>5}  {reason}")
         return "\n".join(lines)
@@ -147,13 +169,17 @@ def load(
     path: Path,
     ingest_version: str,
     *,
-    piel_2013_subset_only: bool = True,
+    piel_2013_subset_only: bool = False,
     min_genotyped_fraction: float = DEFAULT_MIN_GENOTYPED_FRACTION,
 ) -> tuple[pd.DataFrame, IngestReport]:
     """Load the MAP HbS survey export into observations, plus a report of what was refused.
 
-    `piel_2013_subset_only` keeps the rows MAP flags as used in the 2013 population-estimates
-    paper, which is the comparison set golden test 1 is scored against (§8).
+    `piel_2013_subset_only` keeps only the rows MAP flags as used in the 2013 population-estimates
+    paper. **It defaults off.** That flag marks comparability with a published analysis, not data
+    quality: the 158 rows outside it are ordinary surveys that Piel et al. happened not to use,
+    and discarding them shrinks every fitted surface for no scientific reason. Golden test 1 (§8)
+    turns it on, because a parity comparison must be scored on the same inputs the reference used;
+    nothing else should.
     """
     if not 0.0 < min_genotyped_fraction <= 1.0:
         raise ValueError("min_genotyped_fraction must be in (0, 1]")
@@ -173,8 +199,8 @@ def load(
 
     # Where the reported genotypes already account for the whole sample, hbss is determined by
     # subtraction: it must be zero. That is arithmetic, not the "assume blank means zero"
-    # judgement #89 asks an expert to rule on, and it recovers 317 surveys that were being
-    # refused for a value the data already fixes.
+    # judgement #89 asks an expert to rule on, and it recovers surveys that were being refused
+    # for a value the data already fixes.
     raw = raw.copy()
     derivable = (
         raw["hbss"].isna()
@@ -185,6 +211,24 @@ def load(
     )
     raw.loc[derivable, "hbss"] = 0.0
     derived_hbss = int(derivable.sum())
+
+    # hbaa is not needed to count alleles: `ac = hbas + 2*hbss` and `an = 2*genotyped`. Requiring
+    # all three fields refused 53 surveys over a field the arithmetic never touches. Where the
+    # other two are present hbaa follows by subtraction, and where sample_size is also present
+    # that reconstruction is exact.
+    reconstructable = (
+        raw["hbaa"].isna()
+        & raw["hbas"].notna()
+        & raw["hbss"].notna()
+        & raw["sample_size"].notna()
+        & ((raw["hbas"] + raw["hbss"]) <= raw["sample_size"])
+    )
+    raw.loc[reconstructable, "hbaa"] = (
+        raw.loc[reconstructable, "sample_size"]
+        - raw.loc[reconstructable, "hbas"]
+        - raw.loc[reconstructable, "hbss"]
+    )
+    derived_hbaa = int(reconstructable.sum())
 
     def refuse(mask: pd.Series, reason: str) -> None:
         hit = mask & keep
@@ -201,9 +245,36 @@ def load(
     refuse(raw[["latitude", "longitude"]].isna().any(axis=1), "missing_coordinates")
     refuse(raw["sample_size"].isna(), "missing_sample_size")
 
+    # **The denominator is the people actually typed, not the people approached.**
+    #
+    # `an = 2 * genotyped` rather than `2 * sample_size`. Where a survey typed everyone the two
+    # are identical, and where it did not, the genotyped total is the correct denominator for the
+    # alleles that were observed — using `sample_size` would divide real carrier counts by people
+    # who were never tested and understate the frequency.
+    #
+    # This is what recovers most of the old `partially_genotyped` refusals. Ninety surveys typed
+    # between 1.5% and 90% of their sample, with a median of 82%; refusing all of them threw away
+    # eighty-odd ordinary surveys to guard against a handful of pathological ones.
+    #
+    # The pathological case is still refused, and it is worth naming precisely: a US
+    # newborn-screening row typed 47,276 of 3,212,374 infants **because only screen-positives
+    # were typed**. The typed subset is then enriched for carriers by construction, and treating
+    # it as the denominator gives an HbS allele frequency of 0.31 for the United States. What
+    # separates that from an ordinary partial survey is how small the typed share is:
+    # screen-positive subsets are a percent or two, incomplete fieldwork is most of the sample.
+    # `min_genotyped_fraction` is the line between them, and it is a judgement — hence a named
+    # parameter reported in the ingest report rather than a constant buried here.
     genotyped = raw[["hbaa", "hbas", "hbss"]].sum(axis=1)
-    refuse(genotyped > raw["sample_size"], "genotypes_exceed_sample")
-    refuse(genotyped < min_genotyped_fraction * raw["sample_size"], "partially_genotyped")
+
+    # A genotype total slightly above `sample_size` is not broken data. All four such rows exceed
+    # it by 3-14%, which is what a rounded or restated `sample_size` looks like next to exact
+    # genotype counts. The genotypes are the measurement, so they win; only an implausible excess
+    # signals a genuinely inconsistent row.
+    refuse(genotyped > _MAX_GENOTYPE_EXCESS * raw["sample_size"], "genotypes_exceed_sample")
+    refuse(genotyped < min_genotyped_fraction * raw["sample_size"], "screen_positives_only")
+    partially_typed = int(
+        ((genotyped < raw["sample_size"]) & keep & genotyped.notna()).sum()
+    )
 
     radius = raw["area_type"].map(_radius_km)
 
@@ -217,7 +288,8 @@ def load(
             "lon": rows["longitude"].astype(float),
             "radius_km": radius[keep].astype(float),
             "ac": (rows["hbas"] + 2 * rows["hbss"]).astype(int),
-            "an": (2 * rows["sample_size"]).astype(int),
+            # Two alleles per *typed* individual. See the note on the denominator above.
+            "an": (2 * genotyped[keep]).astype(int),
             "source": SOURCE,
             "assay": "genotype",
             "date_lower": 0,
@@ -233,5 +305,10 @@ def load(
     )
     validated = OBSERVATIONS_SCHEMA.validate(obs.reset_index(drop=True))
     return validated, IngestReport(
-        total=total, retained=len(validated), refusals=refusals, derived_hbss=derived_hbss
+        total=total,
+        retained=len(validated),
+        refusals=refusals,
+        derived_hbss=derived_hbss,
+        derived_hbaa=derived_hbaa,
+        partially_typed=partially_typed,
     )

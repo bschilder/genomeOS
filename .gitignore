@@ -236,3 +236,6 @@ __marimo__/
 # Atlas pipeline outputs
 data/
 *.pkl
+
+# Agent worktrees and local session state
+.claude/

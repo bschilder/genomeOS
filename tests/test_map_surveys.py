@@ -6,6 +6,7 @@ found in the full database rather than a synthetic happy path.
 
 from pathlib import Path
 
+import pandas as pd
 import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
@@ -43,12 +44,17 @@ def test_all_rows_are_the_hbs_variant(loaded):
     assert (obs["rsid"] == "rs334").all()
 
 
-def test_allele_counts_come_from_the_reported_genotypes(loaded):
-    """ac = hbas + 2·hbss over an = 2·sample_size."""
+def test_allele_counts_use_the_typed_denominator_not_the_approached_one(loaded):
+    """ac = hbas + 2·hbss over an = 2·(hbaa + hbas + hbss).
+
+    The denominator is the people actually typed, not the people approached. Where a survey typed
+    everyone the two are identical; where it did not, dividing observed carriers by people who
+    were never tested understates the frequency.
+    """
     obs, _ = loaded
     nigeria = obs[obs["population_id"] == "map-hbs-1020"].iloc[0]
     assert nigeria["ac"] == 2392 + 2 * 318
-    assert nigeria["an"] == 2 * 10115
+    assert nigeria["an"] == 2 * (6796 + 2392 + 318), "9,506 typed of 10,115 approached"
 
 
 def test_radius_comes_from_the_recorded_area_class_not_a_constant(loaded):
@@ -66,15 +72,37 @@ def test_zero_count_surveys_are_retained(loaded):
 # --- refusals: every one of these was found in the real database ---
 
 
-def test_partially_genotyped_surveys_are_refused():
-    """A US newborn-screening row types only screen-positives; its denominator is ambiguous."""
-    obs, report = map_surveys.load(FIXTURE, "0.1.0", piel_2013_subset_only=False)
+def test_screen_positive_only_surveys_are_refused_but_ordinary_partial_ones_are_not():
+    """The line is *how small* the typed share is, not that it is below 100%.
+
+    A US newborn-screening row typed 47,276 of 3,212,374 infants because only screen-positives
+    were typed; that subset is enriched for carriers by construction and gives an HbS frequency
+    of 0.31 for the United States. Incomplete fieldwork looks nothing like that — the real
+    distribution of partial surveys has a median of 82% typed — so refusing every partial survey
+    to catch this one discarded eighty-odd ordinary ones.
+    """
+    obs, report = map_surveys.load(FIXTURE, "0.1.0")
     assert "map-hbs-1067" not in set(obs["population_id"])
-    assert report.refusals.get("partially_genotyped", 0) >= 1
+    assert report.refusals.get("screen_positives_only", 0) >= 1
+    assert report.partially_typed >= 1, "ordinary partial surveys are kept, and counted"
 
 
-def test_internally_inconsistent_surveys_are_refused():
-    _, report = map_surveys.load(FIXTURE, "0.1.0", piel_2013_subset_only=False)
+def test_a_small_genotype_excess_is_a_rounded_sample_size_not_broken_data(loaded, tmp_path):
+    """All four such rows in the real export exceed `sample_size` by 3-14%, which is what a
+    rounded or restated sample size looks like next to exact genotype counts. The genotypes are
+    the measurement, so they win and become the denominator. Only an implausible excess signals a
+    genuinely inconsistent row.
+    """
+    obs, _ = loaded
+    row = obs[obs["population_id"] == "map-hbs-267"]
+    assert len(row) == 1, "a 14% excess is kept, not refused"
+    assert row.iloc[0]["an"] == 2 * (164 + 34 + 2), "denominator is the genotypes, not the sample"
+
+    frame = pd.read_csv(FIXTURE)
+    frame.loc[frame["id"] == 267, "sample_size"] = 10.0  # genotypes now 20x the sample
+    path = tmp_path / "inconsistent.csv"
+    frame.to_csv(path, index=False)
+    _, report = map_surveys.load(path, "0.1.0")
     assert report.refusals.get("genotypes_exceed_sample", 0) >= 1
 
 
@@ -111,9 +139,15 @@ def test_report_accounts_for_every_input_row(loaded):
     assert report.retained == len(obs)
 
 
-def test_piel_2013_subset_is_the_default_and_can_be_widened():
-    narrow, narrow_report = map_surveys.load(FIXTURE, "0.1.0")
-    wide, _ = map_surveys.load(FIXTURE, "0.1.0", piel_2013_subset_only=False)
+def test_the_piel_subset_filter_is_off_by_default_and_available_for_parity():
+    """That flag marks comparability with a published analysis, not data quality.
+
+    The rows outside Piel et al.'s 2013 subset are ordinary surveys they happened not to use, and
+    excluding them by default shrank every fitted surface for no scientific reason. Golden test 1
+    turns it on because a parity comparison must be scored on the reference's own inputs.
+    """
+    wide, _ = map_surveys.load(FIXTURE, "0.1.0")
+    narrow, narrow_report = map_surveys.load(FIXTURE, "0.1.0", piel_2013_subset_only=True)
     assert narrow_report.refusals.get("excluded_from_piel_2013", 0) >= 1
     assert len(wide) >= len(narrow)
 
