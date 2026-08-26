@@ -1,0 +1,10 @@
+pop_id	population	latitude	longitude	urban_rural	family	sample_source
+1986	Peru Lamas City Lama	6º 25' S	76º 32' W	Urban	Grandparents live at same location	Blood Donor
+2800	Papua New Guinea Wonie	8º 55' S	143º 10' E	Rural	Not Known	Anthropology Study
+1500	India Tamil Nadu Nadar	8º 0' N	77º 0' E	Unknown	Not Known	Anthropology Study
+9001	Example Rural Degrees Only	8º 0' S	143º 0' E	Rural	Not Known	Anthropology Study
+9002	Example Donor Registry	52º 31' N	13º 24' E	Urban and Rural	Not Known	Bone Marrow Registry
+9003	Example Disease Cohort	41º 54' 30'' N	12º 29' 12'' E	Urban	Parents live in the same location	Disease Study Patients
+9004	Example Unrecorded Study Type	10º 5' N	20º 30' E	Rural	Not Known	Other
+9005	Example Missing Coordinate		20º 30' E	Rural	Not Known	Anthropology Study
+	Example Without Accession	1º 0' N	1º 0' E	Rural	Not Known	Anthropology Study
