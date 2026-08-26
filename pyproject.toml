@@ -22,19 +22,23 @@ read = ["duckdb>=1.1"]
 # API container does not carry pyarrow/duckdb, which it never uses.
 atlas = [
   "pandera[pandas]>=0.23,<1",
-  "pandas>=2.2",
+  "pandas>=2.2,<4",
   "pyarrow>=17",
   "duckdb>=1.1",
-  "h3>=4.1",
+  "h3>=4.1,<5",
 ]
 # Surface inference (P2). Separate from [atlas] because PyMC/PyTensor is a large
 # dependency that only the offline fitting jobs need -- never the serving path (§5).
+# Upper bounds are deliberate, not defensive boilerplate. `pymc>=5.16` alone resolved to 6.3.1,
+# and PyMC changed how NUTS options are passed between 5.x and 6.x — enough for two contributors
+# following the documented install to disagree about what the code does while both being right
+# about their own environment. See `requirements.lock` and `scripts/env_report.py`.
 surfaces = [
-  "pymc>=5.16",
-  "arviz>=0.18",
+  "pymc>=5.16,<7",
+  "arviz>=0.18,<2",
   # JAX-compiled NUTS. Not optional in practice: the spherical HSGP is ~80x faster through it
   # than through PyTensor, and it is the same code path that runs on a GPU.
-  "numpyro>=0.15",
+  "numpyro>=0.15,<1",
 ]
 # Raster handling for the population denominators (P3, §9). Offline batch only.
 geo = [
