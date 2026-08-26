@@ -193,6 +193,46 @@ python scripts/build_observations.py --registry data/registry \
 **If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
 diff.** That diff is the review surface for schema change; CI fails if it is stale.
 
+### Reproducing the environment exactly
+
+The bounds in `pyproject.toml` are ranges, so two contributors following the install line above
+can end up on different versions of the libraries that decide behaviour. That is not theoretical:
+`pymc>=5.16` resolved to **6.3.1**, and PyMC changed how NUTS options are passed between 5.x and
+6.x — enough for two people to disagree about what the code does while both being right about
+their own environment. Upper bounds are now declared for the libraries this has bitten.
+
+`requirements.lock` pins every package exactly, generated universal so it installs on macOS, on
+Linux CI and on a pod:
+
+```bash
+uv venv --python 3.12 && source .venv/bin/activate
+uv pip install -r requirements.lock
+python -m pip install -e '.' --no-deps
+```
+
+Regenerate it when a dependency changes, and commit the diff. **`--upgrade` is not optional**, and
+the reason is easy to miss: writing to an existing `--output-file` makes uv treat the pins already
+in it as *preferences*, so it holds versions steady to minimise churn. Without `--upgrade` a
+widened bound in `pyproject.toml` changes nothing and the lock silently keeps the old pin.
+
+That is not hypothetical — it happened while writing this section. After restoring
+`fastapi>=0.115,<1`, the regenerated lock still pinned `0.119.1`; resolving the same requirement to
+stdout gave `0.141.1`. `--refresh` (which busts uv's persistent *index* cache) is a different knob
+and did not help, because the stale value was coming from the output file, not the cache.
+
+```bash
+uv pip compile pyproject.toml --universal --upgrade --extra dev --extra atlas \
+    --extra surfaces --extra geo --extra figures --python-version 3.12 \
+    --output-file requirements.lock
+```
+
+**Before arguing about library behaviour, run `python scripts/env_report.py`.** It prints the
+installed versions and then *empirically* shows where NUTS options land in your environment, by
+spying on `sample_jax_nuts`. A disagreement about `nuts=` versus `nuts_sampler_kwargs` is almost
+always a version difference, and this turns two readings of the same source into two comparable
+outputs. It will also show you if your venv has drifted out of the declared bounds, which is worth
+checking before trusting a local test run.
+
 `sqlite:///./genomeos.db` is the local default; production requires a PostgreSQL `DATABASE_URL`.
 GCP operations must go through the [repository-local gcloud wrapper](docs/repo-gcloud-auth.md) —
 never bare `gcloud`.
