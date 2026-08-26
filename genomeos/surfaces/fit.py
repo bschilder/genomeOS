@@ -673,9 +673,9 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             "chains": config.chains,
             "random_seed": config.seed,
             "progressbar": False,
-            # Top level. pm.sample folds a top-level `target_accept` into its `nuts` dict and
-            # then reads it back out for the external samplers, so this reaches numpyro and
-            # PyMC's own NUTS alike. See `test_target_accept_reaches_the_sampler`.
+            # Top level, which reaches numpyro and PyMC's own NUTS alike, and is accepted
+            # alongside the `nuts` dict below on both 5.x and 6.x. Measured, not inferred:
+            # `scripts/env_report.py` reports what actually arrives at the sampler.
             "target_accept": config.target_accept,
         }
         if config.nuts_sampler == "pymc":
@@ -689,11 +689,13 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             # three quarters of the available speedup was being left on the table with a warning
             # that reads like a note about CPUs.
             #
-            # It must travel in `nuts_sampler_kwargs`, which pm.sample forwards verbatim to
-            # `sample_jax_nuts`. Passing it in `nuts` does nothing at all: on the external-sampler
-            # path pm.sample pops that dict and keeps only `target_accept` from it, dropping
-            # everything else without a warning — so this option was silently inert until #111.
-            sample_kwargs["nuts_sampler_kwargs"] = {"chain_method": "vectorized"}
+            # `nuts` is the channel to pass it in, and which channel works is version-dependent
+            # rather than settled: PyMC changed how NUTS options are routed between 5.x and 6.x,
+            # and `nuts_sampler_kwargs` — which is the one that works on 5.x — is deprecated on
+            # the pinned 6.3.1 in favour of this one. Do not re-litigate that from the PyMC
+            # source, which is what produced a wrong answer in #120; run `scripts/env_report.py`,
+            # which measures where each channel actually lands in the environment you have.
+            sample_kwargs["nuts"] = {"chain_method": "vectorized"}
         idata = pm.sample(**sample_kwargs)
 
     _check_convergence(idata, config)

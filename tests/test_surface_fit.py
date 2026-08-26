@@ -382,17 +382,17 @@ def test_a_target_accept_outside_the_unit_interval_is_refused(bad):
         FitConfig(target_accept=bad)
 
 
-def test_sampler_options_travel_by_the_channel_pymc_actually_forwards():
-    """A knob that is silently ignored is worse than no knob at all.
+def test_the_configured_sampler_options_are_the_ones_passed_to_pm_sample():
+    """Guards *our* side of the call only, and deliberately claims nothing more.
 
-    On the external-sampler path `pm.sample` pops its `nuts` dict, keeps only `target_accept`
-    from it, and discards the rest without warning. So the two options have to travel by
-    *different* channels: `target_accept` as a top-level argument, and `chain_method` in
-    `nuts_sampler_kwargs`, which is forwarded verbatim to `sample_jax_nuts`.
+    Mocking `pm.sample` can confirm what this module passes; it cannot confirm what PyMC then
+    does with it, and it would keep passing if PyMC changed underneath. That distinction is not
+    academic — reasoning from PyMC's source instead of measuring is exactly what produced the
+    wrong `chain_method` diagnosis in #120. `scripts/env_report.py` is what answers the other
+    half, by spying on `sample_jax_nuts` in whatever environment you actually have.
 
-    `chain_method` sat in `nuts` and was therefore inert — every chain drawn sequentially on a
-    single GPU while the comment claimed otherwise. This test is the regression guard, and it
-    matters most for the fold fits #111 is about, where it is a ~4x difference in wall-clock.
+    So: `nuts` is asserted because it is the non-deprecated channel on the pinned 6.3.1, not
+    because this test could tell if that stopped being true.
     """
     captured: dict[str, object] = {}
 
@@ -407,9 +407,7 @@ def test_sampler_options_travel_by_the_channel_pymc_actually_forwards():
         fit_surface(_observations(n=20), FitConfig(target_accept=0.95, draws=5, tune=5))
 
     assert captured["target_accept"] == 0.95
-    assert captured["nuts_sampler_kwargs"] == {"chain_method": "vectorized"}
-    # Anything left in `nuts` would be dropped on the floor.
-    assert "nuts" not in captured
+    assert captured["nuts"] == {"chain_method": "vectorized"}
 
 
 def test_a_non_default_target_accept_still_produces_a_fit():
