@@ -156,8 +156,28 @@ def entrypoint(args) -> str:
         chmod 600 /root/.gitconfig
         # /workspace is a persistent volume, so a restarted pod finds the clone already there and
         # `git clone` fails the whole entrypoint under `set -e`. Make it idempotent.
-        rm -rf /workspace/genomeOS
-        run git clone --depth 1 --branch {args.ref} https://github.com/bschilder/genomeOS /workspace/genomeOS
+        # Cloning is retried, and deliberately partial. One run died on
+        #   "RPC failed; curl 92 ... CANCEL / fatal: early EOF"
+        # which is a transient transfer failure, not an auth or branch problem — so a single
+        # attempt is the wrong shape. The repository also carries ~9 MB of committed review
+        # figures under docs/ that a pod never reads, so a sparse checkout leaves them on the
+        # server rather than making every run download them and risk the same failure again.
+        clone_repo() {{
+            for attempt in 1 2 3; do
+                rm -rf /workspace/genomeOS
+                if git clone --depth 1 --filter=blob:none --sparse \
+                        --branch {args.ref} \
+                        https://github.com/bschilder/genomeOS /workspace/genomeOS; then
+                    cd /workspace/genomeOS || return 1
+                    git sparse-checkout set genomeos scripts reference contract tests || return 1
+                    return 0
+                fi
+                echo "----- clone attempt ${{attempt}} failed, retrying -----"
+                sleep 10
+            done
+            return 1
+        }}
+        run clone_repo
         cd /workspace/genomeOS || hold 1
 
         echo "===== INSTALL ====="
