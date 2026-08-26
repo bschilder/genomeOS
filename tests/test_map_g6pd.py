@@ -43,20 +43,47 @@ def test_females_are_excluded_rather_than_assumed(loaded):
     them apart, so the surveys that report only females contribute nothing and are counted."""
     obs, report = loaded
     assert "map-g6pd-1723" not in set(obs["population_id"])
-    assert report.female_only >= 1
+    assert report.refusals["female_only_needs_inactivation_model"] >= 1
 
 
-def test_administrative_centroids_that_cannot_be_placed_are_refused(loaded):
-    """`area_size` is capped near 3,800 km2 across this export, so it cannot express the location
-    uncertainty of a country or province centroid — those coordinates are placeholders for areas
-    one to two orders of magnitude larger. §6 gives `uncertainty_radius_km` no default, so there
-    is nothing honest to substitute."""
+def test_administrative_centroids_are_placed_at_country_scale_not_refused(loaded):
+    """`area_size` is capped near 3,800 km2 across this export, so for a country or province
+    centroid it understates location uncertainty by orders of magnitude — Nigeria's Admin0 rows
+    report 20 km2 for a country whose equivalent radius is 538 km.
+
+    The fix is to compute the radius from the actual country polygon, not to discard the row:
+    refusing these threw away 54,355 hemizygous observations over a metadata gap. §7 places each
+    observation as a disc, and a too-large radius makes an observation less influential rather
+    than wrong, so erring coarse is the safe direction.
+    """
     obs, report = loaded
     kept = set(obs["population_id"])
-    assert "map-g6pd-1609" not in kept, "Admin0 (country) centroid must be refused"
-    assert "map-g6pd-148" not in kept, "Admin1 (province) centroid must be refused"
-    assert report.refusals["admin0_centroid"] == 1
-    assert report.refusals["admin1_centroid"] == 1
+    assert "map-g6pd-1609" in kept, "Admin0 centroid must be recovered, not refused"
+    assert "map-g6pd-148" in kept, "Admin1 centroid must be recovered, not refused"
+    assert report.recovered_centroids == 2
+
+    centroid = obs[obs["population_id"] == "map-g6pd-148"].iloc[0]
+    assert centroid["radius_km"] > 100.0, "a province centroid is not a 30 km disc"
+
+
+def test_the_report_separates_empty_rows_from_recoverable_ones(loaded):
+    """827 rows of the real export are metadata-only stubs with nothing to recover, so retention
+    against *all* rows understates how much usable data is kept. Both figures are reported: the
+    meaningful one is retention among rows that carry counts (99% on the real corpus)."""
+    obs, report = loaded
+    assert report.with_counts <= report.total
+    assert report.retained <= report.with_counts
+    assert "of surveys that report any counts" in str(report)
+    assert "no_counts_reported" in report.refusals
+
+
+def test_unused_female_alleles_are_counted_so_the_gap_stays_visible(loaded):
+    """324 real surveys report both sexes and this adapter uses only the males, leaving ~207,000
+    female alleles unused. That is a likelihood limitation, not a data defect, and it is printed
+    rather than left for someone to discover."""
+    _, report = loaded
+    assert report.unused_female_alleles > 0
+    assert "female alleles unused" in str(report)
 
 
 def test_absence_surveys_are_kept_not_dropped(loaded):
@@ -72,7 +99,7 @@ def test_absence_surveys_are_kept_not_dropped(loaded):
 def test_surveys_with_no_counts_at_all_are_refused(loaded):
     obs, report = loaded
     assert "map-g6pd-790" not in set(obs["population_id"])
-    assert report.refusals["no_male_denominator"] >= 1
+    assert report.refusals["no_counts_reported"] >= 1
 
 
 def test_radius_comes_from_the_reported_area(loaded):

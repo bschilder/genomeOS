@@ -73,6 +73,13 @@ NATURAL_EARTH_ISO3_FIXUPS: dict[str, str] = {
 #: (ISO 3166 names as they stood in 2010, hence "Libyan Arab Jamahiriya" and "Swaziland"); the
 #: second is the same countries as MAP, GADM and everyday usage spell them.
 ISO3_ALIASES: dict[str, str] = {
+    # Small territories absent from Natural Earth 1:110m, so their names never enter the index
+    # from the geometry. See SUPPLEMENTARY_AREAS_KM2.
+    "Hong Kong Special Administrative Region of China": "HKG",
+    "Hong Kong SAR, China": "HKG",
+    "Niue": "NIU",
+    "Tokelau": "TKL",
+    "Cook Islands": "COK",
     # --- Piel et al. 2013 / ISO 3166-1 (2010) names ---
     "Aruba": "ABW",
     "Bahrain": "BHR",
@@ -336,3 +343,88 @@ def rollup_by_country(
             }
         )
     return pd.DataFrame(rows)
+
+
+
+#: Land areas for states and territories that Natural Earth 1:110m omits entirely. It is a
+#: *basemap* generalised for world-scale display, so it drops microstates — and dropping them
+#: here would discard real observations: Singapore alone contributes 35,714 hemizygous males to
+#: the G6PD corpus, the largest single survey in it. Published land areas in km², rounded, from
+#: the CIA World Factbook / UN Statistics Division. Kept explicit and small rather than pulling
+#: in a higher-resolution basemap for eleven polygons.
+SUPPLEMENTARY_AREAS_KM2: dict[str, float] = {
+    "BHR": 787.0,     # Bahrain
+    "COK": 236.0,     # Cook Islands
+    "GUM": 544.0,     # Guam
+    "HKG": 1114.0,    # Hong Kong SAR
+    "MUS": 2040.0,    # Mauritius
+    "NIU": 262.0,     # Niue
+    "SGP": 734.0,     # Singapore
+    "STP": 964.0,     # Sao Tome and Principe
+    "TKL": 12.0,      # Tokelau
+    "TON": 747.0,     # Tonga
+    "WSM": 2842.0,    # Samoa
+}
+
+#: Mean Earth radius, matching `surfaces.fit`. Defined locally so `geo` does not depend on
+#: `surfaces` for a constant.
+EARTH_RADIUS_KM = 6371.0088
+
+
+def _ring_area_km2(ring) -> float:
+    """Spherical area of one closed ring, by the standard spherical-excess line integral.
+
+    A planar shoelace on raw degrees would understate high-latitude countries badly, and the
+    whole point of this figure is to describe how little we know about where a centroid actually
+    is — an understated area is the failure we are trying to avoid.
+    """
+    import numpy as np
+
+    arr = np.asarray(ring, dtype=float)
+    lon = np.radians(arr[:, 0])
+    lat = np.radians(arr[:, 1])
+    if lon[0] != lon[-1] or lat[0] != lat[-1]:
+        lon = np.append(lon, lon[0])
+        lat = np.append(lat, lat[0])
+    total = np.sum((lon[1:] - lon[:-1]) * (2.0 + np.sin(lat[:-1]) + np.sin(lat[1:])))
+    return abs(total) * EARTH_RADIUS_KM**2 / 2.0
+
+
+@lru_cache(maxsize=512)
+def country_area_km2(iso3: str) -> float:
+    """Total land area of a country, from the committed Natural Earth geometry.
+
+    Used where a coordinate is an administrative *centroid* rather than a place: the honest
+    uncertainty radius for such a point is the scale of the unit it stands for, and that scale
+    has to be computed rather than guessed. Raises rather than returning zero for an unknown
+    code, per §12.
+    """
+    if iso3 in SUPPLEMENTARY_AREAS_KM2:
+        return SUPPLEMENTARY_AREAS_KM2[iso3]
+    total = 0.0
+    for feature in load_countries():
+        if feature_iso3(feature) != iso3:
+            continue
+        geometry = feature["geometry"]
+        polygons = (
+            [geometry["coordinates"]]
+            if geometry["type"] == "Polygon"
+            else geometry["coordinates"]
+        )
+        for polygon in polygons:
+            if polygon and len(polygon[0]) >= 3:
+                total += _ring_area_km2(polygon[0])
+                # Interior rings are holes, so they do not add land.
+                for hole in polygon[1:]:
+                    if len(hole) >= 3:
+                        total -= _ring_area_km2(hole)
+    if total <= 0.0:
+        raise UnknownCountryError(f"no geometry for ISO3 {iso3!r}; cannot derive an area")
+    return total
+
+
+def country_radius_km(iso3: str) -> float:
+    """Radius of a circle with the country's area — an equivalent extent, not a bounding radius."""
+    import math
+
+    return math.sqrt(country_area_km2(iso3) / math.pi)

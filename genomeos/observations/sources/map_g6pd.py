@@ -32,15 +32,33 @@ returned report — never dropped silently (§12):
 - ``deficient_exceeds_sampled`` — internally inconsistent; more deficient males than males.
 - ``missing_coordinates`` — §6 places observations spatially; a row without a coordinate cannot
   be placed.
-- ``admin0_centroid`` and ``admin1_centroid`` — **the subtle one.** MAP supplies ``area_size`` in
-  km² for every row, and for most rows that area *is* the location uncertainty. But for an
-  administrative centroid the coordinate is a placeholder for a whole administrative unit, and
-  ``area_size`` is capped at about 3,800 km² across this entire export. A country or a province
-  is one to two orders of magnitude larger than that cap, so ``area_size`` cannot express how
-  little we know about where those people actually were. §6 gives ``uncertainty_radius_km`` no
-  default, and there is no defensible one here, so these rows are refused. Admin2 and Admin3
-  centroids are kept: districts and sub-districts are plausibly the size ``area_size`` reports,
-  so the figure is not being asked to carry weight it cannot bear.
+- ``no_counts_reported`` — neither sex has counts. 827 rows of this export are metadata-only
+  stubs with nothing to recover, which is why a headline retention figure against *all* rows
+  understates how much usable data is kept. The report states both.
+- ``female_only_needs_inactivation_model`` — females reported, males not. Recoverable in
+  principle but not by this adapter; see below.
+
+**Administrative centroids are recovered, not refused.** ``area_size`` is capped near 3,800 km²
+across this export, so for an Admin0 or Admin1 centroid it understates the location uncertainty
+by orders of magnitude — Nigeria's Admin0 rows carry ``area_size`` of 20 km² (a 2.5 km radius)
+for a country whose equivalent radius is 538 km. Refusing those rows discarded 54,355 hemizygous
+observations over a metadata gap. Instead the radius is computed from the **actual country
+polygon** already committed for #94, via `geo.countries.country_radius_km`.
+
+For Admin1 the country radius is an over-estimate, and deliberately so: a province lies inside
+its country, so the country scale is an honest upper bound on where the sampled people were, and
+§7 places each observation as a disc — a too-large radius makes an observation *less* influential
+and spreads its evidence, while a too-small one lets a diffuse survey act as a pinpoint
+measurement. Erring coarse is the safe direction. Admin2 and Admin3 centroids keep their reported
+``area_size``: districts are plausibly that size, so the figure is not asked to carry weight it
+cannot bear.
+
+**What is still discarded, and it is not small.** 324 surveys report both sexes fully, and this
+adapter uses only the males — leaving roughly 207,000 female alleles unused against 111,000 male
+ones. Recovering them is a *likelihood* change rather than an adapter change: a deficient female
+may be homozygous or a heterozygote with skewed X-inactivation, and separating those needs a
+two-parameter X-linked model (§7), not an assumption pushed into the allele counts here. Tracked
+separately; the report prints the unused count so it stays visible.
 """
 
 from __future__ import annotations
@@ -51,6 +69,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from genomeos.geo.countries import UnknownCountryError, country_radius_km, resolve_iso3
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 
 SOURCE = "map_g6pd"
@@ -66,12 +85,9 @@ COMPOSITE_NOTE = (
     "genotype. §6 keys artifacts by variant; this is a composite. See the tracking issue."
 )
 
-#: Administrative centroids whose coordinate is a placeholder for an area far larger than the
-#: capped `area_size` can describe. See the module docstring.
-_INDEFENSIBLE_CENTROIDS = {
-    "admin0 centroid": "admin0_centroid",
-    "admin1 centroid": "admin1_centroid",
-}
+#: Administrative centroids whose coordinate stands for an area far larger than the capped
+#: `area_size` can describe. Their radius comes from the country polygon instead. See the docstring.
+_COUNTRY_SCALE_CENTROIDS = frozenset({"admin0 centroid", "admin1 centroid"})
 
 
 @dataclass(frozen=True)
@@ -81,9 +97,15 @@ class IngestReport:
     total: int
     retained: int
     refusals: dict[str, int]
-    #: Surveys that reported females but no males, and so contributed nothing. Tracked separately
-    #: because it is a property of the source's design rather than a data defect.
-    female_only: int = 0
+    #: Rows carrying counts for at least one sex. Retention against this is the meaningful
+    #: figure; retention against `total` is dominated by metadata-only stubs.
+    with_counts: int = 0
+    #: Administrative centroids rescued by computing a radius from the country polygon rather
+    #: than trusting the capped `area_size`.
+    recovered_centroids: int = 0
+    #: Female alleles present in retained surveys but unused, pending an X-linked likelihood
+    #: that can use both sexes. Printed so the size of the gap stays visible.
+    unused_female_alleles: int = 0
 
     @property
     def retained_fraction(self) -> float:
@@ -91,20 +113,43 @@ class IngestReport:
 
     def __str__(self) -> str:
         lines = [f"{self.retained}/{self.total} surveys retained ({self.retained_fraction:.0%})"]
-        if self.female_only:
-            lines.append(f"  {self.female_only} female-only surveys carry no hemizygous count")
+        if self.with_counts:
+            share = self.retained / self.with_counts
+            lines.append(
+                f"  {self.retained}/{self.with_counts} of surveys that report any counts ({share:.0%})"
+            )
+        if self.recovered_centroids:
+            lines.append(
+                f"  {self.recovered_centroids} admin centroids placed at country scale rather "
+                "than refused"
+            )
+        if self.unused_female_alleles:
+            lines.append(
+                f"  {self.unused_female_alleles:,} female alleles unused (needs an X-linked "
+                "likelihood over both sexes)"
+            )
         for reason, count in sorted(self.refusals.items(), key=lambda kv: -kv[1]):
             lines.append(f"  refused {count:>5}  {reason}")
         return "\n".join(lines)
 
 
 def _radius_km(area_size: object) -> float:
-    """Radius of a circle with the survey's reported area.
-
-    MAP reports `area_size` in km² for every row of this layer, so unlike the HbS layer there is
-    no area *class* to translate and no unclassed rows to give a coarse default to.
-    """
+    """Radius of a circle with the survey's reported area."""
     return math.sqrt(float(area_size) / math.pi)
+
+
+def _centroid_radius_km(country: object) -> float | None:
+    """Country-scale radius for an administrative centroid, or None if the country is unknown.
+
+    Returning None rather than a fallback keeps §6's "no default" rule intact: a centroid we
+    cannot place at country scale has no honest radius, and only then is the row refused.
+    """
+    if not isinstance(country, str) or not country.strip():
+        return None
+    try:
+        return country_radius_km(resolve_iso3(country))
+    except (UnknownCountryError, KeyError):
+        return None
 
 
 def _population_id(survey_id: object) -> str:
@@ -149,18 +194,27 @@ def load(path: Path, ingest_version: str) -> tuple[pd.DataFrame, IngestReport]:
     deficient = pd.to_numeric(raw["number_males_deficient"], errors="coerce")
     females = pd.to_numeric(raw["number_females"], errors="coerce")
     no_males = males.isna() | (males <= 0)
-    female_only = int((no_males & females.gt(0)).sum())
 
-    refuse(no_males | deficient.isna(), "no_male_denominator")
+    has_counts = int(((~no_males) | females.gt(0)).sum())
+    refuse(no_males & females.gt(0), "female_only_needs_inactivation_model")
+    refuse(no_males | deficient.isna(), "no_counts_reported")
     refuse(deficient > males, "deficient_exceeds_sampled")
 
+    # Radius: the reported area for ordinary rows, the country's own extent for administrative
+    # centroids whose coordinate stands for far more ground than `area_size` can express.
     area_class = raw["area_type"].astype("string").str.strip().str.lower()
-    for label, reason in _INDEFENSIBLE_CENTROIDS.items():
-        refuse(area_class.eq(label), reason)
-    refuse(raw["area_size"].isna() | (pd.to_numeric(raw["area_size"], errors="coerce") <= 0),
-           "missing_area_size")
+    is_centroid = area_class.isin(_COUNTRY_SCALE_CENTROIDS)
+    area_size = pd.to_numeric(raw["area_size"], errors="coerce")
+    radius = area_size.map(lambda a: _radius_km(a) if pd.notna(a) and a > 0 else None)
+    centroid_radius = raw["country"].map(_centroid_radius_km)
+    radius = radius.where(~is_centroid, centroid_radius)
+
+    refuse(is_centroid & centroid_radius.isna(), "centroid_country_unresolved")
+    refuse(radius.isna(), "missing_area_size")
 
     rows = raw[keep]
+    recovered = int((is_centroid & keep).sum())
+    unused_female_alleles = int(2 * females[keep].fillna(0).sum())
     obs = pd.DataFrame(
         {
             "variant_id": G6PD_VARIANT_ID,
@@ -173,7 +227,7 @@ def load(path: Path, ingest_version: str) -> tuple[pd.DataFrame, IngestReport]:
             "population_id": rows["id"].map(_population_id),
             "lat": rows["latitude"].astype(float),
             "lon": rows["longitude"].astype(float),
-            "radius_km": rows["area_size"].map(_radius_km).astype(float),
+            "radius_km": radius[keep].astype(float),
             # Hemizygous: one allele per male, so the count and the denominator are both in males.
             "ac": deficient[keep].astype(int),
             "an": males[keep].astype(int),
@@ -195,5 +249,10 @@ def load(path: Path, ingest_version: str) -> tuple[pd.DataFrame, IngestReport]:
     )
     validated = OBSERVATIONS_SCHEMA.validate(obs.reset_index(drop=True))
     return validated, IngestReport(
-        total=total, retained=len(validated), refusals=refusals, female_only=female_only
+        total=total,
+        retained=len(validated),
+        refusals=refusals,
+        with_counts=has_counts,
+        recovered_centroids=recovered,
+        unused_female_alleles=unused_female_alleles,
     )
