@@ -327,6 +327,9 @@ class SurfaceFit:
     #: a fitted range is only interpretable against the prior that produced it, and under a derived
     #: prior that differs per variant.
     lengthscale_prior_km: tuple[float, float]
+    #: The cohort labels the fit saw, in the order `beta_cohort` indexes them. Needed so a
+    #: prediction can tell a cohort it has seen from one it has not — see `predict_observation`.
+    cohort_labels: tuple[str, ...]
     #: True when the cohort effect was estimated at all. False when the source gives one cohort
     #: per observation, which is not a cohort effect but an observation-level overdispersion term
     #: — see the note in `fit_surface`.
@@ -406,24 +409,29 @@ class SurfaceFit:
             raise ValueError("lat and lon must have the same length")
         return self._frequency_samples(lat_arr, lon_arr)
 
-    def predict_observation(self, lat: object, lon: object, an: object) -> pd.DataFrame:
+    def predict_observation(
+        self, lat: object, lon: object, an: object, cohort_id: object = None
+    ) -> pd.DataFrame:
         """Posterior predictive for a **new survey** of `an` alleles at each point (§7; #110).
 
         `predict` describes the latent frequency — what the map claims about a place. This
-        describes what a new survey there would actually measure, which is the quantity a
-        calibration check must score against. It restores the two variance components the latent
-        interval deliberately omits:
+        describes what a survey there would actually measure, which is the quantity a calibration
+        check must score against. It restores the two variance components the latent interval
+        omits: a cohort offset, and overdispersed sampling of `an` alleles through the same
+        beta-binomial the likelihood uses (a beta-binomial draw is `p ~ Beta` then `Binomial`, so
+        it composes in numpy without rebuilding the model).
 
-        - **a cohort offset**, drawn fresh from ``Normal(0, cohort_sd)``. A held-out survey
-          belongs to a cohort the model never saw, so reusing a fitted ``cohort_z`` would leak
-          information across the split and understate the interval.
-        - **overdispersed sampling** of `an` alleles, through the same beta-binomial the
-          likelihood uses. A beta-binomial draw is exactly ``p ~ Beta(alpha, beta)`` followed by
-          ``Binomial(n, p)``, so it composes in numpy without rebuilding the model.
+        **`cohort_id` decides whether the cohort offset is conditioned on or integrated out, and
+        getting this wrong silently widens every interval (#127).** The original version always
+        marginalised, on the stated grounds that "a held-out survey belongs to a cohort the model
+        never saw". That is true for a genuinely unseen study and false for 94% of multi-site
+        studies under random cross-validation folds, which cut a study's sites across the split —
+        so the model *has* seen that study, at other sites, and its fitted offset is both
+        available and more accurate than the population it was drawn from.
 
-        Scoring observed frequencies against `predict`'s interval instead is the defect in #110:
-        it compares an interval for a mean against a noisy realisation of that mean, and
-        under-covers by construction however good the model is.
+        Pass `cohort_id` and each point is handled on its merits: a label the fit saw conditions on
+        that cohort's posterior draws, anything else integrates over `Normal(0, cohort_sd)`. Omit
+        it and everything marginalises, which stays correct for genuinely new locations.
         """
         lat_arr = np.atleast_1d(np.asarray(lat, dtype=float))
         lon_arr = np.atleast_1d(np.asarray(lon, dtype=float))
@@ -447,9 +455,16 @@ class SurfaceFit:
                 f"posterior has {len(cohort_sd)} draws but the predictive has {len(freq)}; "
                 "they must align draw-for-draw"
             )
-        logit = np.log(freq / (1.0 - freq)) + rng.normal(
-            0.0, np.broadcast_to(cohort_sd[:, None], freq.shape)
-        )
+        offset = rng.normal(0.0, np.broadcast_to(cohort_sd[:, None], freq.shape))
+        if cohort_id is not None and self.beta_cohort_applied:
+            index = {label: i for i, label in enumerate(self.cohort_labels)}
+            drawn = self.idata.posterior["beta_cohort"].to_numpy().reshape(len(freq), -1)
+            for column, label in enumerate(np.atleast_1d(np.asarray(cohort_id, dtype=object))):
+                position = index.get(str(label))
+                if position is not None:
+                    # Seen in training: use what was learned about it rather than its population.
+                    offset[:, column] = drawn[:, position]
+        logit = np.log(freq / (1.0 - freq)) + offset
         p = np.clip(1.0 / (1.0 + np.exp(-logit)), _EPS, 1.0 - _EPS)
 
         if self.config.likelihood == "beta_binomial":
@@ -841,6 +856,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         config=config,
         beta_design_applied=beta_design_applied,
         beta_cohort_applied=beta_cohort_applied,
+        cohort_labels=tuple(str(c) for c in cohorts),
         lengthscale_prior_km=(anchor_low, anchor_high),
         design_levels=non_reference,
         prior_frequency_sd=prior_sd,

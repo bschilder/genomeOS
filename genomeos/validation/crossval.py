@@ -41,7 +41,7 @@ import pandas as pd
 from genomeos.surfaces.fit import ConvergenceError, FitConfig, fit_surface, to_unit_sphere
 
 SEED = 42
-FOLD_STRATEGIES: tuple[str, ...] = ("spatial", "random")
+FOLD_STRATEGIES: tuple[str, ...] = ("spatial", "random", "grouped")
 
 
 @dataclass(frozen=True)
@@ -63,6 +63,10 @@ class FoldResult:
     log_score: float
     baseline_mae: float
     baseline_log_score: float
+    #: Multi-site studies with sites on both sides of this fold's split. A study cut apart appears
+    #: as singletons in training, where its effect is not identifiable (#127). Reported next to
+    #: the scores because it changes what a convergence failure means.
+    studies_split: int = 0
 
 
 @dataclass(frozen=True)
@@ -126,6 +130,8 @@ class CrossValidation:
                 f"  log score                : {self._mean('log_score'):.3f}"
                 f"   baseline {self._mean('baseline_log_score'):.3f}",
                 f"  skill over baseline      : {self.skill:+.3f}",
+                f"  studies split per fold   : {self._mean('studies_split'):.0f}"
+                f"   (each becomes singletons in training — #127)",
             ]
         )
 
@@ -138,8 +144,23 @@ def make_folds(
 ) -> np.ndarray:
     """Fold index per observation.
 
-    ``spatial`` clusters locations so each fold is a contiguous region — the honest test.
-    ``random`` shuffles rows, which leaks neighbours between train and test.
+    - ``spatial`` clusters locations so each fold is a contiguous region — the honest test of
+      whether the surface predicts somewhere it has not seen.
+    - ``random`` shuffles rows, which leaks neighbours between train and test. Kept because the
+      gap against ``spatial`` estimates how much apparent skill is autocorrelation.
+    - ``grouped`` holds out whole **studies**, keeping every site of a study on the same side.
+
+    **``grouped`` exists because ``random`` breaks the model, not just the score (#127).** The
+    cohort effect is identified by within-study replication: the 143 multi-site studies are what
+    make `cohort_sd` estimable at all. A random split shatters 94% of them, so in training they
+    appear as singletons — and for a singleton study `cohort_sd * cohort_z` and the beta-binomial
+    `concentration` describe the same single residual and are not jointly identifiable. That is
+    the same degeneracy #121 found in AFND, here induced by the split rather than present in the
+    data, and it is why 3 of 5 random folds failed to converge against 1 of 5 spatial (#111).
+
+    So ``random`` measures leakage *and* identifiability damage at once, which is two effects
+    under one number. ``grouped`` separates them: it holds out unseen studies without destroying
+    the replication that makes the effect estimable.
     """
     if strategy not in FOLD_STRATEGIES:
         raise ValueError(f"unknown strategy {strategy!r}; expected one of {FOLD_STRATEGIES}")
@@ -149,6 +170,20 @@ def make_folds(
     rng = np.random.default_rng(seed)
     if strategy == "random":
         return rng.permutation(len(observations)) % n_folds
+
+    if strategy == "grouped":
+        # Whole studies to one fold. Assigned largest-study-first to the emptiest fold, so a few
+        # big studies cannot leave a fold nearly empty — 143 multi-site studies against one with
+        # 33 sites makes that a real risk rather than a theoretical one.
+        cohorts = observations["cohort_id"].to_numpy()
+        order = pd.Series(cohorts).value_counts().index.to_numpy()
+        load = np.zeros(n_folds, dtype=int)
+        assignment: dict[object, int] = {}
+        for cohort in order:
+            target = int(np.argmin(load))
+            assignment[cohort] = target
+            load[target] += int((cohorts == cohort).sum())
+        return np.array([assignment[c] for c in cohorts])
 
     from scipy.cluster.vq import kmeans2
 
@@ -187,6 +222,10 @@ def cross_validate(
         train, test = observations[~test_mask], observations[test_mask]
         if train.empty or test.empty:
             continue
+        # How much of the cohort structure this split destroyed. See FoldResult.studies_split.
+        held = set(test["cohort_id"])
+        kept = set(train["cohort_id"])
+        studies_split = len(held & kept)
 
         try:
             fit = fit_surface(train, config)
@@ -209,7 +248,12 @@ def cross_validate(
         # frequency; `observed` is a noisy realisation of it, carrying binomial sampling noise
         # and its own cohort offset. Comparing the two under-covers however good the model is,
         # which is what produced a 0.10 coverage on the first run (#110).
-        replicated = fit.predict_observation(lat=lat, lon=lon, an=an)
+        # Pass the cohort so a study the model saw at other sites is conditioned on rather than
+        # integrated over. Under random folds that is 94% of multi-site studies (#127), and
+        # marginalising them widens every interval for no reason.
+        replicated = fit.predict_observation(
+            lat=lat, lon=lon, an=an, cohort_id=test["cohort_id"].to_numpy()
+        )
         inside_95 = (observed >= replicated["pred_q025"]) & (observed <= replicated["pred_q975"])
         inside_50 = (observed >= replicated["pred_q25"]) & (observed <= replicated["pred_q75"])
         # Kept for contrast: the gap between the two is the size of the components the map's
@@ -223,6 +267,7 @@ def cross_validate(
                 fold=int(fold),
                 n_train=len(train),
                 n_test=len(test),
+                studies_split=studies_split,
                 coverage_95_predictive=float(inside_95.mean()),
                 coverage_50_predictive=float(inside_50.mean()),
                 coverage_95_latent=float(latent_95.mean()),

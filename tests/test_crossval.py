@@ -24,7 +24,7 @@ FAST = FitConfig(draws=300, tune=600, chains=4, approximation="inducing", n_indu
 
 def _fold(**kwargs) -> FoldResult:
     defaults = dict(
-        fold=0, n_train=80, n_test=20,
+        fold=0, n_train=80, n_test=20, studies_split=0,
         coverage_95_predictive=0.95, coverage_50_predictive=0.5,
         coverage_95_latent=0.30, coverage_50_latent=0.10,
         mae=0.01, rmse=0.02, log_score=-2.0, baseline_mae=0.05, baseline_log_score=-3.0,
@@ -158,3 +158,50 @@ def test_predictive_coverage_exceeds_latent_coverage_on_the_same_data():
     predictive = result._mean("coverage_95_predictive")
     latent = result._mean("coverage_95_latent")
     assert predictive >= latent, f"predictive {predictive:.2f} < latent {latent:.2f}"
+
+
+def test_grouped_folds_keep_every_study_intact():
+    """A study cut across the split appears as singletons in training, where `cohort_sd` and the
+    beta-binomial `concentration` describe the same residual and are not jointly identifiable
+    (#127) — the same degeneracy #121 found in AFND, here caused by us rather than by the source.
+    """
+    observations = _observations(n=60)
+    observations["cohort_id"] = [f"study{i // 4}" for i in range(len(observations))]
+    folds = make_folds(observations, 3, "grouped", 42)
+    for _, group in observations.groupby("cohort_id"):
+        assert len(set(folds[group.index])) == 1, "a study must not straddle folds"
+
+
+def test_grouped_folds_stay_balanced():
+    """Studies are assigned largest-first to the emptiest fold. Without that, one large study —
+    the real corpus has one with 33 sites against 143 multi-site studies — leaves a fold nearly
+    empty and its scores meaningless."""
+    observations = _observations(n=60)
+    sizes = [12, 10, 8, 6, 6, 5, 4, 3, 3, 2, 1]
+    labels = [f"s{i}" for i, n in enumerate(sizes) for _ in range(n)][: len(observations)]
+    observations["cohort_id"] = labels + ["sX"] * (len(observations) - len(labels))
+    counts = np.bincount(make_folds(observations, 3, "grouped", 42), minlength=3)
+    assert counts.max() <= 2 * counts.min(), f"folds too uneven: {counts}"
+
+
+def test_random_folds_split_studies_and_grouped_folds_do_not():
+    """The contrast is the point: `random` measures leakage *and* identifiability damage at once,
+    which is two effects under one number. `grouped` separates them."""
+    observations = _observations(n=60)
+    observations["cohort_id"] = [f"study{i // 4}" for i in range(len(observations))]
+
+    def split_count(strategy):
+        folds = make_folds(observations, 3, strategy, 42)
+        return sum(
+            1 for _, g in observations.groupby("cohort_id") if len(set(folds[g.index])) > 1
+        )
+
+    assert split_count("grouped") == 0
+    assert split_count("random") > 0
+
+
+def test_the_summary_reports_how_many_studies_a_split_broke():
+    """Reported next to the scores because it changes what a convergence failure means."""
+    result = CrossValidation("random", [_fold(studies_split=17)])
+    assert "studies split per fold" in str(result)
+    assert result._mean("studies_split") == 17
