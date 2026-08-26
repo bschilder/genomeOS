@@ -172,6 +172,15 @@ class FitConfig:
     #: loop dominates. The same path runs on a GPU when jax[cuda] is present (#104). "pymc"
     #: remains available and needs no extra install.
     nuts_sampler: str = "numpyro"
+    #: NUTS target acceptance rate. Higher means a smaller step size, so each draw costs more
+    #: leapfrog steps but decorrelates better — the standard trade of wall-clock for ESS.
+    #:
+    #: 0.8 is PyMC's own default and is kept as ours, so the surfaces already published are
+    #: unaffected. It is a field rather than a constant because cross-validation folds need a
+    #: higher value than the full fit does: a fold trains on (k-1)/k of the data, and at
+    #: draws=400 four of ten folds missed the ESS floor of 200, at 61-143 (#111). Raising it is
+    #: opt-in at the call site that needs it — see `scripts/validate_holdout.py`.
+    target_accept: float = 0.8
     #: Gelman-Rubin ceiling, applied to the *maximum* over every parameter. 1.01 is the modern
     #: standard for a single quantity of interest, but this model has ~1,500 latent parameters
     #: and the max over that many exceeds 1.01 by chance even when sampling is healthy — using
@@ -203,6 +212,8 @@ class FitConfig:
             raise ValueError("lengthscale_sigma must be > 0")
         if self.max_rhat < 1.0:
             raise ValueError("max_rhat must be >= 1.0")
+        if not 0.0 < self.target_accept < 1.0:
+            raise ValueError("target_accept must be strictly between 0 and 1")
         if self.approximation not in APPROXIMATIONS:
             raise ValueError(
                 f"unknown approximation {self.approximation!r}; expected one of {APPROXIMATIONS}"
@@ -662,6 +673,10 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             "chains": config.chains,
             "random_seed": config.seed,
             "progressbar": False,
+            # Top level. pm.sample folds a top-level `target_accept` into its `nuts` dict and
+            # then reads it back out for the external samplers, so this reaches numpyro and
+            # PyMC's own NUTS alike. See `test_target_accept_reaches_the_sampler`.
+            "target_accept": config.target_accept,
         }
         if config.nuts_sampler == "pymc":
             # Deterministic given the seed only when chains are drawn sequentially.
@@ -673,7 +688,12 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             # *sequentially* when there is only one — which is what a single GPU looks like, so
             # three quarters of the available speedup was being left on the table with a warning
             # that reads like a note about CPUs.
-            sample_kwargs["nuts"] = {"chain_method": "vectorized"}
+            #
+            # It must travel in `nuts_sampler_kwargs`, which pm.sample forwards verbatim to
+            # `sample_jax_nuts`. Passing it in `nuts` does nothing at all: on the external-sampler
+            # path pm.sample pops that dict and keeps only `target_accept` from it, dropping
+            # everything else without a warning — so this option was silently inert until #111.
+            sample_kwargs["nuts_sampler_kwargs"] = {"chain_method": "vectorized"}
         idata = pm.sample(**sample_kwargs)
 
     _check_convergence(idata, config)

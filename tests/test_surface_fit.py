@@ -1,5 +1,8 @@
 """Surface fit tests (design §7). Sampling is small and seeded; see FAST_CONFIG."""
 
+from dataclasses import replace
+from unittest import mock
+
 import numpy as np
 import pandas as pd
 import pandera.errors
@@ -359,3 +362,62 @@ def test_the_lengthscale_prior_is_configurable_and_defaults_unchanged():
     assert FitConfig(lengthscale_sigma=0.4).lengthscale_sigma == 0.4
     with pytest.raises(ValueError, match="lengthscale_sigma"):
         FitConfig(lengthscale_sigma=0.0)
+
+
+def test_target_accept_is_configurable_and_defaults_unchanged():
+    """Raising it is opt-in, so the surfaces already published are untouched (#111).
+
+    Cross-validation folds need a smaller step size than the full fit does — four of ten missed
+    the ESS floor of 200, at 61-143 — but a fold's need is not a reason to resample every
+    variant. The default asserted here is PyMC's own, so changing it later has to be deliberate
+    rather than a side effect.
+    """
+    assert FitConfig().target_accept == 0.8
+    assert FitConfig(target_accept=0.95).target_accept == 0.95
+
+
+@pytest.mark.parametrize("bad", [0.0, 1.0, -0.5, 1.2])
+def test_a_target_accept_outside_the_unit_interval_is_refused(bad):
+    with pytest.raises(ValueError, match="target_accept"):
+        FitConfig(target_accept=bad)
+
+
+def test_sampler_options_travel_by_the_channel_pymc_actually_forwards():
+    """A knob that is silently ignored is worse than no knob at all.
+
+    On the external-sampler path `pm.sample` pops its `nuts` dict, keeps only `target_accept`
+    from it, and discards the rest without warning. So the two options have to travel by
+    *different* channels: `target_accept` as a top-level argument, and `chain_method` in
+    `nuts_sampler_kwargs`, which is forwarded verbatim to `sample_jax_nuts`.
+
+    `chain_method` sat in `nuts` and was therefore inert — every chain drawn sequentially on a
+    single GPU while the comment claimed otherwise. This test is the regression guard, and it
+    matters most for the fold fits #111 is about, where it is a ~4x difference in wall-clock.
+    """
+    captured: dict[str, object] = {}
+
+    class _Reached(RuntimeError):
+        """Stops the fit as soon as the kwargs are in hand; sampling itself is not the point."""
+
+    def _capture(**kwargs):
+        captured.update(kwargs)
+        raise _Reached
+
+    with mock.patch("pymc.sample", side_effect=_capture), pytest.raises(_Reached):
+        fit_surface(_observations(n=20), FitConfig(target_accept=0.95, draws=5, tune=5))
+
+    assert captured["target_accept"] == 0.95
+    assert captured["nuts_sampler_kwargs"] == {"chain_method": "vectorized"}
+    # Anything left in `nuts` would be dropped on the floor.
+    assert "nuts" not in captured
+
+
+def test_a_non_default_target_accept_still_produces_a_fit():
+    """The external numpyro path must accept the argument, not just PyMC's own sampler.
+
+    Deliberately the known-good `FAST_CONFIG` with one field changed, so a failure here is the
+    argument and not a sampling budget that was never enough in the first place.
+    """
+    config = replace(FAST_CONFIG, target_accept=0.95)
+    fit = fit_surface(_observations(), config)
+    assert fit.config.target_accept == 0.95
