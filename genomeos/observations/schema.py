@@ -27,8 +27,22 @@ SAMPLING_DESIGNS: tuple[str, ...] = (
     "convenience",
 )
 
-# chr-pos-ref-alt on GRCh38 (Global Constraints).
-VARIANT_ID_PATTERN = r"^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ACGT]+-[ACGT]+$"
+# chr-pos-ref-alt on GRCh38 (Global Constraints), or an explicitly-marked phenotype composite.
+#
+# The `phenotype:` form exists because some layers measure a *phenotype* that many alleles
+# produce, not a variant. G6PD deficiency (§8's golden test 2) is the motivating case: it is
+# caused by ~200 alleles and MAP's surveys assay enzyme activity rather than genotype, so there
+# is no single allele the observations could honestly be keyed by. Howes et al. modelled the
+# aggregate deficiency frequency the same way, which is what makes the parity comparison
+# meaningful.
+#
+# The prefix is deliberately ugly and deliberately not parseable as a locus: a composite must be
+# impossible to mistake for a variant at a glance, in a filename, or in a join key. §6 keys
+# artifacts by variant and does not yet describe this case — see the tracking issue before
+# building anything that assumes every id is a locus.
+VARIANT_ID_PATTERN = (
+    r"^(?:chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ACGT]+-[ACGT]+|phenotype:[a-z0-9][a-z0-9-]*)$"
+)
 
 # Registered via the extension API rather than written as inline lambdas. An anonymous
 # lambda check is dropped by `schema.to_json()`, so it would be absent from the frozen
