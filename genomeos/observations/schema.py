@@ -40,8 +40,16 @@ SAMPLING_DESIGNS: tuple[str, ...] = (
 # impossible to mistake for a variant at a glance, in a filename, or in a join key. §6 keys
 # artifacts by variant and does not yet describe this case — see the tracking issue before
 # building anything that assumes every id is a locus.
+#: A third form, ``hla:``, for classical HLA and KIR alleles. Unlike ``phenotype:`` these *are*
+#: single alleles at a single locus — but an HLA allele is a haplotype of many linked variants
+#: named by the WHO Nomenclature Committee (``DQB1*03:01``), not a ``chr-pos-ref-alt`` triple, and
+#: forcing one would pick an arbitrary tag SNP and assert a coordinate the source never measured.
+#: The prefix keeps them joinable to IPD-IMGT/HLA while making it obvious they are not loci.
+#: Each namespace added here should be a deliberate decision, not a widening.
 VARIANT_ID_PATTERN = (
-    r"^(?:chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ACGT]+-[ACGT]+|phenotype:[a-z0-9][a-z0-9-]*)$"
+    r"^(?:chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ACGT]+-[ACGT]+"
+    r"|phenotype:[a-z0-9][a-z0-9-]*"
+    r"|hla:[a-z0-9][a-z0-9._-]*)$"
 )
 
 # Registered via the extension API rather than written as inline lambdas. An anonymous
