@@ -15,6 +15,7 @@ without repeating the inference — a palette change should not cost nine minute
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,22 @@ from genomeos.surfaces.fit import FitConfig, save_fit
 
 #: Loaders keyed by the CLI flag that supplies their export.
 LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}
+
+#: Per-variant prior sd on log lengthscale, where the default does not suit the variant.
+#:
+#: This is a **prior belief about the biology stated per variant**, not a tuning knob, so it lives
+#: here in the open rather than in a CLI flag someone forgets to pass. The default (0.7, roughly
+#: 220-3,400 km at 95%) suits a variant whose data pins the correlation range down; HbS does, and
+#: is deliberately absent from this table.
+#:
+#: G6PD does not. Its deficiency phenotype pools ~200 alleles with different geographic origins —
+#: A- across Africa, Mediterranean through the Middle East and South Asia, Mahidol in Southeast
+#: Asia — so no single spatial scale describes their sum, and the chains slide along the ridge
+#: where a very long lengthscale is indistinguishable from `intercept`. Measured: r_hat 1.469 at
+#: the default, versus r_hat passing and ESS rising 8 -> 111 at 0.4 with everything else equal
+#: (#116). Narrowing the prior asserts the field is spatial rather than constant; it does not
+#: assert the composite is a good model, which #116 still questions.
+LENGTHSCALE_SIGMA: dict[str, float] = {"phenotype:g6pd-deficiency": 0.4}
 
 
 def main() -> None:
@@ -51,10 +68,18 @@ def main() -> None:
     config = FitConfig(
         draws=args.draws, tune=args.draws, approximation="inducing", n_inducing=args.n_inducing
     )
-    jobs = list(jobs_from_sources(sources, config))
+    jobs = [
+        replace(job, config=replace(job.config, lengthscale_sigma=sigma))
+        if (sigma := LENGTHSCALE_SIGMA.get(job.variant_id)) is not None
+        else job
+        for job in jobs_from_sources(sources, config)
+    ]
     print(f"===== fitting {len(jobs)} variants =====")
     for job in jobs:
-        print(f"  {job.variant_id}: {len(job.observations)} observations")
+        print(
+            f"  {job.variant_id}: {len(job.observations)} observations, "
+            f"lengthscale_sigma={job.config.lengthscale_sigma}"
+        )
 
     result = run_batch(jobs, on_progress=lambda v, n: print(f"----- {v} ({n} obs) -----", flush=True))
 

@@ -345,3 +345,17 @@ def test_a_convergence_failure_names_the_parameter_that_starved():
     """
     with pytest.raises(ConvergenceError, match=r"worst: \w+"):
         fit_surface(_observations(n=30), FitConfig(draws=5, tune=5, chains=4))
+
+
+def test_the_lengthscale_prior_is_configurable_and_defaults_unchanged():
+    """Tightening this prior is a claim about the biology, so it must be made per variant.
+
+    The default spans roughly 220-3,400 km at 95%. The top of that range describes a field that
+    is nearly constant globally, which is indistinguishable from `intercept` — a ridge the chains
+    can slide along rather than mix, which is what G6PD does (#116). Leaving the default alone
+    matters: HbS identifies its range from the data and needs no help.
+    """
+    assert FitConfig().lengthscale_sigma == 0.7
+    assert FitConfig(lengthscale_sigma=0.4).lengthscale_sigma == 0.4
+    with pytest.raises(ValueError, match="lengthscale_sigma"):
+        FitConfig(lengthscale_sigma=0.0)

@@ -177,6 +177,15 @@ class FitConfig:
     #: and the max over that many exceeds 1.01 by chance even when sampling is healthy — using
     #: it here rejected a fit with r_hat 1.018 and ESS 378. 1.05 is the classic Gelman-Rubin
     #: cutoff and is the defensible bar for a maximum.
+    #: Prior sd of log lengthscale. The default spans roughly 220-3,400 km at 95%, which suits a
+    #: variant whose data pins the range down. It does not suit every variant: a correlation range
+    #: near the top of that span describes a field that is nearly constant globally, which is
+    #: indistinguishable from `intercept` — a ridge the chains can slide along instead of mixing.
+    #: G6PD does exactly that (r_hat 1.469 on `lengthscale`, #116), because a phenotype pooling
+    #: ~200 alleles has no single spatial scale for the data to identify. Tightening this is a
+    #: statement that the field is spatial rather than constant, and must be made deliberately
+    #: per variant rather than defaulted, because it is a real prior belief about the biology.
+    lengthscale_sigma: float = 0.7
     max_rhat: float = 1.05
     #: Effective sample size floor, per parameter. This is the discriminating statistic: the
     #: binomial fit that produced impossible >0.9 frequencies had ESS 2, the beta-binomial fit
@@ -190,6 +199,8 @@ class FitConfig:
             raise ValueError(f"unknown likelihood {self.likelihood!r}; expected one of {LIKELIHOODS}")
         if self.hsgp_c <= 1.0:
             raise ValueError("hsgp_c must be > 1 so the HSGP domain extends beyond the data")
+        if self.lengthscale_sigma <= 0.0:
+            raise ValueError("lengthscale_sigma must be > 0")
         if self.max_rhat < 1.0:
             raise ValueError("max_rhat must be >= 1.0")
         if self.approximation not in APPROXIMATIONS:
@@ -564,7 +575,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         # against HbS in #39 rather than fixed by fiat.
         # Chordal units on the unit sphere: exp(-2.0) ~ 0.135 ~ 860 km, a scale consistent with
         # the continental structure the surveys show.
-        lengthscale = pm.LogNormal("lengthscale", mu=-2.0, sigma=0.7)
+        lengthscale = pm.LogNormal("lengthscale", mu=-2.0, sigma=config.lengthscale_sigma)
         # The logit-scale field only needs to span roughly [-10, -1.4] to cover 0 to 0.2. Left
         # looser, the amplitude ran to 11.7 — enough to saturate invlogit at 0 and 1 and produce
         # the impossible >0.9 blobs. See #103.
