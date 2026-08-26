@@ -88,6 +88,19 @@ JOB_COMMANDS = {
     # The results are echoed to the pod log on purpose. Nothing copies /workspace/out back, so
     # without this the numbers die with the pod — which is how an earlier 8.9-hour run returned
     # nothing at all. `cat` is guarded because a strategy that failed writes no file.
+    # Multi-variant batch: both MAP layers through `run_batch`, with the exclusion list echoed
+    # to the log so it survives the pod (nothing copies /workspace back).
+    "surfaces": (
+        "run python scripts/fetch_map_hbs.py --layer g6pd "
+        "--out /workspace/data/map_g6pd_surveys.csv ; "
+        "run python scripts/build_surfaces.py "
+        "--hbs /workspace/data/map_hbs_surveys.csv "
+        "--g6pd /workspace/data/map_g6pd_surveys.csv "
+        "--out /workspace/out --n-inducing {n_inducing} --draws {draws} ; "
+        "echo '===== RESULTS BEGIN ====='; "
+        "cat /workspace/out/exclusions.json 2>/dev/null || echo 'no exclusion list written'; "
+        "echo '===== RESULTS END ====='"
+    ),
     "validate": (
         "run python scripts/validate_holdout.py "
         "--observations /workspace/data/map_hbs_surveys.csv "
