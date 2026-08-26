@@ -29,7 +29,12 @@ def main() -> None:
     # grinds at maximum tree depth. At M=800 the spacing is far inside that and a single fold
     # takes hours; at M=150 it is minutes. See `MIN_SPACING_FRACTION` in surfaces.fit.
     ap.add_argument("--n-inducing", type=int, default=150)
-    ap.add_argument("--draws", type=int, default=600)
+    # A fold trains on (k-1)/k of the data, so it has to buy with sampling budget what it lacks
+    # in data. At draws=400 four of ten folds missed the ESS floor of 200, at 61-143 (#111).
+    ap.add_argument("--draws", type=int, default=1000)
+    # 0.9, above the 0.8 default a full fit runs at. Smaller steps cost wall-clock per draw and
+    # buy ESS, which is the statistic every one of those four folds failed on.
+    ap.add_argument("--target-accept", type=float, default=0.9)
     args = ap.parse_args()
 
     observations, report = map_surveys.load(args.observations, "validation")
@@ -40,6 +45,7 @@ def main() -> None:
         tune=max(args.draws, 1000),
         approximation="inducing",
         n_inducing=args.n_inducing,
+        target_accept=args.target_accept,
     )
 
     args.out.mkdir(parents=True, exist_ok=True)

@@ -172,6 +172,15 @@ class FitConfig:
     #: loop dominates. The same path runs on a GPU when jax[cuda] is present (#104). "pymc"
     #: remains available and needs no extra install.
     nuts_sampler: str = "numpyro"
+    #: NUTS target acceptance rate. Higher means a smaller step size, so each draw costs more
+    #: leapfrog steps but decorrelates better — the standard trade of wall-clock for ESS.
+    #:
+    #: 0.8 is PyMC's own default and is kept as ours, so the surfaces already published are
+    #: unaffected. It is a field rather than a constant because cross-validation folds need a
+    #: higher value than the full fit does: a fold trains on (k-1)/k of the data, and at
+    #: draws=400 four of ten folds missed the ESS floor of 200, at 61-143 (#111). Raising it is
+    #: opt-in at the call site that needs it — see `scripts/validate_holdout.py`.
+    target_accept: float = 0.8
     #: Gelman-Rubin ceiling, applied to the *maximum* over every parameter. 1.01 is the modern
     #: standard for a single quantity of interest, but this model has ~1,500 latent parameters
     #: and the max over that many exceeds 1.01 by chance even when sampling is healthy — using
@@ -203,6 +212,8 @@ class FitConfig:
             raise ValueError("lengthscale_sigma must be > 0")
         if self.max_rhat < 1.0:
             raise ValueError("max_rhat must be >= 1.0")
+        if not 0.0 < self.target_accept < 1.0:
+            raise ValueError("target_accept must be strictly between 0 and 1")
         if self.approximation not in APPROXIMATIONS:
             raise ValueError(
                 f"unknown approximation {self.approximation!r}; expected one of {APPROXIMATIONS}"
@@ -662,6 +673,10 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             "chains": config.chains,
             "random_seed": config.seed,
             "progressbar": False,
+            # Top level, which reaches numpyro and PyMC's own NUTS alike, and is accepted
+            # alongside the `nuts` dict below on both 5.x and 6.x. Measured, not inferred:
+            # `scripts/env_report.py` reports what actually arrives at the sampler.
+            "target_accept": config.target_accept,
         }
         if config.nuts_sampler == "pymc":
             # Deterministic given the seed only when chains are drawn sequentially.
@@ -673,6 +688,13 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             # *sequentially* when there is only one — which is what a single GPU looks like, so
             # three quarters of the available speedup was being left on the table with a warning
             # that reads like a note about CPUs.
+            #
+            # `nuts` is the channel to pass it in, and which channel works is version-dependent
+            # rather than settled: PyMC changed how NUTS options are routed between 5.x and 6.x,
+            # and `nuts_sampler_kwargs` — which is the one that works on 5.x — is deprecated on
+            # the pinned 6.3.1 in favour of this one. Do not re-litigate that from the PyMC
+            # source, which is what produced a wrong answer in #120; run `scripts/env_report.py`,
+            # which measures where each channel actually lands in the environment you have.
             sample_kwargs["nuts"] = {"chain_method": "vectorized"}
         idata = pm.sample(**sample_kwargs)
 
