@@ -193,6 +193,34 @@ python scripts/build_observations.py --registry data/registry \
 **If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
 diff.** That diff is the review surface for schema change; CI fails if it is stale.
 
+### Reproducing the environment exactly
+
+The dependency bounds in `pyproject.toml` are lower bounds, not pins, so two contributors
+following the install line above can end up a **major version apart** — `pymc>=5.16` currently
+resolves to 6.3.1, and PyMC changed how NUTS options are passed between 5.x and 6.x. That is
+enough to make two people disagree about what the code does while both being right about their own
+environment.
+
+`requirements.lock` pins all 222 packages. Use it whenever behaviour is in question:
+
+```bash
+uv venv --python 3.12 && source .venv/bin/activate
+uv pip install -r requirements.lock
+python -m pip install -e '.' --no-deps
+```
+
+Regenerate it with:
+
+```bash
+uv pip compile pyproject.toml --extra dev --extra atlas --extra surfaces --extra geo \
+    --extra figures --python-version 3.12 --output-file requirements.lock
+```
+
+**Before arguing about sampler behaviour, run `python scripts/env_report.py`.** It prints the
+installed versions and then *empirically* shows where NUTS options land in your environment, by
+spying on `sample_jax_nuts`. A disagreement about `nuts=` versus `nuts_sampler_kwargs` is almost
+always a version difference, and this turns it into a comparison of two outputs.
+
 `sqlite:///./genomeos.db` is the local default; production requires a PostgreSQL `DATABASE_URL`.
 GCP operations must go through the [repository-local gcloud wrapper](docs/repo-gcloud-auth.md) —
 never bare `gcloud`.
