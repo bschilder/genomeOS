@@ -8,7 +8,17 @@ version = "0.1.0"
 description = "Provenance-first atlas of human genetic variation"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115,<0.120",
+  # `<1`, restored. This was the original bound and the deliberate one: FastAPI has stayed on 0.x
+  # for years, so the major-version guard belongs at 1, not at an arbitrary minor. #107 narrowed it
+  # to `<0.120` while doing something unrelated and without saying why, which left the declared
+  # bound and the installed version disagreeing — CI honoured `<0.120` while local venvs ran 0.141,
+  # both green, nothing surfaced it. Verified: the API tests pass on 0.119.1 and on 0.141.1.
+  #
+  # For the record, the venv was right and the bound was wrong. The first reading of this — that a
+  # local environment had drifted out of spec — was mistaken, and was reinforced by a lock built
+  # from a stale uv cache that pinned 0.119.1 while 0.141.1 was available. Two pieces of stale
+  # tooling agreeing is not corroboration.
+  "fastapi>=0.115,<1",
   "pydantic>=2.11,<3",
   "sqlalchemy>=2.0,<3",
   "uvicorn>=0.34,<1",

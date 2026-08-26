@@ -210,11 +210,16 @@ uv pip install -r requirements.lock
 python -m pip install -e '.' --no-deps
 ```
 
-Regenerate it when a dependency changes, and commit the diff:
+Regenerate it when a dependency changes, and commit the diff. **`--refresh` is not
+optional**: uv's package index cache is persistent, and a stale cache silently pins an
+older version than the index actually offers — which is how a lock generated for this
+very PR came out pinning `fastapi==0.119.1` while 0.141.1 was both available and
+installed, sending an investigation off after a venv drift that had not happened.
 
 ```bash
-uv pip compile pyproject.toml --universal --extra dev --extra atlas --extra surfaces \
-    --extra geo --extra figures --python-version 3.12 --output-file requirements.lock
+uv pip compile pyproject.toml --universal --refresh --extra dev --extra atlas \
+    --extra surfaces --extra geo --extra figures --python-version 3.12 \
+    --output-file requirements.lock
 ```
 
 **Before arguing about library behaviour, run `python scripts/env_report.py`.** It prints the
