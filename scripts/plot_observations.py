@@ -5,8 +5,12 @@ at their survey coordinates. It deliberately draws no fitted surface and no inte
 between points, because §4's first invariant is that what was measured and what was inferred are
 never conflated, and that applies to a review figure as much as to the product.
 
-    python scripts/plot_observations.py --observations data/raw/map_hbs_surveys.csv \
+    python scripts/plot_observations.py --layer hbs --observations data/raw/map_hbs_surveys.csv \
         --out docs/figures/hbs_observations.png
+
+`--layer` selects the adapter. G6PD is X-linked, so its allele frequency comes from hemizygous
+males and its denominator is males rather than 2x individuals; the adapter handles that and the
+figure only needs to know which one to call.
 
 Marker area is proportional to sample size, so a survey of 100 does not carry the same visual
 weight as one of 10,000 — the same reason §11 encodes sample size as opacity in the map client.
@@ -22,11 +26,11 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
-from genomeos.observations.sources import map_surveys  # noqa: E402
+from genomeos.observations.sources import map_g6pd, map_surveys  # noqa: E402
 from genomeos.viz.basemap import draw_countries  # noqa: E402
 
 
-def plot(observations, report, out: Path, title: str) -> None:
+def plot(observations, report, out: Path, title: str, value_label: str) -> None:
     frequency = (observations["ac"] / observations["an"]).to_numpy()
     size = 10 + 70 * (observations["an"] / observations["an"].max()).to_numpy() ** 0.5
 
@@ -67,7 +71,7 @@ def plot(observations, report, out: Path, title: str) -> None:
     ax.set_ylabel("latitude")
     ax.set_title(title, loc="left", fontsize=13)
     ax.legend(loc="lower left", fontsize=9, framealpha=0.9)
-    fig.colorbar(scatter, ax=ax, label="HbS allele frequency (measured)", shrink=0.7)
+    fig.colorbar(scatter, ax=ax, label=value_label, shrink=0.7)
 
     reasons = dict(sorted(report.refusals.items(), key=lambda kv: kv[1]))
     bar.barh(list(reasons), list(reasons.values()), color="#8b949e")
@@ -88,16 +92,28 @@ def plot(observations, report, out: Path, title: str) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--observations", type=Path, required=True, help="MAP HbS survey export CSV")
+    ap.add_argument("--layer", choices=("hbs", "g6pd"), default="hbs")
+    ap.add_argument("--observations", type=Path, required=True, help="MAP survey export CSV")
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
-    observations, report = map_surveys.load(args.observations, "figure")
+    loader = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}[args.layer]
+    observations, report = loader(args.observations, "figure")
     plot(
         observations,
         report,
         args.out,
-        f"MAP HbS surveys — {len(observations)} measured allele frequencies (rs334, HBB)",
+        {
+            "hbs": f"MAP HbS surveys — {len(observations)} measured allele frequencies (rs334, HBB)",
+            "g6pd": (
+                f"MAP G6PD surveys — {len(observations)} hemizygous male allele frequencies "
+                "(X-linked; deficiency phenotype, ~200 alleles)"
+            ),
+        }[args.layer],
+        {
+            "hbs": "HbS allele frequency (measured)",
+            "g6pd": "G6PD-deficiency allele frequency in males (measured)",
+        }[args.layer],
     )
     print(report)
 
