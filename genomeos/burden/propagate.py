@@ -89,7 +89,7 @@ def compute_burden(
     draws = _thin(draws, config)
     cells = cells.reset_index(drop=True)
 
-    refusals = _refusals(cells, config)
+    refusals = cell_refusals(cells, config)
     female_fraction = (
         cells["female_fraction"].to_numpy(dtype=float)
         if "female_fraction" in cells
@@ -130,8 +130,13 @@ def _thin(draws: np.ndarray, config: BurdenConfig) -> np.ndarray:
     return draws[rng.choice(available, size=config.draws, replace=False), :]
 
 
-def _refusals(cells: pd.DataFrame, config: BurdenConfig) -> np.ndarray:
-    """One refusal reason per cell, or NA where a number may be emitted."""
+def cell_refusals(cells: pd.DataFrame, config: BurdenConfig) -> np.ndarray:
+    """One refusal reason per cell, or NA where a number may be emitted.
+
+    Public because the national rollup (`genomeos.burden.national`) needs exactly this policy
+    and must not restate it: a second copy is how "support_masked" stops being enforced in one
+    of the two places burden numbers are produced.
+    """
     refusals = np.full(len(cells), None, dtype=object)
 
     masked = cells["support"].isin(MASKED_STATES).to_numpy()
@@ -154,7 +159,7 @@ def _metric_draws(
     p: np.ndarray, cells: pd.DataFrame, i: int, female_fraction: float, config: BurdenConfig
 ) -> np.ndarray:
     if config.metric in _NEEDS_PENETRANCE:
-        assert config.penetrance is not None  # guaranteed by _refusals
+        assert config.penetrance is not None  # guaranteed by cell_refusals
         frequency = affected_frequency(
             p,
             config.inheritance,

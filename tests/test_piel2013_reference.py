@@ -23,6 +23,31 @@ def test_every_country_in_web_table_1_was_extracted(targets):
     assert targets["country"].is_unique
 
 
+def test_every_row_carries_an_iso3_code(targets):
+    """The parity join is on ISO3, not on names (#94). A blank code would drop the country.
+
+    Two rows sharing a code is the worse failure: they would merge on every downstream join and
+    one country's burden would be reported under another's name.
+    """
+    assert targets["iso3"].notna().all()
+    assert targets["iso3"].is_unique
+    assert targets["iso3"].str.fullmatch(r"[A-Z]{3}").all()
+
+
+def test_iso3_spot_checks_across_the_naming_conventions(targets):
+    """The appendix uses ISO 3166 names as they stood in 2010, which is not how anyone spells
+    them: Natural Earth says "Tanzania", MAP says "United Republic of Tanzania"."""
+    codes = targets.set_index("country")["iso3"]
+    assert codes["Nigeria"] == "NGA"
+    assert codes["India"] == "IND"
+    assert codes["Congo, the Democratic Republic of the"] == "COD"
+    assert codes["Congo"] == "COG"
+    assert codes["Tanzania, United Republic of"] == "TZA"
+    assert codes["Côte d'Ivoire"] == "CIV"
+    assert codes["Swaziland"] == "SWZ"  # eSwatini since 2018; the published row predates it
+    assert codes["Libyan Arab Jamahiriya"] == "LBY"
+
+
 def test_point_estimates_lie_inside_their_published_iqrs(targets):
     for stem in ("as", "ss"):
         point = targets[f"{stem}_neonates_per_year"]

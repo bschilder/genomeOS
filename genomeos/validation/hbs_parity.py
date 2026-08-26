@@ -21,6 +21,11 @@ to be pessimistic wherever it could flatter us:
 - **The global comparison takes our global posterior**, never a sum of our national medians.
   Medians are not additive, and summing them understates the total by roughly 5% — an artifact
   that would read as model failure (#92).
+
+`to_parity_frame` adapts an ISO3-keyed national rollup (`burden.national`) onto the country names
+this scorer joins on. The join itself is on ISO3: MAP, Piel and Natural Earth spell the same
+country three ways, and a name that fails to match drops the country out of the comparison
+silently, which looks exactly like a country with no burden (#94).
 """
 
 from __future__ import annotations
@@ -81,6 +86,34 @@ class ParityResult:
         failed = self.per_country[~self.per_country["point_inside"].fillna(False)]
         return failed.nlargest(n, "published_point")
 
+    def top_bottom(self, n: int = 10) -> pd.DataFrame:
+        """The `n` largest and `n` smallest estimated burdens, beside the published numbers.
+
+        Reviewing a parity run means looking at the countries the total is made of, and the two
+        ends fail differently: the top is where a modelling error moves the global figure, the
+        bottom is where a country with almost no surveys quietly contributes a rounding error.
+
+        `mapped_population_fraction` travels with every row and is not decoration. A country in
+        the top ten at 55% mapped population is a different claim from one at 99% — ours covers
+        only the mapped part (`burden.national`) — and a reader must be able to see which they
+        are looking at without going to another table for it.
+        """
+        estimated = self.per_country[self.per_country["point"].notna()].sort_values(
+            "point", ascending=False
+        )
+        columns = [
+            column
+            for column in (
+                "iso3", "country", "point", "iqr_lower", "iqr_upper",
+                "published_point", "published_lower", "published_upper",
+                "mapped_population_fraction", "point_inside",
+            )
+            if column in estimated.columns
+        ]
+        if len(estimated) <= 2 * n:
+            return estimated[columns]
+        return pd.concat([estimated.head(n), estimated.tail(n)])[columns]
+
     def __str__(self) -> str:
         def mark(ok: bool) -> str:
             return "PASS" if ok else "FAIL"
@@ -96,6 +129,34 @@ class ParityResult:
                 f"  countries: {self.n_estimated} estimated of {self.n_published} published",
             ]
         )
+
+
+def to_parity_frame(
+    per_country: pd.DataFrame, targets: pd.DataFrame | None = None
+) -> pd.DataFrame:
+    """An ISO3-keyed national rollup, in the shape `score_parity` consumes.
+
+    Takes `NationalRollup.per_country` and attaches the published country name for each ISO3, so
+    the scorer's `country` join is a rename of a code match rather than a string comparison.
+
+    Rows we produced for an ISO3 with no published estimate are **not** returned: they cannot be
+    scored, and `score_parity` requires one row per country. Nothing is lost by it — the rollup
+    remains the complete artifact — but it is the reason this is a separate function rather than
+    something `national_totals` does on the way out.
+
+    Refused countries (`point` is null) are kept. §8's denominator is every country with a
+    published estimate, so a refusal has to travel to the scorer to count against us.
+    """
+    if "iso3" not in per_country.columns:
+        raise ValueError("`per_country` must carry an `iso3` column; see burden.national")
+    published = national_estimates() if targets is None else targets
+    if "iso3" not in published.columns:
+        raise ValueError("the published targets must carry an `iso3` column")
+
+    merged = published[["iso3", "country"]].merge(per_country, on="iso3", how="inner")
+    if merged["country"].duplicated().any():
+        raise ValueError("two rollup rows resolved to the same published country")
+    return merged
 
 
 def score_parity(
