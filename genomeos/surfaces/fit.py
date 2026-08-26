@@ -48,6 +48,10 @@ SEED = 42
 
 LIKELIHOODS: tuple[str, ...] = ("binomial", "beta_binomial")
 
+#: How the lengthscale prior is chosen. "derived" reads it off the observation locations; "fixed"
+#: uses the constants on `FitConfig` and exists so a published surface can be reproduced exactly.
+LENGTHSCALE_PRIORS: tuple[str, ...] = ("derived", "fixed")
+
 
 class ConvergenceError(RuntimeError):
     """The sampler did not converge, so this variant yields no surface.
@@ -114,6 +118,81 @@ REFERENCE_DESIGN = "population_random"
 EARTH_RADIUS_KM = 6371.0088
 
 
+#: Independent regions the prior asks the field to show across the sampled domain. A Matern-5/2
+#: decorrelates at roughly twice its range, so an upper anchor of `extent / (2 * K)` says "the
+#: field should vary at least K times across where the data actually is". K=4 is a judgement, but
+#: a stated one: it admits every credible fit measured so far (HbS 680 km, G6PD 547 km,
+#: DRB1*16:02 750 km, DRB1*14:01 1,195 km) and excludes the degenerate ones (DRB1*12:01 3,143 km,
+#: DRB1*04:04 4,111 km) without being tuned per variant.
+LENGTHSCALE_REGIONS = 4
+
+#: Floor on the lower anchor. Three nearest-neighbour spacings is the least that could show
+#: correlation decaying at all; the constant stops a pathologically clustered corpus from driving
+#: the anchor to zero.
+MIN_LENGTHSCALE_ANCHOR_KM = 25.0
+
+#: Ceiling on the upper anchor, and it is a physical statement rather than a tuning constant: a
+#: correlation range of 2,500 km already means two populations 5,000 km apart are meaningfully
+#: correlated, which is most of an inhabited hemisphere. Needed because the anchors are read off
+#: the data and sparse data misreads them — five points spread across 30 degrees put the median
+#: nearest-neighbour spacing at ~1,500 km and drove the prior to 47,000 km, a range longer than
+#: the planet. `MIN_OBSERVATIONS` in `surfaces.batch` is 5, so that case is reachable.
+MAX_LENGTHSCALE_ANCHOR_KM = 2500.0
+
+
+def derive_lengthscale_prior(lat: np.ndarray, lon: np.ndarray) -> tuple[float, float, float, float]:
+    """A LogNormal prior on lengthscale, derived from where the observations actually are.
+
+    Returns ``(mu, sigma, lower_km, upper_km)`` with mu and sigma in the chordal units the kernel
+    uses, and the two anchors in km for the record.
+
+    The fixed prior this replaces (`LogNormal(-2.0, 0.7)`, median 861 km) cannot be right for every
+    variant, and hand-setting it per variant does not survive 767 alleles (#122). Two anchors, both
+    read off the data:
+
+    - **lower** — three times the median nearest-neighbour spacing. Below that there are not enough
+      distinct separations for correlation decay to be visible at all.
+    - **upper** — the domain extent divided by ``2 * LENGTHSCALE_REGIONS``. Above it the field
+      barely varies across the region the data covers, which is #116's degenerate regime where a
+      long range is indistinguishable from the intercept.
+
+    The prior is centred on the geometric mean of the two and spread so ~95% of its mass lies
+    between them. Note what this does *not* do: it never forbids a range, it only makes an
+    implausible one expensive. A variant with genuinely global structure can still reach it if the
+    data insists.
+    """
+    lat_arr = np.asarray(lat, dtype=float)
+    lon_arr = np.asarray(lon, dtype=float)
+    if len(lat_arr) < 2:
+        raise ValueError("a lengthscale prior needs at least two observation locations")
+
+    distance = _haversine_matrix(lat_arr, lon_arr)
+    np.fill_diagonal(distance, np.inf)
+    nearest = float(np.median(distance.min(axis=1)))
+    np.fill_diagonal(distance, 0.0)
+    extent = float(np.quantile(distance, 0.95))
+
+    upper = min(extent / (2.0 * LENGTHSCALE_REGIONS), MAX_LENGTHSCALE_ANCHOR_KM)
+    lower = max(3.0 * nearest, MIN_LENGTHSCALE_ANCHOR_KM)
+    if not lower < upper:
+        # Sparse or tightly clustered data, where the spacing floor meets the physical ceiling.
+        # Back the lower anchor off rather than inverting the prior or letting it run to a range
+        # longer than the planet.
+        lower = upper / 10.0
+    mu = float(np.log(np.sqrt(lower * upper) / EARTH_RADIUS_KM))
+    sigma = float(np.log(upper / lower) / (2.0 * 1.96))
+    return mu, sigma, lower, upper
+
+
+def _haversine_matrix(lat: np.ndarray, lon: np.ndarray) -> np.ndarray:
+    """Pairwise great-circle distances in km."""
+    rlat, rlon = np.radians(lat), np.radians(lon)
+    dlat = rlat[:, None] - rlat[None, :]
+    dlon = rlon[:, None] - rlon[None, :]
+    a = np.sin(dlat / 2) ** 2 + np.cos(rlat)[:, None] * np.cos(rlat)[None, :] * np.sin(dlon / 2) ** 2
+    return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
+
+
 def to_unit_sphere(lat: object, lon: object) -> np.ndarray:
     """(lat, lon) in degrees -> (x, y, z) on the unit sphere.
 
@@ -177,6 +256,16 @@ class FitConfig:
     #: and the max over that many exceeds 1.01 by chance even when sampling is healthy — using
     #: it here rejected a fit with r_hat 1.018 and ESS 378. 1.05 is the classic Gelman-Rubin
     #: cutoff and is the defensible bar for a maximum.
+    #: How the lengthscale prior is set. ``"derived"`` reads it off the observation locations —
+    #: see `derive_lengthscale_prior` — and is the default because hand-setting it does not
+    #: survive 767 alleles (#122): a screen of twenty HLA alleles fitted ranges of 1,036-4,111 km
+    #: under the fixed prior, almost all in the degenerate regime where a long range is
+    #: indistinguishable from the intercept. ``"fixed"`` uses `lengthscale_mu`/`lengthscale_sigma`
+    #: and exists so a published surface can be reproduced exactly.
+    lengthscale_prior: str = "derived"
+    #: Prior mean of log lengthscale, in chordal units. Used only when `lengthscale_prior` is
+    #: "fixed"; exp(-2.0) x Earth radius is about 861 km.
+    lengthscale_mu: float = -2.0
     #: Prior sd of log lengthscale. The default spans roughly 220-3,400 km at 95%, which suits a
     #: variant whose data pins the range down. It does not suit every variant: a correlation range
     #: near the top of that span describes a field that is nearly constant globally, which is
@@ -201,6 +290,11 @@ class FitConfig:
             raise ValueError("hsgp_c must be > 1 so the HSGP domain extends beyond the data")
         if self.lengthscale_sigma <= 0.0:
             raise ValueError("lengthscale_sigma must be > 0")
+        if self.lengthscale_prior not in LENGTHSCALE_PRIORS:
+            raise ValueError(
+                f"unknown lengthscale_prior {self.lengthscale_prior!r}; "
+                f"expected one of {LENGTHSCALE_PRIORS}"
+            )
         if self.max_rhat < 1.0:
             raise ValueError("max_rhat must be >= 1.0")
         if self.approximation not in APPROXIMATIONS:
@@ -229,6 +323,10 @@ class SurfaceFit:
     #: True when the fit could estimate β_design at all, i.e. when the data contained more than
     #: one sampling design. Written to the artifact as `beta_design_applied` (§6).
     beta_design_applied: bool
+    #: The 95% anchors of the lengthscale prior in km, or NaN when it was fixed. Recorded because
+    #: a fitted range is only interpretable against the prior that produced it, and under a derived
+    #: prior that differs per variant.
+    lengthscale_prior_km: tuple[float, float]
     #: True when the cohort effect was estimated at all. False when the source gives one cohort
     #: per observation, which is not a cohort effect but an observation-level overdispersion term
     #: — see the note in `fit_surface`.
@@ -544,6 +642,14 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     beta_design_applied = len(design_levels) > 1
 
     design_index = obs["sampling_design"].map({d: i for i, d in enumerate(design_levels)}).to_numpy()
+    if config.lengthscale_prior == "derived":
+        lengthscale_mu, lengthscale_sigma, anchor_low, anchor_high = derive_lengthscale_prior(
+            obs["lat"].to_numpy(), obs["lon"].to_numpy()
+        )
+    else:
+        lengthscale_mu, lengthscale_sigma = config.lengthscale_mu, config.lengthscale_sigma
+        anchor_low = anchor_high = float("nan")
+
     cohorts = sorted(obs["cohort_id"].unique())
     # A cohort effect needs replication within cohorts to be identified. One level per observation
     # gives none, so the term is dropped rather than fitted into a ridge.
@@ -594,7 +700,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         # against HbS in #39 rather than fixed by fiat.
         # Chordal units on the unit sphere: exp(-2.0) ~ 0.135 ~ 860 km, a scale consistent with
         # the continental structure the surveys show.
-        lengthscale = pm.LogNormal("lengthscale", mu=-2.0, sigma=config.lengthscale_sigma)
+        lengthscale = pm.LogNormal("lengthscale", mu=lengthscale_mu, sigma=lengthscale_sigma)
         # The logit-scale field only needs to span roughly [-10, -1.4] to cover 0 to 0.2. Left
         # looser, the amplitude ran to 11.7 — enough to saturate invlogit at 0 and 1 and produce
         # the impossible >0.9 blobs. See #103.
@@ -735,6 +841,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         config=config,
         beta_design_applied=beta_design_applied,
         beta_cohort_applied=beta_cohort_applied,
+        lengthscale_prior_km=(anchor_low, anchor_high),
         design_levels=non_reference,
         prior_frequency_sd=prior_sd,
         inducing_spacing_ratio=spacing_ratio,
