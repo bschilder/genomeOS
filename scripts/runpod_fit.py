@@ -125,13 +125,15 @@ JOB_COMMANDS = {
     # Allele screening: many AFND alleles through run_batch, with the exclusion list echoed to the
     # log. A diagnostic sweep, so failures are the product and a modest draw budget is correct.
     "screen": (
-        "run python scripts/fetch_afnd.py --out /workspace/data/afnd_populations.tsv "
-        "--cache /workspace/data/afnd_cache --delay 0.2 ; "
+        # The population table is committed (data/raw/afnd_populations.tsv), not re-fetched.
+        # Harvesting it is 1,825 requests and ~2 hours; a pod that re-scraped it burned 1.7
+        # billed hours before fitting anything. The frequency table is one request, so it
+        # is still fetched.
         "run curl -sSL -o /workspace/data/afnd_frequencies.tsv "
         "https://raw.githubusercontent.com/slowkow/allelefrequencies/main/afnd.tsv ; "
         "run python scripts/screen_alleles.py "
         "--frequencies /workspace/data/afnd_frequencies.tsv "
-        "--populations /workspace/data/afnd_populations.tsv "
+        "--populations data/raw/afnd_populations.tsv "
         "--out /workspace/out --top {n_folds} --draws {draws} "
         "--n-inducing {n_inducing} ; "
         "echo '===== RESULTS BEGIN ====='; "
@@ -207,7 +209,7 @@ def entrypoint(args) -> str:
                         --branch {args.ref} \
                         https://github.com/bschilder/genomeOS /workspace/genomeOS; then
                     cd /workspace/genomeOS || return 1
-                    git sparse-checkout set genomeos scripts reference contract tests || return 1
+                    git sparse-checkout set genomeos scripts reference contract tests data/raw || return 1
                     return 0
                 fi
                 echo "----- clone attempt ${{attempt}} failed, retrying -----"

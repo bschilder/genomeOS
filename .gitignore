@@ -243,6 +243,14 @@ data/store/*
 # what gets a result off one laptop. The fits that produced them are ~100 MB each and stay local.
 !data/store/artifacts/
 !data/store/INVENTORY.json
+# The harvested AFND population table is committed, unlike other fetched sources. The rule is
+# cost, not principle: MAP is one HTTP request and stays fetched-by-script, but this is 1,825
+# requests and about two hours. A pod re-scraping it spent 1.7 billed hours before fitting
+# anything. 436 KB is a cheap way to never do that again; `scripts/fetch_afnd.py` still
+# regenerates it, and the page cache stays local.
+!data/raw/
+data/raw/*
+!data/raw/afnd_populations.tsv
 *.pkl
 
 # Agent worktrees and local session state
