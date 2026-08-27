@@ -75,6 +75,19 @@ EXACT_RECONSTRUCTION_MAX_N = 5000
 #: and #123 (weight capping) exist.
 DONOR_REGISTRIES = ("NMDP", "DKMS")
 
+#: AFND's two frequency columns carry **different units**, a 100x difference in one file:
+#: `alleles_over_2n` is a fraction (max 1.000 across the corpus) and `indivs_over_n` is a
+#: percentage (max 100.0). Reading the wrong one without dividing yields a frequency of 63 where
+#: 0.63 was meant, which no downstream check would catch because the schema only bounds `ac <= an`.
+#:
+#: Validated rather than assumed. A fraction column above 1.0 means the release changed units
+#: under us, and §12 makes that a hard error rather than something to rescale silently.
+MAX_FRACTION = 1.0
+#: Genotype percentages for one locus and population must sum to 100. Measured across 1,405 full
+#: triples the sum is 100.0 with a 5th-95th percentile of 99.9 to 100.1, so a 1-point tolerance
+#: is generous for rounding and tight enough to catch a unit error or a missing genotype class.
+GENOTYPE_SUM_TOLERANCE = 1.0
+
 
 #: AFND's own `group` column mapped onto the variant_id namespace. The prefix is a provenance
 #: claim, so it has to name the right family: KIR2DL1 is not an HLA allele and an id saying it is
@@ -206,6 +219,15 @@ def load(
 
     freq["af"] = numeric(freq["alleles_over_2n"])
     freq["n_indiv"] = numeric(freq["n"])
+
+    # The unit check, before anything reads the column. See MAX_FRACTION.
+    over = freq["af"].dropna()
+    if len(over) and float(over.max()) > MAX_FRACTION:
+        raise ValueError(
+            f"alleles_over_2n reaches {float(over.max()):.3f}, above {MAX_FRACTION}. That column "
+            f"is a fraction in every release seen so far; a value above 1 means the units "
+            f"changed, and rescaling silently would misstate every frequency downstream."
+        )
 
     refuse(freq["af"].isna(), "no_frequency_reported")
     refuse(freq["n_indiv"].isna() | (freq["n_indiv"] <= 0), "no_sample_size")

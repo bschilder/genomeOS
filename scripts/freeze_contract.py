@@ -14,7 +14,10 @@ import json
 import sys
 from pathlib import Path
 
-from genomeos.observations.schema import OBSERVATIONS_SCHEMA
+from genomeos.observations.schema import (
+    CARRIER_OBSERVATIONS_SCHEMA,
+    OBSERVATIONS_SCHEMA,
+)
 from genomeos.registry.schema import ALIASES_SCHEMA, POPULATIONS_SCHEMA
 
 CONTRACT_DIR = Path(__file__).resolve().parents[1] / "contract"
@@ -22,6 +25,7 @@ SCHEMAS = {
     "populations.schema.json": POPULATIONS_SCHEMA,
     "population_aliases.schema.json": ALIASES_SCHEMA,
     "observations.schema.json": OBSERVATIONS_SCHEMA,
+    "carrier_observations.schema.json": CARRIER_OBSERVATIONS_SCHEMA,
 }
 
 
