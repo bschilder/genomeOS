@@ -39,6 +39,19 @@ from genomeos.registry.sources import afnd as afnd_registry
 #: for rounding and tight enough to catch a unit error or a missing genotype class.
 GENOTYPE_SUM_TOLERANCE = 1.0
 
+#: Which of a locus's two alleles gets reported.
+#:
+#: **The minor one, by mean frequency across the corpus.** Choosing alphabetically instead maps the
+#: *major* allele for roughly half of loci, and a major-allele surface is flat by construction:
+#: TNF-alpha -308 rendered as a solid ~0.9 field worldwide with every population at its ceiling,
+#: which invites the reader to conclude the variant is uniform when the informative half of the
+#: signal is simply the complement.
+#:
+#: Decided once per locus, not per population, so the id cannot mean different alleles in
+#: different places. A locus whose mean sits exactly at 0.5 keeps the alphabetical choice, since
+#: neither allele is minor and the tie has to break somewhere.
+MINOR_ALLELE_RULE = "mean frequency below 0.5 across all populations of that locus"
+
 
 def variant_id(locus: str, allele: str) -> str:
     """`("IL-6/ - 174", "G")` -> `"cyt:il-6-174-g"`.
@@ -139,14 +152,20 @@ def load(
             refuse("ascertainment_not_stated")
             continue
 
-        # p(B) = f(BB) + f(AB)/2, where B is the second homozygote's allele. Counting.
-        allele = homozygous[1][0]
+        # p = f(BB) + f(AB)/2, counted against the alphabetically second homozygote. Which of
+        # the two alleles is finally *reported* is decided per locus after this loop; see
+        # MINOR_ALLELE_RULE.
+        reference = homozygous[1][0]
+        other = homozygous[0][0]
         frequency = (calls[homozygous[1]] + calls[heterozygous[0]] / 2.0) / 100.0
         an = int(round(2 * n_indiv))
         geo = placed.loc[pid]
         records.append(
             {
-                "variant_id": variant_id(locus, allele),
+                "locus": locus,
+                "reference_allele": reference,
+                "other_allele": other,
+                "variant_id": variant_id(locus, reference),
                 "rsid": None,
                 "population_id": pid,
                 "lat": float(geo["lat"]),
@@ -167,7 +186,20 @@ def load(
 
     # Explicit columns, so a run where every pair is refused still returns a frame the schema
     # can validate rather than a shapeless empty one. A refusal-only result is a valid outcome.
-    frame = pd.DataFrame.from_records(records, columns=list(OBSERVATIONS_SCHEMA.columns))
+    frame = pd.DataFrame.from_records(
+        records, columns=[*OBSERVATIONS_SCHEMA.columns, "locus", "reference_allele",
+                          "other_allele"]
+    )
+    # Second pass: report the minor allele. See MINOR_ALLELE_RULE. Frequencies are complemented
+    # rather than recomputed, which is exact: p(A) = 1 - p(B) for a biallelic locus.
+    if len(frame):
+        mean_by_locus = (frame["ac"] / frame["an"]).groupby(frame["locus"]).transform("mean")
+        flip = mean_by_locus > 0.5
+        frame.loc[flip, "ac"] = frame.loc[flip, "an"] - frame.loc[flip, "ac"]
+        frame.loc[flip, "variant_id"] = [
+            variant_id(row.locus, row.other_allele) for row in frame[flip].itertuples()
+        ]
+    frame = frame.drop(columns=["locus", "reference_allele", "other_allele"])
     if min_populations > 1 and len(frame):
         counts = frame.groupby("variant_id")["population_id"].transform("nunique")
         below = counts < min_populations

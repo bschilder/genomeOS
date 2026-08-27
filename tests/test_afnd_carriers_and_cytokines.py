@@ -31,6 +31,7 @@ def test_a_full_genotype_triple_gives_the_allele_frequency_by_counting(tmp_path)
     """p(B) = f(BB) + f(AB)/2. Arithmetic, with no Hardy-Weinberg anywhere in it.
 
     CC 25%, CG 50%, GG 25% -> p(G) = 0.25 + 0.25 = 0.50, from 100 individuals = 100 of 200.
+    A mean of exactly 0.50 is a tie, so the alphabetical choice stands (see MINOR_ALLELE_RULE).
     """
     path = _table(tmp_path, {
         "group": ["cyt"] * 3,
@@ -136,3 +137,44 @@ def test_a_percentage_above_100_is_refused_rather_than_rescaled(tmp_path):
     })
     with pytest.raises(ValueError, match="above 100"):
         afnd_carriers.load(path, POPULATIONS, "test")
+
+
+def test_the_minor_allele_is_reported_not_the_alphabetical_one(tmp_path):
+    """Choosing alphabetically maps the MAJOR allele for about half of loci, and a major-allele
+    surface is flat by construction — TNF-alpha -308 rendered as a solid 0.9 field worldwide
+    before this rule existed. The minor allele carries the geographic signal.
+
+    AA 81%, AG 18%, GG 1% -> p(G) = 0.01 + 0.09 = 0.10, so G is minor and G is reported.
+    Alphabetically G is still second here, so the id is unchanged; the next test flips it.
+    """
+    path = _table(tmp_path, {
+        "group": ["cyt"] * 3,
+        "gene": ["IL-6-"] * 3,
+        "allele": ["IL-6/ - 174 AA", "IL-6/ - 174 AG", "IL-6/ - 174 GG"],
+        "population": [PLACED] * 3,
+        "indivs_over_n": ["81.0", "18.0", "1.0"],
+        "alleles_over_2n": ["", "", ""],
+        "n": ["100", "100", "100"],
+    })
+    obs, _ = afnd_cytokines.load(path, POPULATIONS, "test")
+    row = obs.iloc[0]
+    assert row["variant_id"] == "cyt:il-6-174-g"
+    assert (row["ac"], row["an"]) == (20, 200)
+
+
+def test_a_major_alphabetical_allele_is_flipped_to_its_minor_partner(tmp_path):
+    """AA 1%, AG 18%, GG 81% -> p(G) = 0.90, so G is MAJOR. The reported allele becomes A at
+    0.10, and the frequency is complemented exactly: p(A) = 1 - p(G) for a biallelic locus."""
+    path = _table(tmp_path, {
+        "group": ["cyt"] * 3,
+        "gene": ["IL-6-"] * 3,
+        "allele": ["IL-6/ - 174 AA", "IL-6/ - 174 AG", "IL-6/ - 174 GG"],
+        "population": [PLACED] * 3,
+        "indivs_over_n": ["1.0", "18.0", "81.0"],
+        "alleles_over_2n": ["", "", ""],
+        "n": ["100", "100", "100"],
+    })
+    obs, _ = afnd_cytokines.load(path, POPULATIONS, "test")
+    row = obs.iloc[0]
+    assert row["variant_id"] == "cyt:il-6-174-a"
+    assert (row["ac"], row["an"]) == (20, 200)
