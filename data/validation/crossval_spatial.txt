@@ -1,0 +1,9 @@
+spatial cross-validation — 4/5 folds scored  (1 did not converge)
+  multi-site studies split  : 7/143  (5%)
+  predictive coverage  95% : 0.74  (target 0.95)  <- calibration
+  predictive coverage  50% : 0.40  (target 0.50)
+  latent-frequency cov 95% : 0.09  (not a calibration statistic; see #110)
+  MAE (allele frequency)   : 0.0384   baseline 0.0394
+  RMSE                     : 0.0540
+  log score                : -1124.378   baseline -1196.283
+  skill over baseline      : +71.906

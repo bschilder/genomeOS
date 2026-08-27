@@ -1,0 +1,61 @@
+{
+  "spatial": {
+    "folds_scored": 4,
+    "folds_attempted": 5,
+    "folds_failed": [
+      {
+        "fold": 3,
+        "n_train": 810,
+        "n_test": 261,
+        "error": "sampler did not converge (effective sample size 186 < 200 (worst: lengthscale)). Per \u00a712 this variant is excluded from the surface set rather than published."
+      }
+    ],
+    "coverage_95_predictive": 0.7350548850644822,
+    "coverage_50_predictive": 0.39901845330378893,
+    "coverage_95_latent": 0.0912548350304273,
+    "mae": 0.03841524924161559,
+    "rmse": 0.05396490380894812,
+    "log_score": -1124.3776546986758,
+    "baseline_log_score": -1196.2831957783185,
+    "skill": 71.90554107964272,
+    "studies_split": 7,
+    "multi_site_studies": 143
+  },
+  "grouped": {
+    "folds_scored": 5,
+    "folds_attempted": 5,
+    "folds_failed": [],
+    "coverage_95_predictive": 0.9589176266029125,
+    "coverage_50_predictive": 0.617174527276679,
+    "coverage_95_latent": 0.40982395131493143,
+    "mae": 0.028455540003247275,
+    "rmse": 0.04004794878326437,
+    "log_score": -795.6572585217475,
+    "baseline_log_score": -909.5527201977693,
+    "skill": 113.8954616760218,
+    "studies_split": 0,
+    "multi_site_studies": 143
+  },
+  "random": {
+    "folds_scored": 4,
+    "folds_attempted": 5,
+    "folds_failed": [
+      {
+        "fold": 4,
+        "n_train": 857,
+        "n_test": 214,
+        "error": "sampler did not converge (effective sample size 175 < 200 (worst: lengthscale)). Per \u00a712 this variant is excluded from the surface set rather than published."
+      }
+    ],
+    "coverage_95_predictive": 0.9801510541186699,
+    "coverage_50_predictive": 0.669707672245164,
+    "coverage_95_latent": 0.4352369050206477,
+    "mae": 0.026052477935602957,
+    "rmse": 0.03639858719528519,
+    "log_score": -827.3252785584899,
+    "baseline_log_score": -933.3791630033991,
+    "skill": 106.05388444490916,
+    "studies_split": 135,
+    "multi_site_studies": 143
+  }
+}
