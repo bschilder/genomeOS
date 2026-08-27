@@ -48,17 +48,35 @@ SOURCE = "afnd_frequencies"
 EXACT_RECONSTRUCTION_MAX_N = 5000
 
 
-def variant_id(gene: str, allele: str) -> str:
-    """`("DQB1", "DQB1*03:01")` -> `"hla:dqb1-03-01"`.
+#: AFND's own `group` column mapped onto the variant_id namespace. The prefix is a provenance
+#: claim, so it has to name the right family: KIR2DL1 is not an HLA allele and an id saying it is
+#: is a false statement about what was measured, not a naming preference (#134). AFND ships this
+#: column; the first version of this adapter hardcoded `hla:` for all four families.
+GROUP_PREFIX = {"hla": "hla", "kir": "kir", "mic": "mic", "cyt": "cyt"}
+
+
+def variant_id(gene: str, allele: str, group: str) -> str:
+    """`("DQB1", "DQB1*03:01", "hla")` -> `"hla:dqb1-03-01"`; `("2DL1", "2DL1*003", "kir")` ->
+    `"kir:2dl1-003"`.
 
     The gene prefix is dropped from the allele where AFND repeats it, so the id is not
     `hla:dqb1-dqb1-03-01`. Colons and asterisks become hyphens; the WHO name stays recoverable.
+
+    `group` is required rather than defaulted. A default would put the burden of remembering the
+    family on every caller and silently mislabel the ones that forget, which is exactly the bug
+    this signature exists to prevent.
     """
+    key = group.strip().lower()
+    if key not in GROUP_PREFIX:
+        raise ValueError(
+            f"unknown AFND group {group!r}; expected one of {sorted(GROUP_PREFIX)}. A new family "
+            f"needs a namespace and a decision about whether it is an allele frequency at all."
+        )
     name = allele.strip()
     if name.upper().startswith(f"{gene.strip().upper()}*"):
         name = name[len(gene) + 1 :]
     slug = re.sub(r"[^a-z0-9]+", "-", f"{gene.strip()}-{name}".lower()).strip("-")
-    return f"hla:{re.sub(r'-+', '-', slug)}"
+    return f"{GROUP_PREFIX[key]}:{re.sub(r'-+', '-', slug)}"
 
 
 @dataclass(frozen=True)
@@ -128,6 +146,23 @@ def load(
             refusals[reason] = refusals.get(reason, 0) + count
             keep.loc[hit] = False
 
+    # Family refusals come first, so a cytokine row that also lacks a frequency is reported as a
+    # cytokine row rather than as missing data. Three of AFND's four families are not allele
+    # frequencies and this adapter's output column is an allele count (#134, #133).
+    group_key = freq["group"].str.strip().str.lower()
+    refuse(~group_key.isin(GROUP_PREFIX), "unknown_afnd_group")
+    # Cytokine rows are diploid GENOTYPES ("AIF-1/ -932 CC", "-932 CT"), not alleles: 0 of 4,517
+    # are gene-presence rows, they are all genotype-level. Reconstructing ac = af * 2n from a
+    # genotype frequency is a category error, and recovering an allele count would require
+    # assuming Hardy-Weinberg — an assumption about the population, not a parsing detail.
+    refuse(group_key == "cyt", "cytokine_genotype_not_allele_frequency")
+    # KIR genes are copy-number variable, so a row whose allele repeats its gene name ("2DL1",
+    # "2DL1") reports the fraction of individuals CARRYING the gene. That is a carrier frequency
+    # over individuals, not an allele frequency over chromosomes. 3,790 of 6,714 KIR rows are of
+    # this kind; the remaining allele-level rows ("3DL1*007") are kept.
+    gene_presence = freq["allele"].str.strip().str.upper() == freq["gene"].str.strip().str.upper()
+    refuse((group_key == "kir") & gene_presence, "kir_gene_presence_not_allele_frequency")
+
     # AFND prints sample sizes with thousand separators ("3,732"). Parsing without stripping them
     # silently refused 33,514 rows — 27% of the table — as having no sample size at all, which is
     # indistinguishable in a refusal report from data that genuinely lacks one.
@@ -176,7 +211,8 @@ def load(
     obs = pd.DataFrame(
         {
             "variant_id": [
-                variant_id(g, a) for g, a in zip(rows["gene"], rows["allele"], strict=True)
+                variant_id(g, a, grp)
+                for g, a, grp in zip(rows["gene"], rows["allele"], rows["group"], strict=True)
             ],
             "rsid": pd.Series([pd.NA] * len(rows), index=rows.index, dtype="string[pyarrow]"),
             "population_id": ids.to_numpy(),

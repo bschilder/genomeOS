@@ -96,7 +96,7 @@ def test_alleles_are_keyed_as_hla_not_as_a_locus(frequencies):
     chr-pos-ref-alt triple; forcing one would assert a coordinate nobody measured."""
     obs, _ = af.load(frequencies, POPULATIONS, "test")
     assert set(obs["variant_id"]) <= {"hla:dqb1-03-01", "hla:a-01-01"}
-    assert af.variant_id("DQB1", "DQB1*03:01") == "hla:dqb1-03-01"
+    assert af.variant_id("DQB1", "DQB1*03:01", "hla") == "hla:dqb1-03-01"
 
 
 def test_output_satisfies_the_observations_contract(frequencies):
@@ -111,3 +111,63 @@ def test_min_populations_is_a_modelling_filter_and_is_reported(frequencies):
     _, strict = af.load(frequencies, POPULATIONS, "test", min_populations=3)
     assert "below_min_populations" not in permissive.refusals
     assert strict.refusals["below_min_populations"] >= 1
+
+
+def test_each_gene_family_gets_its_own_namespace():
+    """AFND ships four families and only one of them is HLA (#134).
+
+    The prefix is a provenance claim. `hla:2dl1` for KIR2DL1 asserts something false about what
+    was measured, which §4 treats as a bug rather than a naming preference.
+    """
+    assert af.variant_id("DQB1", "DQB1*03:01", "hla") == "hla:dqb1-03-01"
+    assert af.variant_id("3DL1", "3DL1*007", "kir") == "kir:3dl1-007"
+    assert af.variant_id("MICA", "MICA*004", "mic") == "mic:mica-004"
+
+
+def test_an_unrecognised_family_is_refused_rather_than_guessed():
+    """A new AFND group needs a namespace and a decision, not a default prefix."""
+    with pytest.raises(ValueError, match="unknown AFND group"):
+        af.variant_id("FOO", "FOO*01", "notafamily")
+
+
+def _table(tmp_path, rows):
+    path = tmp_path / "freq.tsv"
+    pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
+    return path
+
+
+def test_cytokine_genotypes_are_refused_not_converted_to_allele_counts(tmp_path):
+    """Cytokine rows are diploid genotypes, so there is no allele count to recover (#133).
+
+    Deriving one would need Hardy-Weinberg, which is an assumption about the population and
+    exactly the kind of silent substitution the invariants forbid.
+    """
+    path = _table(tmp_path, {
+        "group": ["cyt", "hla"],
+        "gene": ["IL-6-", "DQB1"],
+        "allele": ["IL-6/ - 174 CC", "DQB1*03:01"],
+        "population": ["Peru Lamas City Lama"] * 2,
+        "indivs_over_n": ["", ""],
+        "alleles_over_2n": ["0.4000", "0.1250"],
+        "n": ["100", "100"],
+    })
+    obs, report = af.load(path, POPULATIONS, "test")
+    assert set(obs["variant_id"]) == {"hla:dqb1-03-01"}
+    assert "cytokine_genotype_not_allele_frequency" in report.refusals
+
+
+def test_kir_gene_presence_is_refused_but_kir_alleles_are_kept(tmp_path):
+    """`allele == gene` on a copy-number-variable KIR gene is a carrier frequency, not an
+    allele frequency, so it cannot share a column with one (#133)."""
+    path = _table(tmp_path, {
+        "group": ["kir", "kir"],
+        "gene": ["2DL1", "3DL1"],
+        "allele": ["2DL1", "3DL1*007"],
+        "population": ["Peru Lamas City Lama"] * 2,
+        "indivs_over_n": ["", ""],
+        "alleles_over_2n": ["0.9000", "0.1000"],
+        "n": ["100", "100"],
+    })
+    obs, report = af.load(path, POPULATIONS, "test")
+    assert set(obs["variant_id"]) == {"kir:3dl1-007"}
+    assert report.refusals["kir_gene_presence_not_allele_frequency"] == 1
