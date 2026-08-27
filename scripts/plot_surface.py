@@ -245,6 +245,13 @@ def main() -> None:
         "--marker-area-max", type=float, default=PRESENCE_AREA_MAX,
         help="marker area for the most frequent presence; lower it for dense layers like HbS",
     )
+    ap.add_argument(
+        "--panels", choices=("both", "value"), default="both",
+        help="'value' draws the surface alone. The uncertainty panel plots posterior SD, which "
+             "correlates +0.96 with the estimate itself, so it is redundant next to the surface "
+             "and misleading on its own (see #137); 'value' is the right choice for comparing "
+             "many alleles side by side.",
+    )
     ap.add_argument("--dpi", type=int, default=220)
     args = ap.parse_args()
 
@@ -347,7 +354,14 @@ def main() -> None:
     )
     masked = np.isin(support, MASKED)
 
-    fig, axes = plt.subplots(2, 1, figsize=(13, 13), constrained_layout=True)
+    single = args.panels == "value"
+    fig, axes = plt.subplots(
+        1 if single else 2, 1,
+        figsize=(13, 6.6 if single else 13),
+        constrained_layout=True,
+        squeeze=False,
+    )
+    axes = axes[:, 0]
     _panel(
         axes[0], polygons, central, masked, observations,
         cmap=args.cmap, label=value_label,
@@ -357,12 +371,13 @@ def main() -> None:
         vmax=float(central[~masked].max()),
         area_min=args.marker_area_min, area_max=args.marker_area_max,
     )
-    _panel(
-        axes[1], polygons, sd, masked, observations,
-        cmap=UNCERTAINTY_CMAP, label="posterior standard deviation",
-        title=f"{layer_title} — posterior standard deviation   |   same cells",
-        area_min=args.marker_area_min, area_max=args.marker_area_max,
-    )
+    if not single:
+        _panel(
+            axes[1], polygons, sd, masked, observations,
+            cmap=UNCERTAINTY_CMAP, label="posterior standard deviation",
+            title=f"{layer_title} — posterior standard deviation   |   same cells",
+            area_min=args.marker_area_min, area_max=args.marker_area_max,
+        )
     fig.suptitle(
         f"{layer_title} fitted from {len(observations)} {_LAYER_SOURCE[args.layer]} — "
         f"correlation range {correlation_range_km:.0f} km, "
