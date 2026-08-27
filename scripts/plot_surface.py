@@ -33,7 +33,11 @@ import numpy as np  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
-from genomeos.observations.sources import map_g6pd, map_surveys  # noqa: E402
+from genomeos.observations.sources import (  # noqa: E402
+    afnd_frequencies,
+    map_g6pd,
+    map_surveys,
+)
 from genomeos.surfaces.fit import FitConfig, fit_surface, load_fit, save_fit  # noqa: E402
 from genomeos.surfaces.mask import MaskConfig, classify_support  # noqa: E402
 from genomeos.viz.basemap import draw_countries, h3_land_cells, h3_polygons  # noqa: E402
@@ -53,6 +57,15 @@ LAND = "#e3e6ea"
 # turbo never approaches grey (0.70) or white (0.80), which is what lets the land stay light.
 VALUE_CMAP = "turbo"
 
+#: Presence markers are scaled by observed allele frequency, area-proportional, which is the
+#: cartographic convention for a proportional-symbol map. The bounds are the whole design: about
+#: half of all presences sit below a quarter of the maximum frequency (measured on DRB1*01:01,
+#: A*02:01 and HbS alike), so without a floor most of the evidence shrinks to invisibility, and
+#: without a ceiling the dense European clusters merge into one opaque mass and hide the surface
+#: they are drawn on.
+PRESENCE_AREA_MIN = 4.0
+PRESENCE_AREA_MAX = 32.0
+
 _LAYER_TITLE = {
     "hbs": "HbS (rs334)",
     "g6pd": "G6PD deficiency (X-linked, hemizygous males)",
@@ -61,6 +74,22 @@ _VALUE_LABEL = {
     "hbs": "posterior median HbS allele frequency",
     "g6pd": "posterior median G6PD-deficiency allele frequency (males)",
 }
+#: The source each layer is credited to in the figure caption. AFND surveys are not MAP surveys
+#: and captioning them as such would misattribute the data (§4 provenance).
+_LAYER_SOURCE = {"hbs": "MAP surveys", "g6pd": "MAP surveys", "afnd": "AFND populations"}
+
+
+def hla_display_name(variant_id: str) -> str:
+    """``hla:drb1-15-01`` -> ``HLA-DRB1*15:01``.
+
+    AFND has 767 modelable alleles, so a hand-maintained title table is not an option; the name
+    is reconstructed from the variant_id instead. Anything that is not an `hla:` id is returned
+    unchanged rather than mangled.
+    """
+    if not variant_id.startswith("hla:"):
+        return variant_id
+    gene, _, fields = variant_id[len("hla:") :].partition("-")
+    return f"HLA-{gene.upper()}*{fields.replace('-', ':')}" if fields else f"HLA-{gene.upper()}"
 # A different family for uncertainty: two panels drawn in one palette invite reading a
 # standard deviation as a frequency.
 UNCERTAINTY_CMAP = "magma"
@@ -76,7 +105,7 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2 * r * np.arcsin(np.sqrt(a))
 
 
-def _observation_markers(ax, obs) -> None:
+def _observation_markers(ax, obs, *, area_min=PRESENCE_AREA_MIN, area_max=PRESENCE_AREA_MAX) -> list:
     """Overlay the surveys, with presence and absence as different shapes.
 
     Same encoding as the observations figure and as Piel et al.'s Figure 1A. On a fitted surface
@@ -97,19 +126,49 @@ def _observation_markers(ax, obs) -> None:
     """
     absent = (obs["ac"] == 0).to_numpy()
     fill = (1.0, 1.0, 1.0, 0.75)
+    frequency = (obs["ac"] / obs["an"]).to_numpy(dtype=float)
+    present = ~absent
+
+    lon = obs["lon"].to_numpy()
+    lat = obs["lat"].to_numpy()
+    handles: list = []
+    if present.any():
+        f_present = frequency[present]
+        f_max = float(f_present.max())
+        span = area_max - area_min
+        area = area_min + span * (f_present / f_max if f_max > 0 else 0.0)
+        # Largest first, so a small marker inside a dense cluster lands on top of its big
+        # neighbours instead of underneath them and stays findable.
+        order = np.argsort(-area)
+        ax.scatter(
+            lon[present][order], lat[present][order], s=area[order], marker="o",
+            facecolor=[fill], edgecolor="#11151a", linewidth=0.4, zorder=4,
+        )
+        # Size is meaningless without exemplars, so the legend carries three real frequencies
+        # rather than a single "presence" swatch at some arbitrary size.
+        from matplotlib.lines import Line2D
+
+        exemplars = [f_max * 0.15, f_max * 0.5, f_max]
+        for value in exemplars:
+            a = area_min + span * (value / f_max)
+            handles.append(
+                Line2D(
+                    [], [], marker="o", linestyle="none", markersize=float(np.sqrt(a)),
+                    markerfacecolor=fill, markeredgecolor="#11151a", markeredgewidth=0.4,
+                    label=f"presence — {value:.1%}",
+                )
+            )
+        handles[-1].set_label(f"presence — {f_max:.1%} (max of {int(present.sum())})")
     ax.scatter(
-        obs["lon"][~absent], obs["lat"][~absent], s=9, marker="o",
-        facecolor=[fill], edgecolor="#11151a", linewidth=0.4, zorder=4,
-        label=f"presence ({int((~absent).sum())})",
-    )
-    ax.scatter(
-        obs["lon"][absent], obs["lat"][absent], s=19, marker="^",
+        lon[absent], lat[absent], s=19, marker="^",
         facecolor=[fill], edgecolor="#11151a", linewidth=0.55, zorder=5,
         label=f"absence — AC=0 ({int(absent.sum())})",
     )
+    return handles
 
 
-def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None):
+def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None,
+           area_min=PRESENCE_AREA_MIN, area_max=PRESENCE_AREA_MAX):
     """Draw one hexagon panel: grey land base, heatmap over the cells that carry a claim.
 
     `edgecolors="face"` rather than no edge at all: without it, antialiasing leaves a hairline of
@@ -129,21 +188,31 @@ def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None):
     ax.add_collection(mesh)
 
     draw_countries(ax, color="#8b949e", linewidth=0.4, zorder=3)
-    _observation_markers(ax, obs)
+    size_handles = _observation_markers(ax, obs, area_min=area_min, area_max=area_max)
     ax.set_xlim(-180, 180)
     ax.set_ylim(-60, 84)
     ax.set_aspect("equal")
     ax.set_title(title, loc="left", fontsize=11)
-    handles, _ = ax.get_legend_handles_labels()
+    handles = size_handles + list(ax.get_legend_handles_labels()[0])
     handles.append(Patch(facecolor=LAND, label=f"no claim ({int(masked.sum())} cells)"))
-    ax.legend(handles=handles, loc="lower left", fontsize=8, framealpha=0.9, markerscale=1.6)
+    # markerscale stays 1.0: the size exemplars only mean anything if the legend draws them at
+    # the size the map does.
+    ax.legend(handles=handles, loc="lower left", fontsize=8, framealpha=0.9, markerscale=1.0)
     plt.colorbar(mesh, ax=ax, label=label, shrink=0.72)
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--layer", choices=("hbs", "g6pd"), default="hbs")
+    ap.add_argument("--layer", choices=("hbs", "g6pd", "afnd"), default="hbs")
     ap.add_argument("--observations", type=Path, required=True)
+    # AFND ships one file holding every allele, so a surface needs to be told which one.
+    ap.add_argument("--populations", type=Path, help="AFND population table (--layer afnd)")
+    ap.add_argument("--variant", help="AFND variant_id, e.g. hla:drb1-15-01 (--layer afnd)")
+    ap.add_argument(
+        "--min-populations", type=int, default=30,
+        help="AFND: drop alleles measured in fewer populations than this",
+    )
+    ap.add_argument("--data-version", default="afnd-2026-08")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--h3-res", type=int, default=3, help="H3 resolution for the rendered cells")
     ap.add_argument("--draws", type=int, default=400)
@@ -168,16 +237,54 @@ def main() -> None:
         "Skips prediction too, so it is valid only for the same --h3-res.",
     )
     ap.add_argument("--cmap", default=VALUE_CMAP, help="matplotlib colormap for the value panel")
+    ap.add_argument(
+        "--marker-area-min", type=float, default=PRESENCE_AREA_MIN,
+        help="marker area for the rarest presence; the floor that keeps it visible",
+    )
+    ap.add_argument(
+        "--marker-area-max", type=float, default=PRESENCE_AREA_MAX,
+        help="marker area for the most frequent presence; lower it for dense layers like HbS",
+    )
+    ap.add_argument(
+        "--panels", choices=("both", "value"), default="both",
+        help="'value' draws the surface alone. The uncertainty panel plots posterior SD, which "
+             "correlates +0.96 with the estimate itself, so it is redundant next to the surface "
+             "and misleading on its own (see #137); 'value' is the right choice for comparing "
+             "many alleles side by side.",
+    )
     ap.add_argument("--dpi", type=int, default=220)
     args = ap.parse_args()
 
-    loader = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}[args.layer]
-    observations, report = loader(args.observations, "figure")
-    print(report)
+    if args.layer == "afnd":
+        if not args.populations or not args.variant:
+            raise SystemExit("--layer afnd needs both --populations and --variant")
+        observations, report = afnd_frequencies.load(
+            args.observations, args.populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        observations = observations[observations["variant_id"] == args.variant].reset_index(
+            drop=True
+        )
+        if observations.empty:
+            raise SystemExit(
+                f"{args.variant} has no observations at --min-populations "
+                f"{args.min_populations}; it is not a modelable allele in this release"
+            )
+        layer_title = hla_display_name(args.variant)
+        value_label = f"posterior median {layer_title} allele frequency"
+    else:
+        loader = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}[args.layer]
+        observations, report = loader(args.observations, "figure")
+        print(report)
+        layer_title = _LAYER_TITLE[args.layer]
+        value_label = _VALUE_LABEL[args.layer]
 
     cells = h3_land_cells(args.h3_res)
     polygons, kept = h3_polygons(cells)
     import h3
+
+    cell_edge_km = h3.average_hexagon_edge_length(args.h3_res, unit="km")
 
     centres = np.array([h3.cell_to_latlng(cells[i]) for i in kept], dtype=float)
     cell_lat, cell_lon = centres[:, 0], centres[:, 1]
@@ -247,20 +354,32 @@ def main() -> None:
     )
     masked = np.isin(support, MASKED)
 
-    fig, axes = plt.subplots(2, 1, figsize=(13, 13), constrained_layout=True)
+    single = args.panels == "value"
+    fig, axes = plt.subplots(
+        1 if single else 2, 1,
+        figsize=(13, 6.6 if single else 13),
+        constrained_layout=True,
+        squeeze=False,
+    )
+    axes = axes[:, 0]
     _panel(
         axes[0], polygons, central, masked, observations,
-        cmap=args.cmap, label=_VALUE_LABEL[args.layer],
-        title="Fitted surface — posterior MEDIAN (grey land = no claim: unknown or prior-dominated)",
+        cmap=args.cmap, label=value_label,
+        title=f"{layer_title} — posterior median   |   {len(observations)} populations"
+              f"  ·  correlation range {correlation_range_km:.0f} km"
+              f"  ·  H3 res-{args.h3_res} cells, {cell_edge_km:.0f} km edge",
         vmax=float(central[~masked].max()),
+        area_min=args.marker_area_min, area_max=args.marker_area_max,
     )
-    _panel(
-        axes[1], polygons, sd, masked, observations,
-        cmap=UNCERTAINTY_CMAP, label="posterior standard deviation",
-        title="Posterior uncertainty — where the surface is least trustworthy",
-    )
+    if not single:
+        _panel(
+            axes[1], polygons, sd, masked, observations,
+            cmap=UNCERTAINTY_CMAP, label="posterior standard deviation",
+            title=f"{layer_title} — posterior standard deviation   |   same cells",
+            area_min=args.marker_area_min, area_max=args.marker_area_max,
+        )
     fig.suptitle(
-        f"{_LAYER_TITLE[args.layer]} fitted from {len(observations)} MAP surveys — "
+        f"{layer_title} fitted from {len(observations)} {_LAYER_SOURCE[args.layer]} — "
         f"correlation range {correlation_range_km:.0f} km, "
         f"rendered on H3 res-{args.h3_res} cells",
         fontsize=13,
