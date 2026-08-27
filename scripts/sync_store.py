@@ -51,6 +51,13 @@ SYNCED: tuple[tuple[str, str], ...] = (
     ("data/raw/map_hbs_surveys.csv", "raw/map_hbs_surveys.csv"),
     ("data/raw/map_g6pd_surveys.csv", "raw/map_g6pd_surveys.csv"),
     ("data/store/fits", "store/fits"),
+    # The screening fits and their rendered surfaces. Added because a sweep is hours of sampling
+    # that regenerates only by spending them again: the 17 AFND fits below cost about two hours
+    # and lived in a session scratchpad until this line existed. `sweep.json` is small and carries
+    # the fitted range, observation count and inducing-point budget per allele, so the summary
+    # survives even if the pickles are pruned later.
+    ("data/store/screen", "store/screen"),
+    ("data/store/surfaces", "store/surfaces"),
 )
 
 #: Never synced. See the module docstring.
