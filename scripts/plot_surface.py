@@ -277,6 +277,8 @@ def main() -> None:
     polygons, kept = h3_polygons(cells)
     import h3
 
+    cell_edge_km = h3.average_hexagon_edge_length(args.h3_res, unit="km")
+
     centres = np.array([h3.cell_to_latlng(cells[i]) for i in kept], dtype=float)
     cell_lat, cell_lon = centres[:, 0], centres[:, 1]
     print(f"H3 res {args.h3_res}: {len(cells)} land cells, {len(polygons)} drawable")
@@ -349,14 +351,16 @@ def main() -> None:
     _panel(
         axes[0], polygons, central, masked, observations,
         cmap=args.cmap, label=value_label,
-        title="Fitted surface — posterior MEDIAN (grey land = no claim: unknown or prior-dominated)",
+        title=f"{layer_title} — posterior median   |   {len(observations)} populations"
+              f"  ·  correlation range {correlation_range_km:.0f} km"
+              f"  ·  H3 res-{args.h3_res} cells, {cell_edge_km:.0f} km edge",
         vmax=float(central[~masked].max()),
         area_min=args.marker_area_min, area_max=args.marker_area_max,
     )
     _panel(
         axes[1], polygons, sd, masked, observations,
         cmap=UNCERTAINTY_CMAP, label="posterior standard deviation",
-        title="Posterior uncertainty — where the surface is least trustworthy",
+        title=f"{layer_title} — posterior standard deviation   |   same cells",
         area_min=args.marker_area_min, area_max=args.marker_area_max,
     )
     fig.suptitle(
