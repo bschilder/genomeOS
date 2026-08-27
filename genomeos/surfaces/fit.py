@@ -284,6 +284,20 @@ class FitConfig:
     #: statement that the field is spatial rather than constant, and must be made deliberately
     #: per variant rather than defaulted, because it is a real prior belief about the biology.
     lengthscale_sigma: float = 0.7
+    #: Spatially-uncorrelated variation in the latent field, on the logit scale (#137). Off by
+    #: default because turning it on changes every published range.
+    #:
+    #: Empirical semivariograms on AFND alleles show 31-39% of the sill already present at
+    #: 0-250 km: a large nugget from genotyping error, population definition, and real
+    #: heterogeneity between studies sampling "the same" place. The model has nowhere to put it,
+    #: so the GP either spikes on outliers with a short range or smooths them away with a long
+    #: one — and C*03:03 fits 4,189 km where its own variogram reaches the sill by 3,000-4,000 km,
+    #: implying roughly 1,200-1,600 km.
+    #:
+    #: The nugget enters the likelihood but NOT the prediction path, so the published surface
+    #: stays the smooth field and the noise lives where it belongs: in the posterior predictive
+    #: for a new survey, which `predict_observation` already models.
+    nugget: bool = False
     max_rhat: float = 1.05
     #: Effective sample size floor, per parameter. This is the discriminating statistic: the
     #: binomial fit that produced impossible >0.9 frequencies had ESS 2, the beta-binomial fit
@@ -781,6 +795,18 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             cohort_z = pm.Normal("cohort_z", mu=0.0, sigma=1.0, shape=len(cohorts))
             beta_cohort = pm.Deterministic("beta_cohort", cohort_sd * cohort_z)
             logit = logit + beta_cohort[cohort_index]
+
+        if config.nugget:
+            # Non-centred, like every other hierarchical term here (Neal's funnel).
+            #
+            # Note this competes with the beta-binomial `concentration`: both absorb
+            # per-observation deviation, one on the latent scale and one on the count scale. They
+            # are not the same — the nugget is constant on the logit scale while the beta-binomial
+            # widens with n — but they overlap enough that fitting both may simply trade off.
+            # `likelihood="binomial"` with a nugget is the arm that tests the nugget alone.
+            nugget_sd = pm.HalfNormal("nugget_sd", sigma=1.0)
+            nugget_z = pm.Normal("nugget_z", mu=0.0, sigma=1.0, shape=len(observations))
+            logit = logit + nugget_sd * nugget_z
 
         p = pm.Deterministic("p", pm.math.invlogit(logit))
 
