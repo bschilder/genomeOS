@@ -50,9 +50,11 @@ def main() -> None:
 
     args.out.mkdir(parents=True, exist_ok=True)
     summary: dict[str, dict] = {}
-    for strategy in ("spatial", "random"):
+    for strategy in ("spatial", "grouped", "random"):
         # Spatial first: it is the honest test, so if the run is cut short it is the half worth
         # having. A previous run wrote nothing at all because results were only saved at the end.
+        # `random` goes last because it is the one whose numbers describe a differently
+        # identified model — see the interpretation block and #127.
         result = cross_validate(observations, config, args.n_folds, strategy)
         print(f"\n{result}")
         result.summary().to_csv(args.out / f"crossval_{strategy}.csv", index=False)
@@ -70,10 +72,14 @@ def main() -> None:
             "log_score": result._mean("log_score"),
             "baseline_log_score": result._mean("baseline_log_score"),
             "skill": result.skill,
+            # Carried into the summary so the confound is auditable from the artifact and not
+            # only from stdout (#127).
+            "studies_split": result.studies_split,
+            "multi_site_studies": result.multi_site_studies,
         }
 
     (args.out / "crossval_summary.json").write_text(json.dumps(summary, indent=2))
-    spatial, random = summary["spatial"], summary["random"]
+    spatial, grouped, random = summary["spatial"], summary["grouped"], summary["random"]
     print("\n=== interpretation ===")
     for strategy, block in summary.items():
         if block["folds_scored"] == 0:
@@ -83,13 +89,24 @@ def main() -> None:
                 f"{strategy}: {block['folds_scored']}/{block['folds_attempted']} folds scored; "
                 f"{len(block['folds_failed'])} excluded for non-convergence"
             )
+    for name, block in (("spatial", spatial), ("grouped", grouped), ("random", random)):
+        if block["multi_site_studies"]:
+            share = block["studies_split"] / block["multi_site_studies"]
+            print(
+                f"multi-site studies split, {name:7s}: "
+                f"{block['studies_split']}/{block['multi_site_studies']} ({share:.0%})"
+            )
     print(f"skill over baseline, spatial folds : {spatial['skill']:+.3f}")
+    print(f"skill over baseline, grouped folds : {grouped['skill']:+.3f}")
     print(f"skill over baseline, random folds  : {random['skill']:+.3f}")
+    # Measured against `grouped`, not `random`. Both leak neighbours across the split; only
+    # `random` also shatters studies, so a spatial-vs-random gap mixes spatial autocorrelation
+    # with a loss of cohort identifiability and cannot be attributed to either alone (#127).
     print(
         "autocorrelation share of apparent skill: "
-        f"{1 - spatial['skill'] / random['skill']:.0%}"
-        if random["skill"] > 0
-        else "baseline not beaten on random folds"
+        f"{1 - spatial['skill'] / grouped['skill']:.0%}  (spatial vs grouped)"
+        if grouped["skill"] > 0
+        else "baseline not beaten on grouped folds"
     )
     print(
         f"95% predictive coverage, spatial   : {spatial['coverage_95_predictive']:.2f} "

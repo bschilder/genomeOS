@@ -11,6 +11,22 @@ a randomly held-out survey usually has a training survey a few kilometres away a
 regions asks the real question. Both are computed, because the *gap* between them quantifies how
 much apparent skill is autocorrelation rather than signal.
 
+**That gap is only interpretable if both strategies leave the model identifiable, and ``random``
+does not** (#127). ``cohort_id`` is the contributing study, and a study effect is identified by
+*within-study replication*: the sites a study contributes to more than one place. A random split
+scatters those sites across folds, so in training the study becomes a singleton — one
+observation, one level — at which point ``cohort_sd * cohort_z`` and the beta-binomial
+``concentration`` describe the same single residual and are not jointly identifiable. Measured on
+the MAP HbS corpus (1,071 surveys, 419 studies, 143 of them multi-site), random folds split
+135/143 (94%) of multi-site studies against 7/143 (5%) for spatial, and 3 of 5 random folds
+failed to converge against 1 of 5 spatial. So the spatial-versus-random difference confounds
+spatial leakage with a loss of identifiability, and neither number means what #109 reads it as.
+
+``grouped`` is the fold strategy that answers the question cleanly: whole studies are assigned to
+folds, so no study is ever split and the cohort term stays identifiable in every training set.
+The split counts are reported for **every** strategy, so the confound is visible rather than
+inferred.
+
 **Calibration is the headline, not error.** §4's defence against manufactured clines rests on the
 uncertainty being real. A model with small error and 60% coverage of its own 95% intervals is
 worse than useless here: every credible interval on the published map would be a false claim.
@@ -41,7 +57,8 @@ import pandas as pd
 from genomeos.surfaces.fit import ConvergenceError, FitConfig, fit_surface, to_unit_sphere
 
 SEED = 42
-FOLD_STRATEGIES: tuple[str, ...] = ("spatial", "random")
+#: ``grouped`` is the identifiability-preserving one; see the module docstring and #127.
+FOLD_STRATEGIES: tuple[str, ...] = ("spatial", "random", "grouped")
 
 
 @dataclass(frozen=True)
@@ -86,6 +103,11 @@ class CrossValidation:
     strategy: str
     folds: list[FoldResult] = field(repr=False)
     failures: list[FoldFailure] = field(default_factory=list, repr=False)
+    #: Multi-site studies this split shatters, and how many there were (#127). ``None`` means
+    #: *not computed*, never "none were split" — a zero here is a measurement and has to be
+    #: earned, so `cross_validate` always sets it and `__str__` stays silent when it is absent.
+    studies_split: int | None = None
+    multi_site_studies: int | None = None
 
     @property
     def n_attempted(self) -> int:
@@ -109,6 +131,18 @@ class CrossValidation:
         header = f"{self.strategy} cross-validation — {len(self.folds)}/{self.n_attempted} folds scored"
         if self.failures:
             header += f"  ({len(self.failures)} did not converge)"
+        if self.studies_split is not None and self.multi_site_studies:
+            share = self.studies_split / self.multi_site_studies
+            header += (
+                f"\n  multi-site studies split  : {self.studies_split}/{self.multi_site_studies}"
+                f"  ({share:.0%})"
+            )
+            if share > 0.5:
+                # Not a warning about tidiness: past roughly half, most training sets have lost
+                # the within-study replication the cohort term is identified by, so the metrics
+                # below describe a differently-identified model and cannot be compared with
+                # another strategy's (#127).
+                header += "  <- cohort term largely unidentifiable; see #127"
         if not self.folds:
             return header + "\n  no fold converged; nothing to report"
         return "\n".join(
@@ -130,6 +164,50 @@ class CrossValidation:
         )
 
 
+def _grouped_folds(cohort_id: pd.Series, n_folds: int) -> np.ndarray:
+    """Assign whole cohorts to folds, largest first, each to the currently emptiest fold.
+
+    This is what `sklearn.model_selection.GroupKFold` does, written out rather than taken as a
+    dependency for one greedy loop. Deterministic and seedless by construction: the ordering is
+    by cohort size, so there is nothing to randomise and no seed to disagree about.
+
+    Balancing by *observation* count rather than cohort count matters — studies are very uneven
+    (the MAP corpus has 419 studies over 1,071 surveys), so assigning cohorts round-robin would
+    leave folds of wildly different sizes and make the per-fold metrics incomparable.
+    """
+    counts = cohort_id.value_counts()  # descending by construction
+    if len(counts) < n_folds:
+        raise ValueError(
+            f"{len(counts)} cohorts cannot fill {n_folds} grouped folds. Grouped folds assign "
+            f"whole studies, so there must be at least as many studies as folds; reduce n_folds "
+            f"or use another strategy."
+        )
+    load = np.zeros(n_folds, dtype=int)
+    assignment: dict[object, int] = {}
+    for cohort, size in counts.items():
+        target = int(np.argmin(load))
+        assignment[cohort] = target
+        load[target] += int(size)
+    return cohort_id.map(assignment).to_numpy()
+
+
+def studies_split_across_folds(
+    cohort_id: object, folds: np.ndarray
+) -> tuple[int, int]:
+    """``(split, multi_site)`` — how many multi-site studies this split shatters (#127).
+
+    A study contributing one observation cannot be split and carries no within-study contrast
+    either way, so only multi-site studies are counted. Reported rather than asserted: it is the
+    number that shows whether a fold strategy has quietly destroyed the cohort term's
+    identifiability, and it is the difference between "random folds score worse" and "random
+    folds score a different model".
+    """
+    frame = pd.DataFrame({"cohort": np.asarray(cohort_id), "fold": np.asarray(folds)})
+    per_study = frame.groupby("cohort")["fold"].agg(["nunique", "size"])
+    multi_site = per_study[per_study["size"] > 1]
+    return int((multi_site["nunique"] > 1).sum()), int(len(multi_site))
+
+
 def make_folds(
     observations: pd.DataFrame,
     n_folds: int = 5,
@@ -138,8 +216,11 @@ def make_folds(
 ) -> np.ndarray:
     """Fold index per observation.
 
-    ``spatial`` clusters locations so each fold is a contiguous region — the honest test.
-    ``random`` shuffles rows, which leaks neighbours between train and test.
+    ``spatial`` clusters locations so each fold is a contiguous region — the honest test of
+    spatial skill. ``random`` shuffles rows, which leaks neighbours between train and test.
+    ``grouped`` assigns whole studies, so no study is split and the cohort term stays
+    identifiable in training (#127); it leaks neighbours exactly as ``random`` does, which is
+    the point — the two differ *only* in whether studies survive intact.
     """
     if strategy not in FOLD_STRATEGIES:
         raise ValueError(f"unknown strategy {strategy!r}; expected one of {FOLD_STRATEGIES}")
@@ -149,6 +230,8 @@ def make_folds(
     rng = np.random.default_rng(seed)
     if strategy == "random":
         return rng.permutation(len(observations)) % n_folds
+    if strategy == "grouped":
+        return _grouped_folds(observations["cohort_id"], n_folds)
 
     from scipy.cluster.vq import kmeans2
 
@@ -179,6 +262,10 @@ def cross_validate(
     # M<<N guard against the *fold* size rather than the full dataset.
     folds = make_folds(observations, n_folds, strategy, seed)
     observations = observations.reset_index(drop=True)
+    # Computed for every strategy, not only `grouped`: the point is to make the confound
+    # visible wherever it exists, so a reader can tell a fold strategy that lost identifiability
+    # from one that merely scored badly (#127).
+    split, multi_site = studies_split_across_folds(observations["cohort_id"], folds)
 
     results: list[FoldResult] = []
     failures: list[FoldFailure] = []
@@ -234,4 +321,10 @@ def cross_validate(
                 baseline_log_score=_log_score(ac, an, np.full_like(observed, baseline_p)),
             )
         )
-    return CrossValidation(strategy=strategy, folds=results, failures=failures)
+    return CrossValidation(
+        strategy=strategy,
+        folds=results,
+        failures=failures,
+        studies_split=split,
+        multi_site_studies=multi_site,
+    )
