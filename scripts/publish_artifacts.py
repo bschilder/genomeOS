@@ -3,6 +3,10 @@
     python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
         --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv
 
+    python scripts/publish_artifacts.py --fits data/store/screen --out data/store/artifacts \
+        --afnd data/raw/afnd_frequencies.tsv --afnd-populations data/raw/afnd_populations.tsv \
+        --data-version afnd-2026-08
+
 Reads the fits `build_surfaces.py` saved and writes the immutable parquet each variant is meant to
 be cited as. Separated from fitting on purpose: fitting is expensive and environment-coupled,
 publishing is cheap and must be repeatable, and a figure or a national rollup should read the
@@ -17,7 +21,7 @@ from pathlib import Path
 import h3
 import numpy as np
 
-from genomeos.observations.sources import map_g6pd, map_surveys
+from genomeos.observations.sources import afnd_frequencies, map_g6pd, map_surveys
 from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish
 from genomeos.surfaces.fit import load_fit
 from genomeos.viz.basemap import h3_land_cells
@@ -31,6 +35,11 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--hbs", type=Path)
     ap.add_argument("--g6pd", type=Path)
+    # AFND holds one file per corpus rather than per variant, so publishing it means publishing
+    # every allele the adapter retains, not one named layer.
+    ap.add_argument("--afnd", type=Path, help="AFND frequency table; publishes every fit found")
+    ap.add_argument("--afnd-populations", type=Path)
+    ap.add_argument("--min-populations", type=int, default=30)
     ap.add_argument("--h3-res", type=int, default=3)
     ap.add_argument("--model-version", default="v1")
     ap.add_argument("--data-version", default="map-2026-08")
@@ -42,12 +51,31 @@ def main() -> None:
     lat, lon = centres[:, 0], centres[:, 1]
     print(f"H3 res {args.h3_res}: {len(cells)} land cells")
 
+    jobs: list[tuple[str, object]] = []
     for layer, loader in LAYERS.items():
         path = getattr(args, layer)
         if path is None:
             continue
         observations, _ = loader(path, args.data_version)
-        variant_id = str(observations["variant_id"].iloc[0])
+        jobs.append((str(observations["variant_id"].iloc[0]), observations))
+
+    if args.afnd:
+        if not args.afnd_populations:
+            raise SystemExit("--afnd needs --afnd-populations")
+        corpus, report = afnd_frequencies.load(
+            args.afnd, args.afnd_populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        # Publish every allele that has a fit on disk. Which alleles those are is decided by
+        # whatever sweep produced `--fits`, not here, so this stays a publishing step rather than
+        # quietly becoming a selection step.
+        for variant_id, rows in corpus.groupby("variant_id", sort=True):
+            if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
+                jobs.append((str(variant_id), rows.reset_index(drop=True)))
+
+    print(f"publishing {len(jobs)} variants")
+    for variant_id, observations in jobs:
         stem = variant_id.replace(":", "__")
         fit_path = args.fits / f"{stem}.fit.pkl"
         if not fit_path.exists():

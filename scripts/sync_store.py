@@ -61,7 +61,7 @@ SYNCED: tuple[tuple[str, str], ...] = (
 )
 
 #: Never synced. See the module docstring.
-EXCLUDED = ("data/raw/afnd_cache",)
+EXCLUDED = ("data/raw/afnd_cache", "data/raw/afnd_freq_cache")
 
 
 def _api():

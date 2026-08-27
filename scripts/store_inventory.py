@@ -25,7 +25,11 @@ from pathlib import Path
 
 #: Directories that hold many small files whose individual hashes are noise. They are summarised
 #: by count and total size rather than enumerated, so the inventory stays readable.
-SUMMARISE_ONLY = ("afnd_cache",)
+#: Both AFND page caches. `afnd_freq_cache` is listed separately because it was added by
+#: `fetch_afnd_frequencies.py` after this constant was written, and until it was named here its
+#: 544 cached HTML pages were hashed individually into the inventory — an inventory of the store
+#: should describe the store, not the scraper's scratch space.
+SUMMARISE_ONLY = ("afnd_cache", "afnd_freq_cache")
 
 #: Anything larger than this is hashed in streamed chunks rather than read whole.
 CHUNK = 1 << 20
