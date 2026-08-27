@@ -57,6 +57,10 @@ SYNCED: tuple[tuple[str, str], ...] = (
     # the fitted range, observation count and inducing-point budget per allele, so the summary
     # survives even if the pickles are pruned later.
     ("data/store/screen", "store/screen"),
+    # The fits behind the published v2 artifacts. Kept separate from `screen` because the two
+    # were fitted on different corpora — `screen` predates the donor-registry refusal (#141) and
+    # `screen_v2` follows it — and a fit is only interpretable against the data that produced it.
+    ("data/store/screen_v2", "store/screen_v2"),
     ("data/store/surfaces", "store/surfaces"),
 )
 

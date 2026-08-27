@@ -37,6 +37,11 @@ from genomeos.surfaces.mask import MaskConfig, classify_support
 #: does not understand rather than silently misreading one.
 ARTIFACT_FORMAT = 1
 
+#: The quantity a cell value carries. `allele_frequency` counts chromosomes; `carrier_frequency`
+#: counts individuals and comes from copy-number-variable genes such as KIR, where there is no
+#: diploid genotype to count alleles from (#133).
+MEASUREMENTS: tuple[str, ...] = ("allele_frequency", "carrier_frequency")
+
 #: §6's per-cell columns, in order.
 ARTIFACT_COLUMNS: tuple[str, ...] = (
     "h3_index",
@@ -82,7 +87,19 @@ class ArtifactManifest:
     lengthscale_sigma: float
     n_observations: int
     support_counts: dict[str, int]
+    #: What the per-cell numbers mean. Required, with no default: an artifact holding carrier
+    #: frequencies over individuals and one holding allele frequencies over chromosomes are
+    #: indistinguishable by inspection, and a consumer that averages across both is wrong in a way
+    #: nothing downstream can detect (#133). A publisher that cannot say which it holds is
+    #: incomplete, not ready to publish.
+    measurement: str
     artifact_format: int = ARTIFACT_FORMAT
+
+    def __post_init__(self) -> None:
+        if self.measurement not in MEASUREMENTS:
+            raise ValueError(
+                f"unknown measurement {self.measurement!r}; expected one of {MEASUREMENTS}"
+            )
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
