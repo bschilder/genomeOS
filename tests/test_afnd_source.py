@@ -27,6 +27,10 @@ def loaded() -> tuple[pd.DataFrame, pd.DataFrame, afnd.RegistryReport]:
     return afnd.load(FIXTURE, registry_version="0.1.0")
 
 
+def _loaded():
+    return afnd.load(FIXTURE, registry_version="0.1.0")
+
+
 def _row(populations: pd.DataFrame, pop_id: str) -> pd.Series:
     return populations.set_index("population_id").loc[pop_id]
 
@@ -106,20 +110,34 @@ def test_precision_radius_shrinks_toward_the_poles():
     assert equator == pytest.approx(0.5 * math.hypot(111.12, 111.12), rel=1e-3)
 
 
-def test_unknown_settlement_class_is_refused_not_defaulted(loaded):
-    """§6: uncertainty_radius_km has no default, so an unplaced population is refused."""
-    populations, _, report = loaded
-    assert "afnd-1500" not in set(populations["population_id"])
-    assert report.refusals["no_sampling_area"] == 1
+def test_unknown_settlement_class_takes_the_widest_extent_not_a_refusal():
+    """529 of AFND's 1,821 populations state no settlement class, and refusing them discarded 29%
+    of the corpus over one metadata field while their coordinates were perfectly good.
+
+    This is not the fabricated radius §6 forbids: it is the **widest class in AFND's own stated
+    vocabulary**, chosen because an unstated settlement type could genuinely be any of them and
+    the widest is the only choice that cannot understate. §7 places each population as a disc, so
+    erring coarse makes it less influential rather than wrongly precise — the same reasoning
+    applied to MAP's administrative centroids.
+    """
+    populations, _, _ = _loaded()
+    row = _row(populations, "afnd-1500")
+    assert row["uncertainty_radius_km"] == afnd.UNKNOWN_SETTLEMENT_RADIUS_KM
+    assert afnd.UNKNOWN_SETTLEMENT_RADIUS_KM == max(afnd.SAMPLING_AREA_RADIUS_KM.values())
 
 
-def test_unrecorded_ascertainment_is_refused(loaded):
-    """§7.1 gives sampling_design no default, so "Other" may not become `convenience`."""
-    populations, _, report = loaded
-    assert "afnd-9004" not in set(populations["population_id"])
-    assert report.refusals["unmappable_ascertainment"] == 1
-    assert afnd.sampling_design_for("Other") is None
-    assert afnd.sampling_design_for("") is None
+def test_unrecorded_ascertainment_is_counted_not_refused_at_the_registry():
+    """A population must not be dropped from the *registry* over a field the registry never stores.
+
+    `POPULATIONS_SCHEMA` has no ascertainment columns — they belong to `OBSERVATIONS_SCHEMA` at
+    P1 — so refusing here cost 160 populations for nothing. The question is real and is enforced
+    where it applies: `sampling_design_for` still returns None for an unmappable source, and P1
+    must refuse that population's *observations* rather than guess a design.
+    """
+    populations, _, report = _loaded()
+    assert "afnd-9004" in set(populations["population_id"])
+    assert report.unmapped_ascertainment >= 1
+    assert afnd.sampling_design_for("Other") is None, "P1's guard must still hold"
 
 
 def test_unreadable_coordinate_and_missing_accession_are_refused(loaded):
@@ -134,7 +152,7 @@ def test_every_input_row_is_either_retained_or_counted_as_a_refusal(loaded):
     """§12: rows are refused with a stated reason, never silently dropped."""
     _, _, report = loaded
     assert report.total == 9
-    assert report.retained == 5
+    assert report.retained == 7
     assert report.retained + sum(report.refusals.values()) == report.total
     assert set(report.refusals) <= set(afnd.REFUSAL_REASONS)
     assert "refused" in str(report)
@@ -179,7 +197,9 @@ def test_entries_carry_a_biocultural_notice_and_a_resolvable_provenance(loaded):
     assert populations["biocultural_notice"].str.contains("CARE Principles").all()
     peru = _row(populations, "afnd-1986")
     assert peru["provenance"].startswith(afnd.PROVENANCE_DOI)
-    assert "pop_id=1986" in peru["provenance"]
+    # `pop_name` is the accession parameter: AFND's public navigation keys on the name,
+    # not the numeric id, and that is the key the frequency redistributions share.
+    assert "pop_name=1986" in peru["provenance"]
 
 
 def test_missing_required_column_is_a_hard_error(tmp_path):

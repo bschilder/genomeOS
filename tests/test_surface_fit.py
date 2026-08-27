@@ -10,8 +10,11 @@ import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 from genomeos.surfaces.fit import (
+    EARTH_RADIUS_KM,
+    MAX_LENGTHSCALE_ANCHOR_KM,
     ConvergenceError,
     FitConfig,
+    derive_lengthscale_prior,
     fit_surface,
     h3_inducing_points,
     inducing_points,
@@ -364,6 +367,77 @@ def test_the_lengthscale_prior_is_configurable_and_defaults_unchanged():
         FitConfig(lengthscale_sigma=0.0)
 
 
+def test_a_cohort_per_observation_is_not_estimated_as_a_cohort_effect():
+    """One cohort level per observation is not the study-level effect §7.1d wants.
+
+    It is an observation-level overdispersion term, competing with the beta-binomial
+    `concentration` to explain the same residual and not jointly identifiable with it. Worse, an
+    unidentified per-observation term is free to absorb the spatial signal the GP exists to
+    explain. Screening HLA alleles from AFND — which publishes one study per population, so
+    `cohort_id == population_id` — `cohort_sd` was the worst-mixing parameter in four of five
+    convergence failures.
+    """
+    obs = _observations(n=30)
+    obs["cohort_id"] = [f"c{i}" for i in range(len(obs))]  # one cohort per observation
+    with pytest.warns(UserWarning, match="within-cohort replication"):
+        fit = fit_surface(obs, FitConfig(draws=400, tune=600, chains=4))
+    assert fit.beta_cohort_applied is False
+    assert "cohort_sd" not in fit.idata.posterior
+
+
+def test_grouped_cohorts_are_still_estimated():
+    """The term is dropped only when it cannot be identified, not in general: MAP data has 419
+    cohorts for 1,071 surveys and the effect is real there."""
+    fit = fit_surface(_observations(n=30), FAST_CONFIG)
+    assert fit.beta_cohort_applied is True
+    assert "cohort_sd" in fit.idata.posterior
+
+
+def test_the_lengthscale_prior_is_derived_from_the_data_by_default():
+    """Hand-setting this does not survive 767 alleles (#122).
+
+    The anchors come from where the observations are: three nearest-neighbour spacings below
+    (fewer cannot show correlation decaying at all) and the domain extent over 2*K above (a
+    Matern-5/2 decorrelates at ~2*rho, so this asks the field to vary at least K times across the
+    data). Verified against real corpora: HbS 680 km and G6PD 547 km fall inside their derived
+    priors, while the degenerate HLA fits at 3,143 and 4,111 km fall above theirs.
+    """
+    assert FitConfig().lengthscale_prior == "derived"
+    obs = _observations(n=40)
+    mu, sigma, low, high = derive_lengthscale_prior(obs["lat"].to_numpy(), obs["lon"].to_numpy())
+    assert 0.0 < low < high, "the anchors must bracket, in order"
+    assert sigma > 0.0
+    median_km = float(np.exp(mu) * EARTH_RADIUS_KM)
+    assert low < median_km < high, "the prior centres between its own anchors"
+
+
+def test_sparse_data_cannot_drive_the_prior_past_a_physical_ceiling():
+    """The anchors are read off the data, and sparse data misreads them.
+
+    Five points spread across 30 degrees put the median nearest-neighbour spacing near 1,500 km,
+    which drove an earlier version of this to a 47,000 km range — longer than the planet.
+    `MIN_OBSERVATIONS` in the batch is 5, so that case is reachable rather than hypothetical.
+    """
+    lat = np.array([0.0, 5.0, 10.0, -5.0, 20.0])
+    lon = np.array([0.0, 5.0, -10.0, 15.0, 30.0])
+    _, _, low, high = derive_lengthscale_prior(lat, lon)
+    assert high <= MAX_LENGTHSCALE_ANCHOR_KM
+    assert low < high
+
+
+def test_a_fixed_prior_remains_available_for_reproducing_a_published_surface():
+    """An artifact is only interpretable against the prior that produced it, and a derived prior
+    differs per variant — so the fixed path has to stay reachable."""
+    config = FitConfig(lengthscale_prior="fixed", lengthscale_mu=-2.0, lengthscale_sigma=0.4)
+    assert config.lengthscale_prior == "fixed"
+    with pytest.raises(ValueError, match="unknown lengthscale_prior"):
+        FitConfig(lengthscale_prior="vibes")
+
+
+def test_the_fit_records_the_prior_it_was_given(fit):
+    """A fitted range means nothing without the prior behind it."""
+    low, high = fit.lengthscale_prior_km
+    assert low < fit.correlation_range_km < high or np.isnan(low)
 def test_target_accept_is_configurable_and_defaults_unchanged():
     """Raising it is opt-in, so the surfaces already published are untouched (#111).
 

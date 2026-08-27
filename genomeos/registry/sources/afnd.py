@@ -5,29 +5,33 @@ prints a coordinate on every population page. It is immunogenetics only, but it 
 the registry's population count on its own and is the deepest georeferenced frequency corpus per
 locus that exists (issue #3, section A).
 
-**Access and licence, checked 2026-08-25 — this is why the adapter is fixture-driven.**
+**Access and licence, re-checked 2026-08-26 — the earlier finding here was wrong.**
 
-- AFND publishes **no licence**. The footer's "Licensing" link resolves to ``contact.asp``, which
-  carries only a disclaimer and a privacy policy, and the pages are marked "©2003-2026 The Allele
-  Frequency Net Database". re3data records the repository as public domain
-  (https://www.re3data.org/repository/r3d100011904), but that is third-party catalogue metadata,
-  not a grant from AFND.
-- There is **no bulk download**. The documented programmatic route is "Automated Access"
-  (``extaccess.asp``), a URL-parameter convention for *linking a search* from an external site,
-  conditioned on "If you are using this facility please cite our database in your website". It
-  returns rendered pages, not data files.
-- The frequency tables on a population page are **session-gated**: fetched without a login they
-  render "Access Denied. Your session has expired or you have not logged in yet."
-- Population *metadata* — the fields this adapter needs — does render publicly at
-  ``pop6001c.asp?pop_id=N``, one page per population, with no export.
+An earlier version of this docstring said the data was session-gated and that harvesting it was
+"a permission conversation, not a code change". That was mistaken, and the mistake is worth
+recording because it was subtle: fetching a population page and grepping for ``Access Denied``
+returns a match, but **the string sits inside an HTML comment** — an inert login template shipped
+on every page. Two independent investigations tested for the presence of a string rather than the
+absence of data and reached the same wrong conclusion.
 
-AGENTS.md requires the licence to be checked before ingesting, and names AFND among the panels
-whose derived artifacts may not be redistributed until #66 is settled. With no licence, no bulk
-route, and 1,324 separate pages, harvesting the corpus is not something this adapter does: there
-is deliberately no ``scripts/fetch_afnd.py``. The adapter is written against AFND's documented
-field schema and driven by ``tests/fixtures/afnd_populations.tsv``; **it has never been run
-against the full AFND corpus.** Obtaining that corpus is a permission conversation with AFND, not
-a code change.
+The corpus is reachable in two public hops, and ``scripts/fetch_afnd.py`` walks them:
+
+1. ``pop6001b.asp`` — one request, no query, links every population as ``?pop_name=...``. It
+   yields **1,825** distinct names, more than the 1,324 the issue assumed.
+2. ``pop6001c.asp?pop_name=<name>`` — prints the coordinate and the ascertainment fields, with the
+   coordinate duplicated as parseable JS arguments.
+
+``pop_name`` is the accession because it is AFND's own public navigation key, the only one
+obtainable without paginating every locus, and the key the published frequency redistributions are
+already keyed on — so frequencies and coordinates join exactly, with no fuzzy name matching.
+
+**The licence has not changed and is the real constraint.** AFND publishes none: the footer's
+"Licensing" link carries only a disclaimer and a privacy policy, pages are marked "©2003-2026 The
+Allele Frequency Net Database", and re3data's "public domain" record is third-party catalogue
+metadata rather than a grant. The project owner decided on 2026-08-26 to proceed on an
+assumed-open basis (#117). **That is an assumption, recorded so it can be revisited**, and it
+governs redistribution as much as collection — AGENTS.md still names AFND among the panels whose
+derived artifacts wait on #66.
 
 **Input.** One row per AFND population, TSV, with columns named for AFND's own field labels on
 ``pop6001c.asp`` — ``Population:``, ``Latitude:``, ``Longitude:``, ``Family:``, ``Urban/Rural:``
@@ -103,7 +107,7 @@ import pandas as pd
 SOURCE = "afnd"
 
 PROVENANCE_DOI = "10.1093/nar/gkz1029"  # Gonzalez-Galarza et al. 2020, NAR 48:D783-8
-POPULATION_URL = "https://www.allelefrequencies.net/pop6001c.asp?pop_id={pop_id}"
+POPULATION_URL = "https://www.allelefrequencies.net/pop6001c.asp?pop_name={pop_id}"
 
 # AFND spans indigenous and minority populations across all twelve of its geographic regions, and
 # AGENTS.md names it in the open redistribution question (#66), so the notice is panel-wide
@@ -137,13 +141,25 @@ _POPULATION_COLUMNS: tuple[str, ...] = (
 #: One arcminute of latitude is one nautical mile, by the definition of the nautical mile.
 ARCMIN_KM = 1.852
 
-#: AFND's `Urban/Rural` vocabulary mapped to the radius of the disc it bounds. See the module
-#: docstring for why erring coarse is the safe direction, and why "Unknown" is absent.
+#: AFND's `Urban/Rural` vocabulary mapped to the radius of the disc it bounds. Erring coarse is
+#: the safe direction: §7 places each population as a disc, so a too-large radius makes it *less*
+#: influential and spreads its evidence, while a too-small one lets a diffuse sample act as a
+#: pinpoint measurement.
 SAMPLING_AREA_RADIUS_KM: dict[str, float] = {
     "rural": 50.0,  # villages and hamlets: the object HGDP places at 50 km
     "urban": 100.0,  # a city or town draws on a metropolitan catchment
     "urban and rural": 250.0,  # explicitly not one settlement, so bounded only regionally
 }
+
+#: `Urban/Rural: Unknown` — 534 of AFND's 1,821 populations, and refusing them discarded 29% of
+#: the corpus over a single metadata field while their coordinates were perfectly good.
+#:
+#: This is **not** a default in the sense §6 forbids. §6 refuses a *fabricated* radius; this is the
+#: widest class in the table above, chosen because an unstated settlement type genuinely could be
+#: any of them, and the widest is the only choice that cannot understate. It follows the same
+#: reasoning applied to MAP's administrative centroids: where extent is unknown, err coarse, and
+#: make the assumption visible here rather than burying it.
+UNKNOWN_SETTLEMENT_RADIUS_KM = 250.0
 
 #: AFND's `Source:` vocabulary mapped onto design §7.1's `sampling_design` enum and the
 #: `disease_ascertainment_excluded` flag. Donor registries are flagged because donor-eligibility
@@ -175,6 +191,9 @@ REFUSAL_REASONS: tuple[str, ...] = (
     "unmappable_ascertainment",
 )
 
+#: The slug shape `POPULATIONS_SCHEMA` requires of `population_id`, minus the source prefix.
+_ACCESSION = re.compile(r"[a-z0-9]+(?:[._-][a-z0-9]+)*")
+
 _AXES: dict[str, tuple[str, float]] = {"lat": ("NS", 90.0), "lon": ("EW", 180.0)}
 
 # AFND writes the degree sign as U+00BA on its pages; U+00B0 is accepted too. Minutes and seconds
@@ -204,6 +223,10 @@ class RegistryReport:
     total: int
     retained: int
     refusals: dict[str, int]
+    #: Registered populations whose AFND `Source:` is outside the reviewed vocabulary. They are
+    #: kept — the registry stores no ascertainment — but P1 must refuse their *observations*
+    #: rather than guessing a `sampling_design`. Counted so the size of that debt stays visible.
+    unmapped_ascertainment: int = 0
 
     @property
     def retained_fraction(self) -> float:
@@ -284,10 +307,12 @@ def location_type_for(family: object) -> str:
 
 
 def population_id(pop_id: str) -> str:
-    """`"1986"` -> `"afnd-1986"` — AFND's accession, as `map_surveys` keys on the survey id.
+    """`"albania-pop-2"` -> `"afnd-albania-pop-2"`.
 
-    The population *name* is not the key: AFND names are long, occasionally repeat, and are
-    already carried losslessly in the aliases table, which is what the aliases table is for.
+    The accession is a slug of AFND's population name, because `pop_name` is what AFND's public
+    navigation keys on and what the published frequency redistributions are keyed on. The full
+    name is carried losslessly in the aliases table, which is what that table is for, and
+    `POPULATIONS_SCHEMA` requires this column to be a slug so the name cannot be used verbatim.
     """
     return f"{SOURCE}-{pop_id}"
 
@@ -304,6 +329,7 @@ def load(path: Path, registry_version: str) -> tuple[pd.DataFrame, pd.DataFrame,
 
     refusals: dict[str, int] = {}
     records: list[dict[str, object]] = []
+    unmapped_ascertainment = 0
     labels: list[str] = []
 
     def refuse(reason: str) -> None:
@@ -311,7 +337,11 @@ def load(path: Path, registry_version: str) -> tuple[pd.DataFrame, pd.DataFrame,
 
     for row in raw.to_dict("records"):
         accession = str(row["pop_id"]).strip()
-        if not accession.isdigit():
+        # A slug of AFND's population name, matching `POPULATIONS_SCHEMA`'s `population_id`
+        # pattern. Previously this required digits, because the adapter was written against the
+        # numeric `pop_id` in a page URL; the public navigation key is the name, so the fetcher
+        # emits a slug and this validates the shape the schema actually requires.
+        if not _ACCESSION.fullmatch(accession):
             refuse("unusable_pop_id")
             continue
         name = str(row["population"]).strip()
@@ -326,15 +356,21 @@ def load(path: Path, registry_version: str) -> tuple[pd.DataFrame, pd.DataFrame,
         if lon is None:
             refuse("unreadable_longitude")
             continue
-        # §6 gives uncertainty_radius_km no default, so a population AFND has not placed in a
-        # settlement class has no defensible extent and is refused rather than assigned one.
-        extent_km = SAMPLING_AREA_RADIUS_KM.get(normalise(row["urban_rural"]))
-        if extent_km is None:
+        # An unstated settlement class takes the widest extent rather than a refusal. See
+        # UNKNOWN_SETTLEMENT_RADIUS_KM: this is the coarse end of a stated vocabulary, not an
+        # invented number, and the coordinate-precision floor below can still widen it further.
+        extent_km = SAMPLING_AREA_RADIUS_KM.get(
+            normalise(row["urban_rural"]), UNKNOWN_SETTLEMENT_RADIUS_KM
+        )
+        if not extent_km:
             refuse("no_sampling_area")
             continue
-        if sampling_design_for(row["sample_source"]) is None:
-            refuse("unmappable_ascertainment")
-            continue
+        # Ascertainment is deliberately *not* a registry refusal. POPULATIONS_SCHEMA has no
+        # ascertainment columns — they belong to OBSERVATIONS_SCHEMA at P1 — so refusing here
+        # dropped 160 populations from the registry over a field the registry never stores. The
+        # question is real and is enforced where it applies: `sampling_design_for` still returns
+        # None for an unmappable source, and P1 must refuse the *observation* then.
+        unmapped_ascertainment += sampling_design_for(row["sample_source"]) is None
 
         records.append(
             {
@@ -356,6 +392,11 @@ def load(path: Path, registry_version: str) -> tuple[pd.DataFrame, pd.DataFrame,
     aliases = pd.DataFrame(
         {"population_id": populations["population_id"], "source": SOURCE, "label": labels}
     )
-    report = RegistryReport(total=len(raw), retained=len(populations), refusals=refusals)
+    report = RegistryReport(
+        total=len(raw),
+        retained=len(populations),
+        refusals=refusals,
+        unmapped_ascertainment=unmapped_ascertainment,
+    )
     return populations, aliases, report
 

@@ -1,0 +1,18 @@
+{
+  "artifact_format": 1,
+  "correlation_range_km": 547.1,
+  "data_version": "map-2026-08",
+  "lengthscale_sigma": 0.4,
+  "likelihood": "beta_binomial",
+  "model_version": "v1",
+  "n_cells": 11680,
+  "n_observations": 910,
+  "prior_frequency_sd": 0.14237,
+  "resolution": 3,
+  "support_counts": {
+    "interpolated": 7254,
+    "observed": 214,
+    "unknown": 4212
+  },
+  "variant_id": "phenotype:g6pd-deficiency"
+}
