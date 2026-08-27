@@ -49,7 +49,11 @@ SAMPLING_DESIGNS: tuple[str, ...] = (
 VARIANT_ID_PATTERN = (
     r"^(?:chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\d+-[ACGT]+-[ACGT]+"
     r"|phenotype:[a-z0-9][a-z0-9-]*"
-    r"|hla:[a-z0-9][a-z0-9._-]*)$"
+    # One namespace per immunogenetic gene family, not one `hla:` namespace for all of them.
+    # AFND ships KIR, MIC and cytokine data alongside HLA, and an id that says `hla:` for
+    # KIR2DL1 is a false provenance claim (#134). `cyt:` is reserved rather than used: cytokine
+    # rows are genotypes and this store holds allele counts, so they are refused at ingest (#133).
+    r"|(?:hla|kir|mic|cyt):[a-z0-9][a-z0-9._-]*)$"
 )
 
 # Registered via the extension API rather than written as inline lambdas. An anonymous
