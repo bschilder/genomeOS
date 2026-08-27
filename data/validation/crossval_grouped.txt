@@ -1,0 +1,9 @@
+grouped cross-validation — 5/5 folds scored
+  multi-site studies split  : 0/143  (0%)
+  predictive coverage  95% : 0.96  (target 0.95)  <- calibration
+  predictive coverage  50% : 0.62  (target 0.50)
+  latent-frequency cov 95% : 0.41  (not a calibration statistic; see #110)
+  MAE (allele frequency)   : 0.0285   baseline 0.0401
+  RMSE                     : 0.0400
+  log score                : -795.657   baseline -909.553
+  skill over baseline      : +113.895

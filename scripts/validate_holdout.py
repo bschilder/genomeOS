@@ -59,7 +59,9 @@ def main() -> None:
         print(f"\n{result}")
         result.summary().to_csv(args.out / f"crossval_{strategy}.csv", index=False)
         # Flush after each strategy rather than only at the end.
-        (args.out / f"crossval_{strategy}.json").write_text(str(result))
+        # `.txt`, not `.json`: this is the human-readable summary. The machine-readable
+        # one is `crossval_summary.json` at the end.
+        (args.out / f"crossval_{strategy}.txt").write_text(str(result))
         summary[strategy] = {
             "folds_scored": len(result.folds),
             "folds_attempted": result.n_attempted,

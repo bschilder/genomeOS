@@ -243,6 +243,10 @@ data/store/*
 # what gets a result off one laptop. The fits that produced them are ~100 MB each and stay local.
 !data/store/artifacts/
 !data/store/INVENTORY.json
+# The held-out validation results are the evidence for #109 and are ~4 KB. Same rule as the
+# artifacts: a number that lives only in one terminal is not a result anyone can check, and
+# these are what say the surface is calibrated near data and not calibrated away from it.
+!data/validation/
 # The harvested AFND population table is committed, unlike other fetched sources. The rule is
 # cost, not principle: MAP is one HTTP request and stays fetched-by-script, but this is 1,825
 # requests and about two hours. A pod re-scraping it spent 1.7 billed hours before fitting
