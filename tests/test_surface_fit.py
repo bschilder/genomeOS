@@ -1,5 +1,8 @@
 """Surface fit tests (design §7). Sampling is small and seeded; see FAST_CONFIG."""
 
+from dataclasses import replace
+from unittest import mock
+
 import numpy as np
 import pandas as pd
 import pandera.errors
@@ -435,3 +438,58 @@ def test_the_fit_records_the_prior_it_was_given(fit):
     """A fitted range means nothing without the prior behind it."""
     low, high = fit.lengthscale_prior_km
     assert low < fit.correlation_range_km < high or np.isnan(low)
+def test_target_accept_is_configurable_and_defaults_unchanged():
+    """Raising it is opt-in, so the surfaces already published are untouched (#111).
+
+    Cross-validation folds need a smaller step size than the full fit does — four of ten missed
+    the ESS floor of 200, at 61-143 — but a fold's need is not a reason to resample every
+    variant. The default asserted here is PyMC's own, so changing it later has to be deliberate
+    rather than a side effect.
+    """
+    assert FitConfig().target_accept == 0.8
+    assert FitConfig(target_accept=0.95).target_accept == 0.95
+
+
+@pytest.mark.parametrize("bad", [0.0, 1.0, -0.5, 1.2])
+def test_a_target_accept_outside_the_unit_interval_is_refused(bad):
+    with pytest.raises(ValueError, match="target_accept"):
+        FitConfig(target_accept=bad)
+
+
+def test_the_configured_sampler_options_are_the_ones_passed_to_pm_sample():
+    """Guards *our* side of the call only, and deliberately claims nothing more.
+
+    Mocking `pm.sample` can confirm what this module passes; it cannot confirm what PyMC then
+    does with it, and it would keep passing if PyMC changed underneath. That distinction is not
+    academic — reasoning from PyMC's source instead of measuring is exactly what produced the
+    wrong `chain_method` diagnosis in #120. `scripts/env_report.py` is what answers the other
+    half, by spying on `sample_jax_nuts` in whatever environment you actually have.
+
+    So: `nuts` is asserted because it is the non-deprecated channel on the pinned 6.3.1, not
+    because this test could tell if that stopped being true.
+    """
+    captured: dict[str, object] = {}
+
+    class _Reached(RuntimeError):
+        """Stops the fit as soon as the kwargs are in hand; sampling itself is not the point."""
+
+    def _capture(**kwargs):
+        captured.update(kwargs)
+        raise _Reached
+
+    with mock.patch("pymc.sample", side_effect=_capture), pytest.raises(_Reached):
+        fit_surface(_observations(n=20), FitConfig(target_accept=0.95, draws=5, tune=5))
+
+    assert captured["target_accept"] == 0.95
+    assert captured["nuts"] == {"chain_method": "vectorized"}
+
+
+def test_a_non_default_target_accept_still_produces_a_fit():
+    """The external numpyro path must accept the argument, not just PyMC's own sampler.
+
+    Deliberately the known-good `FAST_CONFIG` with one field changed, so a failure here is the
+    argument and not a sampling budget that was never enough in the first place.
+    """
+    config = replace(FAST_CONFIG, target_accept=0.95)
+    fit = fit_surface(_observations(), config)
+    assert fit.config.target_accept == 0.95

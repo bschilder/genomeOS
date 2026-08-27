@@ -15,6 +15,7 @@ from genomeos.validation.crossval import (
     FoldResult,
     cross_validate,
     make_folds,
+    studies_split_across_folds,
 )
 
 # n_inducing must respect the M<<N guard against the *fold* size, not the full dataset: each
@@ -74,6 +75,90 @@ def test_too_few_folds_is_refused(bad):
 def test_unknown_strategy_is_refused():
     with pytest.raises(ValueError, match="strategy"):
         make_folds(_observations(n=50), 3, "leave-one-country-out")
+
+
+# --- grouped folds and the identifiability confound (#127) ---
+
+
+def test_grouped_folds_never_split_a_study():
+    """The whole point of the strategy, stated as an invariant.
+
+    A study effect is identified by within-study replication. Split the study across the
+    train/test boundary and it becomes a singleton in training, where `cohort_sd * cohort_z` and
+    the beta-binomial `concentration` describe the same single residual and stop being jointly
+    identifiable. If this assertion ever fails, `grouped` has silently become `random`.
+    """
+    observations = _observations(n=90)
+    folds = make_folds(observations, 3, "grouped")
+    split, multi_site = studies_split_across_folds(observations["cohort_id"], folds)
+    assert multi_site > 0, "fixture must contain multi-site studies for this to mean anything"
+    assert split == 0
+
+
+def test_random_folds_shatter_studies_that_grouped_folds_keep_intact():
+    """The #127 contrast, on the same data: 135/143 vs 7/143 in the real corpus."""
+    observations = _observations(n=90)
+    random_split, multi_site = studies_split_across_folds(
+        observations["cohort_id"], make_folds(observations, 3, "random")
+    )
+    grouped_split, _ = studies_split_across_folds(
+        observations["cohort_id"], make_folds(observations, 3, "grouped")
+    )
+    assert random_split > grouped_split == 0
+    assert random_split == multi_site, "every multi-site study should be split by a random draw"
+
+
+def test_grouped_folds_need_no_seed_to_be_reproducible():
+    """Ordering is by cohort size, so there is nothing to randomise and no seed to disagree on."""
+    observations = _observations(n=80)
+    assert np.array_equal(
+        make_folds(observations, 4, "grouped", seed=1),
+        make_folds(observations, 4, "grouped", seed=999),
+    )
+
+
+def test_grouped_folds_balance_by_observation_not_by_study_count():
+    """Studies are very uneven, so round-robin over cohorts would give incomparable folds."""
+    observations = _observations(n=90)
+    folds = make_folds(observations, 3, "grouped")
+    sizes = np.array([int((folds == f).sum()) for f in sorted(set(folds))])
+    assert sizes.max() <= 2 * sizes.min(), f"folds are badly unbalanced: {sizes}"
+
+
+def test_grouped_folds_refuse_when_there_are_fewer_studies_than_folds():
+    """Whole studies cannot be spread across more folds than there are studies."""
+    observations = _observations(n=60)  # the fixture has 4 cohorts
+    with pytest.raises(ValueError, match="cohorts cannot fill"):
+        make_folds(observations, 5, "grouped")
+
+
+def test_a_single_site_study_is_not_counted_as_split():
+    """It cannot be split and carries no within-study contrast either way, so it is not evidence."""
+    cohort_id = ["solo", "pair", "pair"]
+    split, multi_site = studies_split_across_folds(cohort_id, np.array([0, 0, 1]))
+    assert (split, multi_site) == (1, 1)
+
+
+def test_split_counts_are_reported_in_the_summary():
+    result = CrossValidation("random", [_fold()], studies_split=135, multi_site_studies=143)
+    text = str(result)
+    assert "135/143" in text
+    assert "94%" in text
+
+
+def test_a_mostly_shattered_split_says_the_cohort_term_is_unidentifiable():
+    """Past roughly half, the metrics describe a differently-identified model (#127)."""
+    shattered = CrossValidation("random", [_fold()], studies_split=135, multi_site_studies=143)
+    intact = CrossValidation("grouped", [_fold()], studies_split=0, multi_site_studies=143)
+    assert "#127" in str(shattered)
+    assert "#127" not in str(intact)
+
+
+def test_uncomputed_split_counts_are_absent_rather_than_zero():
+    """A zero here is a measurement and has to be earned; `None` must not print as 'none split'."""
+    result = CrossValidation("spatial", [_fold()])
+    assert result.studies_split is None
+    assert "studies split" not in str(result)
 
 
 # --- scoring ---

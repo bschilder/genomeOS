@@ -8,7 +8,12 @@ version = "0.1.0"
 description = "Provenance-first atlas of human genetic variation"
 requires-python = ">=3.11"
 dependencies = [
-  "fastapi>=0.115,<0.120",
+  # `<1`, restored. This was the original bound and the deliberate one: FastAPI has stayed on 0.x
+  # for years, so the major-version guard belongs at 1 rather than at an arbitrary minor. #107
+  # narrowed it to `<0.120` while adding an unrelated read preview, with no mention of fastapi in
+  # its message or body — so 0.141.x was legal under the project's actual intent all along.
+  # Verified: the API tests pass on 0.119.1 and on 0.141.1.
+  "fastapi>=0.115,<1",
   "pydantic>=2.11,<3",
   "sqlalchemy>=2.0,<3",
   "uvicorn>=0.34,<1",
@@ -22,19 +27,23 @@ read = ["duckdb>=1.1"]
 # API container does not carry pyarrow/duckdb, which it never uses.
 atlas = [
   "pandera[pandas]>=0.23,<1",
-  "pandas>=2.2",
+  "pandas>=2.2,<4",
   "pyarrow>=17",
   "duckdb>=1.1",
-  "h3>=4.1",
+  "h3>=4.1,<5",
 ]
 # Surface inference (P2). Separate from [atlas] because PyMC/PyTensor is a large
 # dependency that only the offline fitting jobs need -- never the serving path (§5).
+# Upper bounds are deliberate, not defensive boilerplate. `pymc>=5.16` alone resolved to 6.3.1,
+# and PyMC changed how NUTS options are passed between 5.x and 6.x — enough for two contributors
+# following the documented install to disagree about what the code does while both being right
+# about their own environment. See `requirements.lock` and `scripts/env_report.py`.
 surfaces = [
-  "pymc>=5.16",
-  "arviz>=0.18",
+  "pymc>=5.16,<7",
+  "arviz>=0.18,<2",
   # JAX-compiled NUTS. Not optional in practice: the spherical HSGP is ~80x faster through it
   # than through PyTensor, and it is the same code path that runs on a GPU.
-  "numpyro>=0.15",
+  "numpyro>=0.15,<1",
 ]
 # Raster handling for the population denominators (P3, §9). Offline batch only.
 geo = [
