@@ -171,3 +171,51 @@ def test_kir_gene_presence_is_refused_but_kir_alleles_are_kept(tmp_path):
     obs, report = af.load(path, POPULATIONS, "test")
     assert set(obs["variant_id"]) == {"kir:3dl1-007"}
     assert report.refusals["kir_gene_presence_not_allele_frequency"] == 1
+
+
+def test_donor_registry_strata_are_refused(tmp_path):
+    """NMDP and DKMS sub-populations are ancestry strata, not places (#141).
+
+    All 21 NMDP strata share the registry's Maryland coordinate and all 15 DKMS strata share a
+    German one, and together the 37 carry 91% of the corpus's statistical weight against 905
+    genuinely geographic populations. A point-referenced surface cannot represent stratification,
+    so they are refused rather than relocated: "NMDP European Caucasian" is a blend of European
+    source populations that exists at no location in Europe.
+    """
+    path = _table(tmp_path, {
+        "group": ["hla"] * 3,
+        "gene": ["DQB1"] * 3,
+        "allele": ["DQB1*03:01"] * 3,
+        "population": [
+            "USA NMDP Chinese",
+            "Germany DKMS - German donors",
+            "Peru Lamas City Lama",
+        ],
+        "indivs_over_n": ["", "", ""],
+        "alleles_over_2n": ["0.2000", "0.1500", "0.1250"],
+        "n": ["199344", "3456066", "100"],
+    })
+    obs, report = af.load(path, POPULATIONS, "test")
+    # only the real population survives, and with it the weight that was drowning it
+    assert len(obs) == 1
+    assert report.refusals["donor_registry_ancestry_stratum"] == 2
+
+
+def test_the_registry_refusal_is_reported_before_missing_data(tmp_path):
+    """A registry stratum that also lacks a frequency is reported as a stratum.
+
+    Same reasoning as the gene-family refusals: a refusal list that misattributes rows to
+    "missing data" sends the reader looking for a scraping bug that does not exist.
+    """
+    path = _table(tmp_path, {
+        "group": ["hla", "hla"],
+        "gene": ["DQB1", "DQB1"],
+        "allele": ["DQB1*03:01", "DQB1*03:01"],
+        "population": ["USA NMDP Korean", "Peru Lamas City Lama"],
+        "indivs_over_n": ["", ""],
+        "alleles_over_2n": ["", "0.1250"],   # the registry row has no frequency either
+        "n": ["155168", "100"],
+    })
+    _, report = af.load(path, POPULATIONS, "test")
+    assert report.refusals["donor_registry_ancestry_stratum"] == 1
+    assert "no_frequency_reported" not in report.refusals
