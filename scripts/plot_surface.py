@@ -34,6 +34,8 @@ from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
 
 from genomeos.observations.sources import (  # noqa: E402
+    afnd_carriers,
+    afnd_cytokines,
     afnd_frequencies,
     map_g6pd,
     map_surveys,
@@ -76,16 +78,29 @@ _VALUE_LABEL = {
 }
 #: The source each layer is credited to in the figure caption. AFND surveys are not MAP surveys
 #: and captioning them as such would misattribute the data (§4 provenance).
-_LAYER_SOURCE = {"hbs": "MAP surveys", "g6pd": "MAP surveys", "afnd": "AFND populations"}
+_LAYER_SOURCE = {
+    "hbs": "MAP surveys",
+    "g6pd": "MAP surveys",
+    "afnd": "AFND populations",
+    "cyt": "AFND populations",
+    "kir": "AFND populations",
+}
 
 
-def hla_display_name(variant_id: str) -> str:
+def display_name(variant_id: str) -> str:
     """``hla:drb1-15-01`` -> ``HLA-DRB1*15:01``.
 
     AFND has 767 modelable alleles, so a hand-maintained title table is not an option; the name
     is reconstructed from the variant_id instead. Anything that is not an `hla:` id is returned
     unchanged rather than mangled.
     """
+    if variant_id.startswith("kir:"):
+        return f"KIR{variant_id[len('kir:'):].upper()}"
+    if variant_id.startswith("cyt:"):
+        # `cyt:il-6-174-g` -> `IL-6 -174 G`: gene, position, allele.
+        body = variant_id[len("cyt:") :]
+        *rest, allele = body.split("-")
+        return f"{'-'.join(rest).upper()} {allele.upper()}"
     if not variant_id.startswith("hla:"):
         return variant_id
     gene, _, fields = variant_id[len("hla:") :].partition("-")
@@ -105,7 +120,8 @@ def _haversine_km(lat1, lon1, lat2, lon2):
     return 2 * r * np.arcsin(np.sqrt(a))
 
 
-def _observation_markers(ax, obs, *, area_min=PRESENCE_AREA_MIN, area_max=PRESENCE_AREA_MAX) -> list:
+def _observation_markers(ax, obs, *, area_min=PRESENCE_AREA_MIN, area_max=PRESENCE_AREA_MAX,
+                         vmin=0.0, vmax=None) -> list:
     """Overlay the surveys, with presence and absence as different shapes.
 
     Same encoding as the observations figure and as Piel et al.'s Figure 1A. On a fitted surface
@@ -134,9 +150,15 @@ def _observation_markers(ax, obs, *, area_min=PRESENCE_AREA_MIN, area_max=PRESEN
     handles: list = []
     if present.any():
         f_present = frequency[present]
-        f_max = float(f_present.max())
+        # Markers share the fill's window, so a dot's size means what a cell's colour means. With
+        # the scale stretched to a narrow band, an observation below the band clips to the
+        # smallest marker and one above it to the largest — the same clipping the colourmap does.
+        low = float(vmin)
+        high = float(vmax) if vmax is not None else float(f_present.max())
+        width = high - low
         span = area_max - area_min
-        area = area_min + span * (f_present / f_max if f_max > 0 else 0.0)
+        scaled = (f_present - low) / width if width > 0 else np.zeros_like(f_present)
+        area = area_min + span * np.clip(scaled, 0.0, 1.0)
         # Largest first, so a small marker inside a dense cluster lands on top of its big
         # neighbours instead of underneath them and stays findable.
         order = np.argsort(-area)
@@ -148,17 +170,19 @@ def _observation_markers(ax, obs, *, area_min=PRESENCE_AREA_MIN, area_max=PRESEN
         # rather than a single "presence" swatch at some arbitrary size.
         from matplotlib.lines import Line2D
 
-        exemplars = [f_max * 0.15, f_max * 0.5, f_max]
-        for value in exemplars:
-            a = area_min + span * (value / f_max)
+        # Exemplars at the ends and middle of the window, so the legend reads against the
+        # colourbar rather than against a separate scale of its own.
+        for fraction in (0.0, 0.5, 1.0):
+            value = low + width * fraction
             handles.append(
                 Line2D(
-                    [], [], marker="o", linestyle="none", markersize=float(np.sqrt(a)),
+                    [], [], marker="o", linestyle="none",
+                    markersize=float(np.sqrt(area_min + span * fraction)),
                     markerfacecolor=fill, markeredgecolor="#11151a", markeredgewidth=0.4,
                     label=f"presence — {value:.1%}",
                 )
             )
-        handles[-1].set_label(f"presence — {f_max:.1%} (max of {int(present.sum())})")
+        handles[-1].set_label(f"presence — {high:.1%}  ({int(present.sum())} populations)")
     ax.scatter(
         lon[absent], lat[absent], s=19, marker="^",
         facecolor=[fill], edgecolor="#11151a", linewidth=0.55, zorder=5,
@@ -167,7 +191,7 @@ def _observation_markers(ax, obs, *, area_min=PRESENCE_AREA_MIN, area_max=PRESEN
     return handles
 
 
-def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None,
+def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None, vmin=0.0,
            area_min=PRESENCE_AREA_MIN, area_max=PRESENCE_AREA_MAX):
     """Draw one hexagon panel: grey land base, heatmap over the cells that carry a claim.
 
@@ -184,11 +208,14 @@ def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None,
         [polygons[i] for i in keep],
         array=values[keep], cmap=cmap, edgecolors="face", linewidths=0.0, zorder=2,
     )
-    mesh.set_clim(0.0, vmax if vmax is not None else float(values[keep].max()))
+    mesh.set_clim(vmin, vmax if vmax is not None else float(values[keep].max()))
     ax.add_collection(mesh)
 
     draw_countries(ax, color="#8b949e", linewidth=0.4, zorder=3)
-    size_handles = _observation_markers(ax, obs, area_min=area_min, area_max=area_max)
+    size_handles = _observation_markers(
+        ax, obs, area_min=area_min, area_max=area_max,
+        vmin=vmin, vmax=vmax if vmax is not None else float(values[keep].max()),
+    )
     ax.set_xlim(-180, 180)
     ax.set_ylim(-60, 84)
     ax.set_aspect("equal")
@@ -203,7 +230,7 @@ def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None,
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--layer", choices=("hbs", "g6pd", "afnd"), default="hbs")
+    ap.add_argument("--layer", choices=("hbs", "g6pd", "afnd", "cyt", "kir"), default="hbs")
     ap.add_argument("--observations", type=Path, required=True)
     # AFND ships one file holding every allele, so a surface needs to be told which one.
     ap.add_argument("--populations", type=Path, help="AFND population table (--layer afnd)")
@@ -236,6 +263,15 @@ def main() -> None:
         help="reuse per-cell predictions from this file if it exists, else write them to it. "
         "Skips prediction too, so it is valid only for the same --h3-res.",
     )
+    ap.add_argument(
+        "--shared-scale", action="store_true",
+        help="anchor the colour scale at 0 instead of stretching it to this surface's own range. "
+             "Use it when several maps are read side by side and absolute magnitude has to be "
+             "comparable between them. Off by default because a zero-anchored ramp erases "
+             "structure in any high-frequency variant: KIR2DL1 spans 0.877-0.956, which is 8% of "
+             "a 0-to-max bar, and renders as a uniform red field despite real geographic "
+             "variation across Amazonia, Indonesia and East Asia.",
+    )
     ap.add_argument("--cmap", default=VALUE_CMAP, help="matplotlib colormap for the value panel")
     ap.add_argument(
         "--marker-area-min", type=float, default=PRESENCE_AREA_MIN,
@@ -255,13 +291,27 @@ def main() -> None:
     ap.add_argument("--dpi", type=int, default=220)
     args = ap.parse_args()
 
-    if args.layer == "afnd":
+    if args.layer in ("afnd", "cyt", "kir"):
         if not args.populations or not args.variant:
-            raise SystemExit("--layer afnd needs both --populations and --variant")
-        observations, report = afnd_frequencies.load(
-            args.observations, args.populations, args.data_version,
-            min_populations=args.min_populations,
-        )
+            raise SystemExit(f"--layer {args.layer} needs both --populations and --variant")
+        if args.layer == "kir":
+            # A carrier probability, not an allele frequency. `as_binomial` does the rename in
+            # one visible place and the labels below say which quantity is plotted (#133).
+            carriers, report = afnd_carriers.load(
+                args.observations, args.populations, args.data_version,
+                min_populations=args.min_populations,
+            )
+            observations = afnd_carriers.as_binomial(carriers)
+        elif args.layer == "cyt":
+            observations, report = afnd_cytokines.load(
+                args.observations, args.populations, args.data_version,
+                min_populations=args.min_populations,
+            )
+        else:
+            observations, report = afnd_frequencies.load(
+                args.observations, args.populations, args.data_version,
+                min_populations=args.min_populations,
+            )
         print(report)
         observations = observations[observations["variant_id"] == args.variant].reset_index(
             drop=True
@@ -271,8 +321,9 @@ def main() -> None:
                 f"{args.variant} has no observations at --min-populations "
                 f"{args.min_populations}; it is not a modelable allele in this release"
             )
-        layer_title = hla_display_name(args.variant)
-        value_label = f"posterior median {layer_title} allele frequency"
+        layer_title = display_name(args.variant)
+        quantity = "carrier frequency" if args.layer == "kir" else "allele frequency"
+        value_label = f"posterior median {layer_title} {quantity}"
     else:
         loader = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}[args.layer]
         observations, report = loader(args.observations, "figure")
@@ -355,6 +406,11 @@ def main() -> None:
     masked = np.isin(support, MASKED)
 
     single = args.panels == "value"
+    low = float(central[~masked].min())
+    high = float(central[~masked].max())
+    print(f"surface spans {low:.4f} to {high:.4f} "
+          f"({100 * (high - low) / high:.0f}% of a zero-anchored ramp)")
+
     fig, axes = plt.subplots(
         1 if single else 2, 1,
         figsize=(13, 6.6 if single else 13),
@@ -368,7 +424,11 @@ def main() -> None:
         title=f"{layer_title} — posterior median   |   {len(observations)} populations"
               f"  ·  correlation range {correlation_range_km:.0f} km"
               f"  ·  H3 res-{args.h3_res} cells, {cell_edge_km:.0f} km edge",
-        vmax=float(central[~masked].max()),
+        vmax=high,
+        # Each surface gets its own range by default; the colourbar states it, so nothing is
+        # hidden by leaving it out of the title. `--shared-scale` anchors at 0 for side-by-side
+        # reading, at the cost of flattening high-frequency variants.
+        vmin=(0.0 if args.shared_scale else low),
         area_min=args.marker_area_min, area_max=args.marker_area_max,
     )
     if not single:

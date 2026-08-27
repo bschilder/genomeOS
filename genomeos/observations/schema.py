@@ -69,6 +69,12 @@ def ac_le_an(df):
 
 
 @extensions.register_check_method(check_type="vectorized")
+def carriers_le_individuals(df):
+    """Carriers may not exceed the individuals examined."""
+    return df["carriers"] <= df["n_individuals"]
+
+
+@extensions.register_check_method(check_type="vectorized")
 def date_lower_le_upper(df):
     """Years BP: the lower bound may not postdate the upper bound."""
     return df["date_lower"] <= df["date_upper"]
@@ -106,4 +112,49 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
     strict=True,
     coerce=True,
     name="observations",
+)
+
+
+#: Carrier frequency over **individuals**, not allele frequency over chromosomes (#133).
+#:
+#: A separate table rather than a unit flag on `OBSERVATIONS_SCHEMA`, because `ac`/`an` would then
+#: mean two different things in one column and any consumer averaging across rows would be mixing
+#: chromosomes with people. §4 keeps measurement types apart for the same reason it keeps
+#: observations and surfaces apart: a reader must never have to infer which one they are holding.
+#:
+#: The source is KIR gene presence/absence. KIR genes are copy-number variable, so what a study
+#: reports is the fraction of individuals carrying the gene at all — there is no diploid genotype
+#: to count chromosomes from, and converting via Hardy-Weinberg would assume a model the locus
+#: does not obey.
+#:
+#: The columns mirror `OBSERVATIONS_SCHEMA` exactly apart from the numerator and denominator, so
+#: the same geospatial machinery fits it: a binomial over individuals rather than over
+#: chromosomes.
+CARRIER_OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
+    {
+        "variant_id": pa.Column(str, pa.Check.str_matches(VARIANT_ID_PATTERN), nullable=False),
+        "rsid": pa.Column(str, nullable=True, required=True),
+        "population_id": pa.Column(str, nullable=False),
+        "lat": pa.Column(float, pa.Check.in_range(-90.0, 90.0), nullable=False),
+        "lon": pa.Column(float, pa.Check.in_range(-180.0, 180.0), nullable=False),
+        "radius_km": pa.Column(float, pa.Check.gt(0.0), nullable=False),
+        # The two columns that differ, and the reason this schema exists.
+        "carriers": pa.Column(int, pa.Check.ge(0), nullable=False),
+        "n_individuals": pa.Column(int, pa.Check.gt(0), nullable=False),
+        "source": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "assay": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "date_lower": pa.Column(int, pa.Check.ge(0), nullable=False),
+        "date_upper": pa.Column(int, pa.Check.ge(0), nullable=False),
+        "sampling_design": pa.Column(str, pa.Check.isin(SAMPLING_DESIGNS), nullable=False),
+        "disease_ascertainment_excluded": pa.Column("boolean", nullable=False),
+        "cohort_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "ingest_version": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+    },
+    checks=[
+        pa.Check.carriers_le_individuals(error="carriers must not exceed n_individuals"),
+        pa.Check.date_lower_le_upper(error="date_lower must not exceed date_upper"),
+    ],
+    strict=True,
+    coerce=True,
+    name="carrier_observations",
 )
