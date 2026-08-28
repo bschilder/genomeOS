@@ -21,7 +21,13 @@ from pathlib import Path
 import h3
 import numpy as np
 
-from genomeos.observations.sources import afnd_frequencies, map_g6pd, map_surveys
+from genomeos.observations.sources import (
+    afnd_carriers,
+    afnd_cytokines,
+    afnd_frequencies,
+    map_g6pd,
+    map_surveys,
+)
 from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish
 from genomeos.surfaces.fit import load_fit
 from genomeos.viz.basemap import h3_land_cells
@@ -39,6 +45,10 @@ def main() -> None:
     # every allele the adapter retains, not one named layer.
     ap.add_argument("--afnd", type=Path, help="AFND frequency table; publishes every fit found")
     ap.add_argument("--afnd-populations", type=Path)
+    ap.add_argument("--cytokines", action="store_true",
+                    help="also publish cytokine loci counted from genotypes (needs --afnd)")
+    ap.add_argument("--kir", action="store_true",
+                    help="also publish KIR gene presence as CARRIER frequency (needs --afnd)")
     ap.add_argument("--min-populations", type=int, default=30)
     ap.add_argument("--h3-res", type=int, default=3)
     ap.add_argument("--model-version", default="v1")
@@ -74,6 +84,34 @@ def main() -> None:
             if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
                 jobs.append((str(variant_id), rows.reset_index(drop=True)))
 
+    if args.cytokines:
+        if not args.afnd or not args.afnd_populations:
+            raise SystemExit("--cytokines needs --afnd and --afnd-populations")
+        corpus, report = afnd_cytokines.load(
+            args.afnd, args.afnd_populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        for variant_id, rows in corpus.groupby("variant_id", sort=True):
+            if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
+                jobs.append((str(variant_id), rows.reset_index(drop=True)))
+
+    if args.kir:
+        if not args.afnd or not args.afnd_populations:
+            raise SystemExit("--kir needs --afnd and --afnd-populations")
+        carriers, report = afnd_carriers.load(
+            args.afnd, args.afnd_populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        # `as_binomial` renames carriers/n_individuals to ac/an so the cell table can be built.
+        # The manifest records `measurement="carrier_frequency"` so the distinction survives the
+        # rename and reaches every consumer (#133).
+        binomial = afnd_carriers.as_binomial(carriers)
+        for variant_id, rows in binomial.groupby("variant_id", sort=True):
+            if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
+                jobs.append((str(variant_id), rows.reset_index(drop=True)))
+
     print(f"publishing {len(jobs)} variants")
     for variant_id, observations in jobs:
         stem = variant_id.replace(":", "__")
@@ -106,6 +144,9 @@ def main() -> None:
             lengthscale_sigma=float(fit.config.lengthscale_sigma),
             n_observations=len(observations),
             support_counts=counts,
+            measurement=(
+                "carrier_frequency" if variant_id.startswith("kir:") else "allele_frequency"
+            ),
         )
         directory = publish(frame, args.out, manifest=manifest, overwrite=args.overwrite)
         size = (directory / "cells.parquet").stat().st_size / 1024

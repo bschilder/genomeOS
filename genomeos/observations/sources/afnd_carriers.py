@@ -170,3 +170,20 @@ def load(
         refusals=refusals,
     )
     return validated, report
+
+
+def as_binomial(carriers: pd.DataFrame) -> pd.DataFrame:
+    """Carrier observations in the `(ac, an)` shape `surfaces.fit` expects.
+
+    The arithmetic is identical: a binomial over individuals rather than over chromosomes, so the
+    same GP fits it unchanged. What differs is the meaning of the fitted surface — it is a
+    **carrier probability**, the fraction of people carrying the gene, not an allele frequency.
+
+    This is deliberately a separate function rather than the adapter emitting `ac`/`an` directly.
+    The rename happens at the moment of fitting, in one visible place, so nothing upstream can
+    quietly merge carrier rows into an allele-frequency table. Any figure, artifact or aggregate
+    built from the result must be labelled as carrier frequency; #133 exists because that
+    distinction is easy to lose.
+    """
+    renamed = carriers.rename(columns={"carriers": "ac", "n_individuals": "an"})
+    return renamed[[c for c in renamed.columns]]
