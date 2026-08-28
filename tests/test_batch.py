@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from genomeos.surfaces import batch
 from genomeos.surfaces.batch import (
     EXCLUSION_REASONS,
     MIN_OBSERVATIONS,
@@ -53,6 +54,18 @@ def _observations(n: int, variant_id: str = "chr11-5227002-T-A") -> pd.DataFrame
             "cohort_id": [f"c{i % 4}" for i in range(n)],
             "ingest_version": "test",
         }
+    )
+
+
+def _job(variant_id: str, observations: pd.DataFrame) -> VariantJob:
+    """A job at a small sampling budget: these tests exercise the gate, not the sampler."""
+    return VariantJob(
+        variant_id=variant_id,
+        observations=observations.assign(variant_id=variant_id),
+        # The convergence gate is relaxed on purpose: these tests exercise the SKILL gate,
+        # and a fit excluded for r_hat never reaches it.
+        config=FitConfig(draws=60, tune=60, chains=2, approximation="inducing",
+                         n_inducing=6, max_rhat=99.0, min_ess=1.0),
     )
 
 
@@ -165,3 +178,59 @@ def test_summary_reports_the_excluded_fraction():
     text = str(result)
     assert "0/1 variants fitted" in text
     assert "no_observations" in text
+
+
+def test_the_skill_gate_is_off_unless_asked_for(monkeypatch):
+    """A k-fold refit per variant is five times the batch across 767 alleles, so switching it on
+    is a decision the caller makes with the compute in front of them (#130)."""
+    calls = []
+
+    def _never(*args, **kwargs):
+        calls.append(1)
+        raise AssertionError("skill must not be measured when skill_folds is 0")
+
+    monkeypatch.setattr(batch, "measure_spatial_skill", _never)
+    result = batch.run_batch([_job("chr1-1-A-T", _observations(12))])
+    assert calls == []
+    assert set(result.fitted) == {"chr1-1-A-T"}
+
+
+def test_a_surface_that_cannot_beat_a_constant_is_refused(monkeypatch):
+    """§9 one level up: a map that loses to one global number is not a finding, and emitting no
+    surface is a valid output. Without the gate it is published indistinguishably from one that
+    works (#130)."""
+    monkeypatch.setattr(batch, "measure_spatial_skill", lambda *a, **k: (-0.047, 0.2, 5))
+    result = batch.run_batch([_job("chr1-1-A-T", _observations(12))], skill_folds=5)
+    assert result.fitted == {}
+    (excluded,) = result.exclusions
+    assert excluded.reason == "no_spatial_skill"
+    assert excluded.skill == -0.047
+    # the detail states how far short it fell, so the threshold stays recalibratable
+    assert "-4.7%" in excluded.detail
+
+
+def test_beating_the_baseline_on_average_is_not_enough_without_consistency(monkeypatch):
+    """A variant that wins on average because one fold went well has not shown spatial skill.
+    `MIN_SKILL_FOLD_SHARE` is the guard, so no arbitrary magnitude threshold is needed."""
+    monkeypatch.setattr(batch, "measure_spatial_skill", lambda *a, **k: (0.30, 0.2, 5))
+    result = batch.run_batch([_job("chr1-1-A-T", _observations(12))], skill_folds=5)
+    assert result.fitted == {}
+    assert result.exclusions[0].reason == "no_spatial_skill"
+
+
+def test_a_consistently_better_surface_passes_however_small_the_margin(monkeypatch):
+    """The gate asks for consistency, not magnitude: 2.5% in every fold is spatial skill."""
+    monkeypatch.setattr(batch, "measure_spatial_skill", lambda *a, **k: (0.025, 1.0, 5))
+    result = batch.run_batch([_job("chr1-1-A-T", _observations(12))], skill_folds=5)
+    assert set(result.fitted) == {"chr1-1-A-T"}
+    assert result.exclusions == []
+
+
+def test_unmeasurable_skill_is_refused_rather_than_assumed_good(monkeypatch):
+    """If no fold converged there is no evidence either way, and absence of evidence must not
+    publish a surface."""
+    monkeypatch.setattr(batch, "measure_spatial_skill", lambda *a, **k: (float("nan"), 0.0, 0))
+    result = batch.run_batch([_job("chr1-1-A-T", _observations(12))], skill_folds=5)
+    assert result.fitted == {}
+    assert result.exclusions[0].reason == "no_spatial_skill"
+    assert result.exclusions[0].skill is None

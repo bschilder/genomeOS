@@ -41,6 +41,7 @@ EXCLUSION_REASONS: tuple[str, ...] = (
     "no_observations",
     "too_few_observations",
     "did_not_converge",
+    "no_spatial_skill",
     "unexpected_error",
 )
 
@@ -51,6 +52,27 @@ EXCLUSION_REASONS: tuple[str, ...] = (
 #: backed by a round number is a guess. Deliberately low: dropping a variant that might have
 #: fitted is worse than spending the compute to find out.
 MIN_OBSERVATIONS = 5
+
+#: Relative improvement in held-out MAE over a constant-frequency baseline that a surface must
+#: show before it is published (#130).
+#:
+#: Zero, deliberately. A magnitude threshold here would be the arbitrary constant this gate exists
+#: to avoid — the measured spread gives no natural cut point: HbS +2.5%, DRB1*04:04 -0.4%,
+#: DRB1*12:01 -4.7%, DRB1*15:01 +24.5%. Any line drawn between 2.5% and 24.5% is a preference.
+#:
+#: The guard against passing noise is `MIN_SKILL_FOLD_SHARE` instead, which asks for *consistency*
+#: rather than magnitude. A variant that beats the baseline on average because one fold went well
+#: has not shown spatial skill; one that beats it in most folds has, however small the margin.
+MIN_SKILL_MARGIN = 0.0
+
+#: Share of folds in which the surface must beat the baseline. Above one half, so a bare majority
+#: is not enough at an even fold count, and a single lucky fold cannot carry a variant.
+MIN_SKILL_FOLD_SHARE = 0.6
+
+#: Floor on the inducing-point basis the gate will shrink to. Below a handful of points the
+#: sparse approximation cannot represent a field at all, so a variant that would need fewer than
+#: this is better refused on observation count than scored on a basis that cannot work.
+MIN_INDUCING = 20
 
 
 @dataclass(frozen=True)
@@ -70,6 +92,10 @@ class Exclusion:
     reason: str
     detail: str
     n_observations: int
+    #: Measured held-out skill, where it was measured. Carried on the exclusion so the published
+    #: list says *how far* a variant fell short, not only that it did — which is what makes the
+    #: threshold recalibratable from the record rather than re-argued (#130).
+    skill: float | None = None
 
     def __post_init__(self) -> None:
         if self.reason not in EXCLUSION_REASONS:
@@ -120,16 +146,66 @@ class BatchResult:
         return "\n".join(lines)
 
 
+def measure_spatial_skill(
+    observations: pd.DataFrame, config: FitConfig, *, n_folds: int
+) -> tuple[float, float, int]:
+    """`(mean relative MAE improvement, share of folds improved, folds scored)`.
+
+    Spatially blocked folds, because that is the question: does the surface predict where there
+    is no nearby survey? Random or grouped folds leave a neighbour in training and measure
+    interpolation, which every surface passes and which #109 measured at four times the apparent
+    skill of the honest test.
+
+    Folds that fail to converge are dropped rather than scored, and the count is returned so a
+    variant judged on one surviving fold is visible as such.
+    """
+    from dataclasses import replace
+
+    from genomeos.validation.crossval import cross_validate
+
+    # A fold trains on (k-1)/k of the data, so an `n_inducing` sized against the full set can
+    # breach `fit_surface`'s M<<N guard once the fold is taken and the whole gate raises. The
+    # caller supplies one config for the variant; shrinking it here is the only place that knows
+    # the fold size, and silently failing the gate would be worse than a smaller basis.
+    n_train = len(observations) * (n_folds - 1) // n_folds
+    config = replace(config, n_inducing=max(MIN_INDUCING, min(config.n_inducing, n_train // 2)))
+
+    result = cross_validate(observations, config, n_folds, "spatial")
+    if not result.folds:
+        return float("nan"), 0.0, 0
+    gains = [
+        (fold.baseline_mae - fold.mae) / fold.baseline_mae
+        for fold in result.folds
+        if fold.baseline_mae > 0
+    ]
+    if not gains:
+        return float("nan"), 0.0, 0
+    improved = sum(1 for g in gains if g > 0) / len(gains)
+    return float(sum(gains) / len(gains)), float(improved), len(gains)
+
+
 def run_batch(
     jobs: Iterable[VariantJob],
     *,
     strict: bool = False,
     on_progress: Any = None,
+    skill_folds: int = 0,
+    min_skill_margin: float = MIN_SKILL_MARGIN,
+    min_skill_fold_share: float = MIN_SKILL_FOLD_SHARE,
 ) -> BatchResult:
     """Fit every job, recording rather than raising on the ones that fail.
 
     `strict=True` re-raises instead of excluding, which is what a single-variant debugging run
     wants; the batch path must not use it, or one bad variant ends the run.
+
+    `skill_folds > 0` turns on the **skill gate** (#130): each fitted variant is cross-validated
+    against a constant-frequency baseline and excluded unless it beats it. Off by default because
+    it costs a full k-fold refit per variant — five folds across 767 alleles is five times the
+    batch — so switching it on is a decision the caller makes with the compute in front of them.
+
+    A surface that cannot beat one global number is not a finding, and emitting no surface is a
+    valid output (§9). Without the gate the pipeline publishes those surfaces indistinguishably
+    from the ones that work.
     """
     fitted: dict[str, SurfaceFit] = {}
     exclusions: list[Exclusion] = []
@@ -156,7 +232,32 @@ def run_batch(
             continue
 
         try:
-            fitted[job.variant_id] = fit_surface(job.observations, job.config)
+            fit = fit_surface(job.observations, job.config)
+            if skill_folds > 0:
+                skill, share, scored = measure_spatial_skill(
+                    job.observations, job.config, n_folds=skill_folds
+                )
+                if scored == 0:
+                    exclusions.append(
+                        Exclusion(
+                            job.variant_id, "no_spatial_skill",
+                            "no cross-validation fold converged, so skill is unmeasured",
+                            n, None,
+                        )
+                    )
+                    continue
+                if not (skill > min_skill_margin and share >= min_skill_fold_share):
+                    exclusions.append(
+                        Exclusion(
+                            job.variant_id, "no_spatial_skill",
+                            f"held-out MAE improves on a constant baseline by {skill:+.1%} "
+                            f"in {share:.0%} of {scored} folds; needs >{min_skill_margin:+.1%} "
+                            f"in >={min_skill_fold_share:.0%}",
+                            n, round(skill, 4),
+                        )
+                    )
+                    continue
+            fitted[job.variant_id] = fit
         except ConvergenceError as error:
             # §12: a fit that has not mixed is excluded rather than published. Named separately
             # from `unexpected_error` because it is the expected failure, not a defect.
