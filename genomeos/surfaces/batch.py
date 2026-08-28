@@ -161,14 +161,21 @@ def measure_spatial_skill(
     """
     from dataclasses import replace
 
-    from genomeos.validation.crossval import cross_validate
+    from genomeos.validation.crossval import cross_validate, make_folds
 
-    # A fold trains on (k-1)/k of the data, so an `n_inducing` sized against the full set can
-    # breach `fit_surface`'s M<<N guard once the fold is taken and the whole gate raises. The
-    # caller supplies one config for the variant; shrinking it here is the only place that knows
-    # the fold size, and silently failing the gate would be worse than a smaller basis.
-    n_train = len(observations) * (n_folds - 1) // n_folds
-    config = replace(config, n_inducing=max(MIN_INDUCING, min(config.n_inducing, n_train // 2)))
+    # An `n_inducing` sized against the full variant breaches `fit_surface`'s M<<N guard once a
+    # fold is taken, and the whole gate raises instead of scoring. The caller supplies one config
+    # per variant; only this function knows the fold sizes.
+    #
+    # The smallest training set is computed rather than assumed: spatial folds are k-means
+    # clusters and are markedly uneven, so `(k-1)/k` of the total overestimates it — a variant
+    # with 208 observations produced a 130-row training fold, and an n_inducing derived from the
+    # even-split assumption still breached the guard.
+    folds = make_folds(observations, n_folds, "spatial")
+    smallest_train = min(int((folds != fold).sum()) for fold in set(folds))
+    config = replace(
+        config, n_inducing=max(MIN_INDUCING, min(config.n_inducing, smallest_train // 2))
+    )
 
     result = cross_validate(observations, config, n_folds, "spatial")
     if not result.folds:
