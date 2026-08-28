@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import warnings
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -284,6 +283,12 @@ class FitConfig:
     #: statement that the field is spatial rather than constant, and must be made deliberately
     #: per variant rather than defaulted, because it is a real prior belief about the biology.
     lengthscale_sigma: float = 0.7
+    #: Spatially-uncorrelated variation in the latent field, on the logit scale. Off by default
+    #: because turning it on changes every published range. Empirical semivariograms show 31-39%
+    #: of the sill already at 0-250 km, which the model currently has nowhere to put; the
+    #: evidence and the trade-off with `concentration` are in #137. Enters the likelihood but not
+    #: the prediction path, so the published surface stays the smooth field.
+    nugget: bool = False
     max_rhat: float = 1.05
     #: Effective sample size floor, per parameter. This is the discriminating statistic: the
     #: binomial fit that produced impossible >0.9 frequencies had ESS 2, the beta-binomial fit
@@ -782,6 +787,14 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             beta_cohort = pm.Deterministic("beta_cohort", cohort_sd * cohort_z)
             logit = logit + beta_cohort[cohort_index]
 
+        if config.nugget:
+            # Non-centred, like every other hierarchical term here (Neal's funnel). Competes with
+            # the beta-binomial `concentration` for the same per-observation deviation, so
+            # `likelihood="binomial"` is the arm that tests the nugget alone (#137).
+            nugget_sd = pm.HalfNormal("nugget_sd", sigma=1.0)
+            nugget_z = pm.Normal("nugget_z", mu=0.0, sigma=1.0, shape=len(observations))
+            logit = logit + nugget_sd * nugget_z
+
         p = pm.Deterministic("p", pm.math.invlogit(logit))
 
         if config.likelihood == "binomial":
@@ -875,40 +888,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
     )
 
 
-#: Bumped whenever `SurfaceFit`'s fields change in a way that makes an older file unreadable.
-FIT_FORMAT = 1
-
-
-def save_fit(fit: SurfaceFit, path: str | Path) -> Path:
-    """Persist a trained surface so predictions cost seconds instead of a refit.
-
-    `SurfaceFit.predict` runs `sample_posterior_predictive` against a live PyMC model, so the
-    model object and the posterior have to travel together — writing the InferenceData alone
-    would leave nothing able to use it. cloudpickle handles the PyMC/pytensor graph that plain
-    `pickle` cannot.
-
-    Two limits worth knowing. The file is **coupled to this environment**: a PyMC or pytensor
-    upgrade can make it unreadable, so it is a cache, never an archival artifact — §6 artifacts
-    are the parquet outputs, not this. And pickle executes arbitrary code on load, so only ever
-    load files you produced yourself.
-    """
-    import cloudpickle
-
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("wb") as stream:
-        cloudpickle.dump({"format": FIT_FORMAT, "fit": fit}, stream)
-    return path
-
-
-def load_fit(path: str | Path) -> SurfaceFit:
-    """Reload a surface written by `save_fit`. See its warning about trust and versioning."""
-    import cloudpickle
-
-    with Path(path).open("rb") as stream:
-        payload = cloudpickle.load(stream)
-    if not isinstance(payload, dict) or payload.get("format") != FIT_FORMAT:
-        raise ValueError(
-            f"{path} is not a surface fit of format {FIT_FORMAT}; refit rather than guessing at it"
-        )
-    return payload["fit"]
+# Re-exported for the call sites that import them from here. `surfaces.persistence` is where they
+# live; the import is at the foot of the module because that module imports `SurfaceFit` from
+# this one.
+from genomeos.surfaces.persistence import FIT_FORMAT, load_fit, save_fit  # noqa: E402, F401
