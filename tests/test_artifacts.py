@@ -58,6 +58,7 @@ def _manifest(variant_id: str = "chr11-5227002-T-A", model_version: str = "v1") 
         lengthscale_sigma=0.7,
         n_observations=1071,
         support_counts={"observed": 2},
+        measurement="allele_frequency",
     )
 
 
@@ -128,3 +129,24 @@ def test_a_phenotype_composite_round_trips(tmp_path):
     frame, manifest = read(directory)
     assert set(frame["variant_id"]) == {variant}
     assert manifest["variant_id"] == variant
+
+
+def test_a_manifest_must_say_which_quantity_it_holds():
+    """An artifact of carrier frequencies over individuals and one of allele frequencies over
+    chromosomes are indistinguishable by inspection, and a consumer averaging across both is
+    wrong in a way nothing downstream can detect (#133). So the field is required and checked."""
+    with pytest.raises(ValueError, match="unknown measurement"):
+        ArtifactManifest(
+            variant_id="kir:2dl1",
+            model_version="v2",
+            data_version="afnd-2026-08",
+            resolution=3,
+            n_cells=1,
+            correlation_range_km=1000.0,
+            prior_frequency_sd=0.1,
+            likelihood="beta_binomial",
+            lengthscale_sigma=0.7,
+            n_observations=1,
+            support_counts={},
+            measurement="whatever",
+        )

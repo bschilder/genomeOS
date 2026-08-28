@@ -3,6 +3,10 @@
     python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
         --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv
 
+    python scripts/publish_artifacts.py --fits data/store/screen --out data/store/artifacts \
+        --afnd data/raw/afnd_frequencies.tsv --afnd-populations data/raw/afnd_populations.tsv \
+        --data-version afnd-2026-08
+
 Reads the fits `build_surfaces.py` saved and writes the immutable parquet each variant is meant to
 be cited as. Separated from fitting on purpose: fitting is expensive and environment-coupled,
 publishing is cheap and must be repeatable, and a figure or a national rollup should read the
@@ -17,7 +21,13 @@ from pathlib import Path
 import h3
 import numpy as np
 
-from genomeos.observations.sources import map_g6pd, map_surveys
+from genomeos.observations.sources import (
+    afnd_carriers,
+    afnd_cytokines,
+    afnd_frequencies,
+    map_g6pd,
+    map_surveys,
+)
 from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish
 from genomeos.surfaces.fit import load_fit
 from genomeos.viz.basemap import h3_land_cells
@@ -31,6 +41,15 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--hbs", type=Path)
     ap.add_argument("--g6pd", type=Path)
+    # AFND holds one file per corpus rather than per variant, so publishing it means publishing
+    # every allele the adapter retains, not one named layer.
+    ap.add_argument("--afnd", type=Path, help="AFND frequency table; publishes every fit found")
+    ap.add_argument("--afnd-populations", type=Path)
+    ap.add_argument("--cytokines", action="store_true",
+                    help="also publish cytokine loci counted from genotypes (needs --afnd)")
+    ap.add_argument("--kir", action="store_true",
+                    help="also publish KIR gene presence as CARRIER frequency (needs --afnd)")
+    ap.add_argument("--min-populations", type=int, default=30)
     ap.add_argument("--h3-res", type=int, default=3)
     ap.add_argument("--model-version", default="v1")
     ap.add_argument("--data-version", default="map-2026-08")
@@ -42,12 +61,59 @@ def main() -> None:
     lat, lon = centres[:, 0], centres[:, 1]
     print(f"H3 res {args.h3_res}: {len(cells)} land cells")
 
+    jobs: list[tuple[str, object]] = []
     for layer, loader in LAYERS.items():
         path = getattr(args, layer)
         if path is None:
             continue
         observations, _ = loader(path, args.data_version)
-        variant_id = str(observations["variant_id"].iloc[0])
+        jobs.append((str(observations["variant_id"].iloc[0]), observations))
+
+    if args.afnd:
+        if not args.afnd_populations:
+            raise SystemExit("--afnd needs --afnd-populations")
+        corpus, report = afnd_frequencies.load(
+            args.afnd, args.afnd_populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        # Publish every allele that has a fit on disk. Which alleles those are is decided by
+        # whatever sweep produced `--fits`, not here, so this stays a publishing step rather than
+        # quietly becoming a selection step.
+        for variant_id, rows in corpus.groupby("variant_id", sort=True):
+            if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
+                jobs.append((str(variant_id), rows.reset_index(drop=True)))
+
+    if args.cytokines:
+        if not args.afnd or not args.afnd_populations:
+            raise SystemExit("--cytokines needs --afnd and --afnd-populations")
+        corpus, report = afnd_cytokines.load(
+            args.afnd, args.afnd_populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        for variant_id, rows in corpus.groupby("variant_id", sort=True):
+            if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
+                jobs.append((str(variant_id), rows.reset_index(drop=True)))
+
+    if args.kir:
+        if not args.afnd or not args.afnd_populations:
+            raise SystemExit("--kir needs --afnd and --afnd-populations")
+        carriers, report = afnd_carriers.load(
+            args.afnd, args.afnd_populations, args.data_version,
+            min_populations=args.min_populations,
+        )
+        print(report)
+        # `as_binomial` renames carriers/n_individuals to ac/an so the cell table can be built.
+        # The manifest records `measurement="carrier_frequency"` so the distinction survives the
+        # rename and reaches every consumer (#133).
+        binomial = afnd_carriers.as_binomial(carriers)
+        for variant_id, rows in binomial.groupby("variant_id", sort=True):
+            if (args.fits / f"{variant_id.replace(':', '__')}.fit.pkl").exists():
+                jobs.append((str(variant_id), rows.reset_index(drop=True)))
+
+    print(f"publishing {len(jobs)} variants")
+    for variant_id, observations in jobs:
         stem = variant_id.replace(":", "__")
         fit_path = args.fits / f"{stem}.fit.pkl"
         if not fit_path.exists():
@@ -78,6 +144,9 @@ def main() -> None:
             lengthscale_sigma=float(fit.config.lengthscale_sigma),
             n_observations=len(observations),
             support_counts=counts,
+            measurement=(
+                "carrier_frequency" if variant_id.startswith("kir:") else "allele_frequency"
+            ),
         )
         directory = publish(frame, args.out, manifest=manifest, overwrite=args.overwrite)
         size = (directory / "cells.parquet").stat().st_size / 1024

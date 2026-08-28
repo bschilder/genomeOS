@@ -51,10 +51,21 @@ SYNCED: tuple[tuple[str, str], ...] = (
     ("data/raw/map_hbs_surveys.csv", "raw/map_hbs_surveys.csv"),
     ("data/raw/map_g6pd_surveys.csv", "raw/map_g6pd_surveys.csv"),
     ("data/store/fits", "store/fits"),
+    # The screening fits and their rendered surfaces. Added because a sweep is hours of sampling
+    # that regenerates only by spending them again: the 17 AFND fits below cost about two hours
+    # and lived in a session scratchpad until this line existed. `sweep.json` is small and carries
+    # the fitted range, observation count and inducing-point budget per allele, so the summary
+    # survives even if the pickles are pruned later.
+    ("data/store/screen", "store/screen"),
+    # The fits behind the published v2 artifacts. Kept separate from `screen` because the two
+    # were fitted on different corpora — `screen` predates the donor-registry refusal (#141) and
+    # `screen_v2` follows it — and a fit is only interpretable against the data that produced it.
+    ("data/store/screen_v2", "store/screen_v2"),
+    ("data/store/surfaces", "store/surfaces"),
 )
 
 #: Never synced. See the module docstring.
-EXCLUDED = ("data/raw/afnd_cache",)
+EXCLUDED = ("data/raw/afnd_cache", "data/raw/afnd_freq_cache")
 
 
 def _api():

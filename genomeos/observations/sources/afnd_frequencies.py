@@ -47,6 +47,47 @@ SOURCE = "afnd_frequencies"
 #: accepted — the relative error stays negligible — but the bound is stated rather than assumed.
 EXACT_RECONSTRUCTION_MAX_N = 5000
 
+#: Bone-marrow donor registries whose AFND sub-populations are **ancestry strata, not places**
+#: (#141). Matched case-insensitively against the population name.
+#:
+#: NMDP and DKMS build these strata deliberately, because HLA matching requires a donor of the
+#: same ancestral background — so the label is scientifically meaningful and the data is the
+#: best-powered in the corpus. It is simply not point-referenced. Two facts make that concrete:
+#:
+#: - All 21 NMDP strata sit at one coordinate (38.8, -76.1), the registry's address in Maryland,
+#:   and all 15 DKMS strata at one German coordinate. For `HLA-A*02:01` the NMDP strata span
+#:   0.035 to 0.278 at zero geographic separation. No spatial field can reconcile that, because
+#:   the variation is stratification rather than geography.
+#: - Together the 37 populations carry **91% of the corpus's statistical weight** against 905
+#:   genuinely geographic populations sharing the other 9%. Through a binomial likelihood that
+#:   lets a registry's donor composition pin surfaces across whole continents.
+#:
+#: Neither relocation nor a nugget fixes it. "NMDP European Caucasian" is a blend of European
+#: source populations mixed by US immigration history, which corresponds to no location in
+#: Europe; "NMDP African American" is ~73% African and ~24% European (Bryc et al. 2015) and
+#: matches no single source population either. And an explicit nugget was tested against exactly
+#: this: it moved C*03:03's fitted range by 12% where the variogram implied 65% (#137).
+#:
+#: `DKMS German donors` is refused with the rest despite being a national sample rather than a
+#: stratum: it shares the registry coordinate with 14 strata, it is donor-ascertained, and at
+#: 6,912,132 chromosomes it alone is 49.8% of the corpus, so keeping it reproduces the pathology
+#: on its own. It is the strongest candidate for re-admission once #21 (per-population radii)
+#: and #123 (weight capping) exist.
+DONOR_REGISTRIES = ("NMDP", "DKMS")
+
+#: AFND's two frequency columns carry **different units**, a 100x difference in one file:
+#: `alleles_over_2n` is a fraction (max 1.000 across the corpus) and `indivs_over_n` is a
+#: percentage (max 100.0). Reading the wrong one without dividing yields a frequency of 63 where
+#: 0.63 was meant, which no downstream check would catch because the schema only bounds `ac <= an`.
+#:
+#: Validated rather than assumed. A fraction column above 1.0 means the release changed units
+#: under us, and §12 makes that a hard error rather than something to rescale silently.
+MAX_FRACTION = 1.0
+#: Genotype percentages for one locus and population must sum to 100. Measured across 1,405 full
+#: triples the sum is 100.0 with a 5th-95th percentile of 99.9 to 100.1, so a 1-point tolerance
+#: is generous for rounding and tight enough to catch a unit error or a missing genotype class.
+GENOTYPE_SUM_TOLERANCE = 1.0
+
 
 #: AFND's own `group` column mapped onto the variant_id namespace. The prefix is a provenance
 #: claim, so it has to name the right family: KIR2DL1 is not an HLA allele and an id saying it is
@@ -149,6 +190,13 @@ def load(
     # Family refusals come first, so a cytokine row that also lacks a frequency is reported as a
     # cytokine row rather than as missing data. Three of AFND's four families are not allele
     # frequencies and this adapter's output column is an allele count (#134, #133).
+    # Ahead of every other refusal: a registry stratum that also lacks a frequency should be
+    # reported as what it is, not as missing data. Same reasoning as the family refusals below.
+    registry = freq["population"].str.contains(
+        "|".join(DONOR_REGISTRIES), case=False, regex=True, na=False
+    )
+    refuse(registry, "donor_registry_ancestry_stratum")
+
     group_key = freq["group"].str.strip().str.lower()
     refuse(~group_key.isin(GROUP_PREFIX), "unknown_afnd_group")
     # Cytokine rows are diploid GENOTYPES ("AIF-1/ -932 CC", "-932 CT"), not alleles: 0 of 4,517
@@ -171,6 +219,15 @@ def load(
 
     freq["af"] = numeric(freq["alleles_over_2n"])
     freq["n_indiv"] = numeric(freq["n"])
+
+    # The unit check, before anything reads the column. See MAX_FRACTION.
+    over = freq["af"].dropna()
+    if len(over) and float(over.max()) > MAX_FRACTION:
+        raise ValueError(
+            f"alleles_over_2n reaches {float(over.max()):.3f}, above {MAX_FRACTION}. That column "
+            f"is a fraction in every release seen so far; a value above 1 means the units "
+            f"changed, and rescaling silently would misstate every frequency downstream."
+        )
 
     refuse(freq["af"].isna(), "no_frequency_reported")
     refuse(freq["n_indiv"].isna() | (freq["n_indiv"] <= 0), "no_sample_size")
