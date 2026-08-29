@@ -3,127 +3,163 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GenomeOS infrastructure preview</title>
+  <title>GenomeOS Atlas preview</title>
   <style>
-    :root { color-scheme: dark; font-family: ui-monospace, monospace; background: #08111f; color: #dbeafe; }
-    body { margin: 0; padding: 24px; }
-    main { max-width: 1000px; margin: auto; }
-    header, .panel { border: 1px solid #28405f; border-radius: 10px; padding: 16px; margin-bottom: 16px; background: #0d1b2d; }
-    h1 { margin: 0 0 8px; font-size: 22px; }
-    .meta { color: #93c5fd; display: flex; flex-wrap: wrap; gap: 16px; }
-    select, button { background: #132944; color: #e0f2fe; border: 1px solid #3b82f6; padding: 8px; }
-    svg { width: 100%; height: auto; background: #07101c; border: 1px solid #28405f; }
-    .grid { stroke: #1e3a5f; stroke-width: .5; }
-    .observation { fill: none; stroke: #fff; stroke-width: 2; }
-    .masked { fill: #111827; stroke: #f59e0b; stroke-width: 2; }
-    #error { color: #fca5a5; white-space: pre-wrap; }
-    code { color: #a7f3d0; }
+    :root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #172033; background: #eef2f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1500px; margin: auto; padding: 20px; }
+    header { display: flex; justify-content: space-between; gap: 20px; align-items: end; margin-bottom: 14px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    header p { color: #5b6578; margin: 0; }
+    .status { font-size: 13px; color: #46617f; text-align: right; }
+    .layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 14px; }
+    .panel, .map-card { background: white; border: 1px solid #d5dce7; border-radius: 10px;
+      box-shadow: 0 2px 10px #24324a12; }
+    .panel { padding: 16px; }
+    .group { border-bottom: 1px solid #e7ebf1; padding-bottom: 15px; margin-bottom: 15px; }
+    .group:last-child { border: 0; margin: 0; padding: 0; }
+    label.title { display: block; font-size: 12px; font-weight: 700; letter-spacing: .05em;
+      text-transform: uppercase; color: #657086; margin-bottom: 7px; }
+    select, button { width: 100%; border: 1px solid #b9c3d2; border-radius: 6px; background: white;
+      color: #172033; padding: 9px; font: inherit; }
+    button { cursor: pointer; font-weight: 600; }
+    button:hover { background: #edf4ff; border-color: #5b8fd9; }
+    .button-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .button-row button { font-size: 17px; padding: 6px; }
+    .choice { display: flex; gap: 8px; align-items: center; margin: 8px 0; font-size: 14px; }
+    .choice input { accent-color: #2368b5; }
+    .map-card { position: relative; overflow: hidden; min-height: 630px; }
+    canvas { width: 100%; height: 600px; display: block; cursor: grab; background: #f8fbff; }
+    canvas.dragging { cursor: grabbing; }
+    .legend { position: absolute; left: 18px; right: 18px; bottom: 14px; display: flex; align-items: center;
+      gap: 10px; background: #ffffffed; border: 1px solid #d5dce7; border-radius: 7px; padding: 8px 12px;
+      font-size: 12px; pointer-events: none; }
+    .gradient { height: 12px; flex: 1; border-radius: 3px;
+      background: linear-gradient(90deg, #30123b, #4145ab, #2a9d8f, #a8db34, #f9c74f, #d7191c); }
+    .tooltip { position: absolute; display: none; pointer-events: none; min-width: 205px; padding: 9px 11px;
+      border-radius: 6px; background: #172033ed; color: white; font-size: 12px; line-height: 1.5;
+      box-shadow: 0 3px 14px #0004; }
+    .note { color: #657086; font-size: 12px; line-height: 1.45; }
+    #error { color: #b42318; font-size: 13px; margin-top: 8px; }
+    @media (max-width: 850px) { .layout { grid-template-columns: 1fr; } .map-card { min-height: 520px; }
+      canvas { height: 500px; } header { align-items: start; flex-direction: column; } .status { text-align: left; } }
   </style>
 </head>
 <body>
 <main>
   <header>
-    <h1>GenomeOS infrastructure preview</h1>
-    <p>Diagnostic only: browser → API → DuckDB → immutable Parquet.</p>
-    <div class="meta">
-      <span id="readiness">checking readiness…</span>
-      <span id="versions"></span>
-      <span id="counts"></span>
-    </div>
+    <div><h1>GenomeOS Atlas</h1><p>Interactive diagnostic of immutable published surfaces</p></div>
+    <div class="status"><span id="readiness">Checking API…</span><br><span id="versions"></span></div>
   </header>
-  <section class="panel">
-    <label for="variant">Variant </label><select id="variant"></select>
-    <button id="reload">Reload</button>
-  </section>
-  <section class="panel">
-    <svg id="map" viewBox="0 0 900 450" role="img" aria-label="Diagnostic world projection"></svg>
-    <p id="legend">White rings: observations. Color: posterior mean. Orange outlines: masked support.</p>
-    <div id="error"></div>
-  </section>
+  <div class="layout">
+    <aside class="panel">
+      <div class="group">
+        <label class="title" for="variant">Disease or variant</label>
+        <select id="variant"></select>
+      </div>
+      <div class="group">
+        <label class="title">Display</label>
+        <label class="choice"><input type="radio" name="metric" value="post_mean" checked>Frequency</label>
+        <label class="choice"><input type="radio" name="metric" value="post_sd">Uncertainty</label>
+        <label class="choice"><input id="mask" type="checkbox" checked>Show unsupported cells</label>
+      </div>
+      <div class="group">
+        <label class="title">Map navigation</label>
+        <div class="button-row"><button id="zoom-out" title="Zoom out">−</button>
+          <button id="reset" title="Reset view">⌂</button><button id="zoom-in" title="Zoom in">+</button></div>
+        <p class="note">Scroll to zoom. Drag to pan. Hover over a cell for its estimate and interval.</p>
+      </div>
+      <div class="group">
+        <label class="title">Surface status</label>
+        <div id="counts" class="note">Loading…</div>
+        <div id="error"></div>
+      </div>
+      <div class="group note">This is a diagnostic read of inferred surfaces, not a product map.
+        Grey cells are explicit refusals—not zero prevalence. Observation and burden layers remain separate.</div>
+    </aside>
+    <section class="map-card">
+      <canvas id="map" aria-label="Interactive world frequency surface"></canvas>
+      <div id="tooltip" class="tooltip"></div>
+      <div class="legend"><span id="legend-min">0</span><div class="gradient"></div>
+        <span id="legend-max">1</span><strong id="legend-label">frequency</strong></div>
+    </section>
+  </div>
 </main>
 <script>
-const svg = document.querySelector("#map");
-const ns = "http://www.w3.org/2000/svg";
-const xy = (lat, lon) => [((lon + 180) / 360) * 900, ((90 - lat) / 180) * 450];
-const get = async path => {
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-};
-const optionalGet = async path => {
-  const response = await fetch(path);
-  if (response.status === 503) return null;
-  if (!response.ok) throw new Error(await response.text());
-  return response.json();
-};
-const circle = (lat, lon, radius, css, fill) => {
-  const [cx, cy] = xy(lat, lon);
-  const node = document.createElementNS(ns, "circle");
-  Object.entries({cx, cy, r: radius, class: css, fill}).forEach(([k, v]) => node.setAttribute(k, v));
-  svg.appendChild(node);
-};
-const drawGrid = () => {
-  svg.replaceChildren();
-  for (let lon = -180; lon <= 180; lon += 30) {
-    const line = document.createElementNS(ns, "line");
-    const [x] = xy(0, lon);
-    Object.entries({x1:x, x2:x, y1:0, y2:450, class:"grid"}).forEach(([k,v]) => line.setAttribute(k,v));
-    svg.appendChild(line);
-  }
-  for (let lat = -60; lat <= 60; lat += 30) {
-    const line = document.createElementNS(ns, "line");
-    const [, y] = xy(lat, 0);
-    Object.entries({x1:0, x2:900, y1:y, y2:y, class:"grid"}).forEach(([k,v]) => line.setAttribute(k,v));
-    svg.appendChild(line);
-  }
-};
-const color = value => `hsl(${220 - Math.min(value * 900, 180)} 80% 55%)`;
-async function render() {
-  document.querySelector("#error").textContent = "";
-  const selected = document.querySelector("#variant").selectedOptions[0];
-  const variant = selected.value;
-  const resolution = selected.dataset.resolution;
-  const [observations, surface] = await Promise.all([
-    optionalGet(`/v1/atlas/observations?variant_id=${encodeURIComponent(variant)}`),
-    get(`/v1/atlas/surface?variant_id=${encodeURIComponent(variant)}&resolution=${resolution}`)
-  ]);
-  drawGrid();
-  surface.items.forEach(row => {
-    const masked = ["unknown", "prior_dominated"].includes(row.support);
-    circle(row.lat, row.lon, 10, masked ? "masked" : "", masked ? "#111827" : color(row.post_mean));
-  });
-  (observations?.items || []).forEach(row => circle(row.lat, row.lon, 6, "observation", "none"));
-  document.querySelector("#legend").textContent =
-    `${selected.dataset.measurement.replaceAll("_", " ")} posterior mean · ` +
-    "orange outlines are unknown or prior-dominated; observations are shown only when published.";
-  document.querySelector("#versions").textContent =
-    `data ${surface.data_version} · model ${surface.model_version}`;
-  document.querySelector("#counts").textContent =
-    `${observations?.count ?? "unavailable"} observations · ${surface.count} cells`;
-}
-async function start() {
-  try {
-    const [ready, variants] = await Promise.all([get("/ready"), get("/v1/atlas/variants")]);
-    document.querySelector("#readiness").textContent = `● ${ready.status}`;
-    const select = document.querySelector("#variant");
-    variants.items.forEach(item => {
-      const option = document.createElement("option");
-      option.value = item.variant_id;
-      option.textContent = `${item.label} · ${item.variant_id}`;
-      option.dataset.resolution = item.resolutions[0];
-      option.dataset.measurement = item.measurement;
-      select.appendChild(option);
-    });
-    await render();
-  } catch (error) {
-    document.querySelector("#readiness").textContent = "● unavailable";
-    document.querySelector("#error").textContent = error.message;
-  }
-}
-document.querySelector("#reload").addEventListener("click", () => render().catch(error => {
-  document.querySelector("#error").textContent = error.message;
-}));
-start();
+const canvas = document.querySelector("#map");
+const ctx = canvas.getContext("2d");
+const tooltip = document.querySelector("#tooltip");
+const state = {countries: null, cells: [], scale: 1, offsetX: 0, offsetY: 0, dragging: false,
+  lastX: 0, lastY: 0, metric: "post_mean", showMask: true, selected: null};
+const quadrants = [-180,-90,0,90].flatMap(west => [[west,-90,west+90,0],[west,0,west+90,90]]);
+const get = async path => { const response = await fetch(path); if (!response.ok) throw new Error(await response.text());
+  return response.json(); };
+const project = (lon, lat) => [((lon + 180) / 360) * canvas.width, ((90 - lat) / 180) * canvas.height];
+const screen = (lon, lat) => { const [x,y] = project(lon,lat); return [(x-canvas.width/2)*state.scale+
+  canvas.width/2+state.offsetX, (y-canvas.height/2)*state.scale+canvas.height/2+state.offsetY]; };
+function resize() { const ratio = window.devicePixelRatio || 1; canvas.width = canvas.clientWidth*ratio;
+  canvas.height = canvas.clientHeight*ratio; draw(); }
+function pathRing(ring) { ring.forEach(([lon,lat],i) => { const [x,y]=screen(lon,lat); i ? ctx.lineTo(x,y) : ctx.moveTo(x,y); }); }
+function drawCountries() { if (!state.countries) return; ctx.beginPath(); state.countries.features.forEach(feature => {
+  const geometry=feature.geometry; const polygons=geometry.type === "Polygon" ? [geometry.coordinates] : geometry.coordinates;
+  polygons.forEach(polygon => polygon.forEach(pathRing)); }); ctx.fillStyle="#e8edf3"; ctx.strokeStyle="#8997aa";
+  ctx.lineWidth=Math.max(0.45,0.7*state.scale); ctx.fill("evenodd"); ctx.stroke(); }
+const ramp = t => { const stops=[[48,18,59],[65,69,171],[42,157,143],[168,219,52],[249,199,79],[215,25,28]];
+  const x=Math.max(0,Math.min(.999,t))*(stops.length-1), i=Math.floor(x), f=x-i;
+  return `rgb(${stops[i].map((v,j)=>Math.round(v+(stops[i+1][j]-v)*f)).join(",")})`; };
+function draw() { if (!ctx) return; ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle="#f8fbff";
+  ctx.fillRect(0,0,canvas.width,canvas.height); drawCountries(); if (!state.cells.length) return;
+  const values=state.cells.filter(c=>!["unknown","prior_dominated"].includes(c.support)).map(c=>c[state.metric]);
+  const max=Math.max(...values), min=Math.min(...values); document.querySelector("#legend-min").textContent=min.toFixed(3);
+  document.querySelector("#legend-max").textContent=max.toFixed(3); const radius=Math.max(2.2,4.7*state.scale);
+  state.cells.forEach(cell => { const masked=["unknown","prior_dominated"].includes(cell.support); if(masked&&!state.showMask)return;
+    const [x,y]=screen(cell.lon,cell.lat); if(x<-radius||x>canvas.width+radius||y<-radius||y>canvas.height+radius)return;
+    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fillStyle=masked?"#c8ced8":ramp((cell[state.metric]-min)/(max-min||1));
+    ctx.globalAlpha=masked?.75:.92; ctx.fill(); ctx.globalAlpha=1; }); }
+async function loadSurface() { const option=document.querySelector("#variant").selectedOptions[0]; state.selected=option;
+  document.querySelector("#error").textContent=""; document.querySelector("#counts").textContent="Loading global surface…";
+  const id=encodeURIComponent(option.value), res=option.dataset.resolution;
+  const pages=await Promise.all(quadrants.map(([w,s,e,n])=>get(`/v1/atlas/surface?variant_id=${id}&resolution=${res}`+
+    `&limit=5000&west=${w}&south=${s}&east=${e}&north=${n}`)));
+  const unique=new Map(); pages.flatMap(page=>page.items).forEach(cell=>unique.set(cell.h3_index,cell)); state.cells=[...unique.values()];
+  const counts=state.cells.reduce((result,cell)=>{result[cell.support]=(result[cell.support]||0)+1;return result;},{});
+  document.querySelector("#counts").innerHTML=
+    `<strong>${state.cells.length.toLocaleString()}</strong> H3 cells<br>`+Object.entries(counts).map(([k,v])=>`${k}: ${v}`).join("<br>");
+  document.querySelector("#versions").textContent=`data ${pages[0].data_version} · model ${pages[0].model_version}`;
+  document.querySelector("#legend-label").textContent=state.metric==="post_mean" ? option.dataset.measurement.replaceAll("_"," ") : "posterior SD"; draw(); }
+async function start() { try { const [ready,variants,countries]=await Promise.all([get("/ready"),get("/v1/atlas/variants"),
+    get("/preview/basemap")]); state.countries=countries; document.querySelector("#readiness").textContent=`● ${ready.status}`;
+  const select=document.querySelector("#variant"); variants.items.forEach(item=>{const option=document.createElement("option");
+    option.value=item.variant_id; option.textContent=item.label; option.dataset.resolution=item.resolutions[0];
+    option.dataset.measurement=item.measurement; select.appendChild(option);}); await loadSurface(); }
+  catch(error){document.querySelector("#readiness").textContent="● unavailable";document.querySelector("#error").textContent=error.message;} }
+function zoom(factor,x=canvas.width/2,y=canvas.height/2){const old=state.scale;state.scale=Math.max(1,Math.min(12,old*factor));
+  state.offsetX=x-(x-state.offsetX-canvas.width/2)*(state.scale/old)-canvas.width/2;
+  state.offsetY=y-(y-state.offsetY-canvas.height/2)*(state.scale/old)-canvas.height/2;draw();}
+canvas.addEventListener("wheel",event=>{event.preventDefault();const r=canvas.getBoundingClientRect();zoom(event.deltaY<0?1.25:.8,
+  (event.clientX-r.left)*(canvas.width/r.width),(event.clientY-r.top)*(canvas.height/r.height));},{passive:false});
+canvas.addEventListener("pointerdown",event=>{state.dragging=true;state.lastX=event.clientX;state.lastY=event.clientY;
+  canvas.classList.add("dragging");canvas.setPointerCapture(event.pointerId);});
+canvas.addEventListener("pointermove",event=>{if(state.dragging){const ratio=canvas.width/canvas.clientWidth;
+  state.offsetX+=(event.clientX-state.lastX)*ratio;state.offsetY+=(event.clientY-state.lastY)*ratio;
+  state.lastX=event.clientX;state.lastY=event.clientY;draw();return;} const rect=canvas.getBoundingClientRect(),
+  mx=(event.clientX-rect.left)*(canvas.width/rect.width),my=(event.clientY-rect.top)*(canvas.height/rect.height);
+  let nearest=null,distance=Infinity;state.cells.forEach(cell=>{const [x,y]=screen(cell.lon,cell.lat),d=Math.hypot(x-mx,y-my);
+    if(d<distance){distance=d;nearest=cell;}});if(nearest&&distance<Math.max(7,7*state.scale)){tooltip.style.display="block";
+    tooltip.style.left=`${event.clientX-rect.left+14}px`;tooltip.style.top=`${event.clientY-rect.top+14}px`;
+    tooltip.innerHTML=`<strong>${state.selected.textContent}</strong><br>${nearest.lat.toFixed(2)}°, ${nearest.lon.toFixed(2)}°`+
+      `<br>mean: ${nearest.post_mean.toFixed(4)}<br>95% interval: ${nearest.q025.toFixed(4)}–${nearest.q975.toFixed(4)}`+
+      `<br>support: ${nearest.support}`;}else tooltip.style.display="none";});
+canvas.addEventListener("pointerup",()=>{state.dragging=false;canvas.classList.remove("dragging");});
+canvas.addEventListener("pointerleave",()=>{state.dragging=false;canvas.classList.remove("dragging");tooltip.style.display="none";});
+document.querySelector("#variant").addEventListener("change",()=>loadSurface().catch(e=>document.querySelector("#error").textContent=e.message));
+document.querySelectorAll('input[name="metric"]').forEach(input=>input.addEventListener("change",()=>{state.metric=input.value;
+  document.querySelector("#legend-label").textContent=state.metric==="post_mean"?state.selected.dataset.measurement.replaceAll("_"," "):"posterior SD";draw();}));
+document.querySelector("#mask").addEventListener("change",event=>{state.showMask=event.target.checked;draw();});
+document.querySelector("#zoom-in").addEventListener("click",()=>zoom(1.4));document.querySelector("#zoom-out").addEventListener("click",()=>zoom(.72));
+document.querySelector("#reset").addEventListener("click",()=>{state.scale=1;state.offsetX=0;state.offsetY=0;draw();});
+window.addEventListener("resize",resize);resize();start();
 </script>
 </body>
 </html>

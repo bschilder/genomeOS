@@ -11,6 +11,7 @@ from genomeos.atlas_api import (
     atlas_surface,
     atlas_variants,
     preview,
+    preview_basemap,
     ready,
 )
 from genomeos.observability import RequestLoggingMiddleware
@@ -37,6 +38,7 @@ def test_ready_atlas_queries_and_preview_contracts():
     observations = run(atlas_observations(VARIANT, 1_000, None, None, None, None))
     surface = run(atlas_surface(VARIANT, 4, 5_000, None, None, None, None))
     preview_response = run(preview())
+    basemap_response = run(preview_basemap())
 
     assert ready_response["status"] == "ready"
     assert variants["items"][0]["variant_id"] == VARIANT
@@ -48,6 +50,7 @@ def test_ready_atlas_queries_and_preview_contracts():
         "unknown",
     }
     assert str(preview_response.path).endswith("preview.html")
+    assert str(basemap_response.path).endswith("ne_110m_countries.geojson")
 
 
 def test_request_logging_middleware_emits_one_safe_completion_event():

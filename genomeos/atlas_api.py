@@ -17,6 +17,7 @@ from .observability import log_event
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
 PREVIEW_PATH = Path(__file__).with_name("static") / "preview.html"
+BASEMAP_PATH = Path(__file__).resolve().parents[1] / "reference" / "ne_110m_countries.geojson"
 artifact_catalog = ArtifactCatalog(settings.atlas_artifact_root)
 
 
@@ -43,6 +44,11 @@ async def ready():
 @router.get("/preview", include_in_schema=False)
 async def preview():
     return FileResponse(PREVIEW_PATH)
+
+
+@router.get("/preview/basemap", include_in_schema=False)
+async def preview_basemap():
+    return FileResponse(BASEMAP_PATH, media_type="application/geo+json")
 
 
 @router.get("/v1/atlas/variants")
