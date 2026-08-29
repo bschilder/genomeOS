@@ -37,7 +37,7 @@
   </section>
   <section class="panel">
     <svg id="map" viewBox="0 0 900 450" role="img" aria-label="Diagnostic world projection"></svg>
-    <p>White rings: observations. Color: posterior mean. Orange outlines: masked support.</p>
+    <p id="legend">White rings: observations. Color: posterior mean. Orange outlines: masked support.</p>
     <div id="error"></div>
   </section>
 </main>
@@ -47,6 +47,12 @@ const ns = "http://www.w3.org/2000/svg";
 const xy = (lat, lon) => [((lon + 180) / 360) * 900, ((90 - lat) / 180) * 450];
 const get = async path => {
   const response = await fetch(path);
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+};
+const optionalGet = async path => {
+  const response = await fetch(path);
+  if (response.status === 503) return null;
   if (!response.ok) throw new Error(await response.text());
   return response.json();
 };
@@ -74,21 +80,26 @@ const drawGrid = () => {
 const color = value => `hsl(${220 - Math.min(value * 900, 180)} 80% 55%)`;
 async function render() {
   document.querySelector("#error").textContent = "";
-  const variant = document.querySelector("#variant").value;
+  const selected = document.querySelector("#variant").selectedOptions[0];
+  const variant = selected.value;
+  const resolution = selected.dataset.resolution;
   const [observations, surface] = await Promise.all([
-    get(`/v1/atlas/observations?variant_id=${encodeURIComponent(variant)}`),
-    get(`/v1/atlas/surface?variant_id=${encodeURIComponent(variant)}&resolution=4`)
+    optionalGet(`/v1/atlas/observations?variant_id=${encodeURIComponent(variant)}`),
+    get(`/v1/atlas/surface?variant_id=${encodeURIComponent(variant)}&resolution=${resolution}`)
   ]);
   drawGrid();
   surface.items.forEach(row => {
     const masked = ["unknown", "prior_dominated"].includes(row.support);
     circle(row.lat, row.lon, 10, masked ? "masked" : "", masked ? "#111827" : color(row.post_mean));
   });
-  observations.items.forEach(row => circle(row.lat, row.lon, 6, "observation", "none"));
+  (observations?.items || []).forEach(row => circle(row.lat, row.lon, 6, "observation", "none"));
+  document.querySelector("#legend").textContent =
+    `${selected.dataset.measurement.replaceAll("_", " ")} posterior mean · ` +
+    "orange outlines are unknown or prior-dominated; observations are shown only when published.";
   document.querySelector("#versions").textContent =
     `data ${surface.data_version} · model ${surface.model_version}`;
   document.querySelector("#counts").textContent =
-    `${observations.count} observations · ${surface.count} cells`;
+    `${observations?.count ?? "unavailable"} observations · ${surface.count} cells`;
 }
 async function start() {
   try {
@@ -99,6 +110,8 @@ async function start() {
       const option = document.createElement("option");
       option.value = item.variant_id;
       option.textContent = `${item.label} · ${item.variant_id}`;
+      option.dataset.resolution = item.resolutions[0];
+      option.dataset.measurement = item.measurement;
       select.appendChild(option);
     });
     await render();
