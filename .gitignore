@@ -239,6 +239,7 @@ __marimo__/
 data/*
 !data/store/
 data/store/*
+!data/store/catalog-metadata.json
 # The published artifacts ARE the citable output and are ~1.1 MB per variant. Committing them is
 # what gets a result off one laptop. The fits that produced them are ~100 MB each and stay local.
 !data/store/artifacts/

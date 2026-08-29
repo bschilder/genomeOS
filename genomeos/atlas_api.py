@@ -34,6 +34,7 @@ async def ready():
     return {
         "status": "ready",
         "artifact_version": manifest.artifact_version,
+        "registry_version": manifest.registry_version,
         "data_version": manifest.data_version,
         "model_version": manifest.model_version,
     }
@@ -88,7 +89,7 @@ async def atlas_surface(
             variant_id, resolution, limit=limit, bounds=bounds
         )
     except KeyError as error:
-        raise HTTPException(404, "variant is not present in this artifact set") from error
+        raise HTTPException(404, "variant or resolution is not present in this artifact set") from error
     except PermissionError as error:
         raise HTTPException(403, "variant is not eligible for surface rendering") from error
     except ArtifactUnavailable as error:
@@ -117,6 +118,7 @@ def _bounds(
 def _artifact_response(manifest: ArtifactManifest, rows: list[dict]):
     return {
         "artifact_version": manifest.artifact_version,
+        "registry_version": manifest.registry_version,
         "data_version": manifest.data_version,
         "model_version": manifest.model_version,
         "count": len(rows),

@@ -1,0 +1,30 @@
+{
+  "artifact_version": "atlas-surfaces-2026-08-v1",
+  "registry_version": "map-survey-coordinates-v1",
+  "created_at": "2026-08-27T00:00:00Z",
+  "assumptions": [
+    "surface-only catalog; observation and burden serving artifacts are not yet published",
+    "MAP survey coordinates do not use the P0 population registry"
+  ],
+  "variants": {
+    "chr11-5227002-T-A": {
+      "label": "HbS (rs334)",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "surface_eligible": true,
+      "assumptions": [
+        "beta-binomial spatial surface over MAP HbS surveys"
+      ]
+    },
+    "phenotype:g6pd-deficiency": {
+      "label": "G6PD deficiency in hemizygous males",
+      "entity_type": "phenotype",
+      "measurement": "phenotype_frequency",
+      "surface_eligible": true,
+      "assumptions": [
+        "enzyme-deficiency phenotype pools multiple causal G6PD alleles",
+        "frequency is measured in hemizygous males"
+      ]
+    }
+  }
+}

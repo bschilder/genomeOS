@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 
@@ -86,9 +87,12 @@ def main() -> None:
 
     observations.to_parquet(args.out / "observations.parquet", index=False)
     surfaces.to_parquet(args.out / "surfaces.parquet", index=False)
+    observation_path = args.out / "observations.parquet"
+    surface_path = args.out / "surfaces.parquet"
     manifest = {
-        "schema_version": "1",
+        "schema_version": "2",
         "artifact_version": "demo-artifacts-v1",
+        "registry_version": "demo-registry-v1",
         "data_version": DATA_VERSION,
         "model_version": MODEL_VERSION,
         "created_at": "2026-08-24T00:00:00Z",
@@ -96,16 +100,36 @@ def main() -> None:
             {
                 "variant_id": VARIANT_ID,
                 "label": "HbS (rs334)",
+                "entity_type": "variant",
+                "measurement": "allele_frequency",
                 "surface_eligible": True,
+                "assumptions": ["synthetic diagnostic data; not a scientific result"],
+                "resolutions": [4],
+                "observations": {
+                    "path": observation_path.name,
+                    "sha256": _sha256(observation_path),
+                    "row_count": len(observations),
+                    "schema_version": "observations-v1",
+                },
+                "surface": {
+                    "path": surface_path.name,
+                    "sha256": _sha256(surface_path),
+                    "row_count": len(surfaces),
+                    "schema_version": "surface-v1",
+                },
+                "burden": None,
             }
         ],
-        "observations_path": "observations.parquet",
-        "surfaces_path": "surfaces.parquet",
+        "assumptions": ["fixture-backed diagnostic catalog"],
     }
     (args.out / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
     print(f"demo artifacts: {len(observations)} observations, {len(surfaces)} surface cells")
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 if __name__ == "__main__":
