@@ -7,6 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY genomeos ./genomeos
+COPY demo/artifacts ./demo/artifacts
 RUN pip install --no-cache-dir '.[postgres,tabix,read]'
 
 USER 65532:65532

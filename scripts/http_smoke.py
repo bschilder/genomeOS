@@ -63,7 +63,8 @@ def main() -> int:
         "prior_dominated",
         "unknown",
     }
-    assert b"browser \xe2\x86\x92 API \xe2\x86\x92 DuckDB" in preview
+    assert b"Interactive diagnostic of immutable published surfaces" in preview
+    assert b"not a product map" in preview
     print("HTTP smoke passed: ready, variants, observations, surface, preview")
     return 0
 

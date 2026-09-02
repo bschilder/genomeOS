@@ -35,7 +35,16 @@ The active local GCP configuration must be verified before every deployment.
 Infrastructure creation is intentionally not hidden inside the application
 startup process.
 
-`cloudbuild.yaml` builds the image in Artifact Registry. The Cloud Run template
+`cloudbuild.yaml` builds the image in Artifact Registry. Supply an immutable
+`_TAG` (normally the Git commit SHA) for manual builds; the default `diagnostic`
+tag is only for the synthetic preview. The Cloud Run template
 at `deploy/cloudrun-service.yaml` contains explicit placeholders for the project,
 region, Cloud SQL instance, service account, and image tag. Replace and review
 those values before applying it; never deploy the template verbatim.
+
+The image contains the tiny checked-in synthetic catalog at
+`/app/demo/artifacts` so `/preview` can prove the container read path. Set
+`ATLAS_ARTIFACT_ROOT=/app/demo/artifacts` only for a diagnostic deployment and
+never present those fixtures as scientific results. Production requires an
+explicit immutable artifact root and completion of the GCS work tracked in #33
+and #49.
