@@ -42,9 +42,13 @@ def test_ready_atlas_queries_and_preview_contracts():
 
     assert ready_response["status"] == "ready"
     assert variants["items"][0]["variant_id"] == VARIANT
+    assert variants["items"][0]["has_observations"] is True
+    assert variants["items"][0]["has_surface"] is True
+    assert variants["items"][0]["has_burden"] is False
     assert observations["count"] == 3
     assert surface["count"] == 6
     assert surface["data_version"] == ready_response["data_version"]
+    assert all(len(item["boundary"]) >= 5 for item in surface["items"] if item["boundary"])
     assert {item["support"] for item in surface["items"]} >= {
         "prior_dominated",
         "unknown",

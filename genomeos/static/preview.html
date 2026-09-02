@@ -112,11 +112,13 @@ function draw() { if (!ctx) return; ctx.clearRect(0,0,canvas.width,canvas.height
   ctx.fillRect(0,0,canvas.width,canvas.height); drawCountries(); if (!state.cells.length) return;
   const values=state.cells.filter(c=>!["unknown","prior_dominated"].includes(c.support)).map(c=>c[state.metric]);
   const max=Math.max(...values), min=Math.min(...values); document.querySelector("#legend-min").textContent=min.toFixed(3);
-  document.querySelector("#legend-max").textContent=max.toFixed(3); const radius=Math.max(2.2,4.7*state.scale);
+  document.querySelector("#legend-max").textContent=max.toFixed(3);
   state.cells.forEach(cell => { const masked=["unknown","prior_dominated"].includes(cell.support); if(masked&&!state.showMask)return;
-    const [x,y]=screen(cell.lon,cell.lat); if(x<-radius||x>canvas.width+radius||y<-radius||y>canvas.height+radius)return;
-    ctx.beginPath(); ctx.arc(x,y,radius,0,Math.PI*2); ctx.fillStyle=masked?"#c8ced8":ramp((cell[state.metric]-min)/(max-min||1));
-    ctx.globalAlpha=masked?.75:.92; ctx.fill(); ctx.globalAlpha=1; }); }
+    if(!cell.boundary)return; const [x,y]=screen(cell.lon,cell.lat); if(x<0||x>canvas.width||y<0||y>canvas.height)return;
+    ctx.beginPath(); pathRing(cell.boundary); ctx.closePath();
+    ctx.fillStyle=cell.support==="unknown"?"#c8ced8":cell.support==="prior_dominated"?"#9aa4b2":
+      ramp((cell[state.metric]-min)/(max-min||1)); ctx.globalAlpha=masked?.72:.92; ctx.fill();
+    ctx.globalAlpha=1; ctx.strokeStyle=masked?"#7f8a99":"#ffffff55"; ctx.lineWidth=Math.max(.35,.55*state.scale); ctx.stroke(); }); }
 async function loadSurface() { const option=document.querySelector("#variant").selectedOptions[0]; state.selected=option;
   document.querySelector("#error").textContent=""; document.querySelector("#counts").textContent="Loading global surface…";
   const id=encodeURIComponent(option.value), res=option.dataset.resolution;

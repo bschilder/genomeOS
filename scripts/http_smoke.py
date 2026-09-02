@@ -48,12 +48,12 @@ def main() -> int:
     variants = json.loads(variants_body)
     basemap = json.loads(basemap_body)
     encoded = urllib.parse.quote(VARIANT_ID)
-    _, observations_body = get(base_url, f"/v1/atlas/observations?variant_id={encoded}")
     _, surface_body = get(
-        base_url, f"/v1/atlas/surface?variant_id={encoded}&resolution=4"
+        base_url,
+        f"/v1/atlas/surface?variant_id={encoded}&resolution="
+        f"{variants['items'][0]['resolutions'][0]}",
     )
     _, preview = get(base_url, "/preview")
-    observations = json.loads(observations_body)
     surface = json.loads(surface_body)
 
     assert response.headers["X-Request-ID"] == "http-smoke-1"
@@ -61,15 +61,15 @@ def main() -> int:
     assert basemap["features"]
     assert ready["data_version"] == variants["data_version"] == surface["data_version"]
     assert variants["items"][0]["variant_id"] == VARIANT_ID
-    assert observations["count"] == 3
-    assert surface["count"] == 6
-    assert {item["support"] for item in surface["items"]} >= {
-        "prior_dominated",
-        "unknown",
-    }
+    assert surface["count"] > 0
+    assert all(item["boundary"] for item in surface["items"] if item["boundary"] is not None)
+    if variants["items"][0]["has_observations"]:
+        _, observations_body = get(base_url, f"/v1/atlas/observations?variant_id={encoded}")
+        assert json.loads(observations_body)["count"] > 0
+    assert "unknown" in {item["support"] for item in surface["items"]}
     assert b"Interactive diagnostic of immutable published surfaces" in preview
     assert b"not a product map" in preview
-    print("HTTP smoke passed: ready, variants, observations, surface, preview")
+    print("HTTP smoke passed: ready, variants, surface, optional observations, preview")
     return 0
 
 

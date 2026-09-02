@@ -75,7 +75,7 @@ class VariantEntry(BaseModel):
 
     def public_metadata(self) -> dict:
         """Return client-safe metadata without storage paths or object checksums."""
-        return self.model_dump(
+        metadata = self.model_dump(
             include={
                 "variant_id",
                 "label",
@@ -86,6 +86,12 @@ class VariantEntry(BaseModel):
                 "resolutions",
             }
         )
+        metadata.update(
+            has_observations=self.observations is not None,
+            has_surface=self.surface is not None,
+            has_burden=self.burden is not None,
+        )
+        return metadata
 
 
 class ArtifactManifest(BaseModel):

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import h3
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import text
@@ -100,7 +101,20 @@ async def atlas_surface(
         raise HTTPException(403, "variant is not eligible for surface rendering") from error
     except ArtifactUnavailable as error:
         raise HTTPException(503, "surface artifact is unavailable") from error
-    return _artifact_response(manifest, rows)
+    return _artifact_response(manifest, [_with_h3_boundary(row) for row in rows])
+
+
+def _with_h3_boundary(row: dict) -> dict:
+    """Add render geometry without changing the immutable scientific values (design §10)."""
+    boundary = h3.cell_to_boundary(row["h3_index"])
+    lons = [point[1] for point in boundary]
+    rendered = dict(row)
+    rendered["boundary"] = (
+        None
+        if max(lons) - min(lons) > 180.0
+        else [[point[1], point[0]] for point in boundary]
+    )
+    return rendered
 
 
 def _bounds(
