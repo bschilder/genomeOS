@@ -44,7 +44,9 @@ def main() -> int:
 
     ready = wait_ready(base_url, args.timeout)
     response, variants_body = get(base_url, "/v1/atlas/variants", request_id="http-smoke-1")
+    _, basemap_body = get(base_url, "/preview/basemap")
     variants = json.loads(variants_body)
+    basemap = json.loads(basemap_body)
     encoded = urllib.parse.quote(VARIANT_ID)
     _, observations_body = get(base_url, f"/v1/atlas/observations?variant_id={encoded}")
     _, surface_body = get(
@@ -55,6 +57,8 @@ def main() -> int:
     surface = json.loads(surface_body)
 
     assert response.headers["X-Request-ID"] == "http-smoke-1"
+    assert basemap["type"] == "FeatureCollection"
+    assert basemap["features"]
     assert ready["data_version"] == variants["data_version"] == surface["data_version"]
     assert variants["items"][0]["variant_id"] == VARIANT_ID
     assert observations["count"] == 3

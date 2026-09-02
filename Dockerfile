@@ -8,6 +8,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY genomeos ./genomeos
 COPY demo/artifacts ./demo/artifacts
+COPY reference/ne_110m_countries.geojson ./reference/ne_110m_countries.geojson
 RUN pip install --no-cache-dir '.[postgres,tabix,read]'
 
 USER 65532:65532
