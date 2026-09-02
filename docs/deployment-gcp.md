@@ -39,8 +39,10 @@ startup process.
 `_TAG` (normally the Git commit SHA) for manual builds; the default `diagnostic`
 tag is only for the synthetic preview. The Cloud Run template
 at `deploy/cloudrun-service.yaml` contains explicit placeholders for the project,
-region, Cloud SQL instance, service account, and image tag. Replace and review
-those values before applying it; never deploy the template verbatim.
+region, Cloud SQL instance, service account, image tag, artifact bucket, and
+artifact version. Replace and review those values before applying it; never
+deploy the template verbatim. The runtime identity needs `roles/storage.objectViewer`
+on that bucket.
 
 The image contains the tiny checked-in synthetic catalog at
 `/app/demo/artifacts` so `/preview` can prove the container read path. Set
@@ -48,3 +50,8 @@ The image contains the tiny checked-in synthetic catalog at
 never present those fixtures as scientific results. Production requires an
 explicit immutable artifact root and completion of the GCS work tracked in #33
 and #49.
+
+Cloud Run mounts the artifact bucket read-only at `/mnt/atlas` in the second-generation
+execution environment. Publish every version below `catalogs/<artifact-version>/`, upload
+data objects before `manifest.json`, and set `ATLAS_ARTIFACT_ROOT` to that exact versioned
+directory. Never point the service at a mutable bucket root.

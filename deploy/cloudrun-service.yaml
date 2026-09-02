@@ -10,6 +10,7 @@ spec:
       annotations:
         autoscaling.knative.dev/maxScale: "10"
         run.googleapis.com/cloudsql-instances: PROJECT_ID:REGION:INSTANCE_NAME
+        run.googleapis.com/execution-environment: gen2
     spec:
       containerConcurrency: 40
       timeoutSeconds: 300
@@ -25,12 +26,24 @@ spec:
               value: "true"
             - name: PANUKB_REGION_MAX_ROWS
               value: "10000"
+            - name: ATLAS_ARTIFACT_ROOT
+              value: /mnt/atlas/catalogs/ARTIFACT_VERSION
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
                   name: genomeos-database-url
                   key: latest
+          volumeMounts:
+            - name: atlas-artifacts
+              mountPath: /mnt/atlas
           resources:
             limits:
               cpu: "2"
               memory: 2Gi
+      volumes:
+        - name: atlas-artifacts
+          csi:
+            driver: gcsfuse.run.googleapis.com
+            readOnly: true
+            volumeAttributes:
+              bucketName: ARTIFACT_BUCKET
