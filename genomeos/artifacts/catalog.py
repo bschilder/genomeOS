@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Any
 
 import duckdb
 
-from genomeos.artifacts.manifest import ArtifactManifest
+from genomeos.artifacts.manifest import ArtifactFile, ArtifactManifest
 from genomeos.observability import log_event
 
 LOGGER = logging.getLogger(__name__)
@@ -57,10 +58,12 @@ class ArtifactCatalog:
         path = self.root / "manifest.json"
         try:
             manifest = ArtifactManifest.load(path)
-            for relative in (manifest.observations_path, manifest.surfaces_path):
-                artifact = (self.root / relative).resolve()
+            for entry in manifest.files():
+                artifact = (self.root / entry.path).resolve()
                 if not artifact.is_relative_to(self.root) or not artifact.is_file():
-                    raise ArtifactUnavailable(f"artifact file is unavailable: {relative}")
+                    raise ArtifactUnavailable(f"artifact file is unavailable: {entry.path}")
+                if _sha256(artifact) != entry.sha256:
+                    raise ArtifactUnavailable(f"artifact checksum does not match: {entry.path}")
         except (OSError, ValueError) as error:
             raise ArtifactUnavailable(f"manifest is unavailable or invalid: {path}") from error
         log_event(
@@ -77,13 +80,15 @@ class ArtifactCatalog:
 
     def check_ready(self) -> ArtifactManifest:
         manifest = self.load_manifest()
-        self._query(manifest.observations_path, ("variant_id",), limit=1, emit_log=False)
-        self._query(manifest.surfaces_path, ("variant_id",), limit=1, emit_log=False)
+        for entry in manifest.files():
+            self._query(entry, ("variant_id",), limit=1, emit_log=False)
+            if self._row_count(entry) != entry.row_count:
+                raise ArtifactUnavailable(f"artifact row count does not match: {entry.path}")
         return manifest
 
     def list_variants(self) -> tuple[ArtifactManifest, tuple[dict[str, Any], ...]]:
         manifest = self.load_manifest()
-        return manifest, tuple(variant.model_dump() for variant in manifest.variants)
+        return manifest, tuple(variant.public_metadata() for variant in manifest.variants)
 
     def observations(
         self,
@@ -92,9 +97,12 @@ class ArtifactCatalog:
         limit: int = 1_000,
         bounds: tuple[float, float, float, float] | None = None,
     ) -> tuple[ArtifactManifest, list[dict[str, Any]]]:
-        manifest = self._eligible_manifest(variant_id, surface_required=False)
+        manifest = self.load_manifest()
+        variant = self._variant(manifest, variant_id)
+        if variant.observations is None:
+            raise ArtifactUnavailable(f"observation artifact is unavailable for {variant_id}")
         rows = self._query(
-            manifest.observations_path,
+            variant.observations,
             OBSERVATION_COLUMNS,
             variant_id=variant_id,
             bounds=bounds,
@@ -112,9 +120,16 @@ class ArtifactCatalog:
         limit: int = 5_000,
         bounds: tuple[float, float, float, float] | None = None,
     ) -> tuple[ArtifactManifest, list[dict[str, Any]]]:
-        manifest = self._eligible_manifest(variant_id, surface_required=True)
+        manifest = self.load_manifest()
+        variant = self._variant(manifest, variant_id)
+        if not variant.surface_eligible:
+            raise PermissionError(f"surface rendering is not eligible for {variant_id}")
+        if variant.surface is None:
+            raise ArtifactUnavailable(f"surface artifact is unavailable for {variant_id}")
+        if resolution not in variant.resolutions:
+            raise KeyError(f"resolution {resolution} is unavailable for {variant_id}")
         rows = self._query(
-            manifest.surfaces_path,
+            variant.surface,
             SURFACE_COLUMNS,
             variant_id=variant_id,
             resolution=resolution,
@@ -125,20 +140,16 @@ class ArtifactCatalog:
         )
         return manifest, rows
 
-    def _eligible_manifest(
-        self, variant_id: str, *, surface_required: bool
-    ) -> ArtifactManifest:
-        manifest = self.load_manifest()
+    @staticmethod
+    def _variant(manifest: ArtifactManifest, variant_id: str):
         variant = manifest.variant(variant_id)
         if variant is None:
             raise KeyError(variant_id)
-        if surface_required and not variant.surface_eligible:
-            raise PermissionError(f"surface rendering is not eligible for {variant_id}")
-        return manifest
+        return variant
 
     def _query(
         self,
-        relative_path: str,
+        artifact: ArtifactFile,
         columns: tuple[str, ...],
         *,
         variant_id: str | None = None,
@@ -151,7 +162,7 @@ class ArtifactCatalog:
     ) -> list[dict[str, Any]]:
         if not 1 <= limit <= MAX_ROWS:
             raise ValueError(f"limit must be between 1 and {MAX_ROWS}")
-        path = str((self.root / relative_path).resolve())
+        path = str((self.root / artifact.path).resolve())
         clauses: list[str] = []
         parameters: list[Any] = [path]
         if variant_id is not None:
@@ -181,19 +192,19 @@ class ArtifactCatalog:
                     LOGGER,
                     "artifact_query_failed",
                     duration_ms=_milliseconds(started),
-                    artifact_kind=Path(relative_path).stem,
+                    artifact_kind=Path(artifact.path).stem,
                     variant_id=variant_id,
                     data_version=data_version,
                     model_version=model_version,
                     error_type=type(error).__name__,
                 )
-            raise ArtifactUnavailable(f"artifact query failed for {relative_path}") from error
+            raise ArtifactUnavailable(f"artifact query failed for {artifact.path}") from error
         if emit_log:
             log_event(
                 LOGGER,
                 "artifact_query_completed",
                 duration_ms=_milliseconds(started),
-                artifact_kind=Path(relative_path).stem,
+                artifact_kind=Path(artifact.path).stem,
                 variant_id=variant_id,
                 h3_resolution=resolution,
                 data_version=data_version,
@@ -202,6 +213,22 @@ class ArtifactCatalog:
             )
         return rows
 
+    def _row_count(self, artifact: ArtifactFile) -> int:
+        path = str((self.root / artifact.path).resolve())
+        try:
+            with duckdb.connect() as connection:
+                return int(connection.execute("SELECT count(*) FROM read_parquet(?)", [path]).fetchone()[0])
+        except duckdb.Error as error:
+            raise ArtifactUnavailable(f"artifact query failed for {artifact.path}") from error
+
 
 def _milliseconds(started: float) -> float:
     return round((time.perf_counter() - started) * 1_000, 3)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()

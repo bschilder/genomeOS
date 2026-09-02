@@ -1,0 +1,193 @@
+{
+  "$defs": {
+    "ArtifactFile": {
+      "additionalProperties": false,
+      "description": "One immutable Parquet object referenced by the catalog.",
+      "properties": {
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "row_count": {
+          "minimum": 0,
+          "title": "Row Count",
+          "type": "integer"
+        },
+        "schema_version": {
+          "minLength": 1,
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256",
+        "row_count",
+        "schema_version"
+      ],
+      "title": "ArtifactFile",
+      "type": "object"
+    },
+    "VariantEntry": {
+      "additionalProperties": false,
+      "description": "Public metadata and immutable objects for one renderable entity.",
+      "properties": {
+        "assumptions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Assumptions",
+          "type": "array"
+        },
+        "burden": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entity_type": {
+          "enum": [
+            "variant",
+            "phenotype"
+          ],
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "measurement": {
+          "enum": [
+            "allele_frequency",
+            "carrier_frequency",
+            "phenotype_frequency"
+          ],
+          "title": "Measurement",
+          "type": "string"
+        },
+        "observations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "resolutions": {
+          "default": [],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Resolutions",
+          "type": "array"
+        },
+        "surface": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactFile"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "surface_eligible": {
+          "title": "Surface Eligible",
+          "type": "boolean"
+        },
+        "variant_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9:._-]+$",
+          "title": "Variant Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "variant_id",
+        "label",
+        "entity_type",
+        "measurement",
+        "surface_eligible"
+      ],
+      "title": "VariantEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One immutable, version-pinned Atlas serving catalog.",
+  "properties": {
+    "artifact_version": {
+      "minLength": 1,
+      "title": "Artifact Version",
+      "type": "string"
+    },
+    "assumptions": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Assumptions",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "data_version": {
+      "minLength": 1,
+      "title": "Data Version",
+      "type": "string"
+    },
+    "model_version": {
+      "minLength": 1,
+      "title": "Model Version",
+      "type": "string"
+    },
+    "registry_version": {
+      "minLength": 1,
+      "title": "Registry Version",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "2",
+      "default": "2",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "variants": {
+      "items": {
+        "$ref": "#/$defs/VariantEntry"
+      },
+      "minItems": 1,
+      "title": "Variants",
+      "type": "array"
+    }
+  },
+  "required": [
+    "artifact_version",
+    "registry_version",
+    "data_version",
+    "model_version",
+    "created_at",
+    "variants"
+  ],
+  "title": "ArtifactManifest",
+  "type": "object"
+}

@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import h3
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 from sqlalchemy import text
@@ -17,6 +18,7 @@ from .observability import log_event
 router = APIRouter()
 LOGGER = logging.getLogger(__name__)
 PREVIEW_PATH = Path(__file__).with_name("static") / "preview.html"
+BASEMAP_PATH = Path(__file__).resolve().parents[1] / "reference" / "ne_110m_countries.geojson"
 artifact_catalog = ArtifactCatalog(settings.atlas_artifact_root)
 
 
@@ -34,6 +36,7 @@ async def ready():
     return {
         "status": "ready",
         "artifact_version": manifest.artifact_version,
+        "registry_version": manifest.registry_version,
         "data_version": manifest.data_version,
         "model_version": manifest.model_version,
     }
@@ -42,6 +45,11 @@ async def ready():
 @router.get("/preview", include_in_schema=False)
 async def preview():
     return FileResponse(PREVIEW_PATH)
+
+
+@router.get("/preview/basemap", include_in_schema=False)
+async def preview_basemap():
+    return FileResponse(BASEMAP_PATH, media_type="application/geo+json")
 
 
 @router.get("/v1/atlas/variants")
@@ -88,12 +96,25 @@ async def atlas_surface(
             variant_id, resolution, limit=limit, bounds=bounds
         )
     except KeyError as error:
-        raise HTTPException(404, "variant is not present in this artifact set") from error
+        raise HTTPException(404, "variant or resolution is not present in this artifact set") from error
     except PermissionError as error:
         raise HTTPException(403, "variant is not eligible for surface rendering") from error
     except ArtifactUnavailable as error:
         raise HTTPException(503, "surface artifact is unavailable") from error
-    return _artifact_response(manifest, rows)
+    return _artifact_response(manifest, [_with_h3_boundary(row) for row in rows])
+
+
+def _with_h3_boundary(row: dict) -> dict:
+    """Add render geometry without changing the immutable scientific values (design §10)."""
+    boundary = h3.cell_to_boundary(row["h3_index"])
+    lons = [point[1] for point in boundary]
+    rendered = dict(row)
+    rendered["boundary"] = (
+        None
+        if max(lons) - min(lons) > 180.0
+        else [[point[1], point[0]] for point in boundary]
+    )
+    return rendered
 
 
 def _bounds(
@@ -117,6 +138,7 @@ def _bounds(
 def _artifact_response(manifest: ArtifactManifest, rows: list[dict]):
     return {
         "artifact_version": manifest.artifact_version,
+        "registry_version": manifest.registry_version,
         "data_version": manifest.data_version,
         "model_version": manifest.model_version,
         "count": len(rows),

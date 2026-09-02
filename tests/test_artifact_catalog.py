@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -47,3 +49,21 @@ def test_catalog_fails_closed_for_unknown_or_ineligible_paths(tmp_path):
         ArtifactCatalog(tmp_path).check_ready()
     with pytest.raises(KeyError):
         ArtifactCatalog(DEMO).surface("chr1-1-A-C", 4)
+
+
+def test_catalog_refuses_checksum_and_declared_row_count_drift(tmp_path):
+    checksum_root = tmp_path / "checksum"
+    shutil.copytree(DEMO, checksum_root)
+    surface = checksum_root / "surfaces.parquet"
+    surface.write_bytes(surface.read_bytes() + b"tampered")
+    with pytest.raises(ArtifactUnavailable, match="checksum"):
+        ArtifactCatalog(checksum_root).check_ready()
+
+    count_root = tmp_path / "count"
+    shutil.copytree(DEMO, count_root)
+    manifest_path = count_root / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["variants"][0]["surface"]["row_count"] += 1
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ArtifactUnavailable, match="row count"):
+        ArtifactCatalog(count_root).check_ready()

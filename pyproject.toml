@@ -22,11 +22,12 @@ dependencies = [
 [project.optional-dependencies]
 postgres = ["psycopg[binary]>=3.2,<4"]
 tabix = ["pysam>=0.23,<1"]
-read = ["duckdb>=1.1"]
+read = ["duckdb>=1.1", "h3>=4.1,<5"]
 # Atlas data foundation (P0/P1). Kept out of the default install so the Pan-UKB
 # API container does not carry pyarrow/duckdb, which it never uses.
 atlas = [
-  "pandera[pandas]>=0.23,<1",
+  # 0.33.1 changes four frozen schema exports without a GenomeOS schema change.
+  "pandera[pandas]>=0.23,<0.33",
   "pandas>=2.2,<4",
   "pyarrow>=17",
   "duckdb>=1.1",
