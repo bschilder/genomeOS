@@ -1,3 +1,11 @@
+FROM node:24-alpine AS map-ui
+
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN npm ci
+COPY web ./
+RUN npm run build
+
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -7,6 +15,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY genomeos ./genomeos
+COPY --from=map-ui /web/out ./genomeos/static/map
 COPY demo/artifacts ./demo/artifacts
 COPY reference/ne_110m_countries.geojson ./reference/ne_110m_countries.geojson
 RUN pip install --no-cache-dir '.[postgres,tabix,read]'
