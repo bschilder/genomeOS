@@ -214,6 +214,12 @@ tempCodeRunnerFile.py
 .codex/
 .local/
 .nvim-chatgpt/
+web/.next/
+web/node_modules/
+web/out/
+web/*.tsbuildinfo
+!web/lib/
+!web/lib/*.ts
 example/
 .env.*
 !.env.example

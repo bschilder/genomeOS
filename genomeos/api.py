@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
@@ -16,6 +18,9 @@ from .schemas import AssociationOut, Page, PhenotypeOut, ProvenanceOut
 from .tabix import Region, RegionQueryUnavailable, TabixRegionReader
 
 LOGGER = logging.getLogger(__name__)
+MAP_UI_PATH = Path(__file__).with_name("static") / "map"
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     configure_logging(settings.log_level)
@@ -27,6 +32,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="GenomeOS", version="0.1.0", lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(atlas_router)
+app.mount("/map", StaticFiles(directory=MAP_UI_PATH, html=True, check_dir=False), name="atlas-map")
 
 
 @app.get("/health")
