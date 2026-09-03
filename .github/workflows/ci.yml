@@ -13,6 +13,21 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install map UI
+        working-directory: web
+        run: npm ci
+      - name: Check map UI
+        working-directory: web
+        run: |
+          npm run typecheck
+          npm test
+          npm audit --omit=dev
+          npm run build
       - name: Install
         run: python -m pip install -e '.[dev,atlas,surfaces,geo,figures]'
       - name: Lint

@@ -54,6 +54,7 @@ def main() -> int:
         f"{variants['items'][0]['resolutions'][0]}",
     )
     _, preview = get(base_url, "/preview")
+    _, map_ui = get(base_url, "/map/")
     surface = json.loads(surface_body)
 
     assert response.headers["X-Request-ID"] == "http-smoke-1"
@@ -69,7 +70,8 @@ def main() -> int:
     assert "unknown" in {item["support"] for item in surface["items"]}
     assert b"Interactive diagnostic of immutable published surfaces" in preview
     assert b"not a product map" in preview
-    print("HTTP smoke passed: ready, variants, surface, optional observations, preview")
+    assert b"GenomeOS Atlas" in map_ui
+    print("HTTP smoke passed: ready, variants, surface, optional observations, preview, map UI")
     return 0
 
 
