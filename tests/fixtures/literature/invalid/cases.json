@@ -1,0 +1,12 @@
+[
+  {"case": "invented_radius", "mutation": "extra_column", "column": "radius_km", "value": 500},
+  {"case": "default_convenience", "mutation": "main_value", "column": "sampling_design", "value": "convenience"},
+  {"case": "fake_singleton_cohort", "mutation": "main_value", "column": "cohort_id", "value": "sample1"},
+  {"case": "rounded_count", "mutation": "main_value", "column": "ac_lower", "value": 18},
+  {"case": "guessed_allele", "mutation": "main_value", "column": "counted_allele", "value": "T"},
+  {"case": "self_verification", "mutation": "main_value", "column": "verified_by", "value": "human:curator"},
+  {"case": "placeholder_locator", "mutation": "main_value", "column": "record_locator", "value": "table:unknown"},
+  {"case": "fabricated_citation", "mutation": "main_value", "column": "citation_id", "value": "made-up-2026"},
+  {"case": "unchecked_reuse", "mutation": "main_value", "column": "reuse_evidence", "value": "no license"},
+  {"case": "omitted_field_evidence", "mutation": "drop_field", "field": "sampling_design"}
+]

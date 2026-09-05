@@ -1,0 +1,20 @@
+source_record_id	field_name	evidence_status	raw_value	evidence_source_id	source_locator	checked_scope	derivation_method	decision_reference	notes
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	variant_id	reported	chr2-135851076-G-A	pmid:29063188	table:3,row:pending,column:variant_id
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	rsid	reported	rs4988235	pmid:29063188	table:3,row:pending,column:rsid
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	counted_allele	reported	A	pmid:29063188	table:3,row:pending,column:counted_allele
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	population_label	reported	Sami	pmid:29063188	table:3,row:pending,column:population_label
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	sample_id	not_reported		pmid:29063188		"[""page:methods-2-4"",""table:3""]"			No sample identifier appears in the checked sections.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	cohort_id	not_reviewed							Participant overlap has not yet been reviewed.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	an	not_reviewed							The called allele denominator has not yet been reviewed.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	ac_lower	not_reviewed							Exact allele counts have not yet been reviewed.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	ac_upper	not_reviewed							Exact allele counts have not yet been reviewed.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	reported_frequency	reported	17/58	pmid:29063188	table:3,row:pending,column:reported_frequency
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	count_basis	not_reviewed							The basis for a count has not yet been established.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	denominator_basis	not_reviewed							The denominator basis has not yet been established.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	citation_id	reported	pmid:29063188	pmid:29063188	table:3,row:pending,column:citation_id
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	citation_text	reported	Liebert A et al. World-wide distributions of lactase persistence alleles and the complex effects of recombination and selection. Hum Genet. 2017.	pmid:29063188	table:3,row:pending,column:citation_text
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	assay	not_reported		pmid:29063188		"[""page:methods-2-4"",""supplement:methods""]"			The checked compilation sections do not state an assay.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	sampling_design	ambiguous	population sample?	pmid:29063188	table:3,row:pending,column:sampling_note				The wording does not identify how participants were recruited.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	disease_ascertainment_excluded	not_reviewed							Disease-based recruitment has not yet been reviewed.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	date_lower	not_reviewed							The participant date has not yet been reviewed.
+literature:lct-rs4988235:590859faffdff1d45cd4afdada9cc3534c5c8b6f8413a29186645fd9e7452497	date_upper	not_reviewed							The participant date has not yet been reviewed.

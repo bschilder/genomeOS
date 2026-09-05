@@ -27,14 +27,14 @@
 - Create: `genomeos/observations/evidence.py`
 - Test: `tests/test_literature_evidence_schema.py`
 
-- [ ] Write failing tests asserting the exact 37-column evidence header, exact 10-column field-evidence header, exact search-manifest header, nullable/non-nullable fields, enums, identifier patterns, and strict column order.
-- [ ] Add table-level failing tests for fake missing strings, placeholder locators, noncanonical DOI/JSON, mismatched corpus IDs, duplicate `source_record_id`, invalid count intervals, reversed dates, same extractor/verifier, verifier fields on pending rows, inconsistent field-evidence cardinality, orphan field evidence, duplicate field names, and incomplete search decisions.
-- [ ] Run `pytest tests/test_literature_evidence_schema.py -q` and confirm the import/test failures are about missing implementation.
-- [ ] Implement constants for all ordered columns, 19 evidence-tracked fields, 16 unconditional promotion fields, conditional `sample_id`, five evidence statuses, extraction/normalization/verification/reuse enums, and the nine-method derivation allowlist.
-- [ ] Implement strict pandera schemas plus pure cross-row validators. Provide `validate_literature_tables(evidence, field_evidence)` and `validate_search_manifest(frame)`; return validated copies and raise hard errors for structural dishonesty.
-- [ ] Implement `make_source_record_id(corpus_id, record_source_id, record_locator)` as the full lowercase SHA-256 of UTF-8 `record_source_id + "\n" + record_locator`, and verify caller-supplied IDs match it.
-- [ ] Recompute and compare all three status columns. Reuse checks aggregate `record_source_id` and non-null field `evidence_source_id` values from canonical JSON evidence; any restriction wins, unchecked sources produce `not_checked`, and a checked source with no named licence may produce `no_restriction_found`.
-- [ ] Run `pytest tests/test_literature_evidence_schema.py -q` and make it pass.
+- [x] Write failing tests asserting the exact 37-column evidence header, exact 10-column field-evidence header, exact search-manifest header, nullable/non-nullable fields, enums, identifier patterns, and strict column order.
+- [x] Add table-level failing tests for fake missing strings, placeholder locators, noncanonical DOI/JSON, mismatched corpus IDs, duplicate `source_record_id`, invalid count intervals, reversed dates, same extractor/verifier, verifier fields on pending rows, inconsistent field-evidence cardinality, orphan field evidence, duplicate field names, and incomplete search decisions.
+- [x] Run `pytest tests/test_literature_evidence_schema.py -q` and confirm the import/test failures are about missing implementation.
+- [x] Implement constants for all ordered columns, 19 evidence-tracked fields, 16 unconditional promotion fields, conditional `sample_id`, five evidence statuses, extraction/normalization/verification/reuse enums, and the nine-method derivation allowlist.
+- [x] Implement strict pandera schemas plus pure cross-row validators. Provide `validate_literature_tables(evidence, field_evidence)` and `validate_search_manifest(frame)`; return validated copies and raise hard errors for structural dishonesty.
+- [x] Implement `make_source_record_id(corpus_id, record_source_id, record_locator)` as the full lowercase SHA-256 of UTF-8 `record_source_id + "\n" + record_locator`, and verify caller-supplied IDs match it.
+- [x] Recompute and compare all three status columns. Reuse checks aggregate `record_source_id` and non-null field `evidence_source_id` values from canonical JSON evidence; any restriction wins, unchecked sources produce `not_checked`, and a checked source with no named licence may produce `no_restriction_found`.
+- [x] Run `pytest tests/test_literature_evidence_schema.py -q` and make it pass.
 
 ### Task 2: Add canonical good, unresolved, derived, and prohibited examples
 
@@ -50,12 +50,12 @@
 - Create: `tests/fixtures/literature/invalid/cases.json`
 - Modify: `tests/test_literature_evidence_schema.py`
 
-- [ ] Build one fully promotable rs4988235 record with an exact alias-backed P0 location and all 19 field-evidence rows.
-- [ ] Build one valid pending record whose absent fields explicitly distinguish `not_reported`, `ambiguous`, and `not_reviewed`.
-- [ ] Build reviewed examples exercising every allowed derivation method; each derived field names raw input, evidence source/location, and deterministic method.
-- [ ] Define representative invalid mutations in `cases.json`: invented country radius, default convenience sampling, fake singleton cohort, rounded count, guessed allele, self-verification, placeholder source locator, fabricated citation, unchecked reuse promoted as reusable, and omitted field-evidence row.
-- [ ] Parameterize fixture validation tests so good/pending/derived files validate and every prohibited shortcut raises the named invariant.
-- [ ] Run `pytest tests/test_literature_evidence_schema.py -q`.
+- [x] Build one fully promotable rs4988235 record with an exact alias-backed P0 location and all 19 field-evidence rows.
+- [x] Build one valid pending record whose absent fields explicitly distinguish `not_reported`, `ambiguous`, and `not_reviewed`.
+- [x] Build reviewed examples exercising every allowed derivation method; each derived field names raw input, evidence source/location, and deterministic method.
+- [x] Define representative invalid mutations in `cases.json`: invented country radius, default convenience sampling, fake singleton cohort, rounded count, guessed allele, self-verification, placeholder source locator, fabricated citation, unchecked reuse promoted as reusable, and omitted field-evidence row.
+- [x] Parameterize fixture validation tests so good/pending/derived files validate and every prohibited shortcut raises the named invariant.
+- [x] Run `pytest tests/test_literature_evidence_schema.py -q`.
 
 ### Task 3: Implement deterministic publication promotion through P0
 

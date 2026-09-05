@@ -1,0 +1,20 @@
+source_record_id	field_name	evidence_status	raw_value	evidence_source_id	source_locator	checked_scope	derivation_method	decision_reference	notes
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	variant_id	reported	chr2-135851076-G-A	pmid:29063188	table:3,row:sami,column:variant_id
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	rsid	reported	rs4988235	pmid:29063188	table:3,row:sami,column:rsid
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	counted_allele	reported	A	pmid:29063188	table:3,row:sami,column:counted_allele
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	population_label	reported	Sami	pmid:29063188	table:3,row:sami,column:population_label
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	sample_id	not_reported		pmid:29063188		"[""page:methods-2-4"",""table:3""]"			No sample or stratum identifier appears in the checked sections.
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	cohort_id	reported	cohort:liebert-2017:sami	pmid:29063188	table:3,row:sami,column:cohort_id
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	an	reported	58	pmid:29063188	table:3,row:sami,column:an
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	ac_lower	reported	17	pmid:29063188	table:3,row:sami,column:ac_lower
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	ac_upper	reported	17	pmid:29063188	table:3,row:sami,column:ac_upper
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	reported_frequency	reported	17/58	pmid:29063188	table:3,row:sami,column:reported_frequency
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	count_basis	reported	reported	pmid:29063188	table:3,row:sami,column:count_basis
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	denominator_basis	reported	reported_alleles	pmid:29063188	table:3,row:sami,column:denominator_basis
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	citation_id	reported	pmid:29063188	pmid:29063188	table:3,row:sami,column:citation_id
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	citation_text	reported	Liebert A et al. World-wide distributions of lactase persistence alleles and the complex effects of recombination and selection. Hum Genet. 2017.	pmid:29063188	table:3,row:sami,column:citation_text
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	assay	reported	targeted genotyping	pmid:29063188	table:3,row:sami,column:assay
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	sampling_design	reported	population_random	pmid:29063188	table:3,row:sami,column:sampling_design
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	disease_ascertainment_excluded	reported	false	pmid:29063188	table:3,row:sami,column:disease_ascertainment_excluded
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	date_lower	reported	0	pmid:29063188	table:3,row:sami,column:date_lower
+literature:lct-rs4988235:f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe	date_upper	reported	0	pmid:29063188	table:3,row:sami,column:date_upper
