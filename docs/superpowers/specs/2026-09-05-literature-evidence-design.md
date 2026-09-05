@@ -48,17 +48,18 @@ This sub-project is accepted when:
 ### Engineering component and public interfaces
 
 - `LITERATURE_EVIDENCE_SCHEMA` validates extracted measurements and their provenance.
-- `LITERATURE_FIELD_EVIDENCE_SCHEMA` records whether every promotion-critical field was reported,
-  deterministically derived, or remains unresolved.
+- `LITERATURE_FIELD_EVIDENCE_SCHEMA` records whether every evidence-tracked field was reported,
+  deterministically derived, absent after review, ambiguous, or not yet reviewed.
 - `LITERATURE_SEARCHES_SCHEMA` validates reproducible discovery and screening records.
 - `publications.load(...) -> tuple[pd.DataFrame, pd.DataFrame, IngestReport]` validates evidence and
   field evidence, computes eligibility, resolves population aliases through P0, returns P1
   observations plus the retained evidence rows, and reports scientific refusals.
-- `OBSERVATIONS_SCHEMA.source_record_id` links every measurement to its source-native record.
+- `OBSERVATIONS_SCHEMA.source_record_id` links every measurement to its source-stable record.
 - `scripts/fetch_pubmed_manifest.py` snapshots PubMed ESearch results; it performs network I/O but
   contains no scientific interpretation.
 - `scripts/audit_lct_pilot.py` inventories a user-supplied pilot CSV and produces a curation report;
-  it does not fill missing ascertainment, radius, cohort, or source-locator fields.
+  it assigns only source-anchored IDs and dataset-record locators and does not fill missing
+  ascertainment, radius, cohort, or original-study field locators.
 - `scripts/build_observations.py --literature-evidence ...` composes the offline adapter with the
   existing P1 build.
 
@@ -74,7 +75,8 @@ Assumptions:
 - study and cohort identities are stable across papers so repeated publication of one cohort can
   be detected rather than counted twice;
 - an LLM or automated extractor may propose a value but may never mark its own extraction as
-  verified; automated output enters the ledger as `pending` or `unresolved`;
+  verified; automated output enters with row status `pending` and explicit per-field non-value
+  states wherever support has not been inspected;
 - source terms are checked and recorded; when no explicit reuse restriction is found, the project
   presumes the extracted factual data reusable by downstream users with attribution. This is the
   repository owner's policy decision, not a legal conclusion.
@@ -107,7 +109,7 @@ variant normalization, or scientific adjudication occurs on the serving path.
 
 - publication discovery manifests;
 - normalized, frozen literature evidence and per-field evidence contracts;
-- stable provenance linkage from P1 to source-native rows;
+- stable provenance linkage from P1 to source-stable rows;
 - fail-closed population, count, variant, verification, and duplicate handling;
 - a canonical curation guide backed by valid and invalid fixture files;
 - an rs4988235 lactase-persistence pilot fixture and audit/migration path;
@@ -160,7 +162,7 @@ human-reviewed extraction
               |
               v
 literature_evidence + literature_field_evidence
-                     -- source-native measurement, missingness, provenance
+                     -- source-stable measurement, missingness, provenance
         |                              |
         | variant/count checks         | population alias
         v                              v
@@ -212,119 +214,260 @@ changed only by publishing a new manifest version.
 
 ### 5.2 `literature_evidence`
 
-One row per independently sampled population measurement:
+One row represents one measurement of one allele in one independently sampled population or
+sample stratum. It does **not** represent one paper, one country, one table, or one population name
+aggregated across studies. If a table reports three sampled populations, it produces three rows. If
+one population has two independently recruited samples, it produces two rows with distinct
+`sample_id` values.
 
-| column | type | rule |
-|---|---|---|
-| `source_record_id` | string | globally unique, stable, source-native row identity |
-| `corpus_id` | string | corpus owning the extraction |
-| `variant_id` | nullable string | normalized GRCh38 `chr-pos-ref-alt`; null while unresolved |
-| `rsid` | nullable string | source identifier when present |
-| `counted_allele` | nullable string | literal allele whose copies `ac` represents |
-| `normalization_status` | enum | `verified`, `ambiguous`, or `unresolved`; only verified enters P1 |
-| `population_label` | string | verbatim label used by the source |
-| `sample_id` | nullable string | sample within a study; distinguishes legitimate replicated samples |
-| `cohort_id` | nullable string | contributing cohort across sites and publications |
-| `an` | nullable positive integer | allele denominator supported by the source |
-| `ac_lower`, `ac_upper` | nullable integers | admissible count interval when known |
-| `reported_frequency` | nullable string | verbatim printed value, preserving decimals and symbols |
-| `count_basis` | nullable enum | `reported`, `genotype_derived`, or `frequency_reconstructed` |
-| `denominator_basis` | nullable enum | `reported_alleles`, `diploid_individuals`, or `hemizygous_males` |
-| `citation_id` | string | namespaced persistent ID: `pmid:`, `doi:`, or `thesis:` |
-| `citation_text` | string | human-readable citation |
-| `source_locator` | nullable string | table, figure, page, supplement, and row; null while unresolved |
-| `source_url` | nullable string | stable full-text or landing-page URL |
-| `assay` | nullable string | what produced the measurement |
-| `sampling_design` | nullable P1 enum | no default; null means unresolved, never `convenience` by fallback |
-| `disease_ascertainment_excluded` | nullable boolean | null remains unresolved rather than coercing to false |
-| `date_lower`, `date_upper` | nullable non-negative integers | years BP; lower <= upper when known |
-| `verification_status` | enum | `original_source_verified`, `compilation_verified`, `pending` |
-| `extraction_method` | enum | `manual_transcription`, `structured_table`, `ocr_reviewed`, or `automated_proposal` |
-| `extracted_by` | string | named curator, import, or agent run that created the extraction |
-| `extracted_at` | UTC timestamp string | when the extraction was created |
-| `verified_by` | nullable string | independent reviewer identity; required for either verified status |
-| `verified_at` | nullable UTC timestamp string | required for either verified status |
-| `verification_reference` | nullable string | stable review record; required for either verified status |
-| `reuse_status` | enum | `explicitly_open`, `permission_granted`, `no_restriction_found`, `restricted`, or `not_checked` |
-| `reuse_evidence` | nullable string | terms URL, permission record, or where the absence-of-terms check was performed |
-| `reuse_checked_at` | nullable date string | required unless `reuse_status=not_checked` |
-| `notes` | nullable string | caveats; never substitutes for a structured field |
-| `ingest_version` | string | immutable corpus version |
+Every column below must appear exactly once in the UTF-8 TSV header, in the documented order.
+“May be blank” means an empty TSV cell, which the loader reads as null; strings such as `NA`,
+`N/A`, `unknown`, `none`, `null`, `-`, and `TBD` are data and are rejected as fake missingness.
+Whitespace is trimmed only at the outside of a cell and is never used to rewrite a source value.
+Literal tabs, carriage returns, and newlines inside cells are rejected. Structured multi-value cells
+use compact canonical JSON with double-quoted keys, sorted keys, and no insignificant whitespace.
+The canonical header has 37 columns: concatenate the column names in §§5.2.1–5.2.6 from top to
+bottom. The checked fixture in §5.5 contains the copyable literal header.
 
-Nullability here is intentional and exists only in the evidence staging layer. Missingness must be
-representable so an extractor has no reason to make up a value to satisfy a schema. The promotion
-gate requires every P1 field; `OBSERVATIONS_SCHEMA` remains non-nullable and fail-closed.
+Identifiers use these anchored patterns; examples do not widen them:
 
-`ac_lower == ac_upper` is required for P1 emission. The emitted `ac` is that shared integer.
-Interval-valued rows remain useful evidence and remain visible in the refusal report, but the
-existing binomial likelihood must not receive a fabricated point count. If one bound is present,
-both bounds and `an` must be present and satisfy `0 <= ac_lower <= ac_upper <= an`.
+```text
+corpus_id          ^[a-z0-9]+(?:-[a-z0-9]+)*$
+source_record_id   ^literature:([a-z0-9]+(?:-[a-z0-9]+)*):[0-9a-f]{64}$
+rsid               ^rs[1-9][0-9]*$
+cohort_id          ^cohort:[a-z0-9][a-z0-9.-]*:[a-z0-9][a-z0-9.-]*$
+ingest_version     ^([a-z0-9]+(?:-[a-z0-9]+)*)@[0-9]{4}-[0-9]{2}-[0-9]{2}\.[1-9][0-9]*$
+PMID citation      ^pmid:[1-9][0-9]*$
+DOI citation       ^doi:10\.[0-9]{4,9}/\S+$  (stored lowercase)
+thesis citation    ^thesis:[a-z0-9][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._/-]*$
+repository source  ^repo:github\.com/[a-z0-9_.-]+/[a-z0-9_.-]+@[0-9a-f]{40}:[^\t\r\n]+$
+source_locator     ^(table|figure|page|supplement|dataset-record):[^\t\r\n]+$
+human identity     ^human:[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$
+agent identity     ^agent:[a-z0-9][a-z0-9.-]*:[a-z0-9][a-z0-9._-]*$
+import identity    ^import:[a-z0-9][a-z0-9._/-]*@[0-9a-f]{40}$
+```
 
-`reported_frequency` is a string deliberately. A value printed as `0.16` does not carry the same
-rounding interval as `0.1600`, and parsing both to binary float destroys the distinction needed to
-audit reconstruction.
+The captured corpus segment in `source_record_id` and `ingest_version` must equal the row's
+`corpus_id` exactly. Locator syntax is necessary but not sufficient: generic payloads such as
+`table:unknown`, `page:the-paper`, or `supplement:supplement` are rejected as placeholders.
 
-A verified row requires non-null `verified_by`, `verified_at`, and `verification_reference`, and
-`verified_by` must differ from `extracted_by`. A pending row requires all three verification fields
-to be null. This does not make reviewer identity cryptographically trustworthy; it makes the
-required separation visible and testable in the record and pull-request history.
+The requirement columns have literal meanings:
 
-`reuse_status=no_restriction_found` is promotable under the owner's policy. `restricted` and
-`not_checked` are not. `reuse_evidence` must describe the checked source surfaces; the bare phrase
-“no license” is insufficient because it does not show that a check occurred.
+- **Staging value:** `required` means a non-null value is required even for an incomplete record;
+  `may be blank` means the incomplete record remains valid evidence.
+- **Promotion value:** `required` means a non-null, evidence-backed value is necessary to emit P1;
+  `optional` means absence does not block P1; `conditional` states the exact condition.
+- Every field named in §5.3 also needs its own field-evidence row. A non-null cell alone is never
+  proof that the value was reported or validly derived.
 
-The reuse fields record a search for restrictions rather than manufacture a legal conclusion:
+#### 5.2.1 Identity and variant columns
 
-- `explicitly_open` requires the named licence or public-domain statement and its URL;
-- `permission_granted` requires a stable reference to the permission record;
-- `no_restriction_found` requires `reuse_checked_at` and a concrete inventory such as “journal
-  landing page, article footer, supplement landing page, and repository root checked; no reuse
-  restriction stated”;
-- `restricted` records the restriction and the operation it disallows;
-- `not_checked` is the only state permitted without a completed terms check, and it cannot promote.
+| column | type | staging value | promotion value | exact meaning and format | reject or refuse |
+|---|---|---|---|---|---|
+| `source_record_id` | string | required | required | Loader-generated immutable ID `literature:<corpus_id>:<digest>`. `<digest>` is the complete 64-character lowercase hexadecimal SHA-256 over UTF-8 `record_source_id + "\n" + record_locator` at first staging. | A caller-chosen ID, local dataframe row number, random UUID, mutable population name, regenerated ID after correction, or one ID reused for two measurements. |
+| `corpus_id` | string | required | required | Issue-approved lowercase kebab-case corpus, for example `lct-rs4988235`; every row in one corpus build uses the same value. | A paper title, free-form topic, branch name, or value that changes between runs. |
+| `variant_id` | nullable string | may be blank | required | One-based, minimal, reference-forward GRCh38 ID `chr<chrom>-<pos>-<ref>-<alt>` matching the P1 variant pattern. It names the allele represented after normalization, not merely the source's printed build. | GRCh37 coordinates relabelled as GRCh38, an rsID in this column, an unverified liftover, or a guessed REF/ALT orientation. |
+| `rsid` | nullable string | may be blank | optional | Lowercase dbSNP ID `rs<digits>` only when printed by the source or returned by the same reviewed normalization record used for `variant_id`. A field-evidence row is still required. | Gene symbols, internal marker names, multiple IDs in one cell, or an rsID guessed from nearby coordinates. |
+| `counted_allele` | nullable string | may be blank | required | Uppercase normalized allele counted by `ac_lower`/`ac_upper`; at promotion it must equal the ALT component of `variant_id`. The source's literal allele remains in field evidence as `raw_value`. | Effect/risk/derived/ancestral labels treated as DNA bases, strand complements without normalization evidence, or an allele inconsistent with ALT. |
+| `normalization_status` | enum | required but recomputed | must be `verified` | `verified` when the validated variant/allele field evidence deterministically yields one GRCh38 REF/ALT orientation; `ambiguous` when it yields multiple valid mappings; `unresolved` when inputs or a mapping are absent. | A caller-chosen status or marking verified because an rsID “looks right”; ambiguous and unresolved are valid staging states but never promote. |
+
+`variant_id` and `counted_allele` describe the normalized output. Their field-evidence rows preserve
+the literal source notation and the exact normalization method. If a source reports the reference
+allele count, the alternate count may be derived as `an - source_ac` only through the named
+reference-to-alternate derivation; silently relabelling the source count is forbidden.
+
+For example, first-stage inputs
+`repo:github.com/example/example@0000000000000000000000000000000000000000:data.tsv` and
+`dataset-record:row-17` hash to
+`7220defbe35cb5adbb8ee065f2d2460e03079f6d6cfacbc130477ca655543568`, yielding that digest after
+the `literature:lct-rs4988235:` prefix. If one source row contains multiple measurements, each
+locator must name the exact cell/column as well as the row so the identities remain distinct.
+
+#### 5.2.2 Population, sampling, and time columns
+
+| column | type | staging value | promotion value | exact meaning and format | reject or refuse |
+|---|---|---|---|---|---|
+| `population_label` | string | required | required | Exact source label for the sampled group, preserving spelling, punctuation, and language after outer-whitespace trimming. P0 resolves this literal label through an explicit alias. | ISO3 substitution, translation, country expansion, inferred ethnicity, or splitting one regional label into several rows. |
+| `sample_id` | nullable string | may be blank | conditional | Verbatim source sample/stratum identifier. It is required when the same original citation, population, cohort, and variant have more than one separately reported measurement; otherwise it may remain blank. | Invented `sample1`, local dataframe row numbers, or using a population label as a sample ID. |
+| `cohort_id` | nullable string | may be blank | required | Stable project ID for the actual participant group, `cohort:<citation-key>:<cohort-key>`, where citation key identifies the issue-approved source-defining study rather than whichever paper is being ingested. A project ID is assigned only after review decides which rows share participants; every publication reusing them uses the same ID. | Giving every row a singleton cohort to evade duplicate detection, using each current paper as a new cohort, using one paper as the cohort when it reports several, or merging cohorts merely because labels match. |
+| `assay` | nullable string | may be blank | required | Source-reported measurement technology or an approved controlled mapping, such as `targeted genotyping`; field evidence contains the literal method text and locator. | `genotyping`, `sequencing`, or another modal assay guessed from the era, journal, or variant. |
+| `sampling_design` | nullable enum | may be blank | required | Exactly one P1 value: `population_random`, `healthy_reference`, `clinical_case`, `clinical_control`, `newborn_screening`, `carrier_screening`, or `convenience`. A source phrase maps through reviewed controlled-vocabulary evidence. | Choosing `convenience` as a conservative catch-all, inferring random sampling from a country label, or treating “controls” as healthy without recruitment evidence. |
+| `disease_ascertainment_excluded` | nullable boolean | may be blank | required | Lowercase TSV boolean `true` or `false`. `true` means the design excluded or depleted disease-associated participants; it does not mean the source simply omitted disease discussion. | Blank coerced to `false`, “healthy” inferred from silence, or numeric/string surrogates such as `0`, `1`, `yes`, or `no`. |
+| `date_lower` | nullable integer | may be blank | required | Inclusive younger bound in integer years before present, using P1's time convention; modern is `0` only with evidence that the sampled people are contemporary. | Publication year converted to sample date, negative years, decimal years, or `0` as a missing-value default. |
+| `date_upper` | nullable integer | may be blank | required | Inclusive older bound in integer years before present, with `date_lower <= date_upper`; it uses the same source statement and conversion as `date_lower`. | Reversing bounds, widening an interval without evidence, or copying `date_lower` merely to obtain a point date. |
+
+No latitude, longitude, population ID, or radius belongs in this table. Those values come only from
+the single P0 row resolved from `population_label`; §5.4 defines the equality check.
+
+#### 5.2.3 Count columns
+
+| column | type | staging value | promotion value | exact meaning and format | reject or refuse |
+|---|---|---|---|---|---|
+| `an` | nullable positive integer | may be blank | required | Total number of called allele copies eligible for this measurement, as a base-10 integer with no commas or decimal point. It is chromosomes/copies, not automatically participants. | `2 × N` when missing genotypes are possible, number enrolled rather than successfully assayed, or an interval/estimate. |
+| `ac_lower` | nullable non-negative integer | may be blank | required and equal to `ac_upper` | Inclusive lower bound on copies of `counted_allele`, base-10 integer. Exact reported/derived counts use the same value in both bounds. | Rounded `frequency × an`, prevalence percent treated as a count, or a lower confidence limit. |
+| `ac_upper` | nullable non-negative integer | may be blank | required and equal to `ac_lower` | Inclusive upper bound on copies of `counted_allele`, base-10 integer, satisfying `ac_upper <= an`. | Rounded `frequency × an`, a confidence limit, or a value supplied only to make an interval exact. |
+| `reported_frequency` | nullable string | may be blank | optional | Exact printed token, including decimal precision, percent sign, inequality, or range; for example `0.16`, `16%`, or `<0.01`. It is audit evidence, has a field-evidence row, and is never the P1 likelihood input. | Recalculated frequency, normalized decimal spelling, float parsing followed by reserialization, or a value absent from the source. |
+| `count_basis` | nullable enum | may be blank | required and not `frequency_reconstructed` | `reported` when integer counts are explicit; `genotype_derived` when exact genotype counts deterministically yield allele counts; `frequency_reconstructed` when only frequency and denominator imply a count or interval. | Labelling rounded `frequency × an` as reported or genotype-derived because the product happens to be an integer. |
+| `denominator_basis` | nullable enum | may be blank | required | `reported_alleles` for an explicit allele-copy denominator; `diploid_individuals` only for reviewed `2N` conversion with complete autosomal calls; `hemizygous_males` only for one X-linked copy per assayed male. | Assuming diploidy, ignoring no-calls, applying `2N` to male X-linked data, or mixing people and allele copies. |
+
+If either count bound is present, both bounds and `an` must be present and satisfy
+`0 <= ac_lower <= ac_upper <= an`. Only `ac_lower == ac_upper` promotes. An interval remains useful
+staging evidence but the adapter never selects its midpoint, endpoint, or rounded expectation.
+
+#### 5.2.4 Citation and immutable record-anchor columns
+
+| column | type | staging value | promotion value | exact meaning and format | reject or refuse |
+|---|---|---|---|---|---|
+| `citation_id` | nullable string | may be blank | required | Persistent ID of the **original study owning the measurement**: `pmid:<digits>`, lowercase `doi:<doi>`, or `thesis:<stable-repository-id>`. Its field-evidence row states where that attribution appears. | A search-result URL, author-year alone, title alone, fabricated PMID/DOI, or the compilation ID when the original study is known. |
+| `citation_text` | nullable string | may be blank | required | Full human-readable citation for `citation_id`, sufficient to identify authors, title, venue/repository, and year. Its field-evidence row preserves the compilation's literal citation text when applicable. | An LLM-generated citation not checked against the persistent ID, `et al.` alone, or a title fragment. |
+| `record_source_id` | string | required | required | Immutable persistent ID of the source record from which this evidence row was first staged. A paper uses `pmid:`, `doi:`, or `thesis:`; a repository dataset uses `repo:github.com/<owner>/<repo>@<40-hex-commit>:<path>`. It never changes when later field curation inspects another source. | A moving branch such as `main`, search-result/session URL, source inferred after import, or replacing the anchor during later verification. |
+| `record_locator` | string | required | required | Immutable exact measurement-record location inside `record_source_id`, using the locator grammar above. If a row contains several measurements, it includes the exact cell/column as well as row. | `the paper`, `results`, `supplement`, a PDF URL without page/table/row, a local dataframe row, or changing the locator after first staging. |
+| `record_source_url` | nullable string | may be blank | optional | Stable absolute `https://` landing-page or full-text URL for `record_source_id`; persistent IDs remain authoritative when URLs move. | Search-result, session, signed, localhost, or temporary download URLs. |
+
+The record anchor identifies the immutable imported row; it is not a claim that every scientific
+field was verified there. Each §5.3 field-evidence row separately identifies the exact document and
+location supporting that field. A compilation row therefore remains stably anchored to the
+compilation even if later curation checks some or all values against the original paper.
+
+#### 5.2.5 Extraction and independent-verification columns
+
+| column | type | staging value | promotion value | exact meaning and format | reject or refuse |
+|---|---|---|---|---|---|
+| `verification_status` | enum | required but recomputed | must be verified | `pending` unless every required field is resolved and independent verifier metadata is present. Then compute `original_source_verified` when every required scientific field named below was checked at `citation_id`; otherwise compute `compilation_verified`. | A caller-chosen status, an extractor certifying its own row, a citation lookup treated as measurement verification, or original-source status while a required scientific field relies only on a compilation. |
+| `extraction_method` | enum | required | required | `manual_transcription` = person transcribed inspected content; `structured_table` = deterministic import from machine-readable content; `ocr_reviewed` = extractor checked OCR against its image; `automated_proposal` = LLM/OCR/model output not checked by its extractor. This origin value never changes during later review. | Calling LLM extraction manual, calling unreviewed OCR structured, or changing the method after review to conceal automation. |
+| `extracted_by` | string | required | required | Auditable identity `human:<github-user>`, `agent:<system>:<run-or-pr-id>`, or `import:<script>@<git-commit>`. | `agent`, `AI`, `unknown`, a fictional person, or an identity changed after review. |
+| `extracted_at` | UTC timestamp | required | required | RFC 3339 UTC `YYYY-MM-DDTHH:MM:SSZ`, recording when this version of the extraction was made. | Local time without offset, date only, future time, or source publication time. |
+| `verified_by` | nullable string | may be blank | required when status is verified | Independent reviewer using the same identity grammar as `extracted_by`; it must differ from `extracted_by`. Blank for `pending`. | The extractor under another spelling, an invented reviewer, or any value on an automated pending row. |
+| `verified_at` | nullable UTC timestamp | may be blank | required when status is verified | RFC 3339 UTC time of independent source comparison; blank for `pending`. | Extraction time copied automatically, date only, future time, or any value without an actual review. |
+| `verification_reference` | nullable string | may be blank | required when status is verified | Stable GitHub review URL or immutable curation-manifest record documenting what the reviewer checked; blank for `pending`. | A branch name, chat statement, mutable local path, `looks good`, or a link that does not identify the reviewed record. |
+
+Migration and extraction tools always create `automated_proposal` rows as `pending` with blank
+verifier fields and expose no self-certification option. A separate reviewer may publish a new
+immutable evidence version after checking every stated source location; that version retains
+`extraction_method=automated_proposal`, adds independent verifier metadata, and receives the
+recomputed verification status. Extractor and reviewer separation is enforced in data and remains
+visible in Git history.
+
+For verification classification, the required scientific fields are `variant_id`,
+`counted_allele`, `population_label`, `cohort_id`, `an`, `ac_lower`, `ac_upper`, `count_basis`,
+`denominator_basis`, `assay`, `sampling_design`, `disease_ascertainment_excluded`, `date_lower`, and
+`date_upper`, plus `sample_id` when conditionally required. `citation_id` and `citation_text` remain
+promotion-required but may use `persistent_citation_resolution`; consulting a bibliographic
+authority does not turn otherwise original-source measurement verification into compilation-only
+verification.
+
+#### 5.2.6 Reuse, notes, and version columns
+
+| column | type | staging value | promotion value | exact meaning and format | reject or refuse |
+|---|---|---|---|---|---|
+| `reuse_status` | enum | required but recomputed | must be admissible | Computed over `record_source_id` plus every non-null §5.3 `evidence_source_id`: `explicitly_open`, `permission_granted`, `no_restriction_found`, `restricted`, or `not_checked`. The first three are admissible; the last two refuse promotion. | A caller-chosen status, treating absence of a licence as restricted, or marking no restriction while any contributing source is unchecked. |
+| `reuse_evidence` | nullable canonical JSON string | may be blank | complete source coverage required | Object `{"checks":[...]}` with one source-specific check per contributing source. Every check has `source_id`, `checked_at`, and a finding-specific URL/reference structure defined below. Partial checks are valid staging evidence and compute `not_checked`. | Only `no license`, an LLM's terms summary, duplicate source checks, a finding without checked surfaces, malformed/non-canonical JSON, or checks for unrelated sources. |
+| `reuse_checked_at` | nullable date | blank only when there are no checks | required | UTC `YYYY-MM-DD`, exactly the latest `checked_at` among `reuse_evidence.checks`; it is recomputed, not supplied independently. | Publication/extraction date, a date inconsistent with the checks, partial dates, or future dates. |
+| `notes` | nullable string | may be blank | optional | Source-specific caveat that does not fit a structured field. It may explain uncertainty but cannot supply a required value. | `N/A`, duplicated required fields, hidden transformations, or instructions to ignore a refusal. |
+| `ingest_version` | string | required | required | Immutable corpus release `<corpus_id>@YYYY-MM-DD.<revision>`, for example `lct-rs4988235@2026-09-05.1`; corrections publish a new version without changing stable record IDs. | `latest`, branch names, mutable file names, timestamps that change on every run, or overwriting a prior release. |
+
+Under the owner's policy, a completed check that finds no explicit restriction is not a licensing
+block and does not limit use to particular downstream users. This is recorded as
+`no_restriction_found`, not `explicitly_open`: the former states what was checked and found, while
+the latter asserts a named licence or public-domain statement.
+
+Each object in `reuse_evidence.checks` has exactly one of these shapes; extra keys are rejected.
+Checks are sorted by `source_id`, and every `surfaces` array is unique and lexicographically sorted:
+
+```json
+{"checked_at":"2026-09-05","finding":"explicitly_open","licence":"CC0-1.0","source_id":"doi:10.0000/example","terms_url":"https://example.org/terms"}
+{"checked_at":"2026-09-05","finding":"permission_granted","permission_reference":"https://example.org/permission-record","scope":"public redistribution and downstream reuse","source_id":"doi:10.0000/example"}
+{"checked_at":"2026-09-05","finding":"no_restriction_found","source_id":"doi:10.0000/example","surfaces":["https://example.org/article","https://example.org/supplement"]}
+{"checked_at":"2026-09-05","finding":"restricted","restriction":"non-commercial reuse only","source_id":"doi:10.0000/example","terms_url":"https://example.org/terms"}
+```
+
+The examples use synthetic identifiers and URLs; production values must resolve. Status is computed
+in this order: any restriction that prohibits public redistribution/downstream reuse yields
+`restricted`; otherwise any missing source check yields `not_checked`; otherwise any qualifying
+permission yields `permission_granted`; otherwise all-open yields `explicitly_open`; otherwise at
+least one checked-and-unstated source yields `no_restriction_found`. Permission is admissible only
+when its recorded scope covers public redistribution and downstream reuse, not merely this project.
 
 ### 5.3 `literature_field_evidence`
 
-One row for every promotion-critical field of every source record. The closed field list is
-`variant_id`, `counted_allele`, `population_label`, `sample_id`, `cohort_id`, `an`, `ac_lower`,
-`ac_upper`, `count_basis`, `denominator_basis`, `source_locator`, `assay`, `sampling_design`,
-`disease_ascertainment_excluded`, `date_lower`, and `date_upper`.
+This companion table answers “why is this exact cell allowed to contain that value?” It has exactly
+19 rows per `source_record_id`: one for each of `variant_id`, `rsid`, `counted_allele`,
+`population_label`, `sample_id`, `cohort_id`, `an`, `ac_lower`, `ac_upper`, `reported_frequency`,
+`count_basis`, `denominator_basis`, `citation_id`, `citation_text`, `assay`, `sampling_design`,
+`disease_ascertainment_excluded`, `date_lower`, and `date_upper`. `source_locator` is not in this
+list because it is itself the pointer used by these rows; requiring evidence for an evidence pointer
+would be recursive.
 
-| column | type | rule |
-|---|---|---|
-| `source_record_id` | string | foreign key to `literature_evidence` |
-| `field_name` | enum | every field required to promote the row into P1 |
-| `evidence_status` | enum | `reported`, `derived`, or `unresolved` |
-| `raw_value` | nullable string | literal source value; required for reported and derived fields |
-| `source_locator` | nullable string | exact source location; required for reported and derived fields |
-| `derivation_method` | nullable enum | required only for derived fields; closed allowlist |
-| `decision_reference` | nullable string | issue/PR recording an approved scientific adjudication |
-| `notes` | nullable string | required when unresolved |
+Sixteen fields are always promotion-required. `sample_id` is conditional under §5.2.2. `rsid` and
+`reported_frequency` are optional. An unresolved conditional or optional field does not by itself
+block promotion, but `sample_id` becomes an error when multiple otherwise-identical measurements
+need it for disambiguation.
 
-There must be exactly one row for each critical field. A present value paired with `unresolved`, or
-a missing value paired with `reported`/`derived`, is a hard error. A derived value is accepted only
-when its method is implemented as deterministic code that recomputes the stored value from
-`raw_value`; free-text derivations cannot pass promotion. The initial allowlist is limited to
-genotype-to-allele counting, ploidy conversion from explicitly documented sample composition, and
-recovery from an explicitly printed integer fraction such as `40/200`. A decimal frequency, even
-one with many digits, is never an exact-fraction derivation.
+Every column below is physically required in the field-evidence TSV. Its canonical header has the
+ten names below in exactly this order:
+
+| column | type | exact requirement | accepted example | reject |
+|---|---|---|---|---|
+| `source_record_id` | string | Must exactly match one loader-generated `literature_evidence.source_record_id`; every source record has exactly 19 field rows. | `literature:lct-rs4988235:7220defbe35cb5adbb8ee065f2d2460e03079f6d6cfacbc130477ca655543568` | Orphans, missing field rows, a local row index, or more than one row for the same field. |
+| `field_name` | enum | Exactly one of the 19 closed names above, once per source record. | `sampling_design` | Spelling variants, arbitrary new fields, or duplicates. |
+| `evidence_status` | enum | Exactly `reported`, `derived`, `not_reported`, `ambiguous`, or `not_reviewed`, with the conditional rules below. | `not_reported` | Generic `unresolved`, `verified`, `inferred`, confidence scores, or blank. |
+| `raw_value` | nullable string | Exact source token/quote for `reported` and `ambiguous`; exact derivation input for `derived`, using canonical JSON when multi-valued. Blank for `not_reported` and `not_reviewed`. A placeholder-like token is allowed only for `ambiguous` when it is the literal source text. | `{"AA":"10","AG":"20","GG":"70"}` | Paraphrased values, normalized/reformatted source text, unnamed comma lists, agent-supplied placeholders, or values in absent/unreviewed states. |
+| `evidence_source_id` | nullable string | Persistent inspected document ID for every status except `not_reviewed`, where it is blank. | `repo:github.com/example/example@0000000000000000000000000000000000000000:data.tsv` (synthetic fixture only) | Generated citation, moving branch, omitted compilation identity, or a value for `not_reviewed`. |
+| `source_locator` | nullable string | Required exact value location for `reported`, `derived`, and `ambiguous`. Blank for `not_reported` and `not_reviewed`. | `dataset-record:row-17,column-frequency` | `the paper`, URL alone, guessed location, a value for not-reviewed, or one value location pretending to prove absence. |
+| `checked_scope` | nullable canonical JSON array | Required only for `not_reported`: non-empty, unique, sorted structured locators covering every section actually checked. Blank for all other statuses. | `["page:methods-3-5","supplement:S3-methods"]` | `everywhere`, an unsorted/duplicate list, unchecked sections, or a scope on reported/derived/ambiguous/not-reviewed evidence. |
+| `derivation_method` | nullable enum | Required only for `derived`; exactly one allowlisted method below. Blank for every other status. | `allele_count_from_genotypes` | Free-text formulas, method chains, `manual`, `LLM`, or a method on a non-derived row. |
+| `decision_reference` | nullable string | Required for `derived`: absolute GitHub issue/PR URL approving the method or mapping. Optional for `reported`/`ambiguous`; blank for `not_reported`/`not_reviewed`. | `https://github.com/bschilder/genomeOS/issues/149` | Branch names, chat links, mutable local paths, or approval invented by the extractor. |
+| `notes` | nullable string | Required for `not_reported`, `ambiguous`, and `not_reviewed`; must state what was checked, what conflicts, or why review has not happened. Optional for `reported`/`derived`. | `Recruitment design is absent from the checked Methods and Supplement S3 sections.` | `unknown`, `N/A`, bare `not reported`, or instructions to bypass promotion. |
+
+The three statuses impose these cross-table rules:
+
+| status | main evidence cell | raw value | evidence source | value locator | checked scope | method | promotion effect |
+|---|---|---|---|---|---|---|---|
+| `reported` | non-null and equal to typed literal | required | required | required | blank | blank | eligible if every other gate passes |
+| `derived` | non-null and exactly recomputable | required | required | required | blank | required | eligible if every other gate passes |
+| `not_reported` | blank | blank | required | blank | required | blank | refuses required field; documents genuine source absence |
+| `ambiguous` | blank | required | required | required | blank | blank | refuses required field; preserves conflicting/vague source text |
+| `not_reviewed` | blank | blank | blank | blank | blank | blank | refuses required field; identifies unfinished curation |
+
+The initial derivation allowlist is closed:
+
+| method | allowed output fields | required raw input | exact operation |
+|---|---|---|---|
+| `variant_normalization` | `variant_id`, `rsid`, `counted_allele` | canonical JSON naming printed variant/build/strand/alleles and reference resource version | Deterministic identifier resolution, liftover, and minimal normalization against the named GRCh38 reference; ambiguity refuses. |
+| `persistent_citation_resolution` | `citation_id`, `citation_text` | canonical JSON containing the literal cited reference plus the matched PubMed/Crossref/repository record and retrieval version | Emit a persistent ID and full citation only for one exact match; zero or multiple plausible matches remain unresolved. |
+| `alternate_count_from_reference_count` | `ac_lower`, `ac_upper` | JSON integers `an` and `reference_ac` | Compute `an - reference_ac`; counted-allele normalization must independently verify the ALT allele. |
+| `allele_count_from_genotypes` | `ac_lower`, `ac_upper` | JSON genotype counts with allele labels | Sum exact called allele copies; no Hardy-Weinberg reconstruction or missing-genotype imputation. |
+| `allele_denominator_from_complete_diploid_sample` | `an` | JSON integer `called_individuals` plus explicit complete-call and autosomal evidence | Compute `2 * called_individuals`. Enrolled or attempted samples are not called individuals. |
+| `allele_denominator_from_hemizygous_males` | `an` | JSON integer `called_males` plus explicit X-linked male evidence | Compute `called_males`; mixed-sex samples require genotype-level accounting. |
+| `counts_from_explicit_integer_fraction` | `an`, `ac_lower`, `ac_upper` | A source token explicitly printed as integer `numerator/denominator` | Parse the two integers exactly. Decimal or percent frequencies are excluded even when multiplication yields an integer. |
+| `controlled_vocabulary_mapping` | `cohort_id`, `count_basis`, `denominator_basis`, `assay`, `sampling_design`, `disease_ascertainment_excluded` | Literal source quote/identifier and a versioned mapping key | Apply only an issue-approved exact mapping; no nearest category or semantic guess. |
+| `modern_sample_to_zero_bp` | `date_lower`, `date_upper` | Literal evidence that sampled participants were contemporary/living | Emit `0`; publication year or silence alone is insufficient. |
+
+One derivation row invokes one method. If producing a final value would require an unlisted chain,
+the field remains unresolved until a new method with one deterministic implementation, tests, and
+an approved design decision is added. A reviewer cannot approve a free-text calculation into the
+allowlist through a data cell.
+
+`population_label`, `sample_id`, and `reported_frequency` are never derived: they are either
+transcribed exactly with `evidence_status=reported` or use one of the three explicit non-value
+states.
 
 The schemas reject placeholder strings such as empty text, `unknown`, `n/a`, `not reported`,
-`none`, and `tbd` wherever evidence is claimed as reported or derived. `source_locator` follows a
-closed structured form (`table:`, `figure:`, `page:`, `supplement:`, or `dataset-record:` followed
-by a non-placeholder identifier) so “the paper” or “the supplement” cannot masquerade as an exact
-location. Unresolved fields use the explicit status and a non-placeholder reason instead.
+`none`, and `tbd` wherever evidence is claimed as reported or derived. `ambiguous.raw_value` may
+preserve such a token only as literal, located source text; the normalized main-table cell remains
+blank. Coverage reports may aggregate `not_reported`, `ambiguous`, and `not_reviewed` as unresolved,
+but the stored status never collapses those states.
 
-The adapter computes eligibility from the two evidence tables. There is no `eligible`, `verified`,
-or `force` argument that a caller or agent can set to bypass the checks. Automated discovery and
-migration scripts always emit `pending` verification and may not expose a command-line option to
-self-certify their output. `extraction_method=automated_proposal` is required to pair with
-`verification_status=pending`.
+The adapter computes verification status and eligibility from the two evidence tables. There is no
+`eligible`, `verified`, or `force` argument that a caller or agent can set to bypass the checks.
+Automated discovery and migration scripts always emit `pending` verification and may not expose a
+command-line option to self-certify their output.
 
 ### 5.4 P1 linkage
 
 `OBSERVATIONS_SCHEMA` gains required non-empty `source_record_id`. Every adapter must construct it
-from stable source-native identifiers; row positions in a local dataframe are not stable IDs.
+from stable source identifiers; row positions in a local dataframe are not stable IDs. Literature
+uses the project-assigned, source-anchored format in §5.2.1.
 
 The combined observation build rejects duplicate `source_record_id` values. A publication
 evidence build also rejects duplicate `(variant_id, population_id, cohort_id, sample_id)` rows,
@@ -349,12 +492,11 @@ cannot silently leave the instructions stale.
 The positive examples cover three distinct outcomes:
 
 1. `promotable/` contains one wholly synthetic, clearly labelled record with exact counts and one
-   field-evidence row for every critical field. It validates and promotes through a synthetic P0
+   field-evidence row for every evidence-tracked field. It validates and promotes through a synthetic P0
    registry entry.
-2. `unresolved/` contains a valid staging record whose missing `sampling_design` is null in
-   `literature_evidence`; the matching field-evidence row has `evidence_status=unresolved`, null
-   `raw_value`, null `source_locator`, and a specific note. It validates as evidence and is refused
-   by promotion.
+2. `non_promotable/` contains separate valid staging records for `not_reported`, `ambiguous`, and
+   `not_reviewed`. They demonstrate the different raw-value, evidence-source, locator,
+   `checked_scope`, and note requirements and all refuse promotion.
 3. `derived/` contains one example for every allowlisted transformation. Each example includes the
    literal raw value, structured locator, derivation method, and decision reference, and tests
    recompute the output.
@@ -364,10 +506,11 @@ records):
 
 | situation | value in `literature_evidence` | matching `literature_field_evidence` |
 |---|---|---|
-| source reports denominator | `an=200` | `an`, `reported`, `raw_value="200 chromosomes"`, `source_locator="supplement:table-S3,row-17"` |
-| source omits sampling design | `sampling_design=null` | `sampling_design`, `unresolved`, null raw value/locator, `notes="Recruitment method not stated in methods or supplement"` |
-| deterministic genotype count | `ac_lower=40`, `ac_upper=40` | `ac_lower` and `ac_upper`, `derived`, literal genotype counts, exact locator, `derivation_method="genotype_to_allele_count"`, and an issue/PR decision reference |
-| terms checked but unstated | `reuse_status="no_restriction_found"` | evidence row records the surfaces checked and `reuse_checked_at`; it does not say only `"no license"` |
+| source reports denominator | `an=200` | `an`, `reported`, `raw_value="200 chromosomes"`, exact `evidence_source_id`, and `source_locator="supplement:table-S3,row-17"` |
+| checked source omits sampling design | `sampling_design=<empty TSV cell>` | `sampling_design`, `not_reported`, empty raw value/locator, exact evidence source, checked locator array, and a specific note |
+| sampling design has not been reviewed | `sampling_design=<empty TSV cell>` | `sampling_design`, `not_reviewed`, empty raw value/evidence source/locator/scope, and a note explaining why review is pending |
+| deterministic genotype count | `ac_lower=40`, `ac_upper=40` | `ac_lower` and `ac_upper`, `derived`, canonical JSON genotype counts, exact evidence source/locator, `derivation_method="allele_count_from_genotypes"`, and an issue/PR decision reference |
+| terms checked but unstated | computed `reuse_status="no_restriction_found"`; `reuse_evidence` has a source-specific check with `finding="no_restriction_found"` and every inspected surface | `reuse_checked_at` equals the latest check date; it does not say only `"no license"` |
 
 An `invalid/` directory contains one minimal fixture per prohibited shortcut and a manifest naming
 the expected validation error or refusal. At minimum it demonstrates:
@@ -375,12 +518,12 @@ the expected validation error or refusal. At minimum it demonstrates:
 | do not provide | provide instead |
 |---|---|
 | `radius_km=500` because a country is large | no radius column in literature evidence; resolve an exact P0 entry or refuse |
-| `sampling_design="convenience"` because recruitment is unclear | null plus an `unresolved` field-evidence row |
+| `sampling_design="convenience"` because recruitment is unclear | an empty TSV cell plus `ambiguous` with the literal source wording and exact locator, or `not_reported`/`not_reviewed` as applicable |
 | `ac=round(0.16 * 201)` | preserve `reported_frequency="0.16"`, count interval unresolved, and refuse exact-count promotion |
 | `source_locator="the paper"` or `"supplement"` | a structured locator such as `supplement:table-S3,row-17` |
 | `verification_status="original_source_verified"` after an LLM extraction | `pending` with null verifier fields until a separate reviewer checks the cited location and records the review |
 | coordinates copied from a gazetteer or nearby population | a separately reviewed P0 registry record and exact alias join |
-| `reuse_status="no_restriction_found"`, `reuse_evidence="no license"` | list the journal/repository surfaces actually checked and the check date |
+| caller sets `reuse_status="no_restriction_found"`, `reuse_evidence="no license"` | source-specific canonical JSON checks; let the validator compute status and latest check date |
 | one row duplicated across several countries | one defensible registered regional population, or a refusal |
 
 The guide includes the exact build command, file encoding, delimiter, null representation, date
@@ -394,26 +537,30 @@ data-integrity failure.
 The external pilot contains 426 rows from 88 country strings. Its current audit identifies 116
 frequency-reconstructed rows, 34 `small_n` rows, eight thesis rows without PMIDs, and eight
 corrected no-call denominators. It is primarily a structured extraction from Liebert et al. 2017
-Supplementary Table 3, with original citations attached; ten rows were verified against an
-original paper.
+Supplementary Table 3, with original citations attached; ten rows carry an upstream flag that an
+original paper was checked. The audit does not equate that flag with this contract's
+`original_source_verified` status unless every required scientific field satisfies §5.3.
 
 The repository will not label the corpus “complete.” It has two levels:
 
-- `original_source_verified`: the underlying paper/table was checked directly;
-- `compilation_verified`: the accessible compilation was checked, but the original measurement
-  was not independently inspected.
+- `original_source_verified`: every required scientific field was independently checked at the
+  original paper/table;
+- `compilation_verified`: every required field was independently checked, but at least one
+  required scientific field still relies on the accessible compilation rather than the original.
 
 Both may enter P1 only when the count interval is exact and all other refusal conditions pass.
 `pending` never enters P1. `small_n` is not itself a refusal: the denominator belongs in the
 likelihood, so a small exact measurement is weak evidence rather than invalid evidence.
 
 The current external CSV is a curation input, not yet a `literature_evidence` table: it does not
-contain uncertainty radii, sampling designs, cohort/sample identities, exact source locators, or
-verification state for each row. The first migration tool therefore inventories all 426 rows and
-reports what must be curated; it does not manufacture those fields or emit P1 observations. Once a
-reviewed evidence table exists, the publications adapter emits only eligible exact rows. It never
-coerces country strings into ISO3 identifiers. Labels such as `Angola, Namibia Botswana` require an
-explicit regional P0 entry with a defensible uncertainty radius or are refused.
+contain uncertainty radii, sampling designs, cohort/sample identities, original-study field
+locators, or verification state for each row. The first migration tool therefore inventories all
+426 rows, pins the repository commit, creates a stable `dataset-record:` locator for each imported
+CSV row, and reports what still requires curation. It does not manufacture the missing scientific
+fields or emit P1 observations. Once a reviewed evidence table exists, the publications adapter
+emits only eligible exact rows. It never coerces country strings into ISO3 identifiers. Labels such
+as `Angola, Namibia Botswana` require an explicit regional P0 entry with a defensible uncertainty
+radius or are refused.
 
 The complete pilot CSV may be copied into the staging area with its exact upstream URL and commit
 hash. Its upstream repository exposes no explicit reuse restriction, so it records
@@ -474,10 +621,11 @@ Duplicate identifiers, inconsistent count intervals, contradictory aliases, and 
 cohort/sample measurements raise rather than enter a refusal report; they make the dataset
 internally ambiguous and must be corrected at source.
 
-Promotion emits a machine-readable coverage report with one row per critical field: total records,
-reported, derived, unresolved, promoted, and refused. The totals must reconcile. A PR that reduces
-unresolved counts must show which source records changed and the evidence rows that justified each
-change; a shrinking refusal count alone is not success.
+Promotion emits a machine-readable coverage report with one row per evidence-tracked field: total
+records, reported, derived, not reported, ambiguous, not reviewed, promoted, and refused. It also
+reports the aggregate unresolved count as the sum of the three non-value states. The totals must
+reconcile. A PR that reduces unresolved counts must show which source records changed and the
+evidence rows that justified each change; a shrinking refusal count alone is not success.
 
 ## 9. Agent safeguards
 
@@ -489,14 +637,14 @@ publications:
   field merely to satisfy a schema or increase retention;
 - every derived required field must cite the raw source value and locator and use a named,
   deterministic, tested transformation approved by the issue/spec;
-- an agent may create `pending` or `unresolved` evidence but may not mark its own extraction
-  `original_source_verified` or `compilation_verified`, or convert an unresolved field to
+- an agent may create `pending`, `not_reviewed`, `not_reported`, or `ambiguous` evidence but may not
+  mark its own extraction verified, conflate those three field states, or convert one to
   reported/derived without directly inspectable source evidence;
 - an LLM summary, generated citation, inferred geographic centroid, or another dataset's value is
   not source evidence for the publication being curated;
 - do not add `force`, fallback, permissive mode, or config switches around scientific refusals;
-- every data PR reports input, promoted, refused-by-reason, and unresolved-by-field counts, and
-  explains every reduction in refusals.
+- every data PR reports input, promoted, refused-by-reason, and per-field counts for not reported,
+  ambiguous, and not reviewed, and explains every reduction in refusals.
 
 The same section states the reuse rule operationally: check and record the applicable source
 surfaces before promotion; an explicit restriction is enforced, `not_checked` is refused, and a
@@ -506,7 +654,7 @@ named licence alone is not a blocker.
 `AGENTS.md` links directly to the canonical curation guide and includes a compact “right / wrong”
 example for missing radius, ascertainment, exact counts, verification, source locators, and reuse
 evidence. It warns that examples are contracts, not suggestions: new ingestion work copies the
-checked fixture layout and must not replace nulls merely to obtain a green build.
+checked fixture layout and must not replace empty cells merely to obtain a green build.
 
 The deliberate-behaviours table adds that a row remaining in staging is not a failed ingest; it is
 the correct result when publication evidence is incomplete. The repository layout section names
@@ -516,17 +664,37 @@ the evidence schemas so future agents discover the staging/promotion boundary be
 
 Tests follow red-green-refactor and cover:
 
-- evidence and search schemas accept explicit unresolved fields while P1 continues to reject them;
-- every promotion-critical field has exactly one matching field-evidence row;
-- deleting each critical value produces a structured refusal, never a substituted value;
-- changing a field-evidence status without the required raw value/locator fails validation;
+- the literature TSV header contains every documented column exactly once and rejects missing,
+  extra, duplicated, or reordered columns;
+- empty TSV cells round-trip as null while placeholder strings, implicit boolean spellings,
+  malformed timestamps/dates, moving repository references, and unstable IDs fail validation;
+- source record IDs equal the documented digest of their immutable record source and locator;
+- stored normalization status equals the result recomputed from variant/allele field evidence;
+- evidence schemas accept each explicit non-value state while P1 continues to reject required
+  fields in all three states;
+- every source record has exactly the 19 evidence-tracked field rows, including unresolved optional
+  fields, and no others;
+- deleting each always-required promotion value produces a structured refusal, never a substituted
+  value; conditional and optional fields follow only their documented rules;
+- every field-evidence status enforces its exact raw value, evidence source, value locator,
+  checked-scope, method, decision-reference, and notes matrix;
+- `population_label`, `sample_id`, and `reported_frequency` reject derived status;
 - placeholder strings cannot satisfy a reported/derived field or source locator;
 - every allowlisted derivation is recomputed and compared with the stored value;
-- automated proposals cannot be marked verified;
+- a decimal/percent frequency cannot use `counts_from_explicit_integer_fraction`, and rounded
+  `frequency * an` never becomes an exact count;
+- automated tools cannot initially emit verified rows or accept a self-certification option;
+  independently reviewed automated proposals retain their extraction method and receive only the
+  recomputed status;
 - a verified row requires an independently named reviewer, timestamp, and stable review reference;
-  a pending row cannot carry verifier metadata, and extractor and verifier cannot be the same;
+  rows with unresolved required fields remain pending, pending rows cannot carry verifier
+  metadata, and extractor and verifier cannot be the same;
+- original verification requires every required scientific field's `evidence_source_id` to equal
+  `citation_id`; compilation verification requires at least one distinct compilation source;
+  unresolved original citations stage but do not promote;
 - `not_checked` and `restricted` reuse states are refused, while a fully recorded
-  `no_restriction_found` state is accepted;
+  `no_restriction_found` state with grammar-valid source coverage is accepted; stored reuse status
+  and check date must equal recomputed values;
 - every documented positive example validates, the promotable example emits exactly one P1 row,
   the unresolved example emits none, and every invalid example fails for its named reason;
 - citation namespaces, count interval ordering, date ordering, and conditional search-decision
