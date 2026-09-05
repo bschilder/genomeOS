@@ -6,7 +6,7 @@ annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
     # via pydantic
-anyio==4.15.0
+anyio==4.15.1
     # via
     #   httpx
     #   starlette
@@ -21,7 +21,7 @@ arviz-base==1.3.0
     #   arviz-stats
 arviz-plots==1.3.1
     # via arviz
-arviz-stats==1.3.1
+arviz-stats==1.3.2
     # via
     #   arviz
     #   arviz-plots
@@ -86,7 +86,7 @@ kiwisolver==1.5.1
     # via matplotlib
 lazy-loader==0.5
     # via arviz-base
-llvmlite==0.46.0
+llvmlite==0.48.0
     # via numba
 markdown-it-py==4.2.0
     # via rich
@@ -102,9 +102,9 @@ multipledispatch==1.0.0
     # via numpyro
 mypy-extensions==1.1.0
     # via typing-inspect
-numba==0.63.0b1
+numba==0.66.0
     # via pytensor
-numpy==2.5.2
+numpy==2.4.6
     # via
     #   arviz-base
     #   arviz-stats
@@ -177,7 +177,7 @@ rasterio==1.5.1
     # via genomeos (pyproject.toml)
 rich==15.0.0
     # via pymc
-ruff==0.16.5
+ruff==0.16.6
     # via genomeos (pyproject.toml)
 scipy==1.18.1
     # via

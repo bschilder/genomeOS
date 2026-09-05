@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from genomeos.artifacts import ArtifactCatalog
-from scripts.build_atlas_catalog import build_catalog
+from genomeos.artifacts.build import build_catalog
 
 VARIANT = "chr11-5227002-T-A"
 
