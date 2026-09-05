@@ -24,6 +24,7 @@ SOURCE_RECORD_ID = (
     "f5fd55995c17abf484c03ca85bb786b2710ab49556baad33ad8e1099caa53afe"
 )
 FIXTURES = Path(__file__).parent / "fixtures" / "literature"
+CURATION_GUIDE = Path(__file__).parents[1] / "docs" / "literature-evidence-curation.md"
 
 
 def _read_tsv(path: Path) -> pd.DataFrame:
@@ -447,3 +448,16 @@ def test_search_manifest_keeps_every_candidate_pending_until_screened():
     invalid.loc[0, ["decision", "decision_reason"]] = ["excluded", pd.NA]
     with pytest.raises(ValueError, match="decision_reason"):
         validate_search_manifest(invalid)
+
+
+def test_curation_guide_headers_and_field_names_cannot_drift_from_contracts():
+    """Catches an agent copying a stale template even while the live schema remains valid."""
+    guide = CURATION_GUIDE.read_text()
+    for columns in (
+        LITERATURE_EVIDENCE_COLUMNS,
+        FIELD_EVIDENCE_COLUMNS,
+        LITERATURE_SEARCH_COLUMNS,
+    ):
+        assert "\t".join(columns) in guide
+        for column in columns:
+            assert f"| `{column}` |" in guide

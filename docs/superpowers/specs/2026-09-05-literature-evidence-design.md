@@ -1,10 +1,13 @@
 # Literature Evidence Foundation — Design
 
-**Status:** proposed, pending human review
+**Status:** approved by the user on 2026-09-05
 **Date:** 2026-09-05
 **Scope:** issue #149; the reusable publications evidence contract, deterministic P1 adapter,
 rs4988235 lactase-persistence pilot integration path, and tracker repair. HBB and G6PD corpus work
 are follow-on sub-projects with separate scientific acceptance evidence.
+
+**Implementation plan:**
+[`2026-09-05-literature-evidence-foundation.md`](../plans/2026-09-05-literature-evidence-foundation.md)
 
 ---
 

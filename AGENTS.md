@@ -16,7 +16,9 @@ Read it fully before writing code; it is short on purpose.
    (P0 + P1). Plans are task-by-task with tests specified; follow them rather than improvising.
 5. [Issue #3](https://github.com/bschilder/genomeOS/issues/3) if you are touching data ingestion —
    it explains what every source is for and what its access terms are.
-6. [`docs/panukb-architecture.md`](docs/panukb-architecture.md) if you are touching the
+6. [`docs/literature-evidence-curation.md`](docs/literature-evidence-curation.md) and its linked
+   schema-tested examples if you are extracting or importing publication evidence.
+7. [`docs/panukb-architecture.md`](docs/panukb-architecture.md) if you are touching the
    Pan-UKB evidence slice.
 
 ## Scientific contract before implementation
@@ -92,6 +94,26 @@ prevent are documented and expensive (design §4).
   published numbers. Thin wrappers do the serving.
 - **Determinism.** `SEED = 42` in any module with a stochastic path. Offline functions must be
   deterministic given `(config, data_version, seed)`.
+
+### Publication-evidence safeguards
+
+- Never turn uncertainty or missingness into plausible metadata. Do not invent or default a
+  coordinate, radius, population identity, sample/cohort ID, assay, sampling design, disease
+  ascertainment, date, denominator, count, allele orientation, citation, source locator, reviewer,
+  or reuse check.
+- An unverified or uninspected value may not be represented as `reported` or `derived`. Automated
+  and LLM output is always `automated_proposal`/`pending`; the extractor cannot be its verifier.
+  Use the exact `not_reviewed`, `not_reported`, or `ambiguous` field state instead.
+- Every literature row has exactly 19 field-evidence decisions. Notes never substitute for a
+  structured field or evidence locator. Only the closed, executable derivation allowlist may create
+  a value not printed literally by the source.
+- The absence of a named licence is not itself a restriction, but it is not proof that a check was
+  performed. Inspect and log every contributing source. A completed check with no explicit
+  restriction is `no_restriction_found`; an unperformed check is `not_checked`; any explicit
+  restriction wins.
+- Refusal is a valid output. Never add a `force`, fallback, eligibility, or permissive option to
+  make an incomplete literature row enter P1. Geography comes only from an exact P0 alias and its
+  reviewed `uncertainty_radius_km`.
 
 ## Module and configuration boundaries
 
@@ -187,7 +209,10 @@ Rebuild the Atlas stores from fixtures (the end-to-end check):
 python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv --out data/registry
 python scripts/build_observations.py --registry data/registry \
   --gnomad tests/fixtures/gnomad_hgdp_1kg_freqs.tsv \
-  --map-surveys tests/fixtures/map_hbs_surveys.tsv --out data/observations
+  --map-surveys tests/fixtures/map_hbs_surveys.csv \
+  --literature-evidence tests/fixtures/literature/promotable/evidence.tsv \
+  --literature-field-evidence tests/fixtures/literature/promotable/field_evidence.tsv \
+  --out data/observations
 ```
 
 **If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
@@ -277,8 +302,10 @@ These are hard constraints, not preferences:
   artifacts from HGDP, SGDP, AADR or AFND as standalone datasets until it is answered.
 - Registry entries carry provenance and a Biocultural Notice field, per the CARE Principles.
   Never drop these columns for convenience.
-- Check the licence before ingesting. gnomAD is CC0, but its bundled SpliceAI annotations are
-  CC BY-NC.
+- Check and record source terms before promotion. A completed check that finds no explicit licence
+  or restriction is `no_restriction_found` and is not a blocker; missing due diligence remains
+  `not_checked`. Explicit restrictions are binding. gnomAD is CC0, but its bundled SpliceAI
+  annotations are CC BY-NC.
 
 ## Working the board
 

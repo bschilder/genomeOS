@@ -160,12 +160,12 @@
 - Modify: `docs/scientific-engineering-objectives.md`
 - Modify: `docs/superpowers/specs/2026-09-05-literature-evidence-design.md`
 
-- [ ] Mark the approved spec status accurately and link this implementation plan.
-- [ ] Document every column in copyable header order with: whether a staging value is required, exact accepted representation, promotion rule, evidence-row requirement, one correct example, one prohibited example, and why the shortcut is scientifically unsafe.
-- [ ] Include complete good, unresolved, and derived records by linking the schema-tested TSV fixtures; explain row granularity, immutable anchors, 19-row completeness, status recomputation, exact counts, P0-only geography, duplicate/cohort semantics, independent verification, and reuse checks.
-- [ ] Add explicit agent instructions: never convert uncertainty to plausible metadata; no unverified value may be represented as `reported`/`derived`; absence of a named licence is not itself a restriction but every aggregate source must be checked and logged; refusal is a valid output.
-- [ ] Add publications to the overview source table and P1 objective/evidence while preserving the observation/surface boundary.
-- [ ] Run documentation link/search checks available in the suite and `python scripts/check_module_size.py`.
+- [x] Mark the approved spec status accurately and link this implementation plan.
+- [x] Document every column in copyable header order with: whether a staging value is required, exact accepted representation, promotion rule, evidence-row requirement, one correct example, one prohibited example, and why the shortcut is scientifically unsafe.
+- [x] Include complete good, unresolved, and derived records by linking the schema-tested TSV fixtures; explain row granularity, immutable anchors, 19-row completeness, status recomputation, exact counts, P0-only geography, duplicate/cohort semantics, independent verification, and reuse checks.
+- [x] Add explicit agent instructions: never convert uncertainty to plausible metadata; no unverified value may be represented as `reported`/`derived`; absence of a named licence is not itself a restriction but every aggregate source must be checked and logged; refusal is a valid output.
+- [x] Add publications to the overview source table and P1 objective/evidence while preserving the observation/surface boundary.
+- [x] Run documentation link/search checks available in the suite and `python scripts/check_module_size.py`.
 
 ### Task 10: Update the issue tracker to match the implemented dependency graph
 
