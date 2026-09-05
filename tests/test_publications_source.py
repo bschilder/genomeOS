@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from genomeos.observations.evidence import make_source_record_id
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 from genomeos.observations.sources import publications
 
@@ -38,6 +39,7 @@ def _read(path: Path) -> pd.DataFrame:
 
 
 def _write_tables(tmp_path: Path, evidence: pd.DataFrame, fields: pd.DataFrame) -> tuple[Path, Path]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     evidence_path = tmp_path / "evidence.tsv"
     fields_path = tmp_path / "field_evidence.tsv"
     evidence = evidence.copy()
@@ -192,3 +194,53 @@ def test_no_force_or_eligibility_override_exists():
             "observations@2026-09-05.1",
             force=True,
         )
+
+
+def test_ingest_report_refusal_counts_are_immutable():
+    """Catches a caller rewriting acceptance evidence after the adapter returns it."""
+    _, _, report = _load(PENDING)
+    with pytest.raises(TypeError):
+        report.refusals["required_field_unresolved"] = 0
+
+
+def test_promoted_outputs_are_independent_of_input_row_order(tmp_path):
+    """Catches the retained ledger preserving a scientifically meaningless TSV order."""
+    evidence = _read(PROMOTABLE / "evidence.tsv")
+    fields = _read(PROMOTABLE / "field_evidence.tsv")
+    evidence.loc[0, "sample_id"] = "sami-original"
+    original_sample = fields["field_name"] == "sample_id"
+    fields.loc[
+        original_sample, ["evidence_status", "raw_value", "source_locator", "checked_scope"]
+    ] = ["reported", "sami-original", evidence.loc[0, "record_locator"], pd.NA]
+    second = evidence.iloc[0].copy()
+    second["record_locator"] = "table:3,row:sami-replicate"
+    second["sample_id"] = "sami-replicate"
+    second["source_record_id"] = make_source_record_id(
+        second["corpus_id"], second["record_source_id"], second["record_locator"]
+    )
+    evidence = pd.concat([evidence, second.to_frame().T], ignore_index=True)
+    second_fields = fields.copy()
+    second_fields["source_record_id"] = second["source_record_id"]
+    sample = second_fields["field_name"] == "sample_id"
+    second_fields.loc[
+        sample, ["evidence_status", "raw_value", "source_locator", "checked_scope"]
+    ] = [
+        "reported", "sami-replicate", second["record_locator"], pd.NA,
+    ]
+    fields = pd.concat([fields, second_fields], ignore_index=True)
+
+    forward_paths = _write_tables(tmp_path / "forward", evidence, fields)
+    reverse_paths = _write_tables(
+        tmp_path / "reverse",
+        evidence.iloc[::-1].reset_index(drop=True),
+        fields.iloc[::-1].reset_index(drop=True),
+    )
+    populations, aliases = _registry()
+    forward = publications.load(
+        *forward_paths, populations, aliases, "observations@2026-09-05.1"
+    )
+    reverse = publications.load(
+        *reverse_paths, populations, aliases, "observations@2026-09-05.1"
+    )
+    pd.testing.assert_frame_equal(forward[0], reverse[0])
+    pd.testing.assert_frame_equal(forward[1], reverse[1])

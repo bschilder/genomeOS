@@ -79,6 +79,7 @@ _DERIVATION_OUTPUTS = {
 
 _CORPUS = r"[a-z0-9]+(?:-[a-z0-9]+)*"
 _SOURCE_RECORD = rf"^literature:{_CORPUS}:[0-9a-f]{{64}}$"
+_SEARCH_ID = r"^pubmed:[0-9a-f]{64}$"
 _RSID = r"^rs[1-9][0-9]*$"
 _COHORT = r"^cohort:[a-z0-9][a-z0-9.-]*:[a-z0-9][a-z0-9.-]*$"
 _VERSION = rf"^{_CORPUS}@[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}\.[1-9][0-9]*$"
@@ -99,8 +100,12 @@ _IDENTITY = (
 _UTC_TIMESTAMP = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 _DATE = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
 _FAKE_MISSING = frozenset({"na", "n/a", "unknown", "none", "null", "-", "tbd", "not reported"})
-_PLACEHOLDER_LOCATORS = frozenset(
-    {"table:unknown", "page:the-paper", "supplement:supplement", "table:the-paper"}
+_PLACEHOLDER_LOCATOR_VALUES = _FAKE_MISSING | frozenset(
+    {"the paper", "the-paper", "the source", "the-source", "supplement", "somewhere"}
+)
+_REVIEW_REFERENCE = (
+    r"^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/(?:issues|pull)/[1-9][0-9]*"
+    r"(?:#issuecomment-[1-9][0-9]*)?$"
 )
 
 
@@ -110,7 +115,7 @@ def _string(nullable: bool = False, checks: Any = None, *, unique: bool = False)
 
 LITERATURE_SEARCHES_SCHEMA = pa.DataFrameSchema(
     {
-        "search_id": _string(checks=pa.Check.str_length(min_value=1)),
+        "search_id": _string(checks=pa.Check.str_matches(_SEARCH_ID)),
         "corpus_id": _string(checks=pa.Check.str_matches(rf"^{_CORPUS}$")),
         "database": _string(checks=pa.Check.isin(["pubmed"])),
         "query": _string(checks=pa.Check.str_length(min_value=1)),
@@ -225,6 +230,14 @@ def make_source_record_id(corpus_id: str, record_source_id: str, record_locator:
     return f"literature:{corpus_id}:{digest}"
 
 
+def make_search_id(database: str, query: str, executed_at: str) -> str:
+    """Return the reproducible search identity defined by design §5.1."""
+    identity = json.dumps(
+        [database, query, executed_at], ensure_ascii=False, separators=(",", ":")
+    )
+    return f"{database}:{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"
+
+
 def _is_null(value: object) -> bool:
     return bool(pd.isna(value))
 
@@ -261,6 +274,15 @@ def _require_https_url(value: object, field: str) -> None:
         raise ValueError(f"{field} must be an absolute non-local HTTPS URL")
 
 
+def _is_placeholder_locator(value: object) -> bool:
+    for component in re.split(r"[,;]", str(value)):
+        _, separator, detail = component.partition(":")
+        candidate = detail if separator else component
+        if candidate.strip().casefold() in _PLACEHOLDER_LOCATOR_VALUES:
+            return True
+    return False
+
+
 def _validate_text_and_anchors(evidence: pd.DataFrame, fields: pd.DataFrame) -> None:
     for frame in (evidence, fields):
         for column in frame.select_dtypes(include=["object", "string"]).columns:
@@ -271,7 +293,7 @@ def _validate_text_and_anchors(evidence: pd.DataFrame, fields: pd.DataFrame) -> 
                 if text.casefold() in _FAKE_MISSING:
                     raise ValueError(f"{column} contains fake missingness: {text!r}")
     for locator in pd.concat([evidence["record_locator"], fields["source_locator"]]).dropna():
-        if str(locator).casefold() in _PLACEHOLDER_LOCATORS:
+        if _is_placeholder_locator(locator):
             raise ValueError(f"placeholder source locator: {locator}")
     for value in evidence["citation_id"].dropna():
         if str(value).startswith("doi:") and str(value) != str(value).lower():
@@ -282,6 +304,13 @@ def _validate_text_and_anchors(evidence: pd.DataFrame, fields: pd.DataFrame) -> 
             raise ValueError("record_source_url must be a stable absolute HTTPS URL")
         if parsed.hostname in {"localhost", "127.0.0.1"}:
             raise ValueError("record_source_url may not be local")
+    for value in evidence["verification_reference"].dropna():
+        if re.fullmatch(_REVIEW_REFERENCE, str(value)) is None and re.fullmatch(
+            _REPOSITORY, str(value)
+        ) is None:
+            raise ValueError(
+                "verification_reference must be a stable GitHub review URL or immutable record"
+            )
 
 
 def _typed_literal(value: object) -> str:
@@ -623,6 +652,8 @@ def validate_search_manifest(frame: pd.DataFrame) -> pd.DataFrame:
     validated = LITERATURE_SEARCHES_SCHEMA.validate(frame).reset_index(drop=True)
     for row in validated.itertuples(index=False):
         _validate_timestamp(row.executed_at)
+        if row.search_id != make_search_id(row.database, row.query, row.executed_at):
+            raise ValueError("search_id disagrees with database, query, and executed_at")
         if not row.manifest_version.startswith(f"{row.corpus_id}@"):
             raise ValueError("manifest_version corpus does not match corpus_id")
         if row.decision == "excluded" and _is_null(row.decision_reason):

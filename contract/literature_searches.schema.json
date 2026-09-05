@@ -45,11 +45,7 @@
     },
     "search_id": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "str_matches": "^pubmed:[0-9a-f]{64}$"
     }
   },
   "drop_invalid_rows": false,

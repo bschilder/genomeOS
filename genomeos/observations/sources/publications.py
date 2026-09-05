@@ -8,8 +8,10 @@ error.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 
 import pandas as pd
 
@@ -35,7 +37,13 @@ class IngestReport:
 
     total: int
     retained: int
-    refusals: dict[str, int] = field(default_factory=dict)
+    refusals: Mapping[str, int] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        snapshot = dict(self.refusals)
+        if self.total != self.retained + sum(snapshot.values()):
+            raise ValueError("ingest report counts must reconcile total, retained, and refusals")
+        object.__setattr__(self, "refusals", MappingProxyType(snapshot))
 
     def __str__(self) -> str:
         lines = [f"{self.retained}/{self.total} literature records promoted"]
@@ -182,7 +190,11 @@ def load(
                 expected[source].reset_index(drop=True).astype(float)
             ):
                 raise AssertionError(f"publication {target} must equal its resolved P0 value")
-    retained = evidence.loc[evidence["source_record_id"].isin(retained_ids)].reset_index(drop=True)
+    retained = (
+        evidence.loc[evidence["source_record_id"].isin(retained_ids)]
+        .sort_values("source_record_id")
+        .reset_index(drop=True)
+    )
     return observations, retained, IngestReport(
         total=len(evidence), retained=len(observations), refusals=refusals
     )

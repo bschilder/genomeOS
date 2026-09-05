@@ -188,6 +188,29 @@ def test_dishonest_or_inconsistent_main_values_are_hard_errors(column, value):
         validate_literature_tables(_evidence_row(**{column: value}), _field_evidence())
 
 
+def test_placeholder_locator_variants_and_unstable_review_references_are_rejected():
+    """Catches plausible-looking locator/reviewer text outside the original short denylist."""
+    locator = "page:tbd"
+    with pytest.raises(ValueError, match="placeholder"):
+        validate_literature_tables(
+            _evidence_row(
+                record_locator=locator,
+                source_record_id=make_source_record_id(
+                    "lct-rs4988235", "pmid:29063188", locator
+                ),
+            ),
+            _field_evidence().assign(
+                source_record_id=make_source_record_id(
+                    "lct-rs4988235", "pmid:29063188", locator
+                )
+            ),
+        )
+    with pytest.raises(ValueError, match="verification_reference"):
+        validate_literature_tables(
+            _evidence_row(verification_reference="looks good"), _field_evidence()
+        )
+
+
 def test_missing_or_duplicate_field_evidence_is_a_hard_error():
     """Catches a ledger that creates apparent completeness by omitting field states."""
     fields = _field_evidence().iloc[:-1]
@@ -428,7 +451,9 @@ def test_search_manifest_keeps_every_candidate_pending_until_screened():
     manifest = pd.DataFrame(
         [
             {
-                "search_id": "pubmed:lct-rs4988235:2026-09-03:4c825",
+                "search_id": (
+                    "pubmed:25c463e4027c9b29a385cdf57b2333ed5d59700ffccca741a496e9aca34d1612"
+                ),
                 "corpus_id": "lct-rs4988235",
                 "database": "pubmed",
                 "query": "rs4988235 AND population",
@@ -448,6 +473,11 @@ def test_search_manifest_keeps_every_candidate_pending_until_screened():
     invalid.loc[0, ["decision", "decision_reason"]] = ["excluded", pd.NA]
     with pytest.raises(ValueError, match="decision_reason"):
         validate_search_manifest(invalid)
+
+    mismatched_identity = manifest.copy()
+    mismatched_identity.loc[0, "query"] = "a different query"
+    with pytest.raises(ValueError, match="search_id"):
+        validate_search_manifest(mismatched_identity)
 
 
 def test_curation_guide_headers_and_field_names_cannot_drift_from_contracts():

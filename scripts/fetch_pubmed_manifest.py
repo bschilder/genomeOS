@@ -8,7 +8,6 @@ pending and must be screened in a later immutable manifest version.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import urllib.parse
 import urllib.request
@@ -19,18 +18,12 @@ import pandas as pd
 
 from genomeos.observations.evidence import (
     LITERATURE_SEARCH_COLUMNS,
+    make_search_id,
     validate_search_manifest,
 )
 
 DATABASE = "pubmed"
 ESEARCH_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-
-
-def _search_id(query: str, executed_at: str) -> str:
-    identity = json.dumps(
-        [DATABASE, query, executed_at], ensure_ascii=False, separators=(",", ":")
-    )
-    return f"{DATABASE}:{hashlib.sha256(identity.encode('utf-8')).hexdigest()}"
 
 
 def _candidate_ids(payload: dict[str, Any]) -> list[str]:
@@ -67,7 +60,7 @@ def build_manifest(
     """Convert one complete ESearch response into pending screening rows."""
     if not isinstance(payload, dict):
         raise ValueError("PubMed payload must be a JSON object")
-    search_id = _search_id(query, executed_at)
+    search_id = make_search_id(DATABASE, query, executed_at)
     rows = [
         {
             "search_id": search_id,
