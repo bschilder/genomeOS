@@ -45,6 +45,7 @@ def _observations(n: int, variant_id: str = "chr11-5227002-T-A") -> pd.DataFrame
             "radius_km": 5.0,
             "ac": ac,
             "an": an,
+            "source_record_id": [f"test:{variant_id}:{i}" for i in range(n)],
             "source": "test",
             "assay": "genotype",
             "date_lower": 0,

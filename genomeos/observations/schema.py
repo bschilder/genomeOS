@@ -90,6 +90,11 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         "radius_km": pa.Column(float, pa.Check.gt(0.0), nullable=False),
         "ac": pa.Column(int, pa.Check.ge(0), nullable=False),
         "an": pa.Column(int, pa.Check.gt(0), nullable=False),
+        # Stable identity in the source system, and the only join from compact P1 rows back to
+        # verbose evidence. Local dataframe positions and random UUIDs are not source identities.
+        "source_record_id": pa.Column(
+            str, pa.Check.str_length(min_value=1), nullable=False, unique=True
+        ),
         "source": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
         "assay": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
         # Years before present; modern = 0, ancient from AADR (§7 time axis).

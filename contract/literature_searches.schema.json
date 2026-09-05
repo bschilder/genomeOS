@@ -1,0 +1,64 @@
+{
+  "coerce": true,
+  "columns": {
+    "candidate_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^pmid:[1-9][0-9]*$"
+    },
+    "corpus_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "database": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "pubmed"
+      ]
+    },
+    "decision": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "included",
+        "excluded",
+        "pending"
+      ]
+    },
+    "decision_reason": {
+      "dtype": "string[pyarrow]",
+      "nullable": true
+    },
+    "executed_at": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "manifest_version": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[a-z0-9]+(?:-[a-z0-9]+)*@[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[1-9][0-9]*$"
+    },
+    "query": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "search_id": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "literature_searches",
+  "ordered": true,
+  "schema_type": "dataframe",
+  "strict": true,
+  "unique": [
+    "search_id",
+    "candidate_id"
+  ]
+}

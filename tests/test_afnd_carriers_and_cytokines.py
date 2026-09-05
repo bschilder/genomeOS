@@ -47,6 +47,9 @@ def test_a_full_genotype_triple_gives_the_allele_frequency_by_counting(tmp_path)
     row = obs.iloc[0]
     assert row["variant_id"] == "cyt:il-6-174-g"
     assert (row["ac"], row["an"]) == (100, 200)
+    assert row["source_record_id"] == (
+        "afnd-cytokines:6c3d43c4c6d804ccb036922f93cefb210522665b541ce0f69431a494b8b0e258"
+    )
 
 
 def test_an_incomplete_genotype_set_is_refused_not_completed(tmp_path):

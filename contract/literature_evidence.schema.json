@@ -1,0 +1,250 @@
+{
+  "coerce": true,
+  "columns": {
+    "ac_lower": {
+      "dtype": "Int64",
+      "greater_than_or_equal_to": 0,
+      "nullable": true
+    },
+    "ac_upper": {
+      "dtype": "Int64",
+      "greater_than_or_equal_to": 0,
+      "nullable": true
+    },
+    "an": {
+      "dtype": "Int64",
+      "greater_than": 0,
+      "nullable": true
+    },
+    "assay": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "citation_id": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^(?:pmid:[1-9][0-9]*|doi:10\\.[0-9]{4,9}/\\S+|thesis:[a-z0-9][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._/-]*)$"
+    },
+    "citation_text": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "cohort_id": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^cohort:[a-z0-9][a-z0-9.-]*:[a-z0-9][a-z0-9.-]*$"
+    },
+    "corpus_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+    },
+    "count_basis": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "reported",
+        "genotype_derived",
+        "frequency_reconstructed"
+      ],
+      "nullable": true
+    },
+    "counted_allele": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^[ACGT]+$"
+    },
+    "date_lower": {
+      "dtype": "Int64",
+      "greater_than_or_equal_to": 0,
+      "nullable": true
+    },
+    "date_upper": {
+      "dtype": "Int64",
+      "greater_than_or_equal_to": 0,
+      "nullable": true
+    },
+    "denominator_basis": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "reported_alleles",
+        "diploid_individuals",
+        "hemizygous_males"
+      ],
+      "nullable": true
+    },
+    "disease_ascertainment_excluded": {
+      "dtype": "boolean",
+      "nullable": true
+    },
+    "extracted_at": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "extracted_by": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^(?:human:[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?|agent:[a-z0-9][a-z0-9.-]*:[a-z0-9][a-z0-9._-]*|import:[a-z0-9][a-z0-9._/-]*@[0-9a-f]{40})$"
+    },
+    "extraction_method": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "manual_transcription",
+        "structured_table",
+        "ocr_reviewed",
+        "automated_proposal"
+      ]
+    },
+    "ingest_version": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[a-z0-9]+(?:-[a-z0-9]+)*@[0-9]{4}-[0-9]{2}-[0-9]{2}\\.[1-9][0-9]*$"
+    },
+    "normalization_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "verified",
+        "ambiguous",
+        "unresolved"
+      ]
+    },
+    "notes": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "population_label": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "record_locator": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^(?:table|figure|page|supplement|dataset-record):[^\\t\\r\\n]+$"
+    },
+    "record_source_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "(?:(?:pmid:[1-9][0-9]*|doi:10\\.[0-9]{4,9}/\\S+|thesis:[a-z0-9][a-z0-9.-]*:[A-Za-z0-9][A-Za-z0-9._/-]*)|repo:github\\.com/[a-z0-9_.-]+/[a-z0-9_.-]+@[0-9a-f]{40}:[^\\t\\r\\n]+)"
+    },
+    "record_source_url": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^https://"
+    },
+    "reported_frequency": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "reuse_checked_at": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "reuse_evidence": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "reuse_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "explicitly_open",
+        "permission_granted",
+        "no_restriction_found",
+        "restricted",
+        "not_checked"
+      ]
+    },
+    "rsid": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^rs[1-9][0-9]*$"
+    },
+    "sample_id": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "sampling_design": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "population_random",
+        "healthy_reference",
+        "clinical_case",
+        "clinical_control",
+        "newborn_screening",
+        "carrier_screening",
+        "convenience"
+      ],
+      "nullable": true
+    },
+    "source_record_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^literature:[a-z0-9]+(?:-[a-z0-9]+)*:[0-9a-f]{64}$",
+      "unique": true
+    },
+    "variant_id": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^(?:chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|M)-\\d+-[ACGT]+-[ACGT]+|phenotype:[a-z0-9][a-z0-9-]*|(?:hla|kir|mic|cyt):[a-z0-9][a-z0-9._-]*)$"
+    },
+    "verification_reference": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "verification_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "original_source_verified",
+        "compilation_verified",
+        "pending"
+      ]
+    },
+    "verified_at": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "verified_by": {
+      "dtype": "string[pyarrow]",
+      "nullable": true,
+      "str_matches": "^(?:human:[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?|agent:[a-z0-9][a-z0-9.-]*:[a-z0-9][a-z0-9._-]*|import:[a-z0-9][a-z0-9._/-]*@[0-9a-f]{40})$"
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "literature_evidence",
+  "ordered": true,
+  "schema_type": "dataframe",
+  "strict": true
+}

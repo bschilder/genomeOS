@@ -64,14 +64,14 @@
 - Modify: `genomeos/observations/sources/__init__.py`
 - Create: `tests/test_publications_source.py`
 
-- [ ] Write failing tests for `load(evidence_path, field_evidence_path, populations, aliases, ingest_version)` returning `(observations, retained_evidence, report)`.
-- [ ] Cover the full promotable fixture; exact-copy assertions for `population_id`, `lat`, `lon`, and `radius_km`; one-to-one `source_record_id`; deterministic result order; and an empty refusal report.
-- [ ] Cover refusal reasons for pending verification, unresolved/ambiguous normalization, interval or frequency-reconstructed counts, missing required evidence, unresolved alias, duplicate source record, duplicate cohort/sample measurement, counted allele not equal to ALT, and restricted/not-checked reuse.
-- [ ] Cover conditional `sample_id`: two measurements with equal `(citation_id, population_label, cohort_id, variant_id)` require distinct source-reported sample IDs.
-- [ ] Implement an immutable `IngestReport` with total, retained, and reason counts. Validate both ledgers first, recompute promotion facts, and never parse narrative text.
-- [ ] Resolve aliases only where `source == "literature"`, require exactly one alias and one P0 row, and copy `lat`, `lon`, and `uncertainty_radius_km` verbatim. Assert emitted values equal the resolved registry values after P1 validation.
-- [ ] Emit exact counts only (`ac_lower == ac_upper`), use source `literature:<corpus_id>`, retain matching evidence rows, and expose no eligibility override.
-- [ ] Run `pytest tests/test_publications_source.py -q`.
+- [x] Write failing tests for `load(evidence_path, field_evidence_path, populations, aliases, ingest_version)` returning `(observations, retained_evidence, report)`.
+- [x] Cover the full promotable fixture; exact-copy assertions for `population_id`, `lat`, `lon`, and `radius_km`; one-to-one `source_record_id`; deterministic result order; and an empty refusal report.
+- [x] Cover refusal reasons for pending verification, unresolved/ambiguous normalization, interval or frequency-reconstructed counts, missing required evidence, unresolved alias, duplicate source record, duplicate cohort/sample measurement, counted allele not equal to ALT, and restricted/not-checked reuse.
+- [x] Cover conditional `sample_id`: two measurements with equal `(citation_id, population_label, cohort_id, variant_id)` require distinct source-reported sample IDs.
+- [x] Implement an immutable `IngestReport` with total, retained, and reason counts. Validate both ledgers first, recompute promotion facts, and never parse narrative text.
+- [x] Resolve aliases only where `source == "literature"`, require exactly one alias and one P0 row, and copy `lat`, `lon`, and `uncertainty_radius_km` verbatim. Assert emitted values equal the resolved registry values after P1 validation.
+- [x] Emit exact counts only (`ac_lower == ac_upper`), use source `literature:<corpus_id>`, retain matching evidence rows, and expose no eligibility override.
+- [x] Run `pytest tests/test_publications_source.py -q`.
 
 ### Task 4: Put stable source identities on every existing P1 allele-count observation
 
@@ -92,11 +92,11 @@
 - Modify: `tests/test_surface_fit.py`
 - Modify: `tests/test_batch.py`
 
-- [ ] First require a non-empty globally namespaced `source_record_id` in `OBSERVATIONS_SCHEMA` and update direct test frames; run focused tests to expose every adapter still missing it.
-- [ ] Generate stable IDs from source-native immutable identities: gnomAD variant/population record; MAP survey IDs; and AFND record/locus/population identities. Hash a canonical tuple only where the source supplies no single accession; never use dataframe index or random UUID.
-- [ ] Add adapter assertions for uniqueness and deterministic IDs across repeat loads.
-- [ ] Do not add the field to `CARRIER_OBSERVATIONS_SCHEMA`, because this task changes the allele-count P1 relation only.
-- [ ] Run `pytest tests/test_observations_schema.py tests/test_gnomad_source.py tests/test_map_surveys.py tests/test_map_g6pd.py tests/test_afnd_frequencies.py tests/test_afnd_carriers_and_cytokines.py tests/test_surface_fit.py tests/test_batch.py -q`.
+- [x] First require a non-empty globally namespaced `source_record_id` in `OBSERVATIONS_SCHEMA` and update direct test frames; run focused tests to expose every adapter still missing it.
+- [x] Generate stable IDs from source-native immutable identities: gnomAD variant/population record; MAP survey IDs; and AFND record/locus/population identities. Hash a canonical tuple only where the source supplies no single accession; never use dataframe index or random UUID.
+- [x] Add adapter assertions for uniqueness and deterministic IDs across repeat loads.
+- [x] Do not add the field to `CARRIER_OBSERVATIONS_SCHEMA`, because this task changes the allele-count P1 relation only.
+- [x] Run `pytest tests/test_observations_schema.py tests/test_gnomad_source.py tests/test_map_surveys.py tests/test_map_g6pd.py tests/test_afnd_frequencies.py tests/test_afnd_carriers_and_cytokines.py tests/test_surface_fit.py tests/test_batch.py -q`.
 
 ### Task 5: Compose literature evidence into the offline observation build
 
@@ -104,11 +104,11 @@
 - Modify: `scripts/build_observations.py`
 - Modify: `tests/test_build_scripts.py`
 
-- [ ] Write a failing CLI test invoking the build with `--literature-evidence`, `--literature-field-evidence`, registry fixtures, and the existing source fixtures.
-- [ ] Add the two options as an all-or-neither pair; load P0 parquet tables; invoke `publications.load`; append only promoted observations; and print its refusal report.
-- [ ] Write retained evidence to `literature_evidence.parquet` beside `observations.parquet`, preserving the stable foreign-key target. Do not put evidence text in the P1 table.
-- [ ] Assert the fixture-backed rs4988235 row survives the complete script and its coordinates/radius exactly equal the P0 fixture.
-- [ ] Run `pytest tests/test_build_scripts.py tests/test_publications_source.py -q`.
+- [x] Write a failing CLI test invoking the build with `--literature-evidence`, `--literature-field-evidence`, registry fixtures, and the existing source fixtures.
+- [x] Add the two options as an all-or-neither pair; load P0 parquet tables; invoke `publications.load`; append only promoted observations; and print its refusal report.
+- [x] Write retained evidence to `literature_evidence.parquet` beside `observations.parquet`, preserving the stable foreign-key target. Do not put evidence text in the P1 table.
+- [x] Assert the fixture-backed rs4988235 row survives the complete script and its coordinates/radius exactly equal the P0 fixture.
+- [x] Run `pytest tests/test_build_scripts.py tests/test_publications_source.py -q`.
 
 ### Task 6: Freeze the new public contracts
 
@@ -120,10 +120,10 @@
 - Create: `contract/literature_searches.schema.json`
 - Modify: `tests/test_contracts.py`
 
-- [ ] Write/extend a failing contract test requiring all three literature schemas and the new observation key.
-- [ ] Register all evidence schemas in `PANDERA_SCHEMAS` and run `python scripts/freeze_contract.py`.
-- [ ] Inspect the contract diff for exact field names/order, nullability, enums, and `source_record_id`.
-- [ ] Run `python scripts/freeze_contract.py --check` and `pytest tests/test_contracts.py -q`.
+- [x] Write/extend a failing contract test requiring all three literature schemas and the new observation key.
+- [x] Register all evidence schemas in `PANDERA_SCHEMAS` and run `python scripts/freeze_contract.py`.
+- [x] Inspect the contract diff for exact field names/order, nullability, enums, and `source_record_id`.
+- [x] Run `python scripts/freeze_contract.py --check` and `pytest tests/test_contracts.py -q`.
 
 ### Task 7: Add reproducible PubMed discovery without putting network I/O in science code
 

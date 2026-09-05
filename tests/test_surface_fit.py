@@ -65,6 +65,7 @@ def _observations(
                 "radius_km": 25.0,
                 "ac": ac,
                 "an": an,
+                "source_record_id": [f"synthetic:{i}" for i in range(n)],
                 "source": "synthetic",
                 "assay": "genotype",
                 "date_lower": 0,
@@ -149,7 +150,10 @@ def test_beta_binomial_likelihood_is_selectable():
 
 def test_more_than_one_variant_is_refused():
     """Surfaces are fitted per variant (§7); a mixed frame is a caller error, not a merge."""
-    obs = pd.concat([_observations(n=20), _observations(n=20)], ignore_index=True)
+    first = _observations(n=20)
+    second = _observations(n=20)
+    second["source_record_id"] = "synthetic-second:" + second.index.astype(str)
+    obs = pd.concat([first, second], ignore_index=True)
     obs.loc[obs.index[:20], "variant_id"] = "chr7-117559590-ATCT-A"
     with pytest.raises(ValueError, match="exactly one variant"):
         fit_surface(obs, FAST_CONFIG)

@@ -461,6 +461,18 @@ def _sample_required(evidence: pd.DataFrame, index: int) -> bool:
     return int(matches.sum()) > 1
 
 
+def _validate_conditional_samples(evidence: pd.DataFrame) -> None:
+    keys = ["citation_id", "population_label", "cohort_id", "variant_id"]
+    for _, group in evidence.groupby(keys, dropna=False):
+        if len(group) <= 1:
+            continue
+        if group["sample_id"].isna().any() or not group["sample_id"].is_unique:
+            raise ValueError(
+                "sample_id is required and must be distinct for separately reported "
+                "measurements of one citation/population/cohort/variant"
+            )
+
+
 def _computed_verification(main: pd.Series, field_rows: pd.DataFrame, sample_required: bool) -> str:
     states = field_rows.set_index("field_name")["evidence_status"]
     required = [*PROMOTION_REQUIRED_FIELDS, *(["sample_id"] if sample_required else [])]
@@ -556,6 +568,7 @@ def validate_literature_tables(
     fields = LITERATURE_FIELD_EVIDENCE_SCHEMA.validate(field_evidence).reset_index(drop=True)
     _validate_text_and_anchors(validated, fields)
     _validate_field_rows(validated, fields)
+    _validate_conditional_samples(validated)
     for index, main in validated.iterrows():
         expected_id = make_source_record_id(
             main["corpus_id"], main["record_source_id"], main["record_locator"]

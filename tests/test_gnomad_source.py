@@ -44,6 +44,14 @@ def test_zero_count_rows_are_retained(registry):
     assert (obs["ac"] == 0).sum() == 2
 
 
+def test_source_record_ids_use_the_native_variant_population_key(registry):
+    """Catches unstable dataframe positions or random IDs breaking evidence joins."""
+    populations, aliases = registry
+    obs = gnomad.load(FIXTURES / "gnomad_hgdp_1kg_freqs.tsv", populations, aliases, "0.1.0")
+    assert obs["source_record_id"].is_unique
+    assert "gnomad-hgdp-1kg:chr11-5227002-T-A:Yoruba" in set(obs["source_record_id"])
+
+
 def test_unmapped_population_label_is_a_hard_error(tmp_path, registry):
     populations, aliases = registry
     bad = tmp_path / "bad.tsv"
