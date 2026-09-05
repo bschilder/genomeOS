@@ -171,13 +171,21 @@
 
 **External state:** GitHub issues #7, #8, #45, #117, #149 plus two new follow-on issues.
 
-- [ ] Re-read open and closed issue state immediately before mutation; do not overwrite intervening human decisions.
-- [ ] Reopen #45 if still closed without completed HbS parity evidence, and comment with the specific remaining acceptance run.
-- [ ] Comment on #7 and #8 with the P0 alias/geography and P1 literature-evidence interfaces now implemented.
-- [ ] Close #117 as completed only if its remaining question is exactly resolved by the approved checked-terms/no-explicit-restriction policy; record the decision and retain explicit-restriction handling.
-- [ ] Rewrite #149 to describe the delivered foundation and remaining curation, apply the four repository label families, and leave it open until the PR merges.
-- [ ] Open one HBB round-trip issue tied to HbS parity and one G6PD literature-ingestion issue tied to X-linked/parity acceptance. Do not claim those scientific validations are complete.
-- [ ] Record all resulting issue URLs/numbers in the PR body.
+- [x] Re-read open and closed issue state immediately before mutation; do not overwrite intervening human decisions.
+- [x] Reopen #45 if still closed without completed HbS parity evidence, and comment with the specific remaining acceptance run.
+- [x] Comment on #7 and #8 with the P0 alias/geography and P1 literature-evidence interfaces now implemented.
+- [x] Close #117 as completed only if its remaining question is exactly resolved by the approved checked-terms/no-explicit-restriction policy; record the decision and retain explicit-restriction handling.
+- [x] Rewrite #149 to describe the delivered foundation and remaining curation, apply the four repository label families, and leave it open until the PR merges.
+- [x] Open one HBB round-trip issue tied to HbS parity and one G6PD literature-ingestion issue tied to X-linked/parity acceptance. Do not claim those scientific validations are complete.
+- [x] Record all resulting issue URLs/numbers in the PR body.
+
+Tracker results: [#7](https://github.com/bschilder/genomeOS/issues/7),
+[#8](https://github.com/bschilder/genomeOS/issues/8),
+[#45](https://github.com/bschilder/genomeOS/issues/45),
+[#117](https://github.com/bschilder/genomeOS/issues/117),
+[#149](https://github.com/bschilder/genomeOS/issues/149),
+[#150](https://github.com/bschilder/genomeOS/issues/150), and
+[#151](https://github.com/bschilder/genomeOS/issues/151).
 
 ### Task 11: Verify, review, commit, and open the pull request
 
