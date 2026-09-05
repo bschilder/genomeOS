@@ -191,7 +191,7 @@ Tracker results: [#7](https://github.com/bschilder/genomeOS/issues/7),
 
 **Files:** all files above.
 
-- [ ] Run focused suites after each task, then run the mandatory full gates:
+- [x] Run focused suites after each task, then run the mandatory full gates:
 
 ```bash
 ruff check .
@@ -202,8 +202,14 @@ python scripts/smoke.py
 pytest
 ```
 
-- [ ] Inspect `git diff --check`, `git status --short`, `git diff --stat`, and the complete diff. Confirm unrelated untracked artifacts remain unstaged.
-- [ ] Use `superpowers:requesting-code-review` for a spec/implementation review and address findings before completion.
-- [ ] Run `python scripts/check_private_files.py` again, stage only named task files, and inspect `git diff --cached --name-only`.
-- [ ] Commit coherent units with imperative messages containing `closes #149` on the implementation commit; push `feat/149-literature-evidence`.
-- [ ] Open a PR whose body states the scientific claim, design sections, schema/promotion refusals, LCT 426-row audit result, exact verification commands/results, follow-on issues, and `Closes #149`. Request expert review of allele orientation, denominator derivations, cohort semantics, and the reuse-evidence policy.
+- [x] Inspect `git diff --check`, `git status --short`, `git diff --stat`, and the complete diff. Confirm unrelated untracked artifacts remain unstaged.
+- [x] Use `superpowers:requesting-code-review` for a spec/implementation review and address findings before completion.
+- [x] Run `python scripts/check_private_files.py` again, stage only named task files, and inspect `git diff --cached --name-only`.
+- [x] Commit coherent units with imperative messages containing `closes #149` on the implementation commit; push `feat/149-literature-evidence`.
+- [x] Open a PR whose body states the scientific claim, design sections, schema/promotion refusals, LCT 426-row audit result, exact verification commands/results, follow-on issues, and `Closes #149`. Request expert review of allele orientation, denominator derivations, cohort semantics, and the reuse-evidence policy.
+
+Review result: the review checklist was applied directly because the active collaboration policy
+prohibited spawning a reviewer subagent. It found and fixed reproducible search identities,
+placeholder locator and durable review-reference validation, immutable/reconciled ingest reports,
+and deterministic retained-ledger ordering before PR [#152](https://github.com/bschilder/genomeOS/pull/152)
+was opened.
