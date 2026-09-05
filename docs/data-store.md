@@ -51,6 +51,26 @@ not padding: §4's defence against a persuasive-but-unfounded cline is that a co
 measured from inferred without going back to the model, and the distance is carried so a stricter
 threshold can be applied without refitting.
 
+## Building the P4 serving catalog
+
+P2 publishes one immutable directory per entity. The P4 API reads one version-pinned catalog and
+must not infer labels, measurement meaning, eligibility, or assumptions from directory names.
+Those reviewed decisions live in `data/store/catalog-metadata.json`; build a local serving catalog
+with:
+
+```bash
+python scripts/build_atlas_catalog.py --source data/store/artifacts \
+    --metadata data/store/catalog-metadata.json --out data/serving/atlas-v1
+```
+
+The command refuses to replace an existing output, validates entity IDs, row counts and H3
+resolutions, adds only mechanical H3 centre coordinates, checks that the catalog pins exactly one
+data/model version, and writes `manifest.json` last. Missing observations or burden artifacts stay
+explicitly unavailable; the builder never manufactures them from a surface.
+
+`contract/atlas_catalog.schema.json` is the frozen review surface for this serving boundary. Run
+`python scripts/freeze_contract.py` after an intentional catalog-contract change.
+
 ## Immutability is enforced, not just documented
 
 Artifacts are keyed `(variant_id, model_version, data_version)` and `publish()` **refuses to
