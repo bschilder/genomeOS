@@ -132,10 +132,10 @@
 - Create: `tests/fixtures/pubmed/esearch_rs4988235.json`
 - Create: `tests/test_fetch_pubmed_manifest.py`
 
-- [ ] Write failing pure-parser tests for PubMed ESearch JSON, stable `search_id`, UTC execution timestamp, namespaced PMID candidates, pending decisions, manifest version, ordering, and duplicate rejection.
-- [ ] Implement a pure `build_manifest(payload, corpus_id, query, executed_at, manifest_version)` and a thin CLI using standard-library HTTPS. Require explicit query, date/version, and output; do not infer screening decisions.
-- [ ] Validate output through `LITERATURE_SEARCHES_SCHEMA`, write TSV in contract order, and make HTTP/API failures fatal.
-- [ ] Run `pytest tests/test_fetch_pubmed_manifest.py -q`.
+- [x] Write failing pure-parser tests for PubMed ESearch JSON, stable `search_id`, UTC execution timestamp, namespaced PMID candidates, pending decisions, manifest version, ordering, and duplicate rejection.
+- [x] Implement a pure `build_manifest(payload, corpus_id, query, executed_at, manifest_version)` and a thin CLI using standard-library HTTPS. Require explicit query, date/version, and output; do not infer screening decisions.
+- [x] Validate output through `LITERATURE_SEARCHES_SCHEMA`, write TSV in contract order, and make HTTP/API failures fatal.
+- [x] Run `pytest tests/test_fetch_pubmed_manifest.py -q`.
 
 ### Task 8: Audit the complete LCT pilot without manufacturing P1 metadata
 
@@ -145,11 +145,11 @@
 - Create: `tests/test_audit_lct_pilot.py`
 - Create after audit: `docs/audits/lct-rs4988235-pilot.json`
 
-- [ ] Write failing tests that a small upstream-format CSV receives stable `dataset-record:` locators and source IDs pinned to `repo:github.com/manpreetbola/protective-alleles-gnomad-v4@<40-hex-commit>:data/lct_rs4988235_observations.csv`.
-- [ ] Assert migration output is `automated_proposal`/`pending`, has blank verifier fields, records source-present values only, emits all 19 evidence rows, and does not invent cohort, assay, sampling design, dates, field locators, P0 geography, or radius.
-- [ ] Implement CSV inventory and reconciliation reporting: input/output row counts, duplicate immutable anchors, country-label count, missingness by target field, exact-vs-reconstructed count inventory, and whether all 426 rows were assigned exactly one anchor.
-- [ ] Fetch the exact upstream CSV at its pinned commit, run the audit, and commit only the compact JSON audit report—not article text or a silently curated P1 table. The report must show 426/426 reconciliation or fail.
-- [ ] Run `pytest tests/test_audit_lct_pilot.py -q` and the exact audit command recorded in the JSON report.
+- [x] Write failing tests that a small upstream-format CSV receives stable `dataset-record:` locators and source IDs pinned to `repo:github.com/manpreetbola/protective-alleles-gnomad-v4@<40-hex-commit>:data/lct_rs4988235_observations.csv`.
+- [x] Assert migration output is `automated_proposal`/`pending`, has blank verifier fields, records source-present values only, emits all 19 evidence rows, and does not invent cohort, assay, sampling design, dates, field locators, P0 geography, or radius.
+- [x] Implement CSV inventory and reconciliation reporting: input/output row counts, duplicate immutable anchors, country-label count, missingness by target field, exact-vs-reconstructed count inventory, and whether all 426 rows were assigned exactly one anchor.
+- [x] Fetch the exact upstream CSV at its pinned commit, run the audit, and commit only the compact JSON audit report—not article text or a silently curated P1 table. The report must show 426/426 reconciliation or fail.
+- [x] Run `pytest tests/test_audit_lct_pilot.py -q` and the exact audit command recorded in the JSON report.
 
 ### Task 9: Write the agent/human curation contract and wire project documentation
 

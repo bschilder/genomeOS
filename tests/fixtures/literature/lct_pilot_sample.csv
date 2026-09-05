@@ -1,0 +1,4 @@
+population,country,continent,lat,lon,an,ac,af_reported,source_type,pmid,original_ref,status_notes
+Sami,Finland,Europe,68.0,24.0,58,17,0.29310344827586204,present_paper,29063188,Liebert et al. (2017) Hum Genet. 136 1445-1453,CORRECTED: exact 17/58 after two no-calls.
+Berber Mzab,Algeria,Africa,32.489059,3.678539,66,11,0.17,paper,15806398,Myles et al. (2005) Hum Genet. 117 34,approx_count: source-rounded frequency; ac derived as round(an x f)
+Burji,Kenya,Africa,5.599722,37.783333,16,0,0.0,paper,17159977|24630847,Ranciaro et al. (2014) and Tishkoff et al. (2007),small_n
