@@ -154,7 +154,7 @@ out_dir, hf_revision) -> list[Path]`, the two immutable surface manifests/parque
 - Produces: schema-versioned JSON payloads with `catalog.artifacts[].surface_url` and
   `observations_url`; every file includes its source revision and artifact versions.
 
-- [ ] **Step 1: Write failing exporter tests**
+- [x] **Step 1: Write failing exporter tests**
 
 Create tiny temp parquets and MAP CSVs in `tests/test_export_atlas_web.py`, then assert:
 
@@ -176,7 +176,7 @@ def test_export_preserves_support_and_refuses_missing_radius(tmp_path: Path) -> 
 Also cover missing versions, checksum generation, non-finite posterior values, mismatched
 `variant_id`, and a row that loses `radius_km` after adapter validation.
 
-- [ ] **Step 2: Run exporter tests and verify that they fail**
+- [x] **Step 2: Run exporter tests and verify that they fail**
 
 Run:
 
@@ -186,7 +186,7 @@ Run:
 
 Expected: FAIL because `scripts.export_atlas_web` does not exist.
 
-- [ ] **Step 3: Implement the exporter and immutable allowlist**
+- [x] **Step 3: Implement the exporter and immutable allowlist**
 
 `website/src/atlas/public-artifacts.json` contains exact identities and source files:
 
@@ -218,13 +218,13 @@ text back by source-native ID, rounds only serialized floating-point precision, 
 over canonical JSON, and writes with stable key ordering. It never supplies a radius or scientific
 default.
 
-- [ ] **Step 4: Download the two raw MAP tables from the pinned Hugging Face revision**
+- [x] **Step 4: Download the two raw MAP tables from the pinned Hugging Face revision**
 
 Use `hf_hub_download()` through the already authenticated local Hugging Face client, writing its
 cache outside the repository. Do not print or inspect the token. If anonymous download becomes
 available, the identical command works without a token.
 
-- [ ] **Step 5: Download the immutable Natural Earth fallback**
+- [x] **Step 5: Download the immutable Natural Earth fallback**
 
 Download `geojson/ne_110m_admin_0_countries.geojson` from Natural Earth revision
 `ca96624a56bd078437bca8184e78163e5039ad19`, write it as
@@ -232,7 +232,7 @@ Download `geojson/ne_110m_admin_0_countries.geojson` from Natural Earth revision
 catalog's `context_sources`. Natural Earth is the neutral country-outline fallback, not the detailed
 context map.
 
-- [ ] **Step 6: Generate and inspect the public payloads**
+- [x] **Step 6: Generate and inspect the public payloads**
 
 Run:
 
@@ -248,7 +248,7 @@ Run:
 Inspect row counts, support counts, metric domains, versions, citations, checksums, and filenames
 against both source manifests and the export test.
 
-- [ ] **Step 7: Run exporter and privacy tests**
+- [x] **Step 7: Run exporter and privacy tests**
 
 Run:
 

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "hf_dataset": "bschilder/genomeos-data",
+  "hf_revision": "fc17bc1c1d96a0d0766746dcf26277ccdc669717",
+  "artifacts": [
+    {
+      "id": "hbs-rs334",
+      "variant_id": "chr11-5227002-T-A",
+      "artifact_dir": "chr11-5227002-T-A__v1__map-2026-08",
+      "observation_source": "map_hbs_surveys.csv"
+    },
+    {
+      "id": "g6pd-deficiency",
+      "variant_id": "phenotype:g6pd-deficiency",
+      "artifact_dir": "phenotype__g6pd-deficiency__v1__map-2026-08",
+      "observation_source": "map_g6pd_surveys.csv"
+    }
+  ]
+}
