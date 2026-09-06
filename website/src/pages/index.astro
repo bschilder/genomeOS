@@ -1,0 +1,31 @@
+---
+import EvidenceStates from '../components/EvidenceStates.astro';
+import Hero from '../components/Hero.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+---
+
+<SiteLayout
+  title="genomeOS"
+  description="Explore an open, evidence-first atlas of human genetic variation across the world."
+>
+  <Hero />
+  <EvidenceStates />
+  <section class="intro-section">
+    <div class="section-shell intro-section__grid">
+      <h2>Why place matters</h2>
+      <div class="intro-section__body">
+        <p>
+          Human populations have moved, mixed, and adapted for tens of thousands
+          of years. A genetic change that is common in one region can be rare
+          somewhere else—and that can matter for diagnosis, medicines,
+          screening, and research.
+        </p>
+        <p>
+          But geography describes population evidence. It cannot predict an
+          individual's genotype, and genomeOS will not present it as though it
+          can.
+        </p>
+      </div>
+    </div>
+  </section>
+</SiteLayout>

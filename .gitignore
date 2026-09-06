@@ -73,6 +73,7 @@ instance/
 docs/_build/
 
 # Astro documentation website
+website/.astro/
 website/node_modules/
 website/dist/
 website/dist-fallback/

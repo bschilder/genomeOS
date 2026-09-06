@@ -5,7 +5,8 @@ import { defineConfig } from 'astro/config';
 const site = process.env.SITE_URL ?? 'https://genome-os.org';
 const base = process.env.BASE_PATH ?? '/';
 const outDir = process.env.OUT_DIR ?? 'dist';
-const normalizedBase = base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;
+const normalizedBase =
+  base === '/' ? '/' : `/${base.replace(/^\/+|\/+$/g, '')}/`;
 
 export default defineConfig({
   site,
@@ -27,7 +28,9 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Start here',
-          items: [{ label: 'Technical overview', slug: 'docs' }],
+          items: [
+            { label: 'Technical overview', link: `${normalizedBase}docs/` },
+          ],
         },
       ],
     }),

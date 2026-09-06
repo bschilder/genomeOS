@@ -1,0 +1,19 @@
+:root {
+  color-scheme: dark;
+  --color-void: #020712;
+  --color-orbit: #071831;
+  --color-starlight: #f2f8ff;
+  --color-ion: #70e6ff;
+  --color-genome: #ad8bff;
+  --color-aurora: #72e7c1;
+  --color-signal: #f4c86a;
+  --color-muted: #a5b9d3;
+  --color-line: rgb(112 230 255 / 18%);
+  --color-deep-line: rgb(165 185 211 / 14%);
+  --font-display: 'Raleway Variable', 'Avenir Next', sans-serif;
+  --font-body: 'Figtree Variable', 'Avenir Next', sans-serif;
+  --content-width: 76rem;
+  --reading-width: 47.5rem;
+  --space-page: clamp(1.2rem, 4vw, 3.5rem);
+  --focus-ring: 0 0 0 3px rgb(112 230 255 / 35%);
+}

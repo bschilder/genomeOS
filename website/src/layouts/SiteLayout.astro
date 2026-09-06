@@ -1,0 +1,57 @@
+---
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import { sitePath } from '../lib/paths';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  imageAlt?: string;
+}
+
+const {
+  title,
+  description,
+  imageAlt = 'genomeOS, a worldwide atlas of human genetic variation',
+} = Astro.props;
+const fullTitle = title === 'genomeOS' ? title : `${title} | genomeOS`;
+const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
+const socialImage = new URL(
+  sitePath('/images/genomeos-banner.png'),
+  Astro.site ?? Astro.url.origin,
+);
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <link rel="icon" type="image/svg+xml" href={sitePath('/favicon.svg')} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="genomeOS" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={socialImage} />
+    <meta property="og:image:alt" content={imageAlt} />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={fullTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={socialImage} />
+    <meta name="twitter:image:alt" content={imageAlt} />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+    <SiteHeader />
+    <main id="main-content">
+      <slot />
+    </main>
+    <SiteFooter />
+  </body>
+</html>

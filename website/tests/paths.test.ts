@@ -8,7 +8,9 @@ describe('sitePath', () => {
   });
 
   it('prefixes a project-site deployment exactly once', () => {
-    expect(sitePath('/working-groups/', '/genomeOS/')).toBe('/genomeOS/working-groups/');
+    expect(sitePath('/working-groups/', '/genomeOS/')).toBe(
+      '/genomeOS/working-groups/',
+    );
   });
 
   it('preserves query strings and fragments', () => {
