@@ -1,0 +1,225 @@
+.safeguards-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-top: 1px solid var(--color-line);
+}
+
+.safeguards-grid article {
+  min-height: 13rem;
+  padding: 1.7rem;
+  border-right: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.safeguards-grid article:nth-child(3n) {
+  border-right: 0;
+}
+
+.safeguards-grid h3,
+.contribution-detail h2 {
+  margin: 0 0 0.7rem;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 620;
+}
+
+.safeguards-grid p,
+.contribution-detail p,
+.contribution-detail li {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.95rem;
+}
+
+.pipeline-list {
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--color-line);
+  list-style: none;
+}
+
+.pipeline-list li {
+  padding-block: 1.5rem;
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.pipeline-list li > span {
+  color: var(--color-ion);
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.pipeline-list h3 {
+  margin: 0 0 0.35rem;
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.pipeline-list p {
+  max-width: 50rem;
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.compact-list p {
+  padding-block: 0.7rem;
+  border-bottom: 1px solid var(--color-deep-line);
+}
+
+.callout {
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid var(--callout-color, var(--color-ion));
+  display: grid;
+  grid-template-columns: minmax(15rem, 0.75fr) minmax(20rem, 1.25fr);
+  gap: clamp(2rem, 7vw, 7rem);
+}
+
+.callout--ion {
+  --callout-color: var(--color-ion);
+}
+.callout--genome {
+  --callout-color: var(--color-genome);
+}
+.callout--signal {
+  --callout-color: var(--color-signal);
+}
+.callout--aurora {
+  --callout-color: var(--color-aurora);
+}
+
+.callout h2,
+.callout h3 {
+  margin: 0;
+  color: var(--callout-color);
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  font-weight: 520;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+}
+
+.callout__body p {
+  margin: 0;
+  color: #d2deee;
+}
+
+.source-section {
+  background: var(--color-orbit);
+}
+
+.source-section__inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(3rem, 8vw, 8rem);
+}
+
+.source-section h2,
+.resource-links h2 {
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+}
+
+.source-section p,
+.source-section li {
+  color: var(--color-muted);
+}
+
+.source-section ul {
+  margin: 1.2rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.contribution-detail__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.contribution-detail article {
+  min-height: 20rem;
+  padding: clamp(1.6rem, 4vw, 3rem);
+  border-right: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.contribution-detail article:nth-child(2n) {
+  border-right: 0;
+}
+
+.contribution-detail h2 {
+  font-size: clamp(1.35rem, 2.5vw, 1.8rem);
+}
+
+.contribution-detail p + p {
+  margin-top: 1rem;
+}
+
+.contribution-detail ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.contribution-detail li + li {
+  margin-top: 0.65rem;
+}
+
+.status-definitions {
+  margin: 1.2rem 0 0;
+}
+
+.status-definitions div {
+  padding-block: 0.45rem;
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1rem;
+  border-bottom: 1px solid var(--color-deep-line);
+}
+
+.status-definitions dt {
+  color: var(--color-starlight);
+  font-weight: 680;
+}
+
+.status-definitions dd {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.resource-links__grid {
+  margin-top: 2.5rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--color-line);
+}
+
+.resource-links__grid a {
+  min-height: 9rem;
+  padding: 1.5rem;
+  border-right: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-starlight);
+  text-decoration: none;
+}
+
+.resource-links__grid a:nth-child(2n) {
+  border-right: 0;
+}
+
+.resource-links__grid strong,
+.resource-links__grid span {
+  display: block;
+}
+
+.resource-links__grid strong {
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+}
+
+.resource-links__grid span {
+  margin-top: 0.55rem;
+  color: var(--color-muted);
+}

@@ -1,0 +1,68 @@
+---
+import { sitePath } from '../lib/paths';
+
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+
+const steps = [
+  [
+    'Introduce yourself',
+    'Share your background, interests, and the kind of contribution you want to make in Discussion #76.',
+  ],
+  [
+    'Choose a direction',
+    'Start with Data, Modeling, or Product & Experience—or filter issues by the skill you want to use.',
+  ],
+  [
+    'Read before starting',
+    'Search both open and closed issues. Open work is the queue; closed work records decisions and existing patterns.',
+  ],
+  [
+    'Pick Ready work',
+    'Ready means specified and unblocked. New ideas begin as issues so they can be triaged against the dependency graph.',
+  ],
+  [
+    'State the contract',
+    'Name the objective, measurable evidence, public interface, assumptions, refusal conditions, and downstream users.',
+  ],
+  [
+    'Open a reviewed PR',
+    'Show what changed, what you verified, and which expert perspective is still needed.',
+  ],
+];
+---
+
+<section
+  class:list={['flow-section', { 'flow-section--compact': compact }]}
+  aria-labelledby={compact ? 'home-flow-title' : 'flow-title'}
+>
+  <div class="section-shell">
+    <div class="section-heading section-heading--split">
+      <h2 id={compact ? 'home-flow-title' : 'flow-title'}>How work moves</h2>
+      <p>
+        Conversation becomes a scoped issue; a scoped issue becomes reviewable
+        evidence.
+      </p>
+    </div>
+    <ol class="contribution-flow">
+      {
+        steps.map(([title, detail]) => (
+          <li>
+            <h3>{title}</h3>
+            {!compact && <p>{detail}</p>}
+          </li>
+        ))
+      }
+    </ol>
+    {
+      compact && (
+        <a class="text-link" href={sitePath('/contribute/')}>
+          See the full contribution guide
+        </a>
+      )
+    }
+  </div>
+</section>

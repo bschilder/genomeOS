@@ -1,7 +1,48 @@
 ---
 import EvidenceStates from '../components/EvidenceStates.astro';
+import ContributionFlow from '../components/ContributionFlow.astro';
 import Hero from '../components/Hero.astro';
+import StatusBand from '../components/StatusBand.astro';
+import WorkingGroup from '../components/WorkingGroup.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+
+const groups = [
+  {
+    title: 'Data',
+    description:
+      'Find exact population measurements and connect compatible public resources without erasing provenance.',
+    items: [],
+    fit: 'you enjoy literature, population genetics, careful metadata, data engineering, or tracking down the source of a number.',
+    skills: [
+      'skill:popgen',
+      'skill:data-engineering',
+      'skill:clinical-genetics',
+    ],
+    issueUrl:
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P1%3Aobservations%22',
+  },
+  {
+    title: 'Modeling',
+    description:
+      'Estimate global distributions with honest uncertainty, explicit unsupported regions, and published-science validation.',
+    items: [],
+    fit: 'you work in Bayesian spatial statistics, geometric deep learning, calibration, uncertainty, or scientific validation.',
+    skills: ['skill:spatial-stats', 'skill:popgen', 'skill:geospatial'],
+    issueUrl:
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P2%3Asurfaces%22',
+  },
+  {
+    title: 'Product & Experience',
+    description:
+      'Turn difficult evidence into an explorable map where measurements, estimates, uncertainty, and gaps stay legible.',
+    items: [],
+    fit: 'you build maps, interfaces, accessible explanations, data visualization, or responsible human–AI experiences.',
+    skills: ['skill:frontend', 'skill:geospatial', 'skill:governance'],
+    issueUrl:
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P5%3Amap-ui%22',
+  },
+];
 ---
 
 <SiteLayout
@@ -25,6 +66,120 @@ import SiteLayout from '../layouts/SiteLayout.astro';
           individual's genotype, and genomeOS will not present it as though it
           can.
         </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="story-section story-section--hbs">
+    <div class="section-shell story-grid">
+      <div>
+        <p class="section-kicker">One change, a worldwide story</p>
+        <h2>Why HbS makes the mission tangible</h2>
+      </div>
+      <div class="story-copy">
+        <p>
+          HbS is a change in the gene for haemoglobin. One inherited copy can
+          protect against severe malaria; two copies cause sickle-cell disease.
+          Its frequency therefore traces a history of biology, environment, and
+          human movement.
+        </p>
+        <p>
+          Researchers spent years combining blood surveys, models, and birth
+          rates to estimate where sickle-cell disease affects newborns. genomeOS
+          asks how that careful work can become a reusable system for many
+          clinically meaningful variants—without hiding where the data ends.
+        </p>
+        <a class="text-link" href={sitePath('/project/')}
+          >Read the project story and safeguards</a
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="atlas-section" aria-labelledby="atlas-title">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2 id="atlas-title">Two atlases, one long view</h2>
+        <p>
+          The Earth atlas comes first. The cellular atlas and bridge remain
+          future directions.
+        </p>
+      </div>
+      <div class="atlas-grid">
+        <article>
+          <span class="status-label status-label--active"
+            >In active development</span
+          >
+          <h3>Variation across Earth</h3>
+          <p>
+            Move from a variant or condition to measurements, estimates,
+            uncertainty, and visible evidence gaps across geography.
+          </p>
+        </article>
+        <article>
+          <span class="status-label status-label--future"
+            >Future exploration</span
+          >
+          <h3>The genome inside the cell</h3>
+          <p>
+            Zoom from the nucleus through chromosome structure and folded
+            domains to an individual gene.
+          </p>
+        </article>
+        <article>
+          <span class="status-label status-label--future"
+            >Future exploration</span
+          >
+          <h3>The bridge</h3>
+          <p>
+            Connect where a gene sits and how it folds to which variants exist,
+            where they occur, and what evidence says they do.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="groups-section" aria-labelledby="groups-title">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2 id="groups-title">Three ways into the work</h2>
+        <p>
+          Working groups are forming now. Their boundaries can grow as
+          contributors bring better ideas.
+        </p>
+      </div>
+      <div class="groups-list">
+        {groups.map((group) => <WorkingGroup {...group} compact />)}
+      </div>
+      <a
+        class="button-link button-link--quiet"
+        href={sitePath('/working-groups/')}>Explore the working groups</a
+      >
+    </div>
+  </section>
+
+  <ContributionFlow compact />
+  <StatusBand />
+
+  <section class="final-invitation">
+    <div class="section-shell final-invitation__inner">
+      <h2>Bring the missing perspective.</h2>
+      <p>
+        Introduce yourself, find a Ready issue, or suggest a direction the
+        current plan has missed.
+      </p>
+      <div class="hero__actions">
+        <a
+          class="button-link"
+          href="https://github.com/bschilder/genomeOS/discussions/76"
+          >Introduce yourself</a
+        >
+        <a
+          class="button-link button-link--quiet"
+          href="https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3AReady"
+          >Browse Ready work</a
+        >
       </div>
     </div>
   </section>

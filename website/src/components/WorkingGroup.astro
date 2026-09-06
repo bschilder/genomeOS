@@ -1,0 +1,45 @@
+---
+interface Props {
+  title: string;
+  description: string;
+  items: string[];
+  fit: string;
+  skills: string[];
+  issueUrl: string;
+  compact?: boolean;
+}
+
+const {
+  title,
+  description,
+  items,
+  fit,
+  skills,
+  issueUrl,
+  compact = false,
+} = Astro.props;
+---
+
+<article class:list={['working-group', { 'working-group--compact': compact }]}>
+  <div class="working-group__heading">
+    <h3>{title}</h3>
+    <span class="status-label status-label--forming">Group forming</span>
+  </div>
+  <p class="working-group__description">{description}</p>
+  {
+    !compact && (
+      <ul class="working-group__scope">
+        {items.map((item) => (
+          <li>{item}</li>
+        ))}
+      </ul>
+    )
+  }
+  <p class="working-group__fit"><strong>Good fit if…</strong> {fit}</p>
+  <div class="working-group__footer">
+    <div class="skill-list" aria-label={`Relevant skills for ${title}`}>
+      {skills.map((skill) => <span>{skill}</span>)}
+    </div>
+    <a href={issueUrl}>Browse matching issues</a>
+  </div>
+</article>

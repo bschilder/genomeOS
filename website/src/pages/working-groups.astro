@@ -1,0 +1,110 @@
+---
+import Callout from '../components/Callout.astro';
+import PageIntro from '../components/PageIntro.astro';
+import WorkingGroup from '../components/WorkingGroup.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+
+const groups = [
+  {
+    title: 'Data',
+    description:
+      'Expand geographic genetic evidence while preserving everything needed to interpret and reuse each measurement.',
+    items: [
+      'Find exact allele measurements in PubMed, supplements, theses, and non-English literature.',
+      'Preserve source locators, allele orientation, denominators, recruitment, cohort identity, geography, and reuse checks.',
+      'Develop reproducible ways to combine gnomAD, 1000 Genomes, HGDP, AFND, national resources, and other compatible databases for particular genes or variants.',
+      'Identify coverage gaps without converting continental ancestry labels into geographic coordinates.',
+    ],
+    fit: 'you like literature review, population genetics, clinical genetics, source verification, data engineering, or multilingual extraction.',
+    skills: [
+      'skill:popgen',
+      'skill:data-engineering',
+      'skill:clinical-genetics',
+    ],
+    issueUrl:
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P1%3Aobservations%22',
+  },
+  {
+    title: 'Modeling',
+    description:
+      'Estimate underlying allele-frequency distributions without manufacturing confidence between sparse observations.',
+    items: [
+      'Develop Bayesian spatial models, with Brian leading this line of work.',
+      'Explore geometric deep learning and other statistically defensible model classes.',
+      'Improve calibration, uncertainty quantification, ascertainment correction, cross-validation, and published-science parity.',
+      'Produce interchangeable, immutable artifacts offline; no model inference runs on the serving path.',
+    ],
+    fit: 'you work in spatial statistics, Bayesian methods, geometric learning, uncertainty, epidemiology, or model validation.',
+    skills: ['skill:spatial-stats', 'skill:popgen', 'skill:geospatial'],
+    issueUrl:
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P2%3Asurfaces%22',
+  },
+  {
+    title: 'Product & Experience',
+    description:
+      'Make complex evidence explorable without letting visual polish erase uncertainty or refusal.',
+    items: [
+      'Build globe and map movement, pinch-to-zoom, layers, legends, inspection, and shareable state.',
+      'Make measurements, estimates, uncertainty, and unknown regions legible to non-specialists.',
+      'Design conversational access to versioned evidence as a future direction—not a current capability.',
+      'Explore personal-data contribution only after privacy, consent, governance, security, and scientific-quality requirements are approved.',
+    ],
+    fit: 'you build geospatial interfaces, accessible visualization, product systems, responsible AI interactions, privacy, or community-centered experiences.',
+    skills: ['skill:frontend', 'skill:geospatial', 'skill:governance'],
+    issueUrl:
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P5%3Amap-ui%22',
+  },
+];
+---
+
+<SiteLayout
+  title="Working groups"
+  description="Join the forming genomeOS working groups for data, modeling, or product and experience."
+>
+  <PageIntro
+    note="Groups are forming"
+    title="Choose the part of the problem you want to move."
+    lede="genomeOS needs more than one kind of expertise. These groups organize the work without closing the door on new disciplines, new data sources, or better ways to collaborate."
+  />
+
+  <section class="groups-section groups-section--detail">
+    <div class="section-shell groups-list">
+      {groups.map((group) => <WorkingGroup {...group} />)}
+    </div>
+  </section>
+
+  <section class="validation-section">
+    <div class="section-shell">
+      <Callout title="Future exploration has prerequisites" tone="genome">
+        <p>
+          A conversational assistant must cite versioned evidence and preserve
+          refusal behavior. Any personal-genome contribution path requires
+          approved privacy, consent, governance, security, and
+          scientific-quality controls before an upload interface exists.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section class="final-invitation">
+    <div class="section-shell final-invitation__inner">
+      <h2>See a missing direction?</h2>
+      <p>
+        Working groups are an invitation, not a boundary. Introduce the
+        expertise or project idea the current list does not capture.
+      </p>
+      <div class="hero__actions">
+        <a
+          class="button-link"
+          href="https://github.com/bschilder/genomeOS/discussions/76"
+          >Introduce yourself</a
+        >
+        <a
+          class="button-link button-link--quiet"
+          href="https://github.com/bschilder/genomeOS/issues/new/choose"
+          >Propose a scoped issue</a
+        >
+      </div>
+    </div>
+  </section>
+</SiteLayout>

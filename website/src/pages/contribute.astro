@@ -1,0 +1,159 @@
+---
+import Callout from '../components/Callout.astro';
+import ContributionFlow from '../components/ContributionFlow.astro';
+import PageIntro from '../components/PageIntro.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+---
+
+<SiteLayout
+  title="Contribute"
+  description="How to join genomeOS, choose Ready work, use GitHub Issues and Projects, and open a reviewable contribution."
+>
+  <PageIntro
+    note="Open collaboration"
+    title="Find work that fits how you think."
+    lede="The project is organized so a literature researcher, statistician, engineer, designer, clinician, or community partner can find a bounded task and understand why it matters."
+  />
+
+  <ContributionFlow />
+
+  <section class="contribution-detail">
+    <div class="section-shell contribution-detail__grid">
+      <article>
+        <h2>1. Start with people</h2>
+        <p>
+          Introduce yourself in <a
+            href="https://github.com/bschilder/genomeOS/discussions/76"
+            >Discussion #76</a
+          >. Share the disciplines, languages, datasets, places, or product
+          questions you know. You do not need to arrive with a finished
+          proposal.
+        </p>
+      </article>
+      <article>
+        <h2>2. Use issues as the record</h2>
+        <p>
+          Search <a
+            href="https://github.com/bschilder/genomeOS/issues?q=is%3Aissue"
+            >open and closed issues</a
+          >
+          before starting. Open issues are the work queue. Closed issues preserve
+          decisions and house patterns—including ideas deliberately declined.
+        </p>
+        <p>
+          When posting a substantive update, mention the original issue author
+          so the person who framed the work is notified.
+        </p>
+      </article>
+      <article>
+        <h2>3. Read board status literally</h2>
+        <dl class="status-definitions">
+          <div>
+            <dt>Backlog</dt><dd>
+              Logged, but not yet specified for implementation.
+            </dd>
+          </div>
+          <div>
+            <dt>Ready</dt><dd>
+              Fully specified and unblocked; take it without asking.
+            </dd>
+          </div>
+          <div>
+            <dt>In progress</dt><dd>Someone is actively moving the issue.</dd>
+          </div>
+          <div>
+            <dt>In review</dt><dd>
+              A pull request or expert review is underway.
+            </dd>
+          </div>
+          <div>
+            <dt>Blocked</dt><dd>
+              A named dependency or decision prevents progress.
+            </dd>
+          </div>
+        </dl>
+      </article>
+      <article>
+        <h2>4. Filter by four label families</h2>
+        <ul>
+          <li>
+            <code>type:*</code> describes the kind of contribution: data, science,
+            infrastructure, UI, documentation, governance, or outreach.
+          </li>
+          <li>
+            <code>P*:</code> identifies the Atlas subsystem, from P0 registry through
+            P5 map UI, plus launch work.
+          </li>
+          <li>
+            <code>skill:*</code> helps you find work matching your expertise.
+          </li>
+          <li>
+            <code>priority:*</code> follows the dependency graph—what breaks if work
+            is late—not how exciting it sounds.
+          </li>
+        </ul>
+      </article>
+      <article>
+        <h2>5. Respect decision and review labels</h2>
+        <p>
+          <code>wants-expert-review</code> means implement the issue, then state exactly
+          what a domain expert should check.
+        </p>
+        <p>
+          <code>needs-human-decision</code> means stop at the choice: surface the
+          evidence and options, but do not commit on the project’s behalf.
+        </p>
+      </article>
+      <article>
+        <h2>6. Make the pull request auditable</h2>
+        <p>
+          Connect the scientific objective, acceptance evidence, engineering
+          interface, assumptions, refusal conditions, and downstream users. Link
+          the issue with the correct closing keyword and report every
+          verification run honestly.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <section class="validation-section">
+    <div class="section-shell">
+      <Callout title="Milestones are release boundaries" tone="aurora">
+        <p>
+          M1 establishes the data foundation; M2 reproduces HbS science; M3
+          makes map mode usable; M4 makes public launch safe and legible. Issues
+          belong to a subsystem and a release milestone because those answer
+          different questions.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section class="resource-links">
+    <div class="section-shell">
+      <h2>Open the live workspace</h2>
+      <div class="resource-links__grid">
+        <a href="https://github.com/users/bschilder/projects/8"
+          ><strong>Project board</strong><span
+            >See status, priority, milestones, and ownership.</span
+          ></a
+        >
+        <a href="https://github.com/bschilder/genomeOS/issues"
+          ><strong>Issues</strong><span
+            >Search decisions and choose a scoped task.</span
+          ></a
+        >
+        <a href="https://github.com/bschilder/genomeOS/pulls"
+          ><strong>Pull requests</strong><span
+            >Learn from active implementation and review.</span
+          ></a
+        >
+        <a href="https://github.com/bschilder/genomeOS/issues/65"
+          ><strong>Community standards</strong><span
+            >Follow the contribution-file work tracked in Issue #65.</span
+          ></a
+        >
+      </div>
+    </div>
+  </section>
+</SiteLayout>

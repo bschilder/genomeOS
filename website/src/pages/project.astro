@@ -1,0 +1,258 @@
+---
+import Callout from '../components/Callout.astro';
+import PageIntro from '../components/PageIntro.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+
+const safeguards = [
+  [
+    'Measurements and estimates never merge',
+    'Observed evidence and inferred surfaces remain separate tables, layers, and provenance paths.',
+  ],
+  [
+    'Unknown stays visible',
+    'Unsupported and prior-dominated regions are marked and excluded from aggregates, not smoothed toward zero.',
+  ],
+  [
+    'Zoom cannot manufacture detail',
+    'Resolution follows evidence support rather than the viewer’s zoom level.',
+  ],
+  [
+    'Sampling corrections stay inspectable',
+    'Ascertainment and cohort effects are recorded fields and visible assumptions, not hidden adjustments.',
+  ],
+  [
+    'Clinical scope is enforced',
+    'Version one focuses on defensible single-variant conditions and pharmacogenomics; behavioral, cognitive, and anthropometric burden maps are ineligible.',
+  ],
+  [
+    'No evidence means no number',
+    'Missing denominators, penetrance, coordinates, or support produce an explicit refusal.',
+  ],
+];
+
+const pipeline = [
+  [
+    'P0',
+    'Population registry',
+    'Locate independently sampled populations, preserving coordinate uncertainty, provenance, and governance.',
+  ],
+  [
+    'P1',
+    'Observations',
+    'Store allele counts and the recruitment details needed to interpret them without inventing missing fields.',
+  ],
+  [
+    'P2',
+    'Surfaces',
+    'Fit offline frequency estimates with uncertainty and explicit unsupported regions.',
+  ],
+  [
+    'P3',
+    'Burden',
+    'Carry frequency, inheritance, penetrance, and population denominators into supported health estimates.',
+  ],
+  [
+    'P4',
+    'Read API',
+    'Serve versioned observations and precomputed artifacts without running inference on requests.',
+  ],
+  [
+    'P5',
+    'Map UI',
+    'Render distinct evidence layers, uncertainty, refusal states, and shareable versioned views.',
+  ],
+];
+---
+
+<SiteLayout
+  title="The project"
+  description="Why genomeOS exists, what the two-atlas vision includes, and the scientific safeguards that govern the work."
+>
+  <PageIntro
+    note="The project"
+    title="A world atlas built from evidence, not assumptions."
+    lede="Genetic measurements exist across databases, national programs, and individual papers. genomeOS is building the shared system needed to locate them, model only what they support, and make both knowledge and uncertainty explorable."
+  />
+
+  <section class="story-section">
+    <div class="section-shell story-grid">
+      <h2>The gap is connective</h2>
+      <div class="story-copy">
+        <p>
+          Large resources such as gnomAD contain extraordinary amounts of
+          genetic variation, but broad continental analysis groups cannot be
+          placed on a useful geographic map. Smaller studies often preserve
+          location, yet live in incompatible tables and publications.
+        </p>
+        <p>
+          Joining them requires more than coordinates. Allele orientation,
+          sample denominators, recruitment, cohort overlap, source anchors,
+          reuse terms, and spatial uncertainty all change what a measurement can
+          support.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="atlas-section">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2>The two-atlas vision</h2>
+        <p>
+          Build the geographic evidence system first, then connect it to genome
+          structure when both sides are ready.
+        </p>
+      </div>
+      <div class="atlas-grid atlas-grid--project">
+        <article>
+          <h3>Across Earth</h3><p>
+            Search by variant, gene, condition, or place. See measurements,
+            supported estimates, uncertainty, and where the atlas refuses to
+            estimate.
+          </p>
+        </article>
+        <article>
+          <h3>Inside the cell</h3><p>
+            A future view of chromosome territories, folded domains, loops, and
+            genes—from the whole nucleus down to a locus.
+          </p>
+        </article>
+        <article>
+          <h3>Between them</h3><p>
+            A future bridge from a gene’s physical context to its variants,
+            geographic evidence, linked traits, and provenance.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="safeguards-section" aria-labelledby="safeguards-title">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2 id="safeguards-title">Six rules the interface cannot hide</h2>
+        <p>
+          These are engineering invariants. Breaking one is a bug, even when the
+          result looks plausible.
+        </p>
+      </div>
+      <div class="safeguards-grid">
+        {
+          safeguards.map(([title, detail]) => (
+            <article>
+              <>
+                <h3>{title}</h3>
+                <p>{detail}</p>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="pipeline-section" aria-labelledby="pipeline-title">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2 id="pipeline-title">From evidence to an explorable map</h2>
+        <p>
+          Each part has a narrow public contract, so data, models, serving, and
+          rendering can improve independently.
+        </p>
+      </div>
+      <ol class="pipeline-list">
+        {
+          pipeline.map(([part, title, detail]) => (
+            <li>
+              <>
+                <span>{part}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{detail}</p>
+                  </>
+                </div>
+              </>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="story-section">
+    <div class="section-shell story-grid">
+      <h2>Who could use it</h2>
+      <div class="story-copy compact-list">
+        <p>
+          People and families seeking context—not personal genetic predictions
+          from geography.
+        </p>
+        <p>
+          Researchers and drug developers looking for variants, protective
+          biology, and missing evidence.
+        </p>
+        <p>
+          Health programs deciding where screening evidence is strong enough to
+          guide planning.
+        </p>
+        <p>
+          Sequencing initiatives asking which places and populations remain
+          underrepresented.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="validation-section">
+    <div class="section-shell">
+      <Callout title="A plausible map is not success" tone="signal">
+        <p>
+          Publication is gated on independently reproducing established HbS and
+          G6PD results and measured carrier-screening rates. If the pipeline
+          cannot recover science already known to be right, it has not earned
+          the right to publish unknown results.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <section class="source-section">
+    <div class="section-shell source-section__inner">
+      <div>
+        <h2>Current status</h2>
+        <p>
+          As of September 2026, the repository contains P0/P1 contracts and
+          adapters, offline P2/P3 kernels, and a fixture-backed P4 diagnostic
+          path. Broader literature coverage, golden-test parity, production
+          artifacts, and P5 remain active work.
+        </p>
+      </div>
+      <div>
+        <h2>Authoritative sources</h2>
+        <ul>
+          <li>
+            <a
+              href="https://github.com/bschilder/genomeOS/blob/main/docs/overview.md"
+              >Project overview</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md"
+              >Scientific and engineering objectives</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://github.com/bschilder/genomeOS/blob/main/docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md"
+              >Atlas v1 design</a
+            >
+          </li>
+          <li><a href={sitePath('/docs/')}>Technical documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</SiteLayout>
