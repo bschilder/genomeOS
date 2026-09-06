@@ -16,9 +16,11 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "npm run build && playwright test",
+    "test:performance": "playwright test --config playwright.performance.config.ts",
     "serve:test": "serve dist -l tcp://127.0.0.1:4322 --no-clipboard",
     "check:links": "node scripts/check-links.mjs",
-    "capture": "node scripts/capture-homepage.mjs"
+    "capture": "node scripts/capture-homepage.mjs",
+    "capture:atlas": "npm run build && node scripts/capture-atlas.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.5",

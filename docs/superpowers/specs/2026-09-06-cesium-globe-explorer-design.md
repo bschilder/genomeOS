@@ -338,7 +338,9 @@ Cesium does not move scientific inference into the browser.
 The PR includes a high-resolution screenshot or scripted capture committed under `docs/figures/`.
 It must show observations and inferred surfaces as distinct layers, visibly show an unsupported
 region, and use an unambiguous low-to-high color ramp. A scripted browser trace records frame rate,
-load latency, and long tasks for the initial HbS artifact.
+load latency, and long tasks for the initial HbS artifact. Hardware-accelerated runs enforce all
+three targets; software-rendered CI runs enforce warm-load latency and record the renderer-bound
+frame/long-task measurements for comparison rather than presenting them as laptop GPU evidence.
 
 ## 14. Assumptions and downstream consumers
 
