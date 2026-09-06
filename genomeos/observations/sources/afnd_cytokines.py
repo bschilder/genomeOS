@@ -32,6 +32,7 @@ from pathlib import Path
 import pandas as pd
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
+from genomeos.observations.source_ids import stable_source_record_id
 from genomeos.registry.sources import afnd as afnd_registry
 
 #: Genotype percentages for one locus and population must sum to 100. Measured across 1,405 full
@@ -173,6 +174,9 @@ def load(
                 "radius_km": float(geo["uncertainty_radius_km"]),
                 "ac": int(round(frequency * an)),
                 "an": an,
+                "source_record_id": stable_source_record_id(
+                    "afnd-cytokines", locus, population
+                ),
                 "source": "afnd",
                 "assay": "genotype_counted",
                 "date_lower": 0,

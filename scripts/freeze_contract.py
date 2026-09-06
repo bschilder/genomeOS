@@ -15,6 +15,11 @@ import sys
 from pathlib import Path
 
 from genomeos.artifacts import ArtifactManifest
+from genomeos.observations.evidence import (
+    LITERATURE_EVIDENCE_SCHEMA,
+    LITERATURE_FIELD_EVIDENCE_SCHEMA,
+    LITERATURE_SEARCHES_SCHEMA,
+)
 from genomeos.observations.schema import (
     CARRIER_OBSERVATIONS_SCHEMA,
     OBSERVATIONS_SCHEMA,
@@ -27,6 +32,9 @@ PANDERA_SCHEMAS = {
     "population_aliases.schema.json": ALIASES_SCHEMA,
     "observations.schema.json": OBSERVATIONS_SCHEMA,
     "carrier_observations.schema.json": CARRIER_OBSERVATIONS_SCHEMA,
+    "literature_evidence.schema.json": LITERATURE_EVIDENCE_SCHEMA,
+    "literature_field_evidence.schema.json": LITERATURE_FIELD_EVIDENCE_SCHEMA,
+    "literature_searches.schema.json": LITERATURE_SEARCHES_SCHEMA,
 }
 JSON_SCHEMAS = {
     "atlas_catalog.schema.json": ArtifactManifest.model_json_schema(),

@@ -1,0 +1,83 @@
+{
+  "audit_version": "lct-pilot-audit@2026-09-05.1",
+  "command": ".venv/bin/python scripts/audit_lct_pilot.py --input /tmp/lct_rs4988235_observations.csv --expected-rows 426 --extracted-at 2026-09-05T22:54:04Z --ingest-version lct-rs4988235@2026-09-05.1 --evidence-out /tmp/lct_literature_evidence.tsv --field-evidence-out /tmp/lct_literature_field_evidence.tsv --report-out docs/audits/lct-rs4988235-pilot.json",
+  "coverage": {
+    "count_inventory": {
+      "basis_unresolved": 33,
+      "exact": 277,
+      "frequency_reconstructed": 116
+    },
+    "country_label_count": 88,
+    "source_column_missingness": {
+      "ac": 0,
+      "af_reported": 0,
+      "an": 0,
+      "continent": 0,
+      "country": 0,
+      "lat": 0,
+      "lon": 0,
+      "original_ref": 0,
+      "pmid": 8,
+      "population": 0,
+      "source_type": 0,
+      "status_notes": 0
+    },
+    "source_format_anomalies": {
+      "surrounding_whitespace_by_column": {
+        "ac": 0,
+        "af_reported": 0,
+        "an": 0,
+        "continent": 0,
+        "country": 0,
+        "lat": 0,
+        "lon": 1,
+        "original_ref": 0,
+        "pmid": 0,
+        "population": 0,
+        "source_type": 0,
+        "status_notes": 0
+      }
+    },
+    "target_field_missingness": {
+      "ac_lower": 0,
+      "ac_upper": 0,
+      "an": 0,
+      "assay": 426,
+      "citation_id": 426,
+      "citation_text": 0,
+      "cohort_id": 426,
+      "count_basis": 426,
+      "counted_allele": 426,
+      "date_lower": 426,
+      "date_upper": 426,
+      "denominator_basis": 426,
+      "disease_ascertainment_excluded": 426,
+      "population_label": 0,
+      "reported_frequency": 0,
+      "rsid": 426,
+      "sample_id": 426,
+      "sampling_design": 426,
+      "variant_id": 426
+    }
+  },
+  "input_sha256": "7cb47508217f6536f76264085ffabb698b9706337be52422076a22b87920594a",
+  "reconciliation": {
+    "all_rows_assigned_exactly_one_anchor": true,
+    "duplicate_immutable_anchors": [],
+    "evidence_rows": 426,
+    "field_evidence_rows": 8094,
+    "input_rows": 426,
+    "unique_immutable_anchors": 426
+  },
+  "safeguards": {
+    "source_coordinates_imported": false,
+    "uncertainty_radius_invented": false,
+    "unreviewed_scientific_metadata_invented": false
+  },
+  "source": {
+    "commit": "7c2b1cc6bb783b56fdfffaed5c44d8e8273da994",
+    "path": "data/lct_rs4988235_observations.csv",
+    "record_source_id": "repo:github.com/manpreetbola/protective-alleles-gnomad-v4@7c2b1cc6bb783b56fdfffaed5c44d8e8273da994:data/lct_rs4988235_observations.csv",
+    "url": "https://raw.githubusercontent.com/manpreetbola/protective-alleles-gnomad-v4/7c2b1cc6bb783b56fdfffaed5c44d8e8273da994/data/lct_rs4988235_observations.csv"
+  }
+}

@@ -104,6 +104,16 @@ def test_output_satisfies_the_observations_contract(frequencies):
     OBSERVATIONS_SCHEMA.validate(obs)
 
 
+def test_source_record_ids_hash_the_complete_source_native_key(frequencies):
+    """Catches ambiguous concatenation or dataframe positions in an AFND row identity."""
+    obs, _ = af.load(frequencies, POPULATIONS, "test")
+    assert obs["source_record_id"].is_unique
+    assert (
+        "afnd-frequencies:33071229d43f1a9bb00b0739c22a613f01761812b4a118d9cd96bbbd27c879b8"
+        in set(obs["source_record_id"])
+    )
+
+
 def test_min_populations_is_a_modelling_filter_and_is_reported(frequencies):
     """A spatial field cannot be identified from a handful of points, but that is a modelling
     judgement rather than a data defect — so it defaults off and is counted when used."""

@@ -56,6 +56,12 @@ def load(
             "radius_km": coords.loc[pop_ids, "uncertainty_radius_km"].to_numpy(),
             "ac": raw["AC"].astype(int),
             "an": raw["AN"].astype(int),
+            "source_record_id": [
+                f"gnomad-hgdp-1kg:{variant}:{population}"
+                for variant, population in zip(
+                    raw["variant_id"], raw["pop_label"], strict=True
+                )
+            ],
             "source": SOURCE,
             "assay": "genome",
             "date_lower": 0,

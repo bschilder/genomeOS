@@ -231,6 +231,7 @@ def load(path: Path, ingest_version: str) -> tuple[pd.DataFrame, IngestReport]:
             # Hemizygous: one allele per male, so the count and the denominator are both in males.
             "ac": deficient[keep].astype(int),
             "an": males[keep].astype(int),
+            "source_record_id": rows["id"].map(lambda value: f"map-g6pd:{int(value)}"),
             "source": SOURCE,
             # Not "genotype". These surveys measure enzyme activity, and the distinction matters:
             # an activity assay detects the phenotype whatever allele caused it, and its

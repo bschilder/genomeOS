@@ -37,6 +37,13 @@ def test_allele_counts_are_hemizygous_males(loaded):
     assert row["an"] == 226, "one allele per male, not two"
 
 
+def test_source_record_ids_are_the_native_survey_ids(loaded):
+    """Catches a local row number replacing MAP's stable survey identity."""
+    obs, _ = loaded
+    assert obs["source_record_id"].is_unique
+    assert "map-g6pd:661" in set(obs["source_record_id"])
+
+
 def test_females_are_excluded_rather_than_assumed(loaded):
     """A female recorded 'deficient' may be homozygous or a heterozygote with skewed
     X-inactivation, and those imply very different allele frequencies. The source cannot tell

@@ -35,6 +35,15 @@ def test_read_can_filter_to_one_variant(tmp_path, obs):
     assert read_observations(tmp_path, variant_id="chr1-1-A-T").empty
 
 
+def test_read_ignores_non_observation_parquet_at_store_root(tmp_path, obs):
+    """Evidence ledgers beside chrom partitions must never enter the P1 scan."""
+    write_observations(obs, tmp_path)
+    pd.DataFrame({"source_record_id": ["evidence:1"], "citation": ["example"]}).to_parquet(
+        tmp_path / "literature_evidence.parquet", index=False
+    )
+    assert len(read_observations(tmp_path)) == len(obs)
+
+
 def test_write_rejects_a_frame_that_violates_the_schema(tmp_path, obs):
     broken = obs.copy()
     broken.loc[0, "sampling_design"] = "unknown"

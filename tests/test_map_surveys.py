@@ -44,6 +44,13 @@ def test_all_rows_are_the_hbs_variant(loaded):
     assert (obs["rsid"] == "rs334").all()
 
 
+def test_source_record_ids_are_the_native_survey_ids(loaded):
+    """Catches a local row number replacing MAP's stable survey identity."""
+    obs, _ = loaded
+    assert obs["source_record_id"].is_unique
+    assert "map-surveys:1020" in set(obs["source_record_id"])
+
+
 def test_allele_counts_use_the_typed_denominator_not_the_approached_one(loaded):
     """ac = hbas + 2·hbss over an = 2·(hbaa + hbas + hbss).
 

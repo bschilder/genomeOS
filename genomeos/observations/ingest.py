@@ -29,7 +29,10 @@ def write_observations(obs: pd.DataFrame, out_dir: Path) -> Path:
 
 
 def read_observations(out_dir: Path, variant_id: str | None = None) -> pd.DataFrame:
-    glob = str(Path(out_dir) / "**" / "*.parquet")
+    # Scan only the P1 hive partitions. Audit ledgers intentionally live beside them at the
+    # store root and have a different schema; a recursive glob would conflate evidence with
+    # observations, violating design §4 before validation even has a chance to run.
+    glob = str(Path(out_dir) / "chrom=*" / "*.parquet")
     sql = f"SELECT * EXCLUDE (chrom) FROM read_parquet('{glob}', hive_partitioning = true)"
     if variant_id is None:
         return duckdb.sql(sql).df()

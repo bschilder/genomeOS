@@ -38,6 +38,7 @@ from pathlib import Path
 import pandas as pd
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
+from genomeos.observations.source_ids import stable_source_record_id
 from genomeos.registry.sources import afnd as afnd_registry
 
 SOURCE = "afnd_frequencies"
@@ -279,6 +280,12 @@ def load(
             # Reconstructed from a four-decimal frequency; see the module docstring.
             "ac": (rows["af"] * an).round().astype(int),
             "an": an,
+            "source_record_id": [
+                stable_source_record_id("afnd-frequencies", group, gene, allele, population)
+                for group, gene, allele, population in zip(
+                    rows["group"], rows["gene"], rows["allele"], rows["population"], strict=True
+                )
+            ],
             "source": SOURCE,
             "assay": "frequency_reconstructed",
             "date_lower": 0,

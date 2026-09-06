@@ -15,6 +15,7 @@ def _row(**overrides) -> pd.DataFrame:
         "radius_km": 50.0,
         "ac": 12,
         "an": 200,
+        "source_record_id": "map-surveys:survey-001",
         "source": "map_surveys",
         "assay": "genotype",
         "date_lower": 0,
@@ -47,6 +48,7 @@ def test_every_sampling_design_in_the_enum_is_accepted():
         {"sampling_design": "unknown"},            # not in enum
         {"disease_ascertainment_excluded": None},  # mandatory
         {"cohort_id": ""},                         # mandatory, non-empty
+        {"source_record_id": ""},                  # provenance join key, non-empty
         {"variant_id": "11:5227002T>A"},           # must be chr-pos-ref-alt on GRCh38
         {"date_lower": -5},                        # years BP, non-negative
     ],

@@ -290,6 +290,7 @@ def load(
             "ac": (rows["hbas"] + 2 * rows["hbss"]).astype(int),
             # Two alleles per *typed* individual. See the note on the denominator above.
             "an": (2 * genotyped[keep]).astype(int),
+            "source_record_id": rows["id"].map(lambda value: f"map-surveys:{int(value)}"),
             "source": SOURCE,
             "assay": "genotype",
             "date_lower": 0,
