@@ -750,7 +750,7 @@ git commit -m "test: capture Cesium explorer evidence (#55)"
 Change the spec status to `approved` and check each completed task step only after its command and
 artifact evidence exist.
 
-- [ ] **Step 2: Run all website gates**
+- [x] **Step 2: Run all website gates**
 
 ```bash
 cd website
@@ -764,7 +764,7 @@ npm run check:links -- dist-fallback /genomeOS/
 npm run test:e2e
 ```
 
-- [ ] **Step 3: Run repository gates in the pinned environment**
+- [x] **Step 3: Run repository gates in the pinned environment**
 
 ```bash
 cd /private/tmp/genomeos-153-docs
