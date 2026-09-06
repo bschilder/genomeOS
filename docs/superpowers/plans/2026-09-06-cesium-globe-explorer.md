@@ -259,7 +259,7 @@ Run:
 
 Expected: PASS, with only the two MAP collections in the catalog.
 
-- [ ] **Step 8: Commit the browser artifacts**
+- [x] **Step 8: Commit the browser artifacts**
 
 ```bash
 git add scripts/export_atlas_web.py tests/test_export_atlas_web.py website/src/atlas/public-artifacts.json website/public/data/atlas
@@ -282,7 +282,7 @@ git commit -m "feat: export public MAP atlas artifacts (#55)"
 - Produces: `AtlasCatalog`, `ArtifactRef`, `SurfaceArtifact`, `ObservationArtifact`,
   `AtlasDataProvider`, and `StaticAtlasDataProvider`.
 
-- [ ] **Step 1: Write failing schema tests**
+- [x] **Step 1: Write failing schema tests**
 
 ```ts
 it("does not invent support or an observation radius", () => {
@@ -304,13 +304,13 @@ it("rejects stale responses after cancellation", async () => {
 Tests also reject unknown support enums, unsupported schema versions, non-positive denominators,
 invalid latitude/longitude, missing source revision, missing checksums, and mismatched artifact IDs.
 
-- [ ] **Step 2: Run tests and verify that they fail**
+- [x] **Step 2: Run tests and verify that they fail**
 
 Run: `cd website && npx vitest run tests/atlas-contracts.test.ts tests/atlas-provider.test.ts`
 
 Expected: FAIL because the contract and provider modules do not exist.
 
-- [ ] **Step 3: Implement Zod schemas and inferred types**
+- [x] **Step 3: Implement Zod schemas and inferred types**
 
 Define:
 
@@ -335,14 +335,14 @@ export type AtlasDataProvider = {
 All scientific numeric fields use finite-number refinements. No `.default()` appears in a
 scientific schema.
 
-- [ ] **Step 4: Implement `StaticAtlasDataProvider`**
+- [x] **Step 4: Implement `StaticAtlasDataProvider`**
 
 The provider resolves deployment-aware URLs from a constructor-supplied base, uses `fetch` with
 the caller's `AbortSignal`, checks response status, validates decoded JSON, and verifies that the
 loaded artifact matches the requested catalog identity and version. It performs no rendering or
 fallback substitution.
 
-- [ ] **Step 5: Run provider contracts**
+- [x] **Step 5: Run provider contracts**
 
 Run: `cd website && npx vitest run tests/atlas-contracts.test.ts tests/atlas-provider.test.ts`
 
