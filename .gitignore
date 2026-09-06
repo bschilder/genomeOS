@@ -15,6 +15,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!website/src/lib/
 lib64/
 parts/
 sdist/
@@ -70,6 +71,13 @@ instance/
 
 # Sphinx documentation
 docs/_build/
+
+# Astro documentation website
+website/node_modules/
+website/dist/
+website/dist-fallback/
+website/test-results/
+website/playwright-report/
 
 # PyBuilder
 .pybuilder/
