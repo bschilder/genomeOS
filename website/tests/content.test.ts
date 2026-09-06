@@ -28,7 +28,7 @@ describe('public site content', () => {
   });
 
   it('labels current work, active work, and future ideas separately', () => {
-    expect(home).toMatch(
+    expect(project).toMatch(
       /Available now[\s\S]*In active development[\s\S]*Future exploration/,
     );
   });
@@ -89,9 +89,13 @@ describe('public site content', () => {
 
   it('states the scientific publication bar', () => {
     expect(project).toMatch(/HbS[\s\S]*G6PD[\s\S]*screening/);
+    expect(project).toContain('Why haemoglobin S makes the mission tangible');
     expect(project).toMatch(/population-location registry/i);
     expect(project).toMatch(/interactive public map/i);
-    expect(project).toContain('/images/project-community.webp');
+    expect(project).toContain('/images/vision-earth.webp');
+    expect(project).toContain('/images/vision-cell.webp');
+    expect(project).toContain('/images/vision-bridge.webp');
+    expect(project).toContain('ancient-DNA time slider');
   });
 
   it('frames the live application as a sample-data WIP diagnostic', () => {

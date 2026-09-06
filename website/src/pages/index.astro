@@ -1,57 +1,11 @@
 ---
 import Applications from '../components/Applications.astro';
-import ContributionFlow from '../components/ContributionFlow.astro';
 import CorpusMetrics from '../components/CorpusMetrics.astro';
 import Hero from '../components/Hero.astro';
 import HowItWorks from '../components/HowItWorks.astro';
 import MissionIntro from '../components/MissionIntro.astro';
-import MultiScaleVision from '../components/MultiScaleVision.astro';
-import StatusBand from '../components/StatusBand.astro';
-import WorkingGroup from '../components/WorkingGroup.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { sitePath } from '../lib/paths';
-
-const groups = [
-  {
-    title: 'Data Gathering & Infrastructure',
-    description:
-      'Find and process reliable evidence, then store and serve it through a scalable, dynamic data foundation.',
-    items: [],
-    fit: 'you enjoy literature, population genetics, careful metadata, data engineering, or tracking down the source of a number.',
-    skills: ['Population genetics', 'Data engineering', 'Clinical genetics'],
-    issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Adata-engineering%22',
-    image: sitePath('/images/group-data.webp'),
-    imageAlt:
-      'Scientific sources and databases connecting into a global genomic data network',
-  },
-  {
-    title: 'Statistical & AI Modeling',
-    description:
-      'Use incomplete geographic samples to infer underlying allele-frequency distributions and supported disease burden or risk.',
-    items: [],
-    fit: 'you work in Bayesian spatial statistics, geometric deep learning, calibration, uncertainty, or scientific validation.',
-    skills: ['Spatial statistics', 'Population genetics', 'Geospatial'],
-    issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Aspatial-stats%22',
-    image: sitePath('/images/group-modeling.webp'),
-    imageAlt:
-      'Sparse geographic observations becoming statistical fields with visible uncertainty',
-  },
-  {
-    title: 'UI & Applications',
-    description:
-      'Build the interactive atlas, useful applications, and an agentic AI for conversing with the data and deliberately provided personal genomes.',
-    items: [],
-    fit: 'you build maps, interfaces, accessible explanations, data visualization, or responsible artificial-intelligence experiences.',
-    skills: ['Interface design', 'Geospatial', 'Governance'],
-    issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Afrontend%22',
-    image: sitePath('/images/group-ui.webp'),
-    imageAlt:
-      'An interactive genomic globe with an AI conversation network and personal-genome pathway',
-  },
-];
 ---
 
 <SiteLayout
@@ -63,58 +17,36 @@ const groups = [
   <CorpusMetrics />
   <Applications />
 
-  <section class="story-section story-section--hbs">
-    <div class="section-shell story-grid" data-reveal>
-      <div>
-        <p class="section-kicker">One change, a worldwide story</p>
-        <h2>Why haemoglobin S makes the mission tangible</h2>
+  <HowItWorks />
+
+  <section class="home-project-path" aria-labelledby="home-project-path-title">
+    <div class="section-shell home-project-path__inner" data-reveal>
+      <div class="home-project-path__media">
+        <img
+          src={sitePath('/images/vision-earth.webp')}
+          alt="A luminous globe showing genetic evidence points distributed unevenly across the world"
+          width="1536"
+          height="1024"
+          loading="lazy"
+          decoding="async"
+        />
       </div>
-      <div class="story-copy">
+      <div class="home-project-path__copy">
+        <p class="section-kicker">Explore the larger vision</p>
+        <h2 id="home-project-path-title">
+          From one world map to many biological scales.
+        </h2>
         <p>
-          Haemoglobin S—often shortened to HbS—is a change in the gene for
-          haemoglobin. One inherited copy can protect against severe malaria;
-          two copies cause sickle-cell disease. Its frequency therefore traces a
-          history of biology, environment, and human movement.
-        </p>
-        <p>
-          Researchers spent years combining blood surveys, models, and birth
-          rates to estimate where sickle-cell disease affects newborns. genomeOS
-          asks how that careful work can become a reusable system for many
-          clinically meaningful variants—and a public resource for discovering
-          what should be studied next.
+          See why geographic evidence comes first, how genomeOS could later
+          connect Earth to the genome inside our cells, and which scientific
+          safeguards govern every layer.
         </p>
         <a class="button-link button-link--quiet" href={sitePath('/project/')}
-          >Read the project story</a
+          >Explore the project</a
         >
       </div>
     </div>
   </section>
-
-  <HowItWorks />
-  <MultiScaleVision />
-
-  <section class="groups-section" aria-labelledby="groups-title">
-    <div class="section-shell">
-      <div class="section-heading section-heading--split" data-reveal>
-        <h2 id="groups-title">Build it with us.</h2>
-        <p>
-          Working groups are forming around the project’s three main stages.
-          Their boundaries can grow as contributors bring local knowledge and
-          better ideas.
-        </p>
-      </div>
-      <div class="groups-list">
-        {groups.map((group) => <WorkingGroup {...group} compact />)}
-      </div>
-      <a
-        class="button-link button-link--quiet"
-        href={sitePath('/working-groups/')}>Explore the working groups</a
-      >
-    </div>
-  </section>
-
-  <ContributionFlow compact />
-  <StatusBand />
 
   <section class="final-invitation">
     <div class="section-shell final-invitation__inner">

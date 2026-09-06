@@ -1,7 +1,8 @@
 ---
 import Callout from '../components/Callout.astro';
+import MultiScaleVision from '../components/MultiScaleVision.astro';
 import PageIntro from '../components/PageIntro.astro';
-import PageVisual from '../components/PageVisual.astro';
+import StatusBand from '../components/StatusBand.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { sitePath } from '../lib/paths';
 
@@ -76,14 +77,6 @@ const pipeline = [
     lede="Genetic measurements exist across databases, national programs, and individual papers. genomeOS is building the shared system needed to locate them, model only what they support, and make both knowledge and uncertainty explorable."
   />
 
-  <PageVisual
-    image={sitePath('/images/project-community.webp')}
-    alt="A worldwide community connecting knowledge and contributions into a shared genomic atlas"
-    kicker="A shared public resource"
-    title="Built across borders, returned to everyone."
-    description="No single lab, database, or country holds the whole picture. genomeOS brings their knowledge together through an open global collaboration so the result can serve the public good."
-  />
-
   <section class="story-section">
     <div class="section-shell story-grid">
       <h2>The data exists. It just doesn’t work together yet.</h2>
@@ -106,38 +99,31 @@ const pipeline = [
     </div>
   </section>
 
-  <section class="atlas-section">
-    <div class="section-shell">
-      <div class="section-heading section-heading--split">
-        <h2>The multi-scale vision</h2>
-        <p>
-          Build the geographic evidence system first, then connect it to genome
-          structure when both sides are ready.
-        </p>
+  <section class="story-section story-section--hbs">
+    <div class="section-shell story-grid" data-reveal>
+      <div>
+        <p class="section-kicker">One change, a worldwide story</p>
+        <h2>Why haemoglobin S makes the mission tangible</h2>
       </div>
-      <div class="atlas-grid atlas-grid--project">
-        <article>
-          <h3>Across Earth</h3><p>
-            Search by variant, gene, condition, or place. See measurements,
-            supported estimates, uncertainty, and where the atlas refuses to
-            estimate.
-          </p>
-        </article>
-        <article>
-          <h3>Inside the cell</h3><p>
-            A future view of chromosome territories, folded regions, loops, and
-            genes—from the whole nucleus down to one gene location.
-          </p>
-        </article>
-        <article>
-          <h3>Between them</h3><p>
-            A future bridge from a gene’s physical context to its variants,
-            geographic evidence, linked traits, and provenance.
-          </p>
-        </article>
+      <div class="story-copy">
+        <p>
+          Haemoglobin S—often shortened to HbS—is a change in the gene for
+          haemoglobin. One inherited copy can protect against severe malaria;
+          two copies cause sickle-cell disease. Its frequency therefore traces a
+          history of biology, environment, and human movement.
+        </p>
+        <p>
+          Researchers spent years combining blood surveys, models, and birth
+          rates to estimate where sickle-cell disease affects newborns. genomeOS
+          asks how that careful work can become a reusable system for many
+          clinically meaningful variants—and a public resource for discovering
+          what should be studied next.
+        </p>
       </div>
     </div>
   </section>
+
+  <MultiScaleVision />
 
   <section class="safeguards-section" aria-labelledby="safeguards-title">
     <div class="section-shell">
@@ -230,18 +216,27 @@ const pipeline = [
     </div>
   </section>
 
+  <StatusBand />
+
   <section class="source-section">
     <div class="section-shell source-section__inner">
       <div>
-        <h2>Current status</h2>
+        <h2>Follow the work</h2>
         <p>
-          As of September 2026, the repository can organize population locations
-          and genetic measurements, run early frequency and disease burden
-          models, and power the live software preview with synthetic test data.
-          Expanding the literature evidence, reproducing published scientific
-          results, preparing public datasets, and building the finished
-          interactive map remain active work.
+          The public project board tracks what is available now, what is in
+          active development, and which future ideas still need scientific or
+          governance foundations. The working-group and contribution guides
+          explain where each kind of work belongs.
         </p>
+        <a
+          class="github-cta github-cta--inline"
+          href="https://github.com/users/bschilder/projects/8"
+          target="_blank"
+          rel="noopener noreferrer"
+          ><span>See current priorities</span><strong
+            >Open the project board</strong
+          ><span aria-hidden="true">↗</span></a
+        >
       </div>
       <div>
         <h2>Authoritative sources</h2>

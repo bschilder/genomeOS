@@ -21,15 +21,19 @@ describe('homepage contract', () => {
     );
   });
 
-  it('uses accessible illustrations to guide the multi-scale vision', () => {
+  it('uses one accessible visual to lead into the detailed project vision', () => {
     expect(html).toContain('/images/vision-earth.webp');
-    expect(html).toContain('/images/vision-cell.webp');
-    expect(html).toContain('/images/vision-bridge.webp');
     expect(html).toContain('alt="A luminous globe showing genetic evidence');
-    expect(html).toContain('alt="A visual journey from a cell nucleus');
-    expect(html).toContain(
-      'alt="Folded chromatin and a highlighted gene connected',
-    );
+    expect(html).toContain('Explore the larger vision');
+    expect(html).not.toContain('/images/vision-cell.webp');
+    expect(html).not.toContain('/images/vision-bridge.webp');
+  });
+
+  it('does not duplicate detailed subpage content', () => {
+    expect(html).not.toContain('How work moves');
+    expect(html).not.toContain('What exists—and what comes later');
+    expect(html).not.toContain('Browse matching issues');
+    expect(html).not.toContain('Why haemoglobin S makes the mission tangible');
   });
 
   it('makes the GitHub community entry points prominent', () => {
@@ -47,5 +51,7 @@ describe('homepage contract', () => {
     expect(html).toContain('Skip to main content');
     expect(html).toContain('aria-label="View genomeOS on GitHub"');
     expect(html).toContain('https://github.com/bschilder/genomeOS');
+    expect(html).toMatch(/© \d{4} genomeOS/);
+    expect(html).not.toContain('Population geography is context');
   });
 });

@@ -55,8 +55,8 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
   );
 });
 
-test('homepage labels all three capability states', async ({ page }) => {
-  await page.goto('/');
+test('project page labels all three capability states', async ({ page }) => {
+  await page.goto('/project/');
   await expect(
     page.getByRole('heading', { name: 'Available now' }),
   ).toBeVisible();
@@ -150,7 +150,7 @@ test('public typography keeps body and supporting text comfortably large', async
     const selectors = [
       'body',
       '.desktop-nav a',
-      '.status-label',
+      '.section-kicker',
       '.site-footer p',
       '.mission-copy p',
     ];
@@ -188,7 +188,7 @@ test('metric digits use a common height and baseline', async ({ page }) => {
 test('multi-scale illustrations load with accessible descriptions', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/project/');
   const images = page.locator('.vision-card img');
   await expect(images).toHaveCount(3);
   for (const image of await images.all()) {
