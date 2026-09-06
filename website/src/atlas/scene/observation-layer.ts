@@ -109,7 +109,6 @@ export function buildObservationLayer(
     points,
     ring,
     setOpacity(opacity: number) {
-      collection.show = opacity > 0;
       ringColor.alpha = 0.94 * opacity;
       for (let index = 0; index < points.length; index += 1) {
         points.get(index).color.alpha = 0.96 * opacity;

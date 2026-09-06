@@ -21,6 +21,7 @@ import type {
   LayerVisibility,
 } from '../url-state';
 import { bindKeyboardCamera, cameraState, setCameraState } from './camera';
+import { LayerCache } from './layer-cache';
 import {
   buildObservationLayer,
   type ObservationPick,
@@ -31,6 +32,9 @@ import {
   type ScientificPrimitiveGroup,
   type SurfacePick,
 } from './surface-layer';
+import { animateSwap, waitForReady } from './scene-transition';
+
+export { transitionProgress } from './scene-transition';
 
 export type AtlasPick = SurfacePick | ObservationPick;
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
@@ -59,7 +63,11 @@ export interface AtlasSceneController {
   destroy(): void;
 }
 
-type FadeableGroup = ScientificPrimitiveGroup | ObservationPrimitiveGroup;
+interface PreparedSurfaceSwap {
+  incoming: ScientificPrimitiveGroup;
+  outgoing: ScientificPrimitiveGroup | null;
+  sequence: number;
+}
 
 const DEFAULT_LAYERS: LayerVisibility = {
   context: true,
@@ -74,21 +82,11 @@ const HOME_CAMERA: CameraState = {
   lon: 20,
   pitch: -90,
 };
-const HEATMAP_TRANSITION_MS = 720;
-
 export function resolveElevationView(
   view: ExplorerSceneMode,
   elevationEnabled: boolean,
 ): ExplorerSceneMode {
   return view === 'map' && elevationEnabled ? 'perspective' : view;
-}
-
-export function transitionProgress(
-  elapsedMs: number,
-  durationMs = HEATMAP_TRANSITION_MS,
-): number {
-  const linear = Math.min(1, Math.max(0, elapsedMs / durationMs));
-  return linear * linear * (3 - 2 * linear);
 }
 
 function isAtlasPick(value: unknown): value is AtlasPick {
@@ -97,49 +95,21 @@ function isAtlasPick(value: unknown): value is AtlasPick {
   return value.kind === 'surface' || value.kind === 'observation';
 }
 
-function waitForReady(viewer: Viewer, group: FadeableGroup): Promise<void> {
-  if (group.isReady()) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const remove = viewer.scene.postRender.addEventListener(() => {
-      if (!group.isReady()) return;
-      clearTimeout(timeout);
-      remove();
-      resolve();
-    });
-    const timeout = window.setTimeout(() => {
-      remove();
-      reject(new Error('Cesium geometry build timed out'));
-    }, 30_000);
-    viewer.scene.requestRender();
+export function preferredAtlasPick(
+  picks: readonly unknown[],
+): AtlasPick | null {
+  const atlasPicks = picks.flatMap((picked) => {
+    const value =
+      typeof picked === 'object' && picked !== null && 'id' in picked
+        ? picked.id
+        : null;
+    return isAtlasPick(value) ? [value] : [];
   });
-}
-
-function animateSwap(
-  viewer: Viewer,
-  incoming: FadeableGroup,
-  outgoing: FadeableGroup | null,
-  reducedMotion: boolean,
-): Promise<void> {
-  if (reducedMotion) {
-    incoming.setOpacity(1);
-    if (outgoing) viewer.scene.primitives.remove(outgoing.collection);
-    return Promise.resolve();
-  }
-  return new Promise((resolve) => {
-    const started = performance.now();
-    const frame = (now: number) => {
-      const progress = transitionProgress(now - started);
-      incoming.setOpacity(progress);
-      outgoing?.setOpacity(1 - progress);
-      viewer.scene.requestRender();
-      if (progress < 1) requestAnimationFrame(frame);
-      else {
-        if (outgoing) viewer.scene.primitives.remove(outgoing.collection);
-        resolve();
-      }
-    };
-    requestAnimationFrame(frame);
-  });
+  return (
+    atlasPicks.find(({ kind }) => kind === 'observation') ??
+    atlasPicks[0] ??
+    null
+  );
 }
 
 class CesiumAtlasScene implements AtlasSceneController {
@@ -153,6 +123,8 @@ class CesiumAtlasScene implements AtlasSceneController {
   #surfaceArtifact: SurfaceArtifact | null = null;
   #surfaceGroup: ScientificPrimitiveGroup | null = null;
   #observationGroup: ObservationPrimitiveGroup | null = null;
+  readonly #surfaceCache = new LayerCache<ScientificPrimitiveGroup>(4);
+  readonly #observationCache = new LayerCache<ObservationPrimitiveGroup>(3);
   #contextLayer: ImageryLayer | null = null;
   #outlineSource: GeoJsonSource | null = null;
   #metric: Metric = 'post_mean';
@@ -177,6 +149,8 @@ class CesiumAtlasScene implements AtlasSceneController {
       homeButton: false,
       infoBox: false,
       navigationHelpButton: false,
+      maximumRenderTimeChange: Number.POSITIVE_INFINITY,
+      requestRenderMode: true,
       scene3DOnly: false,
       sceneModePicker: false,
       selectionIndicator: false,
@@ -187,16 +161,16 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#unbindKeyboard = bindKeyboardCamera(this.#viewer, container);
     this.#removeMoveEnd = this.#viewer.camera.moveEnd.addEventListener(() => {
       const state = cameraState(this.#viewer);
+      if (!state) return;
       for (const listener of this.#cameraListeners) listener(state);
     });
     this.#handler = new ScreenSpaceEventHandler(this.#viewer.scene.canvas);
     this.#handler.setInputAction(
       (event: ScreenSpaceEventHandler.PositionedEvent) => {
-        const picked = this.#viewer.scene.pick(event.position) as
-          { id?: unknown } | undefined;
-        const value = picked?.id;
-        for (const listener of this.#pickListeners)
-          listener(isAtlasPick(value) ? value : null);
+        const value = preferredAtlasPick(
+          this.#viewer.scene.drillPick(event.position, 12),
+        );
+        for (const listener of this.#pickListeners) listener(value);
       },
       ScreenSpaceEventType.LEFT_CLICK,
     );
@@ -234,9 +208,6 @@ class CesiumAtlasScene implements AtlasSceneController {
         maximumLevel: 18,
         url: imageryUrl,
       });
-      provider.errorEvent.addEventListener(() =>
-        this.#setContextStatus('fallback'),
-      );
       const contextLayer = new ImageryLayer(provider);
       this.#viewer.imageryLayers.add(contextLayer);
       contextLayer.alpha = 0.63;
@@ -245,6 +216,16 @@ class CesiumAtlasScene implements AtlasSceneController {
       contextLayer.saturation = 0.48;
       contextLayer.show = this.#layers.context;
       this.#contextLayer = contextLayer;
+      let failed = false;
+      provider.errorEvent.addEventListener(() => {
+        if (failed) return;
+        failed = true;
+        if (this.#contextLayer === contextLayer) {
+          this.#viewer.imageryLayers.remove(contextLayer, true);
+          this.#contextLayer = null;
+        }
+        this.#setContextStatus('fallback');
+      });
       this.#setContextStatus('ready');
     } catch {
       this.#setContextStatus('fallback');
@@ -275,25 +256,66 @@ class CesiumAtlasScene implements AtlasSceneController {
     for (const listener of this.#contextListeners) listener(status);
   }
 
-  async #replaceSurface(): Promise<void> {
-    if (this.#surfaceArtifact === null) return;
+  async #prepareSurface(): Promise<PreparedSurfaceSwap | null> {
+    if (this.#surfaceArtifact === null) return null;
     const sequence = ++this.#buildSequence;
-    const incoming = buildSurfaceLayer(this.#surfaceArtifact, {
-      elevation: this.#elevation && this.#mode !== 'map',
-      exaggeration: this.#exaggeration,
-      metric: this.#metric,
-    });
+    const elevated = this.#elevation && this.#mode !== 'map';
+    const identity = this.#surfaceArtifact.artifact;
+    const key = [
+      identity.id,
+      identity.model_version,
+      identity.data_version,
+      this.#metric,
+      elevated ? `raised-${this.#exaggeration}` : 'flat',
+    ].join(':');
+    let incoming = this.#surfaceCache.get(key);
+    if (!incoming) {
+      incoming = buildSurfaceLayer(this.#surfaceArtifact, {
+        elevation: elevated,
+        exaggeration: this.#exaggeration,
+        metric: this.#metric,
+      });
+      this.#surfaceCache.set(key, incoming);
+      this.#viewer.scene.primitives.add(incoming.collection);
+    }
+    incoming.collection.show = true;
     incoming.setOpacity(0);
-    incoming.setVisibility(this.#layers.surface, this.#layers.support);
-    this.#viewer.scene.primitives.add(incoming.collection);
     await waitForReady(this.#viewer, incoming);
     if (sequence !== this.#buildSequence || this.#destroyed) {
-      this.#viewer.scene.primitives.remove(incoming.collection);
+      if (incoming !== this.#surfaceGroup) incoming.collection.show = false;
+      return null;
+    }
+    return { incoming, outgoing: this.#surfaceGroup, sequence };
+  }
+
+  async #activateSurface(swap: PreparedSurfaceSwap): Promise<void> {
+    const { incoming, outgoing, sequence } = swap;
+    if (sequence !== this.#buildSequence || this.#destroyed) {
+      if (incoming !== this.#surfaceGroup) incoming.collection.show = false;
       return;
     }
-    const outgoing = this.#surfaceGroup;
+    if (outgoing === incoming) {
+      incoming.setVisibility(this.#layers.surface, this.#layers.support);
+      incoming.setOpacity(1);
+      return;
+    }
     this.#surfaceGroup = incoming;
-    await animateSwap(this.#viewer, incoming, outgoing, this.#reducedMotion);
+    incoming.setVisibility(this.#layers.surface, this.#layers.support);
+    await animateSwap(
+      this.#viewer,
+      incoming,
+      outgoing,
+      this.#reducedMotion,
+      true,
+    );
+    this.#surfaceCache.prune(incoming, (group) => {
+      this.#viewer.scene.primitives.remove(group.collection);
+    });
+  }
+
+  async #replaceSurface(): Promise<void> {
+    const swap = await this.#prepareSurface();
+    if (swap) await this.#activateSurface(swap);
   }
 
   async setArtifact(
@@ -302,27 +324,60 @@ class CesiumAtlasScene implements AtlasSceneController {
   ): Promise<void> {
     const sequence = ++this.#artifactSequence;
     this.#surfaceArtifact = surface;
-    const incomingObservations = buildObservationLayer(observations);
+    const identity = observations.artifact;
+    const observationKey = [
+      identity.id,
+      identity.model_version,
+      identity.data_version,
+    ].join(':');
+    let incomingObservations = this.#observationCache.get(observationKey);
+    if (!incomingObservations) {
+      incomingObservations = buildObservationLayer(observations);
+      this.#observationCache.set(observationKey, incomingObservations);
+      this.#viewer.scene.primitives.add(incomingObservations.collection);
+    }
+    incomingObservations.collection.show = true;
     incomingObservations.setOpacity(0);
-    incomingObservations.collection.show = this.#layers.observations;
-    this.#viewer.scene.primitives.add(incomingObservations.collection);
     const oldObservations = this.#observationGroup;
-    await Promise.all([
-      this.#replaceSurface(),
+    const [surfaceSwap] = await Promise.all([
+      this.#prepareSurface(),
       waitForReady(this.#viewer, incomingObservations),
     ]);
-    if (this.#destroyed || sequence !== this.#artifactSequence) {
-      this.#viewer.scene.primitives.remove(incomingObservations.collection);
+    if (
+      !surfaceSwap ||
+      this.#destroyed ||
+      sequence !== this.#artifactSequence
+    ) {
+      if (incomingObservations !== this.#observationGroup)
+        incomingObservations.collection.show = false;
       return;
     }
-    this.#observationGroup = incomingObservations;
-    await animateSwap(
-      this.#viewer,
-      incomingObservations,
-      oldObservations,
-      this.#reducedMotion,
-    );
-    incomingObservations.collection.show = this.#layers.observations;
+    let observationTransition = Promise.resolve();
+    if (oldObservations === incomingObservations) {
+      incomingObservations.collection.show = this.#layers.observations;
+      incomingObservations.setOpacity(1);
+    } else if (this.#layers.observations) {
+      this.#observationGroup = incomingObservations;
+      observationTransition = animateSwap(
+        this.#viewer,
+        incomingObservations,
+        oldObservations,
+        this.#reducedMotion,
+        true,
+      );
+    } else {
+      this.#observationGroup = incomingObservations;
+      incomingObservations.collection.show = false;
+      incomingObservations.setOpacity(1);
+      if (oldObservations) oldObservations.collection.show = false;
+    }
+    await Promise.all([
+      this.#activateSurface(surfaceSwap),
+      observationTransition,
+    ]);
+    this.#observationCache.prune(incomingObservations, (group) => {
+      this.#viewer.scene.primitives.remove(group.collection);
+    });
   }
 
   async setMetric(metric: Metric): Promise<void> {

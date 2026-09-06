@@ -1,6 +1,6 @@
 /** Batched H3 posterior and support geometry for Atlas design §11. */
 
-import { cellToBoundary } from 'h3-js';
+import { cellToBoundary, cellToLatLng } from 'h3-js';
 import {
   Cartesian3,
   Color,
@@ -39,6 +39,12 @@ type OpacityMaterial = {
   cellAlpha?: number;
 };
 
+// Cesium cannot tessellate a polygon whose edges collectively enclose a pole
+// (https://github.com/CesiumGS/cesium/issues/4801). Only those two H3 cells are
+// split into triangles, with a renderer-only seam kept just off the singularity.
+const POLAR_SEAM_LONGITUDE = 179;
+const POLE_EPSILON_DEGREES = 0.000001;
+
 function opacityMaterial(material: Material): OpacityMaterial {
   const colors = (['color', 'lightColor', 'darkColor'] as const).flatMap(
     (key) => {
@@ -58,6 +64,39 @@ export function h3BoundaryDegrees(h3Index: string): [number, number][] {
   return cellToBoundary(h3Index).map(([lat, lon]) => [lon, lat]);
 }
 
+export function h3PolygonParts(h3Index: string): [number, number][][] {
+  const boundary = h3BoundaryDegrees(h3Index);
+  const longitudeSpan =
+    Math.max(...boundary.map(([lon]) => lon)) -
+    Math.min(...boundary.map(([lon]) => lon));
+  const isPolar =
+    longitudeSpan > 180 && boundary.some(([, lat]) => Math.abs(lat) > 89);
+  if (!isPolar) return [boundary];
+
+  const [centerLat, centerLon] = cellToLatLng(h3Index);
+  const center: [number, number] = [centerLon, centerLat];
+  const poleLatitude = Math.sign(centerLat) * (90 - POLE_EPSILON_DEGREES);
+  const parts: [number, number][][] = [];
+  for (let index = 0; index < boundary.length; index += 1) {
+    const first = boundary[index];
+    const second = boundary[(index + 1) % boundary.length];
+    if (Math.abs(first[0] - second[0]) <= 180) {
+      parts.push([center, first, second]);
+      continue;
+    }
+    const firstSeam: [number, number] = [
+      Math.sign(first[0]) * POLAR_SEAM_LONGITUDE,
+      poleLatitude,
+    ];
+    const secondSeam: [number, number] = [
+      Math.sign(second[0]) * POLAR_SEAM_LONGITUDE,
+      poleLatitude,
+    ];
+    parts.push([center, first, firstSeam], [center, secondSeam, second]);
+  }
+  return parts;
+}
+
 export function surfacePickId(cell: SurfaceCell): SurfacePick {
   return { h3Index: cell.h3_index, kind: 'surface' };
 }
@@ -66,21 +105,23 @@ function geometryForCell(
   cell: SurfaceCell,
   domain: readonly [number, number],
   options: SurfaceLayerOptions,
-): PolygonGeometry {
-  const degrees = h3BoundaryDegrees(cell.h3_index).flat();
+): PolygonGeometry[] {
   const height = options.elevation
     ? heightForCell(cell, domain, options.exaggeration, options.metric)
     : 0;
-  return new PolygonGeometry({
-    closeBottom: height > 0,
-    closeTop: true,
-    extrudedHeight: height > 0 ? 0 : undefined,
-    height,
-    polygonHierarchy: new PolygonHierarchy(
-      Cartesian3.fromDegreesArray(degrees),
-    ),
-    vertexFormat: MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
-  });
+  return h3PolygonParts(cell.h3_index).map(
+    (part) =>
+      new PolygonGeometry({
+        closeBottom: height > 0,
+        closeTop: true,
+        extrudedHeight: height > 0 ? 0 : undefined,
+        height,
+        polygonHierarchy: new PolygonHierarchy(
+          Cartesian3.fromDegreesArray(part.flat()),
+        ),
+        vertexFormat: MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
+      }),
+  );
 }
 
 function addPrimitive(
@@ -98,12 +139,14 @@ function addPrimitive(
       translucent: true,
     }),
     asynchronous: true,
-    geometryInstances: cells.map(
-      (cell) =>
-        new GeometryInstance({
-          geometry: geometryForCell(cell, domain, options),
-          id: surfacePickId(cell),
-        }),
+    geometryInstances: cells.flatMap((cell) =>
+      geometryForCell(cell, domain, options).map(
+        (geometry) =>
+          new GeometryInstance({
+            geometry,
+            id: surfacePickId(cell),
+          }),
+      ),
     ),
   });
   collection.add(primitive);
@@ -154,7 +197,6 @@ export function buildSurfaceLayer(
     primitives,
     isReady: () => primitives.every((primitive) => primitive.ready),
     setOpacity(opacity: number) {
-      collection.show = opacity > 0;
       for (const { cellAlpha, colors, material } of opacityMaterials) {
         for (const { baseAlpha, key } of colors) {
           const color = material.uniforms[key];

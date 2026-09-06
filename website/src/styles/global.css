@@ -9,7 +9,6 @@
 @import './process.css';
 @import './vision.css';
 @import './motion.css';
-@import './preview.css';
 
 * {
   box-sizing: border-box;

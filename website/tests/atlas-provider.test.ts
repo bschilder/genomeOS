@@ -91,13 +91,16 @@ describe('StaticAtlasDataProvider', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     const provider = new StaticAtlasDataProvider('/genomeOS/data/atlas/');
-    await expect(provider.getSurface(ref)).resolves.toMatchObject({
+    const first = await provider.getSurface(ref);
+    await expect(provider.getSurface(ref)).resolves.toBe(first);
+    expect(first).toMatchObject({
       artifact: { id: ref.id },
     });
     expect(fetchMock).toHaveBeenCalledWith(
       '/genomeOS/data/atlas/hbs-rs334.surface.json',
       expect.objectContaining({ signal: undefined }),
     );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
 
     fetchMock.mockResolvedValueOnce(
       new Response(
@@ -107,7 +110,10 @@ describe('StaticAtlasDataProvider', () => {
         }),
       ),
     );
-    await expect(provider.getSurface(ref)).rejects.toThrow(/identity/i);
+    const invalidProvider = new StaticAtlasDataProvider(
+      '/genomeOS/data/atlas/',
+    );
+    await expect(invalidProvider.getSurface(ref)).rejects.toThrow(/identity/i);
   });
 
   it('reports HTTP failures instead of falling back', async () => {

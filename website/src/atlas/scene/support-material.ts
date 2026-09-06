@@ -72,10 +72,10 @@ export function materialForSupport(
 ): Material {
   if (support === 'unknown') {
     return Material.fromType('Grid', {
-      cellAlpha: 0.11,
-      color: Color.fromCssColorString('#72819a').withAlpha(0.52),
-      lineCount: new Cartesian2(7, 7),
-      lineThickness: new Cartesian2(1.2, 1.2),
+      cellAlpha: 0.24,
+      color: Color.fromCssColorString('#a8b5c9').withAlpha(0.72),
+      lineCount: new Cartesian2(5, 5),
+      lineThickness: new Cartesian2(1.65, 1.65),
     });
   }
   return Material.fromType('Dot', {

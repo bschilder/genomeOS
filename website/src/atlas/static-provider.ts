@@ -39,6 +39,9 @@ function assertIdentity(ref: ArtifactRef, loaded: ArtifactIdentity): void {
 
 export class StaticAtlasDataProvider implements AtlasDataProvider {
   readonly #baseUrl: string;
+  #catalog: AtlasCatalog | null = null;
+  readonly #surfaces = new Map<string, SurfaceArtifact>();
+  readonly #observations = new Map<string, ObservationArtifact>();
 
   constructor(baseUrl: string) {
     this.#baseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
@@ -58,15 +61,21 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   }
 
   async getCatalog(signal?: AbortSignal): Promise<AtlasCatalog> {
-    return atlasCatalogSchema.parse(
+    if (this.#catalog) return this.#catalog;
+    const catalog = atlasCatalogSchema.parse(
       await this.#getJson('catalog.json', signal),
     );
+    this.#catalog = catalog;
+    return catalog;
   }
 
   async getSurface(
     ref: ArtifactRef,
     signal?: AbortSignal,
   ): Promise<SurfaceArtifact> {
+    const key = `${ref.id}:${ref.model_version}:${ref.data_version}:${ref.surface_url}`;
+    const cached = this.#surfaces.get(key);
+    if (cached) return cached;
     const artifact = surfaceArtifactSchema.parse(
       await this.#getJson(ref.surface_url, signal),
     );
@@ -77,6 +86,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
           `received ${artifact.cells.length}`,
       );
     }
+    this.#surfaces.set(key, artifact);
     return artifact;
   }
 
@@ -84,6 +94,9 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     ref: ArtifactRef,
     signal?: AbortSignal,
   ): Promise<ObservationArtifact> {
+    const key = `${ref.id}:${ref.model_version}:${ref.data_version}:${ref.observations_url}`;
+    const cached = this.#observations.get(key);
+    if (cached) return cached;
     const artifact = observationArtifactSchema.parse(
       await this.#getJson(ref.observations_url, signal),
     );
@@ -94,6 +107,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
           `received ${artifact.observations.length}`,
       );
     }
+    this.#observations.set(key, artifact);
     return artifact;
   }
 }

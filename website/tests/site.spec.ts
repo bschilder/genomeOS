@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
 const topLevelRoutes = [
   '/',
@@ -316,4 +316,172 @@ test('application cards reveal on scroll and respond to hover', async ({
     (element) => getComputedStyle(element).transform,
   );
   expect(hoverTransform).not.toBe(restingTransform);
+});
+
+test('explorer changes entity, metric, context, and elevation', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.abort(),
+  );
+  await page.goto('/app/');
+  await expect(
+    page.getByRole('application', { name: 'genomeOS globe explorer' }),
+  ).toBeVisible();
+  await page.getByLabel('Variant or phenotype').selectOption('g6pd-deficiency');
+  await page.getByRole('radio', { name: 'Uncertainty' }).check();
+  await page.getByLabel('Geographic context').uncheck();
+  await page.getByRole('radio', { name: 'Map' }).check();
+  await page.getByLabel('Elevation').check();
+  await expect(
+    page.getByRole('heading', {
+      name: 'G6PD deficiency in hemizygous males',
+    }),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole('radio', { name: 'Perspective' })).toBeChecked();
+  await expect(page).toHaveURL(/entity=g6pd-deficiency/);
+  await expect(page).toHaveURL(/metric=post_sd/);
+});
+
+test('explorer switches among globe, map, and perspective views', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.abort(),
+  );
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 30_000,
+  });
+
+  for (const view of ['Map', 'Perspective', 'Globe']) {
+    const control = page.getByRole('radio', { name: view });
+    await control.check();
+    await expect(control).toBeChecked();
+  }
+  await expect(page).toHaveURL(/view=globe/);
+});
+
+test('explorer restores a complete shareable URL', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.abort(),
+  );
+  const query = new URLSearchParams({
+    elevation: 'true',
+    entity: 'g6pd-deficiency',
+    exaggeration: '2.5',
+    heading: '12',
+    height: '4200000',
+    lat: '1',
+    layers: 'surface,support',
+    lon: '9',
+    metric: 'post_sd',
+    pitch: '-55',
+    version: 'v1/map-2026-08',
+    view: 'perspective',
+  });
+  await page.goto(`/app/?${query}`);
+
+  await expect(page.getByLabel('Variant or phenotype')).toHaveValue(
+    'g6pd-deficiency',
+  );
+  await expect(page.getByRole('radio', { name: 'Uncertainty' })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'Perspective' })).toBeChecked();
+  await expect(page.getByLabel('Elevation')).toBeChecked();
+  await expect(page.getByLabel('Height exaggeration')).toHaveValue('2.5');
+  await expect(page.getByLabel('Measured observations')).not.toBeChecked();
+  await expect(page.getByLabel('Geographic context')).not.toBeChecked();
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(page).toHaveURL(/lon=9(?:&|%|$)/);
+  await expect(page).toHaveURL(/lat=1(?:&|%|$)/);
+  await expect(page).toHaveURL(/height=4200000(?:&|%|$)/);
+});
+
+test('explorer opens separate surface and observation inspectors', async ({
+  page,
+  isMobile,
+}) => {
+  test.setTimeout(60_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.abort(),
+  );
+  const query = new URLSearchParams({
+    heading: '0',
+    height: '1000000',
+    lat: '40.4407',
+    lon: '-3.7201',
+    pitch: '-90',
+  });
+  await page.goto(`/app/?${query}`);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const canvas = page.locator('.atlas-scene canvas').first();
+  const clickNearCenter = async (inspector: Locator) => {
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    for (const [offsetX, offsetY] of [
+      [0, 0],
+      [-18, 0],
+      [18, 0],
+      [0, -18],
+      [0, 18],
+      [-18, -18],
+      [18, -18],
+      [-18, 18],
+      [18, 18],
+    ]) {
+      await page.mouse.click(
+        box!.x + box!.width / 2 + offsetX,
+        box!.y + box!.height / 2 + offsetY,
+      );
+      if (await inspector.isVisible()) return;
+    }
+  };
+
+  await page.getByLabel('Measured observations').uncheck();
+  if (isMobile) {
+    await page.getByText('Map controls', { exact: true }).click();
+  }
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
+  const surfaceInspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await clickNearCenter(surfaceInspector);
+  await expect(surfaceInspector).toBeVisible();
+  await page.getByRole('button', { name: 'Close inspector' }).click();
+
+  if (isMobile) {
+    await page.getByText('Map controls', { exact: true }).click();
+  }
+  await page.getByLabel('Measured observations').check();
+  if (isMobile) {
+    await page.getByText('Map controls', { exact: true }).click();
+  }
+  await expect(page).toHaveURL(/layers=[^&]*observations/);
+  await page.waitForTimeout(650);
+  const observationInspector = page.getByRole('complementary', {
+    name: 'Selected observation',
+  });
+  await clickNearCenter(observationInspector);
+  await expect(observationInspector).toBeVisible();
+});
+
+test('explorer reports unavailable WebGL with a retry action', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    HTMLCanvasElement.prototype.getContext = () => null;
+  });
+  await page.goto('/app/');
+  await expect(page.getByText('This globe needs WebGL')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Retry globe' })).toBeVisible();
 });

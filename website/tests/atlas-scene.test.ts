@@ -1,11 +1,19 @@
 import { cellToBoundary } from 'h3-js';
+import {
+  Cartesian3,
+  MaterialAppearance,
+  PolygonGeometry,
+  PolygonHierarchy,
+} from 'cesium';
 import { describe, expect, it } from 'vitest';
 
 import type { SurfaceArtifact, SurfaceCell } from '../src/atlas/contracts';
-import { keyboardCommandFor } from '../src/atlas/scene/camera';
+import { cameraState, keyboardCommandFor } from '../src/atlas/scene/camera';
+import { LayerCache } from '../src/atlas/scene/layer-cache';
 import { observationPickId } from '../src/atlas/scene/observation-layer';
 import {
   h3BoundaryDegrees,
+  h3PolygonParts,
   surfacePickId,
 } from '../src/atlas/scene/surface-layer';
 import {
@@ -13,6 +21,7 @@ import {
   quantizeMetric,
 } from '../src/atlas/scene/support-material';
 import {
+  preferredAtlasPick,
   resolveElevationView,
   transitionProgress,
 } from '../src/atlas/scene/atlas-scene';
@@ -29,6 +38,24 @@ const baseCell: SurfaceCell = {
 };
 
 describe('Cesium scene policy', () => {
+  it('keeps recently used render layers and evicts the least recent inactive layer', () => {
+    const cache = new LayerCache<object>(2);
+    const first = {};
+    const second = {};
+    const third = {};
+    cache.set('first', first);
+    cache.set('second', second);
+    expect(cache.get('first')).toBe(first);
+    cache.set('third', third);
+
+    const evicted: object[] = [];
+    cache.prune(first, (layer) => evicted.push(layer));
+    expect(cache.get('second')).toBeUndefined();
+    expect(cache.get('first')).toBe(first);
+    expect(cache.get('third')).toBe(third);
+    expect(evicted).toEqual([second]);
+  });
+
   it('partitions inferred values from unsupported cells', () => {
     const cells: SurfaceCell[] = [
       baseCell,
@@ -64,6 +91,22 @@ describe('Cesium scene policy', () => {
     expect(converted).toEqual([source[1], source[0]]);
   });
 
+  it('tessellates pole-spanning H3 cells into geometry Cesium can project', () => {
+    const parts = h3PolygonParts('83f293fffffffff');
+    expect(parts.length).toBeGreaterThan(1);
+    for (const part of parts) {
+      const polygon = new PolygonGeometry({
+        closeTop: true,
+        height: 0,
+        polygonHierarchy: new PolygonHierarchy(
+          Cartesian3.fromDegreesArray(part.flat()),
+        ),
+        vertexFormat: MaterialAppearance.MaterialSupport.TEXTURED.vertexFormat,
+      });
+      expect(() => PolygonGeometry.createGeometry(polygon)).not.toThrow();
+    }
+  });
+
   it('attaches explicit pick kinds', () => {
     expect(surfacePickId(baseCell)).toEqual({
       h3Index: baseCell.h3_index,
@@ -73,6 +116,14 @@ describe('Cesium scene policy', () => {
       kind: 'observation',
       sourceRecordId: 'map-surveys:1',
     });
+  });
+
+  it('prefers a measured point when it overlaps a modeled cell', () => {
+    const surface = { id: surfacePickId(baseCell) };
+    const observation = { id: observationPickId('map-surveys:1') };
+    expect(preferredAtlasPick([surface, observation])).toEqual(observation.id);
+    expect(preferredAtlasPick([surface])).toEqual(surface.id);
+    expect(preferredAtlasPick([{ id: 'context' }])).toBeNull();
   });
 
   it('moves elevation out of 2D while preserving other view choices', () => {
@@ -101,5 +152,20 @@ describe('Cesium scene policy', () => {
       }),
     ).toBeNull();
     expect(keyboardCommandFor({ key: 'x', target: null })).toBeNull();
+  });
+
+  it('refuses to serialize Cesium camera values while a scene morph is incomplete', () => {
+    const viewer = {
+      camera: {
+        heading: 0,
+        pitch: -Math.PI / 2,
+        positionCartographic: {
+          height: 1_000_000,
+          latitude: undefined,
+          longitude: 0,
+        },
+      },
+    };
+    expect(cameraState(viewer as never)).toBeNull();
   });
 });

@@ -61,8 +61,21 @@ export function keyboardCommandFor(
   );
 }
 
-export function cameraState(viewer: Viewer): CameraState {
+export function cameraState(viewer: Viewer): CameraState | null {
   const cartographic = viewer.camera.positionCartographic;
+  const radians = [
+    cartographic?.latitude,
+    cartographic?.longitude,
+    viewer.camera.heading,
+    viewer.camera.pitch,
+  ];
+  if (
+    !cartographic ||
+    !Number.isFinite(cartographic.height) ||
+    radians.some((value) => !Number.isFinite(value))
+  ) {
+    return null;
+  }
   return {
     heading: CesiumMath.toDegrees(viewer.camera.heading),
     height: cartographic.height,
