@@ -3,30 +3,35 @@ import Callout from '../components/Callout.astro';
 import PageIntro from '../components/PageIntro.astro';
 import WorkingGroup from '../components/WorkingGroup.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
 
 const groups = [
   {
-    title: 'Data',
+    title: 'Data Gathering & Infrastructure',
     description:
-      'Expand geographic genetic evidence while preserving everything needed to interpret and reuse each measurement.',
+      'Build the evidence foundation end to end: find and process trustworthy data, then store and serve it as a growing, responsive public resource.',
     items: [
       'Find exact allele measurements in PubMed, supplements, theses, and non-English literature.',
-      'Preserve source locators, allele orientation, denominators, recruitment, cohort identity, geography, and reuse checks.',
+      'Standardize and validate source locators, allele orientation, denominators, recruitment, cohort identity, geography, and reuse checks.',
       'Develop reproducible ways to combine the Genome Aggregation Database, 1000 Genomes Project, Human Genome Diversity Project, Allele Frequency Net Database, national resources, and other compatible databases for particular genes or variants.',
-      'Identify coverage gaps without converting continental ancestry labels into geographic coordinates.',
+      'Design versioned storage, indexes, and data services that can scale with the corpus and answer dynamic map and search requests.',
     ],
     fit: 'you like literature review, population genetics, clinical genetics, source verification, data engineering, or multilingual extraction.',
     skills: ['Population genetics', 'Data engineering', 'Clinical genetics'],
     issueUrl:
       'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Adata-engineering%22',
+    image: sitePath('/images/group-data.webp'),
+    imageAlt:
+      'Scientific publications and data streams connecting through structured databases to a glowing world network',
   },
   {
-    title: 'Modeling',
+    title: 'Statistical & AI Modeling',
     description:
-      'Estimate underlying allele-frequency distributions without manufacturing confidence between sparse observations.',
+      'The world has not been sampled evenly. Models help infer the underlying geographic distribution between observed populations while showing where uncertainty remains too great.',
     items: [
       'Develop Bayesian spatial models, with Brian leading this line of work.',
       'Explore geometric deep learning and other statistically defensible model classes.',
+      'Translate supported allele-frequency estimates, inheritance, penetrance, and population denominators into disease-burden and carefully validated risk estimates.',
       'Improve calibration, uncertainty estimates, correction for how participants were recruited, independent testing, and reproduction of published science.',
       'Run models ahead of time and publish traceable, versioned results so the public website stays fast and cannot quietly change a scientific result.',
     ],
@@ -34,28 +39,35 @@ const groups = [
     skills: ['Spatial statistics', 'Population genetics', 'Geospatial'],
     issueUrl:
       'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Aspatial-stats%22',
+    image: sitePath('/images/group-modeling.webp'),
+    imageAlt:
+      'Sparse observations across a globe flowing into statistical fields with visible uncertainty and health-model layers',
   },
   {
-    title: 'Product & Experience',
+    title: 'UI & Applications',
     description:
-      'Make complex evidence explorable without letting visual polish erase uncertainty or refusal.',
+      'Turn the atlas into an intuitive place to explore, ask questions, and—when people deliberately provide their own genome—understand it in the context of trusted evidence.',
     items: [
       'Build globe and map movement, pinch-to-zoom, layers, legends, inspection, and shareable state.',
       'Make measurements, estimates, uncertainty, and unknown regions legible to non-specialists.',
-      'Design conversational access to versioned evidence as a future direction—not a current capability.',
-      'Explore personal-data contribution only after privacy, consent, governance, security, and scientific-quality requirements are approved.',
+      'Build an agentic AI guide that lets people converse with versioned project data and, when explicitly provided, their own genomes.',
+      'Develop useful research, health, education, and discovery applications on top of the atlas.',
+      'Gate any personal-genome experience behind privacy, consent, governance, security, provenance, and scientific-quality safeguards.',
     ],
     fit: 'you build geospatial interfaces, accessible visualization, product systems, responsible artificial-intelligence interactions, privacy, or community-centered experiences.',
     skills: ['Interface design', 'Geospatial', 'Governance'],
     issueUrl:
       'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Afrontend%22',
+    image: sitePath('/images/group-ui.webp'),
+    imageAlt:
+      'An interactive genomic globe with conversational constellations and a protected personal-genome pathway',
   },
 ];
 ---
 
 <SiteLayout
   title="Working groups"
-  description="Join the forming genomeOS working groups for data, modeling, or product and experience."
+  description="Join the forming genomeOS working groups for data infrastructure, statistical and AI modeling, or interfaces and applications."
 >
   <PageIntro
     note="Groups are forming"
@@ -93,12 +105,16 @@ const groups = [
         <a
           class="github-cta github-cta--primary"
           href="https://github.com/bschilder/genomeOS/discussions/76"
+          target="_blank"
+          rel="noopener noreferrer"
           ><span>Meet the community</span><strong>Introduce yourself</strong
           ><span aria-hidden="true">↗</span></a
         >
         <a
           class="github-cta"
           href="https://github.com/bschilder/genomeOS/issues/new/choose"
+          target="_blank"
+          rel="noopener noreferrer"
           ><span>Bring a new direction</span><strong>Propose an issue</strong
           ><span aria-hidden="true">↗</span></a
         >

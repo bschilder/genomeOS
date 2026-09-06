@@ -38,4 +38,4 @@ Domain ownership uses the permanent `_github-pages-challenge-bschilder` TXT reco
 up to 24 hours after successful DNS configuration to provision HTTPS; enable **Enforce HTTPS** when
 the repository setting becomes available.
 
-See the [website design and deployment contract](https://github.com/bschilder/genomeOS/blob/main/docs/superpowers/specs/2026-09-05-docs-website-design.md).
+See the <a href="https://github.com/bschilder/genomeOS/blob/main/docs/superpowers/specs/2026-09-05-docs-website-design.md" target="_blank" rel="noopener noreferrer">website design and deployment contract</a>.

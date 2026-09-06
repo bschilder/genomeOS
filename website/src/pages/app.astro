@@ -1,6 +1,8 @@
 ---
 import PageIntro from '../components/PageIntro.astro';
+import PageVisual from '../components/PageVisual.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
 
 const previewUrl = 'https://genomeos-api-357876699511.us-east1.run.app/preview';
 ---
@@ -13,6 +15,14 @@ const previewUrl = 'https://genomeos-api-357876699511.us-east1.run.app/preview';
     note="Work-in-progress preview"
     title="See the first map experience taking shape."
     lede="This early preview shows how the genomeOS software can retrieve prepared genetic evidence and display it on a map. It is a development demo—not the finished public atlas."
+  />
+
+  <PageVisual
+    image={sitePath('/images/preview-atlas.webp')}
+    alt="A luminous interactive Earth with geographic layers, observation points, uncertainty bands, and an AI constellation"
+    kicker="The experience we are building"
+    title="Move through global variation—and ask the atlas questions."
+    description="The finished experience will combine fluid globe exploration with clear evidence layers and an AI guide that can help people investigate what the data supports."
   />
 
   <section class="preview-section" aria-labelledby="preview-title">

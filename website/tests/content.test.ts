@@ -59,10 +59,16 @@ describe('public site content', () => {
 
   it('defines all three forming working groups and modeling breadth', () => {
     expect(groups).toMatch(
-      /Data[\s\S]*Modeling[\s\S]*Product &amp; Experience/,
+      /Data Gathering &amp; Infrastructure[\s\S]*Statistical &amp; AI Modeling[\s\S]*UI &amp; Applications/,
     );
     expect(groups).toContain('geometric deep learning');
     expect(groups).toContain('Brian');
+    expect(groups).toMatch(/not been sampled evenly/i);
+    expect(groups).toMatch(/disease-burden[\s\S]*risk estimates/i);
+    expect(groups).toMatch(/agentic AI[\s\S]*own genomes/i);
+    expect(groups).toContain('/images/group-data.webp');
+    expect(groups).toContain('/images/group-modeling.webp');
+    expect(groups).toContain('/images/group-ui.webp');
     expect(groups).toMatch(
       /Future exploration[\s\S]*privacy[\s\S]*consent[\s\S]*governance/,
     );
@@ -78,12 +84,14 @@ describe('public site content', () => {
     expect(contribute).toContain(
       'https://github.com/users/bschilder/projects/8',
     );
+    expect(contribute).toContain('/images/contribute-community.webp');
   });
 
   it('states the scientific publication bar', () => {
     expect(project).toMatch(/HbS[\s\S]*G6PD[\s\S]*screening/);
     expect(project).toMatch(/population-location registry/i);
     expect(project).toMatch(/interactive public map/i);
+    expect(project).toContain('/images/project-community.webp');
   });
 
   it('frames the live application as a sample-data WIP diagnostic', () => {
@@ -97,6 +105,7 @@ describe('public site content', () => {
     );
     expect(preview).not.toMatch(/\bP[0-9]+\b/);
     expect(preview).toContain('sample data created for software testing');
+    expect(preview).toContain('/images/preview-atlas.webp');
   });
 
   it('does not expose unexplained internal project codes on introduction pages', () => {

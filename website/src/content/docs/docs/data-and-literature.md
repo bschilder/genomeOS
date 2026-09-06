@@ -38,5 +38,5 @@ and other datasets differ in geography, how participants were recruited, samples
 terms. A continental genetic-analysis group is not a geographic observation. The same study group
 must not be counted twice when it appears in more than one source.
 
-Follow the [literature evidence curation guide](https://github.com/bschilder/genomeOS/blob/main/docs/literature-evidence-curation.md)
-and the source-specific access decisions in [Issue #3](https://github.com/bschilder/genomeOS/issues/3).
+Follow the <a href="https://github.com/bschilder/genomeOS/blob/main/docs/literature-evidence-curation.md" target="_blank" rel="noopener noreferrer">literature evidence curation guide</a>
+and the source-specific access decisions in <a href="https://github.com/bschilder/genomeOS/issues/3" target="_blank" rel="noopener noreferrer">Issue #3</a>.

@@ -2,7 +2,9 @@
 import Callout from '../components/Callout.astro';
 import ContributionFlow from '../components/ContributionFlow.astro';
 import PageIntro from '../components/PageIntro.astro';
+import PageVisual from '../components/PageVisual.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
 ---
 
 <SiteLayout
@@ -15,6 +17,14 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     lede="The project is organized so a literature researcher, statistician, engineer, designer, clinician, or community partner can find a bounded task and understand why it matters."
   />
 
+  <PageVisual
+    image={sitePath('/images/contribute-community.webp')}
+    alt="Contributors around the world bringing research, code, data, design, and discussion into a shared atlas"
+    kicker="Many ways to contribute"
+    title="Bring the perspective the atlas is missing."
+    description="Local knowledge, overlooked literature, scientific critique, modeling, infrastructure, design, and community experience all make the resource more complete and more useful."
+  />
+
   <ContributionFlow />
 
   <section class="contribution-detail">
@@ -24,7 +34,8 @@ import SiteLayout from '../layouts/SiteLayout.astro';
         <p>
           Introduce yourself in <a
             href="https://github.com/bschilder/genomeOS/discussions/76"
-            >Discussion #76</a
+            target="_blank"
+            rel="noopener noreferrer">Discussion #76</a
           >. Share the disciplines, languages, datasets, places, or product
           questions you know. You do not need to arrive with a finished
           proposal.
@@ -35,7 +46,8 @@ import SiteLayout from '../layouts/SiteLayout.astro';
         <p>
           Search <a
             href="https://github.com/bschilder/genomeOS/issues?q=is%3Aissue"
-            >open and closed issues</a
+            target="_blank"
+            rel="noopener noreferrer">open and closed issues</a
           >
           before starting. Open issues are the work queue. Closed issues preserve
           decisions and house patterns—including ideas deliberately declined.
@@ -136,22 +148,34 @@ import SiteLayout from '../layouts/SiteLayout.astro';
     <div class="section-shell">
       <h2>Open the live workspace</h2>
       <div class="resource-links__grid">
-        <a href="https://github.com/users/bschilder/projects/8"
+        <a
+          href="https://github.com/users/bschilder/projects/8"
+          target="_blank"
+          rel="noopener noreferrer"
           ><strong>Project board</strong><span
             >See status, priority, milestones, and ownership.</span
           ></a
         >
-        <a href="https://github.com/bschilder/genomeOS/issues"
+        <a
+          href="https://github.com/bschilder/genomeOS/issues"
+          target="_blank"
+          rel="noopener noreferrer"
           ><strong>Issues</strong><span
             >Search decisions and choose a scoped task.</span
           ></a
         >
-        <a href="https://github.com/bschilder/genomeOS/pulls"
+        <a
+          href="https://github.com/bschilder/genomeOS/pulls"
+          target="_blank"
+          rel="noopener noreferrer"
           ><strong>Pull requests</strong><span
             >Learn from active implementation and review.</span
           ></a
         >
-        <a href="https://github.com/bschilder/genomeOS/issues/65"
+        <a
+          href="https://github.com/bschilder/genomeOS/issues/65"
+          target="_blank"
+          rel="noopener noreferrer"
           ><strong>Community standards</strong><span
             >Follow the contribution-file work tracked in Issue #65.</span
           ></a

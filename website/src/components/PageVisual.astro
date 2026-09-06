@@ -1,0 +1,32 @@
+---
+interface Props {
+  image: string;
+  alt: string;
+  kicker: string;
+  title: string;
+  description: string;
+}
+
+const { image, alt, kicker, title, description } = Astro.props;
+---
+
+<section class="page-visual" data-reveal>
+  <div class="section-shell">
+    <figure class="page-visual__frame">
+      <img
+        src={image}
+        alt={alt}
+        width="1536"
+        height="1024"
+        loading="eager"
+        fetchpriority="high"
+        decoding="async"
+      />
+      <figcaption>
+        <p class="section-kicker">{kicker}</p>
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </figcaption>
+    </figure>
+  </div>
+</section>

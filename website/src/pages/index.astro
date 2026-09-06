@@ -13,34 +13,43 @@ import { sitePath } from '../lib/paths';
 
 const groups = [
   {
-    title: 'Data',
+    title: 'Data Gathering & Infrastructure',
     description:
-      'Find exact population measurements and connect compatible public resources without erasing provenance.',
+      'Find and process reliable evidence, then store and serve it through a scalable, dynamic data foundation.',
     items: [],
     fit: 'you enjoy literature, population genetics, careful metadata, data engineering, or tracking down the source of a number.',
     skills: ['Population genetics', 'Data engineering', 'Clinical genetics'],
     issueUrl:
       'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Adata-engineering%22',
+    image: sitePath('/images/group-data.webp'),
+    imageAlt:
+      'Scientific sources and databases connecting into a global genomic data network',
   },
   {
-    title: 'Modeling',
+    title: 'Statistical & AI Modeling',
     description:
-      'Estimate global distributions with honest uncertainty, explicit unsupported regions, and published-science validation.',
+      'Use incomplete geographic samples to infer underlying allele-frequency distributions and supported disease burden or risk.',
     items: [],
     fit: 'you work in Bayesian spatial statistics, geometric deep learning, calibration, uncertainty, or scientific validation.',
     skills: ['Spatial statistics', 'Population genetics', 'Geospatial'],
     issueUrl:
       'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Aspatial-stats%22',
+    image: sitePath('/images/group-modeling.webp'),
+    imageAlt:
+      'Sparse geographic observations becoming statistical fields with visible uncertainty',
   },
   {
-    title: 'Product & Experience',
+    title: 'UI & Applications',
     description:
-      'Turn difficult evidence into an explorable map where measurements, estimates, uncertainty, and gaps stay legible.',
+      'Build the interactive atlas, useful applications, and an agentic AI for conversing with the data and deliberately provided personal genomes.',
     items: [],
     fit: 'you build maps, interfaces, accessible explanations, data visualization, or responsible artificial-intelligence experiences.',
     skills: ['Interface design', 'Geospatial', 'Governance'],
     issueUrl:
       'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Afrontend%22',
+    image: sitePath('/images/group-ui.webp'),
+    imageAlt:
+      'An interactive genomic globe with an AI conversation network and personal-genome pathway',
   },
 ];
 ---
@@ -120,6 +129,8 @@ const groups = [
         <a
           class="github-cta github-cta--primary"
           href="https://github.com/bschilder/genomeOS/discussions/76"
+          target="_blank"
+          rel="noopener noreferrer"
           ><span>Start here</span><strong>Join the conversation</strong><span
             aria-hidden="true">↗</span
           ></a
@@ -127,6 +138,8 @@ const groups = [
         <a
           class="github-cta"
           href="https://github.com/bschilder/genomeOS/issues"
+          target="_blank"
+          rel="noopener noreferrer"
           ><span>See what needs doing</span><strong>Explore open issues</strong
           ><span aria-hidden="true">↗</span></a
         >

@@ -1,6 +1,7 @@
 ---
 import Callout from '../components/Callout.astro';
 import PageIntro from '../components/PageIntro.astro';
+import PageVisual from '../components/PageVisual.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { sitePath } from '../lib/paths';
 
@@ -73,6 +74,14 @@ const pipeline = [
     note="The project"
     title="A world atlas built from evidence, not assumptions."
     lede="Genetic measurements exist across databases, national programs, and individual papers. genomeOS is building the shared system needed to locate them, model only what they support, and make both knowledge and uncertainty explorable."
+  />
+
+  <PageVisual
+    image={sitePath('/images/project-community.webp')}
+    alt="A worldwide community connecting knowledge and contributions into a shared genomic atlas"
+    kicker="A shared public resource"
+    title="Built across borders, returned to everyone."
+    description="No single lab, database, or country holds the whole picture. genomeOS brings their knowledge together through an open global collaboration so the result can serve the public good."
   />
 
   <section class="story-section">
@@ -240,19 +249,22 @@ const pipeline = [
           <li>
             <a
               href="https://github.com/bschilder/genomeOS/blob/main/docs/overview.md"
-              >Project overview</a
+              target="_blank"
+              rel="noopener noreferrer">Project overview</a
             >
           </li>
           <li>
             <a
               href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md"
-              >Scientific and engineering objectives</a
+              target="_blank"
+              rel="noopener noreferrer">Scientific and engineering objectives</a
             >
           </li>
           <li>
             <a
               href="https://github.com/bschilder/genomeOS/blob/main/docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md"
-              >Atlas v1 design</a
+              target="_blank"
+              rel="noopener noreferrer">Atlas v1 design</a
             >
           </li>
           <li><a href={sitePath('/docs/')}>Technical documentation</a></li>

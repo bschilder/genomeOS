@@ -40,6 +40,67 @@
   font-size: clamp(1.08rem, 2vw, 1.28rem);
 }
 
+.page-visual {
+  padding-block: clamp(2rem, 5vw, 4rem);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-void);
+}
+
+.page-visual__frame {
+  position: relative;
+  min-height: clamp(29rem, 60vw, 47rem);
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  background: var(--color-orbit);
+}
+
+.page-visual__frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(0deg, rgb(2 7 18 / 94%) 0%, rgb(2 7 18 / 8%) 72%);
+  pointer-events: none;
+}
+
+.page-visual__frame img {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  object-fit: cover;
+  transition: transform 700ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.page-visual__frame:hover img {
+  transform: scale(1.025);
+}
+
+.page-visual__frame figcaption {
+  position: absolute;
+  z-index: 1;
+  right: clamp(1.5rem, 5vw, 4rem);
+  bottom: clamp(1.5rem, 5vw, 4rem);
+  left: clamp(1.5rem, 5vw, 4rem);
+  max-width: 49rem;
+}
+
+.page-visual__frame h2 {
+  max-width: 18ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.15rem, 5vw, 4.5rem);
+  font-weight: 420;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.page-visual__frame figcaption > p:last-child {
+  max-width: 43rem;
+  margin: 1rem 0 0;
+  color: #d6e3f4;
+}
+
 .story-section,
 .atlas-section,
 .groups-section,
@@ -204,11 +265,46 @@
 }
 
 .working-group {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   padding-block: clamp(2.4rem, 5vw, 4rem);
+  padding-inline: clamp(1rem, 2.5vw, 2.5rem);
   display: grid;
   grid-template-columns: 0.65fr 0.95fr 1.3fr;
   gap: clamp(1.5rem, 4vw, 4rem);
   border-bottom: 1px solid var(--color-line);
+}
+
+.working-group::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgb(2 7 18 / 96%),
+    rgb(2 7 18 / 76%) 58%,
+    rgb(2 7 18 / 90%)
+  );
+}
+
+.working-group__backdrop {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.72;
+  transition:
+    transform 650ms cubic-bezier(0.2, 0.75, 0.25, 1),
+    opacity 650ms ease;
+}
+
+.working-group:hover .working-group__backdrop {
+  transform: scale(1.035);
+  opacity: 0.88;
 }
 
 .working-group__heading h3 {
@@ -435,6 +531,9 @@
 @media (max-width: 46rem) {
   .page-intro__inner {
     min-height: 28rem;
+  }
+  .page-visual__frame {
+    min-height: 34rem;
   }
   .story-grid,
   .section-heading--split,

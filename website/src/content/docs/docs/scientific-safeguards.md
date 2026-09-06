@@ -40,4 +40,4 @@ When the evidence cannot support a number, genomeOS returns no number and says w
 results for haemoglobin S (HbS), glucose-6-phosphate dehydrogenase (G6PD) deficiency, and screening
 programmes are the validation controls; a plausible-looking map is not.
 
-Read the complete [repository invariants](https://github.com/bschilder/genomeOS/blob/main/AGENTS.md#invariants).
+Read the complete <a href="https://github.com/bschilder/genomeOS/blob/main/AGENTS.md#invariants" target="_blank" rel="noopener noreferrer">repository invariants</a>.

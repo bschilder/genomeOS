@@ -6,6 +6,8 @@ interface Props {
   fit: string;
   skills: string[];
   issueUrl: string;
+  image: string;
+  imageAlt: string;
   compact?: boolean;
 }
 
@@ -16,11 +18,22 @@ const {
   fit,
   skills,
   issueUrl,
+  image,
+  imageAlt,
   compact = false,
 } = Astro.props;
 ---
 
 <article class:list={['working-group', { 'working-group--compact': compact }]}>
+  <img
+    class="working-group__backdrop"
+    src={image}
+    alt={imageAlt}
+    width="1536"
+    height="1024"
+    loading="lazy"
+    decoding="async"
+  />
   <div class="working-group__heading">
     <h3>{title}</h3>
     <span class="status-label status-label--forming">Group forming</span>
@@ -40,7 +53,11 @@ const {
     <div class="skill-list" aria-label={`Relevant skills for ${title}`}>
       {skills.map((skill) => <span>{skill}</span>)}
     </div>
-    <a class="github-cta github-cta--compact" href={issueUrl}
+    <a
+      class="github-cta github-cta--compact"
+      href={issueUrl}
+      target="_blank"
+      rel="noopener noreferrer"
       ><span>Open work</span><strong>Browse matching issues</strong><span
         aria-hidden="true">↗</span
       ></a

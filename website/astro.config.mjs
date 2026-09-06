@@ -20,14 +20,17 @@ export default defineConfig({
       description: 'An open atlas of human genetic variation across geography.',
       favicon: '/favicon.svg',
       disable404Route: true,
+      components: {
+        EditLink: './src/components/starlight/EditLink.astro',
+        SocialIcons: './src/components/starlight/SocialIcons.astro',
+      },
       customCss: [
         '@fontsource-variable/figtree',
         '@fontsource-variable/raleway',
         './src/styles/starlight.css',
       ],
       editLink: {
-        baseUrl:
-          'https://github.com/bschilder/genomeOS/edit/main/website/src/content/docs/',
+        baseUrl: 'https://github.com/bschilder/genomeOS/edit/main/website/',
       },
       head: [
         {
