@@ -1,6 +1,6 @@
 # genomeOS Cesium Globe Explorer — Design
 
-**Status:** approved architecture, pending written-spec review
+**Status:** approved
 
 **Date:** 2026-09-06
 
