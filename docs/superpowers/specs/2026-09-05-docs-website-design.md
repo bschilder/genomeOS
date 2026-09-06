@@ -1,6 +1,6 @@
 # genomeOS public documentation website — design
 
-**Status:** Draft for user review<br>
+**Status:** Approved for implementation<br>
 **Issue:** [#153](https://github.com/bschilder/genomeOS/issues/153)<br>
 **Visual direction:** Orbital observatory<br>
 **Production domain:** `https://genome-os.org`
