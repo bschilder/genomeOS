@@ -1,0 +1,35 @@
+---
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+---
+
+<SiteLayout
+  title="Page not found"
+  description="The requested genomeOS page could not be found."
+>
+  <section class="page-intro">
+    <div class="section-shell page-intro__inner">
+      <p class="page-intro__note">404</p>
+      <h1>That route is outside the atlas.</h1>
+      <p>
+        The page may have moved. Choose a reliable path back into the project.
+      </p>
+    </div>
+  </section>
+  <section class="resource-links">
+    <div class="section-shell resource-links__grid">
+      <a href={sitePath('/')}>
+        <strong>Home</strong>
+        <span>Return to the public project introduction.</span>
+      </a>
+      <a href={sitePath('/contribute/')}>
+        <strong>Contribute</strong>
+        <span>Find a working group and a scoped task.</span>
+      </a>
+      <a href={sitePath('/docs/')}>
+        <strong>Technical docs</strong>
+        <span>Open the scientific and engineering guides.</span>
+      </a>
+    </div>
+  </section>
+</SiteLayout>

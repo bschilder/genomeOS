@@ -18,6 +18,38 @@ export default defineConfig({
       title: 'genomeOS',
       description: 'An open atlas of human genetic variation across geography.',
       favicon: `${normalizedBase}favicon.svg`,
+      disable404Route: true,
+      customCss: [
+        '@fontsource-variable/figtree',
+        '@fontsource-variable/raleway',
+        './src/styles/starlight.css',
+      ],
+      editLink: {
+        baseUrl:
+          'https://github.com/bschilder/genomeOS/edit/main/website/src/content/docs/',
+      },
+      head: [
+        {
+          tag: 'meta',
+          attrs: {
+            property: 'og:image',
+            content: new URL(
+              `${normalizedBase}images/genomeos-banner.png`,
+              site,
+            ).href,
+          },
+        },
+        {
+          tag: 'meta',
+          attrs: {
+            name: 'twitter:image',
+            content: new URL(
+              `${normalizedBase}images/genomeos-banner.png`,
+              site,
+            ).href,
+          },
+        },
+      ],
       social: [
         {
           icon: 'github',
@@ -27,10 +59,19 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Start here',
+          label: 'Explore genomeOS',
           items: [
-            { label: 'Technical overview', link: `${normalizedBase}docs/` },
+            { label: 'Project home', link: normalizedBase },
+            {
+              label: 'Working groups',
+              link: `${normalizedBase}working-groups/`,
+            },
+            { label: 'Contribute', link: `${normalizedBase}contribute/` },
           ],
+        },
+        {
+          label: 'Technical docs',
+          items: [{ autogenerate: { directory: 'docs' } }],
         },
       ],
     }),
