@@ -1,4 +1,6 @@
 ---
+import BrandName from './BrandName.astro';
+
 interface Props {
   title: string;
   lede: string;
@@ -6,12 +8,19 @@ interface Props {
 }
 
 const { title, lede, note } = Astro.props;
+const projectName = 'genomeOS';
+const titleParts = title.split(/(genomeOS)/g);
+const ledeParts = lede.split(/(genomeOS)/g);
 ---
 
 <section class="page-intro">
   <div class="section-shell page-intro__inner">
     {note && <p class="page-intro__note">{note}</p>}
-    <h1>{title}</h1>
-    <p>{lede}</p>
+    <h1>
+      {titleParts.map((part) => (part === projectName ? <BrandName /> : part))}
+    </h1>
+    <p>
+      {ledeParts.map((part) => (part === projectName ? <BrandName /> : part))}
+    </p>
   </div>
 </section>

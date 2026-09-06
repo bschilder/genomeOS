@@ -36,7 +36,7 @@ Prompt wording, frontend state, and configuration flags cannot bypass that polic
 
 ## Refusal beats plausibility
 
-When the evidence cannot support a number, genomeOS returns no number and says why. Published
+When the evidence cannot support a number, <span class="brand-name">genomeOS</span> returns no number and says why. Published
 results for haemoglobin S (HbS), glucose-6-phosphate dehydrogenase (G6PD) deficiency, and screening
 programmes are the validation controls; a plausible-looking map is not.
 

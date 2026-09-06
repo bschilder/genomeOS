@@ -60,6 +60,13 @@ body {
   letter-spacing: 0.13em;
 }
 
+.brand-name {
+  font-family: 'Raleway Variable', 'Avenir Next', sans-serif;
+  font-weight: 380;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
 h1,
 h2,
 h3,

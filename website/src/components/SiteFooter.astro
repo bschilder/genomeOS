@@ -1,12 +1,13 @@
 ---
 import GitHubLink from './GitHubLink.astro';
+import BrandName from './BrandName.astro';
 
 const year = new Date().getFullYear();
 ---
 
 <footer class="site-footer">
   <div class="site-footer__inner">
-    <p>© {year} genomeOS</p>
+    <p>© {year} <BrandName /></p>
     <GitHubLink />
   </div>
 </footer>

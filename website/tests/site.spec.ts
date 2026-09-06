@@ -10,6 +10,17 @@ const topLevelRoutes = [
   '/docs/',
 ];
 
+const brandAuditRoutes = [
+  ...topLevelRoutes,
+  '/docs/data-and-literature/',
+  '/docs/deployment/',
+  '/docs/issues-and-projects/',
+  '/docs/local-development/',
+  '/docs/modeling-and-validation/',
+  '/docs/scientific-safeguards/',
+  '/docs/system-overview/',
+];
+
 for (const route of topLevelRoutes) {
   test(`${route} has one primary heading and no serious axe violations`, async ({
     page,
@@ -53,6 +64,76 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
     'Choose the part of the problem',
   );
+});
+
+test('navigation stays visible and condenses after scrolling', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/');
+  const header = page.locator('.site-header');
+  const initial = await header.boundingBox();
+  expect(initial).not.toBeNull();
+
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect(header).toHaveClass(/site-header--compact/);
+
+  const scrolled = await header.boundingBox();
+  expect(scrolled).not.toBeNull();
+  expect(Math.abs(scrolled!.y)).toBeLessThanOrEqual(1);
+  expect(scrolled!.height).toBeLessThan(initial!.height);
+
+  const activeNavigationText = isMobile
+    ? page.locator('.mobile-nav summary')
+    : page
+        .getByRole('navigation', { name: 'Primary navigation' })
+        .locator('a')
+        .first();
+  const navFontSize = await activeNavigationText.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).fontSize),
+  );
+  expect(navFontSize).toBeGreaterThanOrEqual(16);
+});
+
+test('visible project names use the wordmark typography', async ({ page }) => {
+  for (const route of brandAuditRoutes) {
+    await page.goto(route);
+    const unstyled = await page.evaluate(() => {
+      const failures: string[] = [];
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+      );
+      let node = walker.nextNode();
+      while (node) {
+        if (node.nodeValue?.includes('genomeOS')) {
+          const parent = node.parentElement;
+          const nonVisual = parent?.closest('script, style, title, code, pre');
+          if (
+            parent &&
+            !nonVisual &&
+            getComputedStyle(parent).display !== 'none'
+          ) {
+            const wordmark = parent.closest<HTMLElement>(
+              '.brand-name, .wordmark, .site-title',
+            );
+            if (!wordmark) {
+              failures.push(
+                `${parent.tagName.toLowerCase()}: missing wordmark`,
+              );
+            } else if (
+              !getComputedStyle(wordmark).fontFamily.includes('Raleway')
+            ) {
+              failures.push(`${parent.tagName.toLowerCase()}: wrong font`);
+            }
+          }
+        }
+        node = walker.nextNode();
+      }
+      return failures;
+    });
+    expect(unstyled, `${route} has unstyled genomeOS text`).toEqual([]);
+  }
 });
 
 test('project page labels all three capability states', async ({ page }) => {
@@ -139,6 +220,11 @@ test('reduced-motion preferences disable decorative hero movement', async ({
     .locator('.hero__image')
     .evaluate((element) => getComputedStyle(element).animationName);
   expect(animationName).toBe('none');
+
+  const header = page.locator('.site-header');
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect(header).not.toHaveClass(/site-header--compact/);
+  expect(Math.abs((await header.boundingBox())!.y)).toBeLessThanOrEqual(1);
 });
 
 test('public typography keeps body and supporting text comfortably large', async ({

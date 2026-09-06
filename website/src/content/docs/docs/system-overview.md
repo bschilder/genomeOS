@@ -5,7 +5,7 @@ sidebar:
   order: 2
 ---
 
-genomeOS separates the journey into six parts. Contributors use the codes P0 through P5 as short
+<span class="brand-name">genomeOS</span> separates the journey into six parts. Contributors use the codes P0 through P5 as short
 project-board labels; each code is translated below before its technical role is described. The
 information moves in one direction:
 

@@ -15,7 +15,7 @@ const isCurrent = (href: string) =>
   path === sitePath(href) || path.startsWith(sitePath(href));
 ---
 
-<header class="site-header">
+<header class="site-header" data-site-header>
   <div class="site-header__inner">
     <a class="wordmark" href={sitePath('/')}>genomeOS</a>
 

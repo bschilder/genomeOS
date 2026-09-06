@@ -6,7 +6,7 @@ sidebar:
   label: Overview
 ---
 
-genomeOS is building an open, worldwide resource for exploring human genetic variation and its
+<span class="brand-name">genomeOS</span> is building an open, worldwide resource for exploring human genetic variation and its
 possible implications for health and research. The public website explains that vision; these
 guides explain how contributors are turning it into reliable software and data.
 
