@@ -1,6 +1,7 @@
 ---
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
+import MotionController from '../components/MotionController.astro';
 import { sitePath } from '../lib/paths';
 import '../styles/global.css';
 import '../styles/pages.css';
@@ -54,5 +55,6 @@ const socialImage = new URL(
       <slot />
     </main>
     <SiteFooter />
+    <MotionController />
   </body>
 </html>

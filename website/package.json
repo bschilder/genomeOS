@@ -15,7 +15,8 @@
     "check": "ASTRO_TELEMETRY_DISABLED=1 astro check",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build && playwright test",
+    "serve:test": "serve dist -l tcp://127.0.0.1:4322 --no-clipboard",
     "check:links": "node scripts/check-links.mjs",
     "capture": "node scripts/capture-homepage.mjs"
   },
@@ -32,6 +33,7 @@
     "@playwright/test": "1.63.0",
     "prettier": "3.9.6",
     "prettier-plugin-astro": "0.14.1",
+    "serve": "14.2.6",
     "typescript": "6.0.3",
     "vitest": "5.0.0"
   }

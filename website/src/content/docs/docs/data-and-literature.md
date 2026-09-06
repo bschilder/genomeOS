@@ -15,8 +15,8 @@ sampling design, disease exclusion, cohort identifier, date, or source locator. 
 typical study practice, and values in a secondary compilation are not substitutes for source
 evidence.
 
-If a field is not supported, preserve it as unresolved in the publication ledger. Do not promote
-the row into P1.
+If a field is not supported, preserve it as unresolved in the publication review ledger. Do not
+promote the row into the validated observation store.
 
 ## Anchor every claim
 
@@ -30,9 +30,13 @@ Explicit restrictions still control.
 
 ## Keep database transfers source-aware
 
-gnomAD, 1000 Genomes, HGDP, AFND, national resources, and other datasets differ in geography,
-ascertainment, samples, and access terms. A continental genetic-analysis group is not a geographic
-observation. Cohort overlap must not be counted twice.
+[The Genome Aggregation Database (gnomAD)](https://gnomad.broadinstitute.org/), the
+[1000 Genomes Project](https://www.internationalgenome.org/), the
+[Human Genome Diversity Project (HGDP)](https://www.internationalgenome.org/data-portal/data-collection/hgdp),
+the [Allele Frequency Net Database (AFND)](https://www.allelefrequencies.net/), national resources,
+and other datasets differ in geography, how participants were recruited, samples, and access
+terms. A continental genetic-analysis group is not a geographic observation. The same study group
+must not be counted twice when it appears in more than one source.
 
 Follow the [literature evidence curation guide](https://github.com/bschilder/genomeOS/blob/main/docs/literature-evidence-curation.md)
 and the source-specific access decisions in [Issue #3](https://github.com/bschilder/genomeOS/issues/3).

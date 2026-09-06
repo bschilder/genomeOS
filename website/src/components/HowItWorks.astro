@@ -1,0 +1,63 @@
+---
+const steps = [
+  {
+    number: '01',
+    title: 'Aggregate the evidence',
+    description:
+      'Find population-level genetic measurements in scientific papers and trusted databases, then bring them into one traceable structure without losing who was studied, where, or how.',
+    detail:
+      'Publications · gnomAD · 1000 Genomes · community-contributed sources',
+  },
+  {
+    number: '02',
+    title: 'Model what the evidence supports',
+    description:
+      'Estimate how the frequency of each supported variant changes across geography. For clinically established conditions, connect those estimates to possible disease burden—with uncertainty and evidence gaps included.',
+    detail:
+      'Bayesian models · geometric deep learning · validation against known results',
+  },
+  {
+    number: '03',
+    title: 'Open it to the world',
+    description:
+      'Build an interactive public atlas where anyone can explore variants, conditions, sources, estimates, and unanswered questions through maps and clear explanations.',
+    detail:
+      'Interactive maps · accessible context · shareable, versioned views',
+  },
+];
+---
+
+<section class="process-section" aria-labelledby="process-title">
+  <div class="section-shell">
+    <div class="process-intro" data-reveal>
+      <p class="section-kicker">How genomeOS works</p>
+      <h2 id="process-title">
+        From the world’s evidence to a resource people can use.
+      </h2>
+      <p>
+        The system follows three connected stages. Each can improve as new
+        contributors, methods, and sources join the project.
+      </p>
+    </div>
+
+    <ol class="process-list">
+      {
+        steps.map((step, index) => (
+          <li data-reveal style={`--reveal-delay: ${index * 90}ms`}>
+            <span class="process-list__number" aria-hidden="true">
+              {step.number}
+            </span>
+            <div class="process-list__marker" aria-hidden="true">
+              <span />
+            </div>
+            <div>
+              <h3>{step.title}</h3>
+              <p>{step.description}</p>
+              <small>{step.detail}</small>
+            </div>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

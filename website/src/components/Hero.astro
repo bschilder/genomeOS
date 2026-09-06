@@ -12,18 +12,26 @@ const banner = sitePath('/images/genomeos-banner.png');
     style={`--hero-image: url('${banner}')`}
   >
   </div>
+  <div class="hero__signals" aria-hidden="true">
+    <span>Open source</span>
+    <span>Built together</span>
+    <span>For the public good</span>
+  </div>
   <div class="hero__content">
+    <p class="hero__eyebrow">A shared atlas for global genetics</p>
     <h1 id="hero-title">Explore genomes across the world.</h1>
     <p class="hero__lede">
-      An open atlas of human genetic variation—showing what was measured, what
-      can be estimated, and where the honest answer is still “we don't know.”
+      Make the world’s genetic diversity legible and useful—so screening,
+      medicine, discovery, and future research can work for every population.
     </p>
     <div class="hero__actions">
-      <a class="button-link" href={sitePath('/working-groups/')}
-        >Find your place in the project</a
+      <a
+        class="button-link github-cta"
+        href="https://github.com/bschilder/genomeOS/discussions/76"
+        >Join the global community</a
       >
       <a class="button-link button-link--quiet" href={sitePath('/project/')}
-        >Understand the project</a
+        >Explore the vision</a
       >
     </div>
   </div>

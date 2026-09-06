@@ -1,6 +1,6 @@
 ---
 title: Modeling and validation
-description: The offline artifact contract shared by Bayesian, geometric, and other statistically defensible models.
+description: How Bayesian, geometric, and other models produce comparable, testable geographic estimates.
 sidebar:
   order: 5
 ---
@@ -14,18 +14,21 @@ Brian leads the Bayesian spatial modeling line. The working group also welcomes 
 learning and other statistically defensible approaches. Models compete on scientific acceptance
 evidence rather than on visual smoothness or novelty.
 
-## One artifact boundary
+## One shared result format
 
-Every model runs offline and emits the same versioned surface contract: posterior summaries,
-support state, effective sample information, `model_version`, and `data_version`. Artifacts are
-immutable and keyed by variant and versions. P4 reads them; it does not know how they were fitted.
+Every model runs ahead of publication and produces the same kind of versioned result file. That
+file records the estimated frequency, its uncertainty, whether the available data support the
+estimate, the effective sample information, and the exact model and data versions. Published files
+are never overwritten. The data service can read them without needing to know how a particular
+model was fitted.
 
 ## Validation before publication
 
-The blocking controls are published HbS geography and burden, G6PD frequency and X-linked logic,
-and measured carrier-screening rates. Calibration, held-out spatial prediction, posterior
-diagnostics, ascertainment correction, and stability all matter. A model that cannot beat an
-appropriate baseline or reproduce known science is refused.
+The blocking checks are published geography and disease burden for haemoglobin S (HbS), published
+frequency and X-linked inheritance results for glucose-6-phosphate dehydrogenase (G6PD) deficiency,
+and measured carrier-screening rates. Calibration, prediction in locations withheld from model
+training, statistical diagnostics, correction for how participants were recruited, and stability
+all matter. A model that cannot beat an appropriate baseline or reproduce known science is refused.
 
 The current inference decision is PyMC with a Hilbert-space Gaussian process. Read
 [Issue #34](https://github.com/bschilder/genomeOS/issues/34) before proposing a different runtime,

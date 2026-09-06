@@ -1,7 +1,11 @@
 ---
-import EvidenceStates from '../components/EvidenceStates.astro';
+import Applications from '../components/Applications.astro';
 import ContributionFlow from '../components/ContributionFlow.astro';
+import CorpusMetrics from '../components/CorpusMetrics.astro';
 import Hero from '../components/Hero.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import MissionIntro from '../components/MissionIntro.astro';
+import MultiScaleVision from '../components/MultiScaleVision.astro';
 import StatusBand from '../components/StatusBand.astro';
 import WorkingGroup from '../components/WorkingGroup.astro';
 import SiteLayout from '../layouts/SiteLayout.astro';
@@ -14,13 +18,9 @@ const groups = [
       'Find exact population measurements and connect compatible public resources without erasing provenance.',
     items: [],
     fit: 'you enjoy literature, population genetics, careful metadata, data engineering, or tracking down the source of a number.',
-    skills: [
-      'skill:popgen',
-      'skill:data-engineering',
-      'skill:clinical-genetics',
-    ],
+    skills: ['Population genetics', 'Data engineering', 'Clinical genetics'],
     issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P1%3Aobservations%22',
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Adata-engineering%22',
   },
   {
     title: 'Modeling',
@@ -28,125 +28,70 @@ const groups = [
       'Estimate global distributions with honest uncertainty, explicit unsupported regions, and published-science validation.',
     items: [],
     fit: 'you work in Bayesian spatial statistics, geometric deep learning, calibration, uncertainty, or scientific validation.',
-    skills: ['skill:spatial-stats', 'skill:popgen', 'skill:geospatial'],
+    skills: ['Spatial statistics', 'Population genetics', 'Geospatial'],
     issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P2%3Asurfaces%22',
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Aspatial-stats%22',
   },
   {
     title: 'Product & Experience',
     description:
       'Turn difficult evidence into an explorable map where measurements, estimates, uncertainty, and gaps stay legible.',
     items: [],
-    fit: 'you build maps, interfaces, accessible explanations, data visualization, or responsible human–AI experiences.',
-    skills: ['skill:frontend', 'skill:geospatial', 'skill:governance'],
+    fit: 'you build maps, interfaces, accessible explanations, data visualization, or responsible artificial-intelligence experiences.',
+    skills: ['Interface design', 'Geospatial', 'Governance'],
     issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P5%3Amap-ui%22',
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Afrontend%22',
   },
 ];
 ---
 
 <SiteLayout
   title="genomeOS"
-  description="Explore an open, evidence-first atlas of human genetic variation across the world."
+  description="Make the world's genetic diversity useful for better screening, medicine, discovery, and more representative research."
 >
   <Hero />
-  <EvidenceStates />
-  <section class="intro-section">
-    <div class="section-shell intro-section__grid">
-      <h2>Why place matters</h2>
-      <div class="intro-section__body">
-        <p>
-          Human populations have moved, mixed, and adapted for tens of thousands
-          of years. A genetic change that is common in one region can be rare
-          somewhere else—and that can matter for diagnosis, medicines,
-          screening, and research.
-        </p>
-        <p>
-          But geography describes population evidence. It cannot predict an
-          individual's genotype, and genomeOS will not present it as though it
-          can.
-        </p>
-      </div>
-    </div>
-  </section>
+  <MissionIntro />
+  <CorpusMetrics />
+  <Applications />
 
   <section class="story-section story-section--hbs">
-    <div class="section-shell story-grid">
+    <div class="section-shell story-grid" data-reveal>
       <div>
         <p class="section-kicker">One change, a worldwide story</p>
-        <h2>Why HbS makes the mission tangible</h2>
+        <h2>Why haemoglobin S makes the mission tangible</h2>
       </div>
       <div class="story-copy">
         <p>
-          HbS is a change in the gene for haemoglobin. One inherited copy can
-          protect against severe malaria; two copies cause sickle-cell disease.
-          Its frequency therefore traces a history of biology, environment, and
-          human movement.
+          Haemoglobin S—often shortened to HbS—is a change in the gene for
+          haemoglobin. One inherited copy can protect against severe malaria;
+          two copies cause sickle-cell disease. Its frequency therefore traces a
+          history of biology, environment, and human movement.
         </p>
         <p>
           Researchers spent years combining blood surveys, models, and birth
           rates to estimate where sickle-cell disease affects newborns. genomeOS
           asks how that careful work can become a reusable system for many
-          clinically meaningful variants—without hiding where the data ends.
+          clinically meaningful variants—and a public resource for discovering
+          what should be studied next.
         </p>
-        <a class="text-link" href={sitePath('/project/')}
-          >Read the project story and safeguards</a
+        <a class="button-link button-link--quiet" href={sitePath('/project/')}
+          >Read the project story</a
         >
       </div>
     </div>
   </section>
 
-  <section class="atlas-section" aria-labelledby="atlas-title">
-    <div class="section-shell">
-      <div class="section-heading section-heading--split">
-        <h2 id="atlas-title">Two atlases, one long view</h2>
-        <p>
-          The Earth atlas comes first. The cellular atlas and bridge remain
-          future directions.
-        </p>
-      </div>
-      <div class="atlas-grid">
-        <article>
-          <span class="status-label status-label--active"
-            >In active development</span
-          >
-          <h3>Variation across Earth</h3>
-          <p>
-            Move from a variant or condition to measurements, estimates,
-            uncertainty, and visible evidence gaps across geography.
-          </p>
-        </article>
-        <article>
-          <span class="status-label status-label--future"
-            >Future exploration</span
-          >
-          <h3>The genome inside the cell</h3>
-          <p>
-            Zoom from the nucleus through chromosome structure and folded
-            domains to an individual gene.
-          </p>
-        </article>
-        <article>
-          <span class="status-label status-label--future"
-            >Future exploration</span
-          >
-          <h3>The bridge</h3>
-          <p>
-            Connect where a gene sits and how it folds to which variants exist,
-            where they occur, and what evidence says they do.
-          </p>
-        </article>
-      </div>
-    </div>
-  </section>
+  <HowItWorks />
+  <MultiScaleVision />
 
   <section class="groups-section" aria-labelledby="groups-title">
     <div class="section-shell">
-      <div class="section-heading section-heading--split">
-        <h2 id="groups-title">Three ways into the work</h2>
+      <div class="section-heading section-heading--split" data-reveal>
+        <h2 id="groups-title">Build it with us.</h2>
         <p>
-          Working groups are forming now. Their boundaries can grow as
-          contributors bring better ideas.
+          Working groups are forming around the project’s three main stages.
+          Their boundaries can grow as contributors bring local knowledge and
+          better ideas.
         </p>
       </div>
       <div class="groups-list">
@@ -164,21 +109,26 @@ const groups = [
 
   <section class="final-invitation">
     <div class="section-shell final-invitation__inner">
-      <h2>Bring the missing perspective.</h2>
+      <p class="section-kicker">Your perspective belongs here</p>
+      <h2>Help build a genomic resource for everyone.</h2>
       <p>
-        Introduce yourself, find a Ready issue, or suggest a direction the
-        current plan has missed.
+        Introduce yourself, find a task, or start a conversation about evidence,
+        places, communities, applications, and ideas the current roadmap has
+        missed.
       </p>
-      <div class="hero__actions">
+      <div class="final-invitation__actions">
         <a
-          class="button-link"
+          class="github-cta github-cta--primary"
           href="https://github.com/bschilder/genomeOS/discussions/76"
-          >Introduce yourself</a
+          ><span>Start here</span><strong>Join the conversation</strong><span
+            aria-hidden="true">↗</span
+          ></a
         >
         <a
-          class="button-link button-link--quiet"
-          href="https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3AReady"
-          >Browse Ready work</a
+          class="github-cta"
+          href="https://github.com/bschilder/genomeOS/issues"
+          ><span>See what needs doing</span><strong>Explore open issues</strong
+          ><span aria-hidden="true">↗</span></a
         >
       </div>
     </div>

@@ -17,6 +17,12 @@
   --sl-color-bg-nav: rgb(2 7 18 / 92%);
   --sl-color-bg-sidebar: #051226;
   --sl-color-hairline: rgb(112 230 255 / 18%);
+  --sl-text-xs: 0.95rem;
+  --sl-text-sm: 1rem;
+  --sl-text-base: 1.1rem;
+  --sl-text-lg: 1.25rem;
+  --sl-text-body: var(--sl-text-base);
+  --sl-text-body-sm: var(--sl-text-sm);
   --sl-text-h1: clamp(2.6rem, 6vw, 4.8rem);
 }
 
@@ -39,6 +45,7 @@
 }
 
 html {
+  font-size: 112.5%;
   scroll-behavior: smooth;
 }
 

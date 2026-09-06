@@ -2,12 +2,21 @@
 @import '@fontsource-variable/raleway';
 @import './tokens.css';
 @import './home.css';
+@import './metrics.css';
+@import './applications.css';
+@import './github-cta.css';
+@import './mission.css';
+@import './process.css';
+@import './vision.css';
+@import './motion.css';
+@import './preview.css';
 
 * {
   box-sizing: border-box;
 }
 
 html {
+  font-size: 112.5%;
   background: var(--color-void);
   color: var(--color-starlight);
   font-family: var(--font-body);
@@ -21,7 +30,7 @@ body {
     linear-gradient(180deg, rgb(7 24 49 / 32%) 0, transparent 38rem),
     var(--color-void);
   color: var(--color-starlight);
-  font-size: 1.05rem;
+  font-size: 1.08rem;
   line-height: 1.65;
 }
 
@@ -112,7 +121,7 @@ svg {
 
 .desktop-nav a {
   color: var(--color-muted);
-  font-size: 0.95rem;
+  font-size: 1rem;
   text-decoration: none;
 }
 
@@ -126,7 +135,7 @@ svg {
   align-items: center;
   gap: 0.48rem;
   color: var(--color-starlight);
-  font-size: 0.92rem;
+  font-size: 1rem;
   font-weight: 650;
   text-decoration: none;
 }
@@ -159,7 +168,7 @@ svg {
   max-width: 42rem;
   margin: 0;
   color: var(--color-muted);
-  font-size: 0.93rem;
+  font-size: 1rem;
 }
 
 .visually-hidden {
@@ -220,14 +229,6 @@ svg {
     color: var(--color-starlight);
     text-decoration: none;
   }
-  .evidence-grid {
-    grid-template-columns: 1fr;
-  }
-  .evidence-copy {
-    padding-inline: var(--space-page);
-    border-right: 0;
-    border-bottom: 1px solid var(--color-line);
-  }
 }
 
 @media (max-width: 46rem) {
@@ -251,17 +252,6 @@ svg {
   }
   .hero__lede {
     max-width: 27rem;
-  }
-  .evidence-states {
-    grid-template-columns: 1fr;
-  }
-  .evidence-state {
-    min-height: 18rem;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-deep-line);
-  }
-  .evidence-state:last-child {
-    border-bottom: 0;
   }
   .intro-section__grid {
     grid-template-columns: 1fr;

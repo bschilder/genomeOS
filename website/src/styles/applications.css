@@ -1,0 +1,184 @@
+.applications-section {
+  --spotlight-x: 78%;
+  --spotlight-y: 24rem;
+  position: relative;
+  padding-block: clamp(5rem, 10vw, 9rem);
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-line);
+  background:
+    radial-gradient(
+      circle 30rem at var(--spotlight-x) var(--spotlight-y),
+      rgb(112 230 255 / 9%),
+      transparent 72%
+    ),
+    var(--color-void);
+}
+
+.applications-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgb(112 230 255 / 5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(112 230 255 / 5%) 1px, transparent 1px);
+  background-size: 4.5rem 4.5rem;
+  mask-image: linear-gradient(90deg, transparent, black 35%, black);
+}
+
+.applications-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(17rem, 0.72fr) minmax(0, 1.28fr);
+  gap: clamp(3rem, 8vw, 8rem);
+  align-items: start;
+}
+
+.applications-intro {
+  position: sticky;
+  top: 6.5rem;
+}
+
+.applications-intro h2 {
+  max-width: 11ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.7rem, 5vw, 4.8rem);
+  font-weight: 420;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.applications-intro > p:not(.section-kicker) {
+  max-width: 32rem;
+  margin: 1.6rem 0 1rem;
+  color: #cedbec;
+}
+
+.applications-intro .github-cta--inline {
+  margin-top: 1.7rem;
+}
+
+.applications-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--color-line);
+}
+
+.application-card {
+  position: relative;
+  min-height: 23rem;
+  padding: clamp(1.6rem, 3vw, 2.5rem);
+  overflow: hidden;
+  border-right: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+  background: rgb(7 24 49 / 54%);
+  transform: perspective(70rem) translate3d(0, 0, 0);
+  transition:
+    transform 260ms ease,
+    border-color 260ms ease,
+    background-color 260ms ease,
+    box-shadow 260ms ease;
+}
+
+.application-card:nth-child(2n) {
+  border-right: 0;
+}
+
+.application-card:hover,
+.application-card:focus-within {
+  z-index: 2;
+  border-color: rgb(112 230 255 / 54%);
+  background: rgb(10 35 67 / 90%);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 38%);
+  transform: perspective(70rem) translate3d(0, -0.65rem, 2rem) rotateX(1deg);
+}
+
+.application-card__meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--color-ion);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.application-card__meta span:last-child {
+  max-width: 10rem;
+  color: var(--color-aurora);
+  text-align: right;
+}
+
+.application-card h3 {
+  max-width: 12ch;
+  margin: clamp(4rem, 8vw, 7rem) 0 1rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.65rem, 2.5vw, 2.25rem);
+  font-weight: 520;
+  letter-spacing: -0.035em;
+  line-height: 1.08;
+}
+
+.application-card p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1.58;
+}
+
+.application-card__signal {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 2.6rem;
+  height: 2px;
+  background: var(--color-ion);
+  box-shadow: 0 0 1.5rem rgb(112 230 255 / 70%);
+  transition: width 260ms ease;
+}
+
+.application-card:hover .application-card__signal,
+.application-card:focus-within .application-card__signal {
+  width: 42%;
+}
+
+@media (max-width: 64rem) {
+  .applications-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .applications-intro {
+    position: relative;
+    top: auto;
+  }
+
+  .applications-intro h2 {
+    max-width: 14ch;
+  }
+}
+
+@media (max-width: 46rem) {
+  .applications-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .application-card,
+  .application-card:nth-child(2n) {
+    min-height: 19rem;
+    border-right: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .application-card,
+  .application-card__signal {
+    transition: none;
+  }
+
+  .application-card:hover,
+  .application-card:focus-within {
+    transform: none;
+  }
+}

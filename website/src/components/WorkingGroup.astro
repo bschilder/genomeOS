@@ -40,6 +40,10 @@ const {
     <div class="skill-list" aria-label={`Relevant skills for ${title}`}>
       {skills.map((skill) => <span>{skill}</span>)}
     </div>
-    <a href={issueUrl}>Browse matching issues</a>
+    <a class="github-cta github-cta--compact" href={issueUrl}
+      ><span>Open work</span><strong>Browse matching issues</strong><span
+        aria-hidden="true">↗</span
+      ></a
+    >
   </div>
 </article>

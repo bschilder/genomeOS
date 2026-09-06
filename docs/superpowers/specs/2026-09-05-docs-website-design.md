@@ -7,25 +7,24 @@
 
 ## 1. Product claim
 
-A newcomer can understand why genomeOS exists, distinguish measured evidence from modeled
-estimates, find the working group that matches their skills, and reach a well-specified
-contribution task without first reading the technical repository.
+A newcomer can understand why genomeOS is being built for the public good, see how an open global
+community contributes, understand the project's scale and possible applications, and find a way to
+participate without first reading the technical repository.
 
-The site is public documentation and contributor onboarding. It is not the P5 product map, the
-diagnostic `/preview`, a scientific-results publication, an AI assistant, or a genetic-data upload
-service.
+The site is public documentation and contributor onboarding. It is not the finished interactive
+atlas, a scientific-results publication, an AI assistant, or a genetic-data upload service.
 
 ## 2. Audience and jobs
 
 The first release serves five audiences:
 
-| Audience | Job the site must support |
-|---|---|
-| Curious visitor | Understand the problem and why geographic genetic evidence matters. |
-| Prospective contributor | Find a working group and an issue suited to their skills. |
-| Scientific reviewer | Find the evidence, safeguards, validation bar, and technical contracts. |
-| Organizer | Send one durable link that explains the project and how work is coordinated. |
-| Potential partner | Understand what data or expertise the project needs without mistaking future ideas for shipped features. |
+| Audience                | Job the site must support                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| Curious visitor         | Understand the problem and why geographic genetic evidence matters.                                      |
+| Prospective contributor | Find a working group and an issue suited to their skills.                                                |
+| Scientific reviewer     | Find the evidence, safeguards, validation bar, and technical contracts.                                  |
+| Organizer               | Send one durable link that explains the project and how work is coordinated.                             |
+| Potential partner       | Understand what data or expertise the project needs without mistaking future ideas for shipped features. |
 
 The homepage is written for the first two audiences. The Project and Working groups pages add
 detail for reviewers and partners. The Starlight documentation area is the technical route.
@@ -37,6 +36,7 @@ The public navigation has five destinations plus a GitHub repository link:
 ```text
 Home
 ├── Project
+├── Preview
 ├── Working groups
 ├── Contribute
 ├── Technical docs
@@ -48,13 +48,23 @@ Home
 The homepage tells one narrative in this order:
 
 1. Full-width banner hero: “Explore genomes across the world.”
-2. A short explanation of why genetic variation differs by place and why that matters.
-3. The public scientific commitment: measured, estimated, and unknown are distinct states.
-4. The two-atlas vision: variation across Earth, the genome inside the cell, and the bridge.
-5. Three working-group entry points.
-6. The contribution path from introduction to issue to reviewed pull request.
-7. Current state, active development, and future explorations.
-8. A final invitation to introduce yourself or browse `Ready` work.
+2. “Why genomeOS”: why genetic diversity matters and why scattered, uneven evidence limits who
+   benefits from research.
+3. “Built in the open”: open-source development by a global community for the public good, with
+   large entry points to GitHub Discussions, Issues, and the project board.
+4. Current corpus scale: variants and alleles, participant records, and disease reference corpora,
+   calculated from a pinned source-data revision.
+5. Potential applications from screening and diagnosis context to research planning and the map of
+   what is not yet known.
+6. The haemoglobin S example as a concrete worldwide story.
+7. The high-level process: aggregate evidence, model variant frequencies and supported disease
+   burden, then make the results explorable through a public interface.
+8. The multi-scale vision: variation across Earth, the genome inside the cell, and the bridge,
+   guided by three original illustrations.
+9. Three working-group entry points.
+10. The contribution path from introduction to issue to reviewed pull request.
+11. Current state, active development, and future explorations.
+12. A final invitation to join the conversation or browse open issues.
 
 The sickle-cell example is the main non-technical explanatory anchor. The page does not imply
 that geography predicts an individual's genotype or that a visually smooth map is measured data.
@@ -67,7 +77,7 @@ This page expands the README narrative:
 - the Earth atlas, cellular atlas, and their eventual bridge;
 - who could use the system;
 - the six scientific safeguards;
-- P0–P5 in plain language;
+- the six system parts in plain language, without internal milestone shorthand;
 - the HbS, G6PD, and screening-program parity bar;
 - a clearly dated current-status section.
 
@@ -127,8 +137,9 @@ notified. It links to #65 for the forthcoming contribution files and community s
 
 ### 3.5 Technical docs — `/docs/`
 
-Starlight supplies the searchable documentation shell. The first release contains concise public
-guides for:
+Starlight supplies the searchable documentation shell. Its landing page first explains that P0–P5
+are internal contributor labels and translates every label into a plain-language system part. The
+first release contains concise public guides for:
 
 - system overview and P0–P5;
 - scientific safeguards and refusal behavior;
@@ -146,11 +157,11 @@ decisions. Long implementation plans remain repository references rather than pr
 
 Every product statement belongs to one of three visible states:
 
-| State | Meaning | Examples at launch |
-|---|---|---|
-| **Available now** | Implemented and backed by current evidence. | P0/P1 contracts, data adapters, P2/P3 kernels, fixture-backed P4 diagnostic path. |
-| **In active development** | Tracked work with an issue or milestone. | Scientific parity, broader literature corpora, product map. |
-| **Future exploration** | Direction only; no promise or approved implementation. | Conversational assistant, personal-genome upload, ancient-DNA time slider, full cell atlas. |
+| State                     | Meaning                                                | Examples at launch                                                                          |
+| ------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| **Available now**         | Implemented and backed by current evidence.            | Population and observation tools, early offline models, and a synthetic-data software preview. |
+| **In active development** | Tracked work with an issue or milestone.               | Scientific parity, broader literature corpora, product map.                                 |
+| **Future exploration**    | Direction only; no promise or approved implementation. | Conversational assistant, personal-genome upload, ancient-DNA time slider, full cell atlas. |
 
 Future cards name their prerequisites. The personal-genome contribution card explicitly names
 privacy, consent, governance, security, and quality control. It has no upload control.
@@ -162,19 +173,21 @@ surfaces restrained.
 
 ### 5.1 Palette
 
-| Token | Value | Role |
-|---|---|---|
-| Void | `#020712` | Page and hero base |
-| Orbit | `#071831` | Raised sections and navigation |
-| Starlight | `#F2F8FF` | Primary text |
-| Ion cyan | `#70E6FF` | Links, focus, measured evidence |
+| Token         | Value     | Role                                   |
+| ------------- | --------- | -------------------------------------- |
+| Void          | `#020712` | Page and hero base                     |
+| Orbit         | `#071831` | Raised sections and navigation         |
+| Starlight     | `#F2F8FF` | Primary text                           |
+| Ion cyan      | `#70E6FF` | Links, focus, measured evidence        |
 | Genome violet | `#AD8BFF` | Modeled evidence and secondary accents |
-| Aurora mint | `#72E7C1` | Confirmed/current status |
-| Signal amber | `#F4C86A` | Uncertainty and caution |
-| Muted blue | `#A5B9D3` | Secondary text |
+| Aurora mint   | `#72E7C1` | Confirmed/current status               |
+| Signal amber  | `#F4C86A` | Uncertainty and caution                |
+| Muted blue    | `#A5B9D3` | Secondary text                         |
 
 The hero uses the existing `docs/images/genomeos-banner.png` with one dark readability overlay.
-Aurora color is drawn from the image. Gradients are not used as generic section decoration.
+Aurora color is drawn from the image. Three original generated illustrations—Earth, cell-to-gene,
+and their bridge—extend that palette and are committed as compressed WebP assets. They are
+conceptual guides, never presented as data or scientific results.
 
 Measured, modeled, and unknown states use redundant labels and marker/pattern differences; color
 alone never carries their meaning.
@@ -184,6 +197,10 @@ alone never carries their meaning.
 - Raleway Variable, locally bundled through Fontsource, echoes the thin geometric banner wordmark
   for display text.
 - Figtree Variable, also locally bundled, is the reading and interface face.
+- The root type size is 18px and body copy resolves to at least 19px on public pages. Supporting
+  labels resolve to at least 16px.
+- Corpus statistics use Figtree lining, tabular numerals so every digit has the same height and
+  baseline.
 - Body lines remain under approximately 76 characters with a minimum 1.55 line height.
 - Labels use sentence case. Tracking and all-caps are reserved for the existing logo treatment,
   not repeated as generic eyebrows.
@@ -202,14 +219,17 @@ Desktop homepage:
 │                                                              │
 │ Explore genomes                 banner globe / Earth lights  │
 │ across the world.                                           │
-│ [Find your place] [Understand the project]                  │
+│ [Join the global community] [Explore the vision]            │
 │                                                              │
-├───────────────────────────┬──────────────────────────────────┤
-│ Measured here.            │ observed  modeled  unknown       │
-│ Estimated there.          │ small evidence-layer diagram     │
-│ Never confused.           │                                  │
-├───────────────────────────┴──────────────────────────────────┤
-│ Why it matters / HbS narrative                              │
+├──────────────────────────────────────────────────────────────┤
+│ Why genomeOS / public-good mission                          │
+│ Built in the open / large GitHub community actions          │
+├──────────────────────────────────────────────────────────────┤
+│ Current evidence counts / potential applications            │
+├──────────────────────────────────────────────────────────────┤
+│ HbS story → aggregate → model → public interface            │
+├──────────────────────────────────────────────────────────────┤
+│ Earth image → cell image → bridge image                     │
 ├──────────────────────────────────────────────────────────────┤
 │ Data              Modeling             Product & Experience │
 ├──────────────────────────────────────────────────────────────┤
@@ -223,18 +243,19 @@ scroll is required.
 
 ### 5.4 Motion
 
-One non-interactive motion system is allowed: a slow hero star/aurora drift created with CSS over
-the static banner. It stops under `prefers-reduced-motion`. User-triggered navigation and
-disclosures animate only enough to explain changed state. Sections do not independently fade or
-slide into view.
+Motion creates spatial continuity without becoming required for comprehension: the hero responds
+subtly to pointer and scroll position; sections reveal as they enter the viewport; application
+cards, process steps, GitHub actions, and vision images respond to hover or focus; and a thin scroll
+progress indicator follows the page. Every effect is disabled or reduced to a static state under
+`prefers-reduced-motion`.
 
 ### 5.5 Shared components
 
 - `SiteHeader` and `SiteFooter`, reused by custom pages and Starlight overrides.
 - `GitHubLink`, containing a visible GitHub mark, visible “GitHub” text where space permits, and an
   accessible name in every placement.
-- `Hero`, `EvidenceStates`, `WorkingGroup`, `StatusBand`, `ContributionFlow`, `Callout`, and
-  `SourceLink` components.
+- `Hero`, `MissionIntro`, `CorpusMetrics`, `Applications`, `HowItWorks`, `MultiScaleVision`,
+  `WorkingGroup`, `StatusBand`, `ContributionFlow`, and `Callout` components.
 - A base-aware `sitePath()` helper is the only way components construct internal absolute paths.
 
 Components have one content/layout responsibility. No component should become a second content
@@ -280,7 +301,8 @@ Dependency changes regenerate and commit the lockfile. CI uses `npm ci`, never `
 
 ### 6.3 Custom pages and Starlight
 
-Astro file-based routes implement the four public-facing pages. Starlight owns the `/docs/`
+Astro file-based routes implement the five public-facing pages, including `/app/`, which embeds the
+current synthetic-data software preview with a plain-language explanation of its limits. Starlight owns the `/docs/`
 content collection and is customized through supported CSS/component overrides rather than a fork.
 This follows Starlight's documented support for mixing custom Astro routes and content pages.
 

@@ -19,7 +19,7 @@
 .section-kicker {
   margin: 0 0 1rem;
   color: var(--color-ion);
-  font-size: 0.94rem;
+  font-size: 1rem;
   font-weight: 650;
 }
 
@@ -146,7 +146,7 @@
 .atlas-grid p {
   margin: 0;
   color: var(--color-muted);
-  font-size: 0.98rem;
+  font-size: 1rem;
 }
 
 .atlas-grid--project article {
@@ -165,7 +165,7 @@
   padding: 0.24rem 0.6rem;
   border: 1px solid currentcolor;
   color: var(--color-genome);
-  font-size: 0.78rem;
+  font-size: 0.9rem;
   font-weight: 680;
   line-height: 1.4;
 }
@@ -254,7 +254,6 @@
 
 .working-group__footer > a {
   flex: 0 0 auto;
-  font-weight: 680;
 }
 
 .skill-list {
@@ -267,7 +266,7 @@
   padding: 0.18rem 0.5rem;
   border: 1px solid var(--color-deep-line);
   color: var(--color-muted);
-  font-size: 0.76rem;
+  font-size: 0.9rem;
 }
 
 .working-group--compact {
@@ -331,7 +330,7 @@
 .contribution-flow p {
   margin: 0.75rem 0 0;
   color: var(--color-muted);
-  font-size: 0.94rem;
+  font-size: 1rem;
 }
 
 .flow-section--compact .contribution-flow li {
@@ -397,14 +396,22 @@
   align-items: end;
 }
 
+.final-invitation__inner > .section-kicker {
+  grid-column: 1 / -1;
+  margin-bottom: -1rem;
+}
+
 .final-invitation p {
   max-width: 35rem;
   margin: 0;
   color: var(--color-muted);
 }
 
-.final-invitation .hero__actions {
+.final-invitation__actions {
   grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
 }
 
 @media (max-width: 64rem) {
@@ -481,8 +488,9 @@
   .final-invitation p {
     margin-top: 0.5rem;
   }
-  .final-invitation .hero__actions {
+  .final-invitation__actions {
     grid-column: 1;
+    grid-template-columns: 1fr;
   }
   .contribution-detail article {
     min-height: auto;

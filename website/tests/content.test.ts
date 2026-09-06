@@ -14,6 +14,7 @@ const home = page('');
 const project = page('project');
 const groups = page('working-groups');
 const contribute = page('contribute');
+const preview = page('app');
 
 describe('public site content', () => {
   it.each([
@@ -21,6 +22,7 @@ describe('public site content', () => {
     ['project', project],
     ['working groups', groups],
     ['contribute', contribute],
+    ['preview', preview],
   ])('renders one primary heading on the %s page', (_name, html) => {
     expect(html.match(/<h1(?:\s|>)/g) ?? []).toHaveLength(1);
   });
@@ -29,6 +31,30 @@ describe('public site content', () => {
     expect(home).toMatch(
       /Available now[\s\S]*In active development[\s\S]*Future exploration/,
     );
+  });
+
+  it('leads with the higher-order mission and concrete applications', () => {
+    expect(home).toContain(
+      'Make the world’s genetic diversity legible and useful',
+    );
+    expect(home).toMatch(
+      /Potential applications[\s\S]*Screening programmes[\s\S]*Diagnostic context[\s\S]*Trial planning[\s\S]*The map of what we don’t know/,
+    );
+    expect(home).toContain(
+      'https://github.com/bschilder/genomeOS/discussions/1',
+    );
+    expect(home).toMatch(/open source/i);
+    expect(home).toMatch(/global community/i);
+    expect(home).toMatch(/public good/i);
+  });
+
+  it('reports sourced corpus metrics with an auditable definition', () => {
+    expect(home).toMatch(
+      /4,392[\s\S]*Genetic variants &amp; alleles[\s\S]*6\.69M[\s\S]*People represented[\s\S]*2[\s\S]*Diseases represented/,
+    );
+    expect(home).toContain('How these counts are defined');
+    expect(home).toContain('fc17bc1c1d96a0d0766746dcf26277ccdc669717');
+    expect(home).not.toContain('Measured here.');
   });
 
   it('defines all three forming working groups and modeling breadth', () => {
@@ -56,7 +82,25 @@ describe('public site content', () => {
 
   it('states the scientific publication bar', () => {
     expect(project).toMatch(/HbS[\s\S]*G6PD[\s\S]*screening/);
-    expect(project).toContain('P0');
-    expect(project).toContain('P5');
+    expect(project).toMatch(/population-location registry/i);
+    expect(project).toMatch(/interactive public map/i);
+  });
+
+  it('frames the live application as a sample-data WIP diagnostic', () => {
+    expect(preview).toContain('Work-in-progress preview');
+    expect(preview).toContain('Sample data for testing');
+    expect(preview).toContain(
+      'https://genomeos-api-357876699511.us-east1.run.app/preview',
+    );
+    expect(preview).toContain(
+      'title="genomeOS diagnostic application preview"',
+    );
+    expect(preview).not.toMatch(/\bP[0-9]+\b/);
+    expect(preview).toContain('sample data created for software testing');
+  });
+
+  it('does not expose unexplained internal project codes on introduction pages', () => {
+    expect(home).not.toMatch(/\bP[0-9]+\b/);
+    expect(project).not.toMatch(/\bP[0-9]+\b/);
   });
 });

@@ -12,17 +12,13 @@ const groups = [
     items: [
       'Find exact allele measurements in PubMed, supplements, theses, and non-English literature.',
       'Preserve source locators, allele orientation, denominators, recruitment, cohort identity, geography, and reuse checks.',
-      'Develop reproducible ways to combine gnomAD, 1000 Genomes, HGDP, AFND, national resources, and other compatible databases for particular genes or variants.',
+      'Develop reproducible ways to combine the Genome Aggregation Database, 1000 Genomes Project, Human Genome Diversity Project, Allele Frequency Net Database, national resources, and other compatible databases for particular genes or variants.',
       'Identify coverage gaps without converting continental ancestry labels into geographic coordinates.',
     ],
     fit: 'you like literature review, population genetics, clinical genetics, source verification, data engineering, or multilingual extraction.',
-    skills: [
-      'skill:popgen',
-      'skill:data-engineering',
-      'skill:clinical-genetics',
-    ],
+    skills: ['Population genetics', 'Data engineering', 'Clinical genetics'],
     issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P1%3Aobservations%22',
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Adata-engineering%22',
   },
   {
     title: 'Modeling',
@@ -31,13 +27,13 @@ const groups = [
     items: [
       'Develop Bayesian spatial models, with Brian leading this line of work.',
       'Explore geometric deep learning and other statistically defensible model classes.',
-      'Improve calibration, uncertainty quantification, ascertainment correction, cross-validation, and published-science parity.',
-      'Produce interchangeable, immutable artifacts offline; no model inference runs on the serving path.',
+      'Improve calibration, uncertainty estimates, correction for how participants were recruited, independent testing, and reproduction of published science.',
+      'Run models ahead of time and publish traceable, versioned results so the public website stays fast and cannot quietly change a scientific result.',
     ],
     fit: 'you work in spatial statistics, Bayesian methods, geometric learning, uncertainty, epidemiology, or model validation.',
-    skills: ['skill:spatial-stats', 'skill:popgen', 'skill:geospatial'],
+    skills: ['Spatial statistics', 'Population genetics', 'Geospatial'],
     issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P2%3Asurfaces%22',
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Aspatial-stats%22',
   },
   {
     title: 'Product & Experience',
@@ -49,10 +45,10 @@ const groups = [
       'Design conversational access to versioned evidence as a future direction—not a current capability.',
       'Explore personal-data contribution only after privacy, consent, governance, security, and scientific-quality requirements are approved.',
     ],
-    fit: 'you build geospatial interfaces, accessible visualization, product systems, responsible AI interactions, privacy, or community-centered experiences.',
-    skills: ['skill:frontend', 'skill:geospatial', 'skill:governance'],
+    fit: 'you build geospatial interfaces, accessible visualization, product systems, responsible artificial-intelligence interactions, privacy, or community-centered experiences.',
+    skills: ['Interface design', 'Geospatial', 'Governance'],
     issueUrl:
-      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22P5%3Amap-ui%22',
+      'https://github.com/bschilder/genomeOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22skill%3Afrontend%22',
   },
 ];
 ---
@@ -93,16 +89,18 @@ const groups = [
         Working groups are an invitation, not a boundary. Introduce the
         expertise or project idea the current list does not capture.
       </p>
-      <div class="hero__actions">
+      <div class="final-invitation__actions">
         <a
-          class="button-link"
+          class="github-cta github-cta--primary"
           href="https://github.com/bschilder/genomeOS/discussions/76"
-          >Introduce yourself</a
+          ><span>Meet the community</span><strong>Introduce yourself</strong
+          ><span aria-hidden="true">↗</span></a
         >
         <a
-          class="button-link button-link--quiet"
+          class="github-cta"
           href="https://github.com/bschilder/genomeOS/issues/new/choose"
-          >Propose a scoped issue</a
+          ><span>Bring a new direction</span><strong>Propose an issue</strong
+          ><span aria-hidden="true">↗</span></a
         >
       </div>
     </div>

@@ -1,40 +1,47 @@
 ---
 title: System overview
-description: How population evidence moves through the genomeOS P0–P5 contracts without mixing measurements and inferences.
+description: How population evidence moves from original sources to models and the public map.
 sidebar:
   order: 2
 ---
 
-The dependency direction is intentionally one-way:
+genomeOS separates the journey into six parts. Contributors use the codes P0 through P5 as short
+project-board labels; each code is translated below before its technical role is described. The
+information moves in one direction:
 
 ```text
-source adapters → P0/P1 contracts → pure P2 → pure P3 → immutable artifacts → P4 → P5
+original sources → population locations → measured evidence → frequency models
+→ disease-burden models → versioned result files → data service → interactive map
 ```
 
-## P0: population registry
+## Population locations (internal label: P0)
 
-P0 answers where an independently sampled population can be located, how uncertain that location
-is, and where the coordinate and governance metadata came from. A missing coordinate or
-`uncertainty_radius_km` is a hard refusal, not an invitation to guess.
+The population-location registry records where an independently sampled population can be located,
+how uncertain that location is, and where the location and community-governance information came
+from. If a source does not support a location or uncertainty range, the build stops instead of
+guessing one.
 
-## P1: observations
+## Measured evidence (internal label: P1)
 
-P1 stores what a source measured: counted allele, allele count, denominator, population, sampling
-design, cohort identity, assay, citation, and exact source locator. Publication proposals remain
-in staging ledgers until every required field is independently verified and the population resolves
-through P0.
+The observation store preserves what a source measured: the allele being counted, its count and
+denominator, the sampled population, how participants were recruited, the study group, laboratory
+method, citation, and exact table or figure location. Proposed rows remain in a review area until
+every required field is independently verified and the population has a supported location.
 
-## P2 and P3: offline science
+## Frequency and disease-burden modeling (internal labels: P2 and P3)
 
-P2 produces frequency surfaces with posterior summaries and explicit support states. P3 combines
-supported surfaces with inheritance, penetrance, and population denominators. Both are pure offline
-modules. Missing support or assumptions produce no number.
+Frequency models estimate how a variant may vary between measured locations and report both
+uncertainty and places with inadequate evidence. Disease-burden models combine supported frequency
+results with inheritance, the chance that a variant produces a condition, and population counts.
+Both run before results reach the website. Missing evidence or required assumptions produce no
+number.
 
-## P4 and P5: reading and rendering
+## Data service and interactive map (internal labels: P4 and P5)
 
-P4 reads finished, immutable artifacts; it never fits a model. P5 consumes P4 and gives
-observations, modeled surfaces, uncertainty, masks, and burden separate visual layers. Every
-shareable view names its model and data versions.
+The data service reads finished, versioned result files; it never fits a model while someone is
+using the website. The interactive map requests those results and shows measured evidence, modeled
+patterns, uncertainty, insufficient-evidence areas, and disease-burden estimates as clearly separate
+layers. Every shareable view identifies the model and data versions behind it.
 
 See the [scientific and engineering objectives](https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md)
 for acceptance evidence at each boundary.

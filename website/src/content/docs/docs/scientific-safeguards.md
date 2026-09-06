@@ -14,9 +14,10 @@ caller cannot request a view that makes their status indistinguishable.
 
 ## Unknown is an output
 
-Cells marked `unknown` or `prior_dominated` are excluded from aggregates, and the excluded fraction
-travels with the result. An unmeasured place is not treated as zero. A visually empty area is
-explicitly labeled rather than silently filled.
+Map cells marked as unknown—or as driven mainly by model assumptions rather than observations—are
+excluded from summary statistics, and the excluded fraction travels with the result. An unmeasured
+place is not treated as zero. A visually empty area is explicitly labeled rather than silently
+filled.
 
 ## Zoom follows evidence
 
@@ -35,7 +36,8 @@ Prompt wording, frontend state, and configuration flags cannot bypass that polic
 
 ## Refusal beats plausibility
 
-When the evidence cannot support a number, genomeOS returns no number and says why. Published HbS,
-G6PD, and screening-program results are the validation controls; a plausible-looking map is not.
+When the evidence cannot support a number, genomeOS returns no number and says why. Published
+results for haemoglobin S (HbS), glucose-6-phosphate dehydrogenase (G6PD) deficiency, and screening
+programmes are the validation controls; a plausible-looking map is not.
 
 Read the complete [repository invariants](https://github.com/bschilder/genomeOS/blob/main/AGENTS.md#invariants).

@@ -27,11 +27,41 @@
 - Before every commit or push, run `python scripts/check_private_files.py` and inspect `git diff --cached --name-only`.
 - Every code/configuration change runs `python scripts/smoke.py`; pre-PR verification runs all commands required by `AGENTS.md`.
 
+## Approved feedback amendments — 2026-09-06
+
+These changes supersede the earlier homepage details in Tasks 2 and 3:
+
+- Lead with the higher-order mission: make human genetic diversity useful for screening, medicine,
+  discovery, and more representative research. Explain why genomeOS exists, its open-source global
+  community model, and its public-good purpose before describing implementation.
+- Replace the `Measured / Estimated / Unknown` homepage block with corpus-scale statistics computed
+  from pinned source data: 4,392 variant or allele identifiers, 6.69 million participant records,
+  and two disease reference corpora. Link and expand every named source acronym at first use. Use
+  lining, tabular numerals for metric typography.
+- Add potential applications grounded in Discussion #1. Follow the introductory material with a
+  plain-language three-stage process: aggregate evidence; model per-variant frequency and supported
+  disease burden using Bayesian, geometric, or other defensible methods; build the public interface.
+- Add three generated, style-matched visual guides for variation across Earth, genome organization
+  inside the cell, and the bridge between those scales. Commit optimized WebP files; their role is
+  conceptual navigation, not scientific evidence.
+- Make GitHub Discussions, Issues, and the project board large, inviting actions on the homepage.
+  Retain the GitHub icon in global navigation.
+- Add `/app/` as a work-in-progress preview that embeds the current Cloud Run diagnostic. Describe
+  its synthetic test data and limitations in ordinary language; do not expose unexplained P0–P5
+  project shorthand on any introductory page.
+- Raise public typography to an 18px root and at least 19px body copy. Add scroll reveals, hero
+  parallax, a progress indicator, application spotlights, and hover/focus movement, with complete
+  reduced-motion fallbacks.
+- Treat the site as a first-time introduction everywhere: expand scientific acronyms on first use,
+  translate project codes before displaying them in technical docs, and replace internal terms such
+  as “read path,” “artifact,” and milestone codes in public-facing copy.
+
 ---
 
 ### Task 1: Reproducible Astro/Starlight foundation
 
 **Files:**
+
 - Create: `website/package.json`
 - Create: `website/package-lock.json`
 - Create: `website/.nvmrc`
@@ -43,6 +73,7 @@
 - Modify: `.gitignore`
 
 **Interfaces:**
+
 - Consumes: `SITE_URL`, `BASE_PATH`, and `OUT_DIR` environment variables at the Astro composition boundary.
 - Produces: `sitePath(path: string, base?: string): string`, a statically prerendered Starlight integration, and exact npm scripts used by every later task.
 
@@ -66,21 +97,23 @@ Expected: `package-lock.json` is generated with no floating direct dependency ve
 - [ ] **Step 3: Write the failing base-path unit tests**
 
 ```ts
-import { describe, expect, it } from 'vitest';
-import { sitePath } from '../src/lib/paths';
+import { describe, expect, it } from "vitest";
+import { sitePath } from "../src/lib/paths";
 
-describe('sitePath', () => {
-  it('keeps a root deployment rooted once', () => {
-    expect(sitePath('/working-groups/', '/')).toBe('/working-groups/');
+describe("sitePath", () => {
+  it("keeps a root deployment rooted once", () => {
+    expect(sitePath("/working-groups/", "/")).toBe("/working-groups/");
   });
 
-  it('prefixes a project-site deployment exactly once', () => {
-    expect(sitePath('/working-groups/', '/genomeOS/')).toBe('/genomeOS/working-groups/');
+  it("prefixes a project-site deployment exactly once", () => {
+    expect(sitePath("/working-groups/", "/genomeOS/")).toBe(
+      "/genomeOS/working-groups/",
+    );
   });
 
-  it('preserves query strings and fragments', () => {
-    expect(sitePath('/contribute/?status=ready#start', '/genomeOS/')).toBe(
-      '/genomeOS/contribute/?status=ready#start',
+  it("preserves query strings and fragments", () => {
+    expect(sitePath("/contribute/?status=ready#start", "/genomeOS/")).toBe(
+      "/genomeOS/contribute/?status=ready#start",
     );
   });
 });
@@ -121,6 +154,7 @@ git commit -m "build: add the reproducible Astro site foundation"
 ### Task 2: Shared orbital-observatory shell and first meaningful homepage preview
 
 **Files:**
+
 - Create: `website/public/favicon.svg`
 - Create: `website/public/images/genomeos-banner.png` (mechanical copy of `docs/images/genomeos-banner.png`)
 - Create: `website/src/styles/tokens.css`
@@ -135,6 +169,7 @@ git commit -m "build: add the reproducible Astro site foundation"
 - Create: `website/tests/home.test.ts`
 
 **Interfaces:**
+
 - Consumes: `sitePath()`, local banner and fonts, canonical `Astro.url`, and static page metadata.
 - Produces: `SiteLayout` props `{ title: string; description: string; imageAlt?: string }`, a shared semantic header/footer, accessible repository link, and a recognizable homepage first viewport.
 
@@ -143,11 +178,13 @@ git commit -m "build: add the reproducible Astro site foundation"
 Create a Vitest test that runs the production build once in a temporary output directory, reads `index.html`, and asserts independently derived behavior:
 
 ```ts
-expect(html).toContain('<h1>Explore genomes across the world.</h1>');
-expect(html).toMatch(/Measured here[\s\S]*Estimated there[\s\S]*Never confused/);
+expect(html).toContain("<h1>Explore genomes across the world.</h1>");
+expect(html).toMatch(
+  /Measured here[\s\S]*Estimated there[\s\S]*Never confused/,
+);
 expect(html).toContain('aria-label="View genomeOS on GitHub"');
-expect(html).toContain('https://github.com/bschilder/genomeOS');
-expect(html).toContain('Skip to main content');
+expect(html).toContain("https://github.com/bschilder/genomeOS");
+expect(html).toContain("Skip to main content");
 ```
 
 The production break caught is a homepage that compiles but loses its primary claim, evidence distinction, repository route, or keyboard bypass.
@@ -199,6 +236,7 @@ git commit -m "feat: establish the genomeOS public site shell"
 ### Task 3: Complete public narrative and contributor routes
 
 **Files:**
+
 - Create: `website/src/components/Callout.astro`
 - Create: `website/src/components/ContributionFlow.astro`
 - Create: `website/src/components/StatusBand.astro`
@@ -210,6 +248,7 @@ git commit -m "feat: establish the genomeOS public site shell"
 - Create: `website/tests/content.test.ts`
 
 **Interfaces:**
+
 - Consumes: `SiteLayout`, `sitePath()`, GitHub issue/search/project/discussion URLs, and the claims in `docs/overview.md` plus `docs/scientific-engineering-objectives.md`.
 - Produces: four complete public routes, reusable working-group and capability-state presentations, and a six-step contribution path.
 
@@ -218,14 +257,18 @@ git commit -m "feat: establish the genomeOS public site shell"
 Build the site and assert rendered user-visible behavior rather than source text. Check all four routes exist, each has one `h1`, and the rendered output includes:
 
 ```ts
-expect(home).toMatch(/Available now[\s\S]*In active development[\s\S]*Future exploration/);
+expect(home).toMatch(
+  /Available now[\s\S]*In active development[\s\S]*Future exploration/,
+);
 expect(groups).toMatch(/Data[\s\S]*Modeling[\s\S]*Product &amp; Experience/);
-expect(groups).toContain('geometric deep learning');
-expect(groups).toContain('Brian');
-expect(groups).toMatch(/Future exploration[\s\S]*privacy[\s\S]*consent[\s\S]*governance/);
-expect(contribute).toContain('Discussion #76');
-expect(contribute).toContain('mention the original issue author');
-expect(contribute).toContain('Ready');
+expect(groups).toContain("geometric deep learning");
+expect(groups).toContain("Brian");
+expect(groups).toMatch(
+  /Future exploration[\s\S]*privacy[\s\S]*consent[\s\S]*governance/,
+);
+expect(contribute).toContain("Discussion #76");
+expect(contribute).toContain("mention the original issue author");
+expect(contribute).toContain("Ready");
 ```
 
 The break caught is an attractive site that drops the project's operating guidance or turns future ideas into current claims.
@@ -238,7 +281,7 @@ Expected: FAIL because the routes and capability bands are absent.
 
 - [ ] **Step 3: Complete the homepage narrative**
 
-Add the plain-language HbS anchor, two-atlas vision, forming working-group entry points, contribution sequence, capability status band, and final actions. State directly that geography describes population evidence and does not predict an individual's genotype.
+Add the plain-language HbS anchor, multi-scale vision, forming working-group entry points, contribution sequence, capability status band, and final actions. State directly that geography describes population evidence and does not predict an individual's genotype.
 
 - [ ] **Step 4: Implement the Project route**
 
@@ -278,6 +321,7 @@ git commit -m "feat: add public project and contribution guides"
 ### Task 4: Searchable technical documentation and helpful 404
 
 **Files:**
+
 - Create: `website/src/styles/starlight.css`
 - Create: `website/src/content/docs/docs/index.md`
 - Create: `website/src/content/docs/docs/system-overview.md`
@@ -291,6 +335,7 @@ git commit -m "feat: add public project and contribution guides"
 - Create: `website/tests/docs.test.ts`
 
 **Interfaces:**
+
 - Consumes: Starlight docs collection, repository source links, and shared design tokens.
 - Produces: `/docs/` plus seven focused technical guides, searchable Starlight navigation, and a custom recovery route.
 
@@ -335,6 +380,7 @@ git commit -m "docs: add searchable technical guidance"
 ### Task 5: Deployment, link, accessibility, and browser contracts
 
 **Files:**
+
 - Create: `website/scripts/build-fallback.mjs`
 - Create: `website/scripts/check-links.mjs`
 - Create: `website/playwright.config.ts`
@@ -344,6 +390,7 @@ git commit -m "docs: add searchable technical guidance"
 - Update: `website/package-lock.json`
 
 **Interfaces:**
+
 - Consumes: production and fallback static output, all top-level routes, GitHub's Pages artifact/deployment APIs.
 - Produces: deterministic build variants, broken-link refusal, desktop/mobile axe coverage, and main-only Pages deployment.
 
@@ -417,12 +464,14 @@ git commit -m "ci: validate and deploy the Pages site"
 ### Task 6: Reproducible review figure, full verification, and PR
 
 **Files:**
+
 - Create: `website/scripts/capture-homepage.mjs`
 - Create: `docs/figures/docs-site-homepage.png`
 - Modify: `website/package.json`
 - Update: `website/package-lock.json` only if script wiring changes dependencies
 
 **Interfaces:**
+
 - Consumes: a successfully built production preview at a caller-supplied URL.
 - Produces: deterministic 1440×1000 PNG review evidence and a pull request closing Issue #153.
 

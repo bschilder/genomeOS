@@ -12,12 +12,13 @@ export default defineConfig({
   site,
   base,
   outDir,
+  devToolbar: { enabled: false },
   trailingSlash: 'always',
   integrations: [
     starlight({
       title: 'genomeOS',
       description: 'An open atlas of human genetic variation across geography.',
-      favicon: `${normalizedBase}favicon.svg`,
+      favicon: '/favicon.svg',
       disable404Route: true,
       customCss: [
         '@fontsource-variable/figtree',
@@ -61,12 +62,10 @@ export default defineConfig({
         {
           label: 'Explore genomeOS',
           items: [
-            { label: 'Project home', link: normalizedBase },
-            {
-              label: 'Working groups',
-              link: `${normalizedBase}working-groups/`,
-            },
-            { label: 'Contribute', link: `${normalizedBase}contribute/` },
+            { label: 'Project home', link: '/' },
+            { label: 'Application preview', link: '/app/' },
+            { label: 'Working groups', link: '/working-groups/' },
+            { label: 'Contribute', link: '/contribute/' },
           ],
         },
         {

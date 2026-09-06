@@ -11,7 +11,7 @@ const safeguards = [
   ],
   [
     'Unknown stays visible',
-    'Unsupported and prior-dominated regions are marked and excluded from aggregates, not smoothed toward zero.',
+    'Places with too little evidence are marked and left out of summaries, rather than filled with a convincing-looking number.',
   ],
   [
     'Zoom cannot manufacture detail',
@@ -19,47 +19,47 @@ const safeguards = [
   ],
   [
     'Sampling corrections stay inspectable',
-    'Ascertainment and cohort effects are recorded fields and visible assumptions, not hidden adjustments.',
+    'How participants were recruited and which studies they came from remain visible, rather than becoming hidden adjustments.',
   ],
   [
     'Clinical scope is enforced',
-    'Version one focuses on defensible single-variant conditions and pharmacogenomics; behavioral, cognitive, and anthropometric burden maps are ineligible.',
+    'Version one focuses on defensible single-variant conditions and genetic differences that affect medicine response; behavioral, cognitive, and body-measurement burden maps are excluded.',
   ],
   [
     'No evidence means no number',
-    'Missing denominators, penetrance, coordinates, or support produce an explicit refusal.',
+    'Missing sample totals, evidence about how often a variant causes a condition, locations, or model support produce no number and a clear explanation.',
   ],
 ];
 
 const pipeline = [
   [
-    'P0',
-    'Population registry',
+    '01',
+    'Population-location registry',
     'Locate independently sampled populations, preserving coordinate uncertainty, provenance, and governance.',
   ],
   [
-    'P1',
+    '02',
     'Observations',
     'Store allele counts and the recruitment details needed to interpret them without inventing missing fields.',
   ],
   [
-    'P2',
-    'Surfaces',
+    '03',
+    'Frequency modeling',
     'Fit offline frequency estimates with uncertainty and explicit unsupported regions.',
   ],
   [
-    'P3',
-    'Burden',
+    '04',
+    'Disease-burden modeling',
     'Carry frequency, inheritance, penetrance, and population denominators into supported health estimates.',
   ],
   [
-    'P4',
-    'Read API',
-    'Serve versioned observations and precomputed artifacts without running inference on requests.',
+    '05',
+    'Data service',
+    'Deliver versioned measurements and model results quickly without changing the science while someone is using the website.',
   ],
   [
-    'P5',
-    'Map UI',
+    '06',
+    'Interactive public map',
     'Render distinct evidence layers, uncertainty, refusal states, and shareable versioned views.',
   ],
 ];
@@ -67,7 +67,7 @@ const pipeline = [
 
 <SiteLayout
   title="The project"
-  description="Why genomeOS exists, what the two-atlas vision includes, and the scientific safeguards that govern the work."
+  description="Why genomeOS exists, what the multi-scale vision includes, and the scientific safeguards that govern the work."
 >
   <PageIntro
     note="The project"
@@ -77,13 +77,15 @@ const pipeline = [
 
   <section class="story-section">
     <div class="section-shell story-grid">
-      <h2>The gap is connective</h2>
+      <h2>The data exists. It just doesn’t work together yet.</h2>
       <div class="story-copy">
         <p>
-          Large resources such as gnomAD contain extraordinary amounts of
-          genetic variation, but broad continental analysis groups cannot be
-          placed on a useful geographic map. Smaller studies often preserve
-          location, yet live in incompatible tables and publications.
+          Large resources such as the <a
+            href="https://gnomad.broadinstitute.org/"
+            >Genome Aggregation Database (gnomAD)</a
+          > contain extraordinary amounts of genetic variation, but broad continental
+          analysis groups cannot be placed on a useful geographic map. Smaller studies
+          often preserve location, yet live in incompatible tables and publications.
         </p>
         <p>
           Joining them requires more than coordinates. Allele orientation,
@@ -98,7 +100,7 @@ const pipeline = [
   <section class="atlas-section">
     <div class="section-shell">
       <div class="section-heading section-heading--split">
-        <h2>The two-atlas vision</h2>
+        <h2>The multi-scale vision</h2>
         <p>
           Build the geographic evidence system first, then connect it to genome
           structure when both sides are ready.
@@ -114,8 +116,8 @@ const pipeline = [
         </article>
         <article>
           <h3>Inside the cell</h3><p>
-            A future view of chromosome territories, folded domains, loops, and
-            genes—from the whole nucleus down to a locus.
+            A future view of chromosome territories, folded regions, loops, and
+            genes—from the whole nucleus down to one gene location.
           </p>
         </article>
         <article>
@@ -209,10 +211,11 @@ const pipeline = [
     <div class="section-shell">
       <Callout title="A plausible map is not success" tone="signal">
         <p>
-          Publication is gated on independently reproducing established HbS and
-          G6PD results and measured carrier-screening rates. If the pipeline
-          cannot recover science already known to be right, it has not earned
-          the right to publish unknown results.
+          Publication is gated on independently reproducing established results
+          for haemoglobin S (HbS), glucose-6-phosphate dehydrogenase (G6PD)
+          deficiency, and measured carrier-screening rates. If the system cannot
+          recover science already known to be right, it has not earned the right
+          to publish new results.
         </p>
       </Callout>
     </div>
@@ -223,10 +226,12 @@ const pipeline = [
       <div>
         <h2>Current status</h2>
         <p>
-          As of September 2026, the repository contains P0/P1 contracts and
-          adapters, offline P2/P3 kernels, and a fixture-backed P4 diagnostic
-          path. Broader literature coverage, golden-test parity, production
-          artifacts, and P5 remain active work.
+          As of September 2026, the repository can organize population locations
+          and genetic measurements, run early frequency and disease burden
+          models, and power the live software preview with synthetic test data.
+          Expanding the literature evidence, reproducing published scientific
+          results, preparing public datasets, and building the finished
+          interactive map remain active work.
         </p>
       </div>
       <div>

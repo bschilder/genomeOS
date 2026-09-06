@@ -1,0 +1,145 @@
+.process-section {
+  padding-block: clamp(5rem, 10vw, 9rem);
+  overflow: hidden;
+  border-bottom: 1px solid var(--color-line);
+  background:
+    radial-gradient(
+      circle at 85% 25%,
+      rgb(173 139 255 / 9%),
+      transparent 30rem
+    ),
+    var(--color-void);
+}
+
+.process-intro {
+  max-width: 58rem;
+  margin-bottom: clamp(3.5rem, 7vw, 6rem);
+}
+
+.process-intro h2 {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 5.8vw, 5.5rem);
+  font-weight: 390;
+  letter-spacing: -0.055em;
+  line-height: 0.98;
+}
+
+.process-intro > p:last-child {
+  max-width: 43rem;
+  margin: 1.7rem 0 0;
+  color: var(--color-muted);
+  font-size: 1.1rem;
+}
+
+.process-list {
+  margin: 0;
+  padding: 0;
+  display: grid;
+  list-style: none;
+}
+
+.process-list li {
+  position: relative;
+  min-height: 18rem;
+  padding-block: 2.8rem;
+  display: grid;
+  grid-template-columns: 5rem 3rem minmax(0, 1fr);
+  gap: clamp(1rem, 3vw, 2.5rem);
+  border-top: 1px solid var(--color-line);
+  transition:
+    background-color 240ms ease,
+    padding-inline 240ms ease;
+}
+
+.process-list li:last-child {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.process-list li:hover {
+  padding-inline: 1.2rem;
+  background: rgb(112 230 255 / 4%);
+}
+
+.process-list__number {
+  color: var(--color-ion);
+  font-family: var(--font-body);
+  font-feature-settings:
+    'lnum' 1,
+    'tnum' 1;
+  font-size: 1.1rem;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-weight: 650;
+}
+
+.process-list__marker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.process-list__marker::after {
+  content: '';
+  position: absolute;
+  top: 1.2rem;
+  bottom: -4rem;
+  width: 1px;
+  background: linear-gradient(var(--color-ion), rgb(173 139 255 / 18%));
+}
+
+.process-list li:last-child .process-list__marker::after {
+  display: none;
+}
+
+.process-list__marker span {
+  z-index: 1;
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid var(--color-ion);
+  border-radius: 50%;
+  background: var(--color-void);
+  box-shadow: 0 0 1.5rem rgb(112 230 255 / 52%);
+}
+
+.process-list h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  font-weight: 430;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.process-list p {
+  max-width: 51rem;
+  margin: 1rem 0 1.4rem;
+  color: #cbd9eb;
+  font-size: clamp(1.02rem, 1.5vw, 1.18rem);
+}
+
+.process-list small {
+  color: var(--color-aurora);
+  font-size: 0.9rem;
+  font-weight: 610;
+}
+
+@media (max-width: 46rem) {
+  .process-list li {
+    grid-template-columns: 2.2rem minmax(0, 1fr);
+  }
+
+  .process-list__marker {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .process-list li {
+    transition: none;
+  }
+
+  .process-list li:hover {
+    padding-inline: 0;
+  }
+}
