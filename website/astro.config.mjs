@@ -63,7 +63,7 @@ export default defineConfig({
       ],
       sidebar: [
         {
-          label: 'Explore genomeOS',
+          label: 'Explore the project',
           items: [
             { label: 'Project home', link: '/' },
             { label: 'Application preview', link: '/app/' },

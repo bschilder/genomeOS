@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const homepage = path.resolve(import.meta.dirname, '../dist/index.html');
 const html = existsSync(homepage) ? readFileSync(homepage, 'utf8') : '';
+const visibleText = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 
 describe('homepage contract', () => {
   it('leads with the public-good mission and current evidence scale', () => {
@@ -13,10 +14,16 @@ describe('homepage contract', () => {
     expect(html).toMatch(/global community/i);
     expect(html).toMatch(/public good/i);
     expect(html).toMatch(/4,392[\s\S]*6\.69M[\s\S]*disease/);
+    expect(html).toContain(
+      'Location matters because a genetic variant can be common',
+    );
+    expect(html).not.toContain(
+      'Place matters because a genetic variant can be common',
+    );
   });
 
   it('introduces the mission before explaining the delivery process', () => {
-    expect(html).toMatch(
+    expect(visibleText).toMatch(
       /Why genomeOS[\s\S]*Built in the open[\s\S]*Potential applications[\s\S]*How genomeOS works[\s\S]*Aggregate the evidence[\s\S]*Model what the evidence supports[\s\S]*Open it to the world/,
     );
   });
@@ -51,7 +58,7 @@ describe('homepage contract', () => {
     expect(html).toContain('Skip to main content');
     expect(html).toContain('aria-label="View genomeOS on GitHub"');
     expect(html).toContain('https://github.com/bschilder/genomeOS');
-    expect(html).toMatch(/© \d{4} genomeOS/);
+    expect(visibleText).toMatch(/© \d{4} genomeOS/);
     expect(html).not.toContain('Population geography is context');
   });
 });

@@ -21,6 +21,7 @@
 
     const hero = document.querySelector<HTMLElement>('.hero');
     const heroImage = document.querySelector<HTMLElement>('.hero__image');
+    const header = document.querySelector<HTMLElement>('[data-site-header]');
     const progress = document.querySelector<HTMLElement>('.scroll-progress');
     let frame = 0;
 
@@ -33,6 +34,7 @@
         '--scroll-progress',
         String(Math.min(1, Math.max(0, pageProgress))),
       );
+      header?.classList.toggle('site-header--compact', window.scrollY > 48);
 
       if (hero && heroImage) {
         const heroProgress = Math.min(

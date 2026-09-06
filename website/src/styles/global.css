@@ -74,11 +74,16 @@ svg {
 }
 
 .site-header {
-  position: relative;
-  z-index: 20;
+  position: sticky;
+  z-index: 40;
+  top: 0;
   border-bottom: 1px solid var(--color-line);
   background: rgb(2 7 18 / 88%);
   backdrop-filter: blur(18px);
+  transition:
+    background-color 260ms ease,
+    border-color 260ms ease,
+    box-shadow 260ms ease;
 }
 
 .site-header__inner,
@@ -94,6 +99,7 @@ svg {
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
+  transition: min-height 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
 .wordmark {
@@ -103,6 +109,28 @@ svg {
   font-weight: 380;
   letter-spacing: 0.13em;
   text-decoration: none;
+  transition: font-size 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-weight: 380;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.site-header--compact {
+  border-bottom-color: rgb(112 230 255 / 24%);
+  background: rgb(2 7 18 / 96%);
+  box-shadow: 0 0.7rem 2.4rem rgb(0 0 0 / 28%);
+}
+
+.site-header--compact .site-header__inner {
+  min-height: 3.9rem;
+}
+
+.site-header--compact .wordmark {
+  font-size: 1.16rem;
 }
 
 .desktop-nav,
@@ -268,5 +296,10 @@ svg {
   }
   .hero__image {
     animation: none;
+  }
+  .site-header,
+  .site-header__inner,
+  .wordmark {
+    transition: none;
   }
 }
