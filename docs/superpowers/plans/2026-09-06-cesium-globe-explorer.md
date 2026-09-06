@@ -57,7 +57,7 @@ TypeScript 6.0.3, Vitest 5.0.0, Playwright 1.63.0, Python 3.12, pandas/pyarrow.
 - Produces: React island support and a `CESIUM_BASE_URL` containing copied Cesium `Assets`,
   `ThirdParty`, `Widgets`, and `Workers` directories in both root and project-site builds.
 
-- [ ] **Step 1: Write the failing asset contract**
+- [x] **Step 1: Write the failing asset contract**
 
 ```ts
 // website/tests/cesium-assets.test.ts
@@ -75,13 +75,13 @@ describe("Cesium static runtime", () => {
 });
 ```
 
-- [ ] **Step 2: Run the contract and verify that it fails**
+- [x] **Step 2: Run the contract and verify that it fails**
 
 Run: `cd website && npm test -- cesium-assets.test.ts`
 
 Expected: FAIL because `dist/cesium/Assets` and the other runtime directories do not exist.
 
-- [ ] **Step 3: Install exact dependencies**
+- [x] **Step 3: Install exact dependencies**
 
 Run:
 
@@ -91,7 +91,7 @@ npm install --save-exact @astrojs/react@6.0.5 cesium@1.145.0 h3-js@4.5.0 react@1
 npm install --save-dev --save-exact vite-plugin-static-copy@4.1.1
 ```
 
-- [ ] **Step 4: Configure React and Cesium assets**
+- [x] **Step 4: Configure React and Cesium assets**
 
 Update `website/astro.config.mjs` to add `react()` and `viteStaticCopy()`. Copy each directory from
 `node_modules/cesium/Build/Cesium` to `cesium/`, and expose the deployment-aware base:
@@ -112,7 +112,7 @@ vite: {
 },
 ```
 
-- [ ] **Step 5: Verify root and fallback asset builds**
+- [x] **Step 5: Verify root and fallback asset builds**
 
 Run:
 
@@ -125,7 +125,7 @@ test -d dist-fallback/cesium/Workers
 
 Expected: the Vitest contract passes and both build roots contain Cesium runtime assets.
 
-- [ ] **Step 6: Commit the runtime**
+- [x] **Step 6: Commit the runtime**
 
 ```bash
 git add website/package.json website/package-lock.json website/astro.config.mjs website/tests/cesium-assets.test.ts
