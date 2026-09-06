@@ -1,0 +1,13 @@
+population_id	lat	lon	uncertainty_radius_km	location_type	provenance	biocultural_notice	registry_version
+literature-komi	63.863054	54.831269	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-udmurts	56.833333	53.183316	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-mokshas	54.236944	44.068397	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-erzas	54.212315	43.584157	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-saami	68.258009	26.193792	450	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-finns-eastern	65.0	29.0	250	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-finns-western	64.0	24.0	250	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-basques	43.395495	-1.454917	120	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-pathan	32.667476	69.859741	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-sindi	24.893501	67.028062	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-brahui	30.209572	67.019672	200	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
+literature-qashqai	29.616538	52.533901	120	ancestral	repo:github.com/manpreetbola/protective-alleles-gnomad-v4@v2 data table (Liebert 2017 coords); radius = proposal for registry review		demo@2026-09-06.1
