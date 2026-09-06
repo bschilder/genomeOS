@@ -1,0 +1,115 @@
+:root,
+:root[data-theme='dark'] {
+  --sl-font: 'Figtree Variable', 'Avenir Next', sans-serif;
+  --sl-font-system-mono: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  --sl-color-accent-low: #102b52;
+  --sl-color-accent: #70e6ff;
+  --sl-color-accent-high: #dff9ff;
+  --sl-color-white: #f2f8ff;
+  --sl-color-gray-1: #e1edfb;
+  --sl-color-gray-2: #c1d1e5;
+  --sl-color-gray-3: #91a8c4;
+  --sl-color-gray-4: #49627e;
+  --sl-color-gray-5: #17304f;
+  --sl-color-gray-6: #071831;
+  --sl-color-black: #020712;
+  --sl-color-bg: #020712;
+  --sl-color-bg-nav: rgb(2 7 18 / 92%);
+  --sl-color-bg-sidebar: #051226;
+  --sl-color-hairline: rgb(112 230 255 / 18%);
+  --sl-text-xs: 0.95rem;
+  --sl-text-sm: 1rem;
+  --sl-text-base: 1.1rem;
+  --sl-text-lg: 1.25rem;
+  --sl-text-body: var(--sl-text-base);
+  --sl-text-body-sm: var(--sl-text-sm);
+  --sl-text-h1: clamp(2.6rem, 6vw, 4.8rem);
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #d7f7ff;
+  --sl-color-accent: #176b84;
+  --sl-color-accent-high: #062f49;
+  --sl-color-white: #071831;
+  --sl-color-gray-1: #102a48;
+  --sl-color-gray-2: #304c6b;
+  --sl-color-gray-3: #526d8a;
+  --sl-color-gray-4: #91a8c4;
+  --sl-color-gray-5: #d8e5f3;
+  --sl-color-gray-6: #eaf3fb;
+  --sl-color-black: #f7fbff;
+  --sl-color-bg: #f7fbff;
+  --sl-color-bg-nav: rgb(247 251 255 / 94%);
+  --sl-color-bg-sidebar: #eef6fd;
+  --sl-color-hairline: rgb(7 24 49 / 16%);
+}
+
+html {
+  font-size: 112.5%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--sl-font);
+  line-height: 1.65;
+}
+
+.site-title {
+  font-family: 'Raleway Variable', 'Avenir Next', sans-serif;
+  font-weight: 380;
+  letter-spacing: 0.13em;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: 'Raleway Variable', 'Avenir Next', sans-serif;
+  letter-spacing: -0.025em;
+}
+
+.sl-markdown-content {
+  max-width: 48rem;
+}
+
+.sl-markdown-content h2 {
+  border-top: 1px solid var(--sl-color-hairline);
+  padding-top: 1.5rem;
+}
+
+.header {
+  border-bottom-color: var(--sl-color-hairline);
+  backdrop-filter: blur(18px);
+}
+
+.sidebar-pane {
+  border-right-color: var(--sl-color-hairline);
+}
+
+a:focus-visible,
+button:focus-visible,
+summary:focus-visible,
+select:focus-visible {
+  outline: 2px solid #70e6ff;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 3px rgb(112 230 255 / 28%);
+}
+
+.sl-markdown-content table {
+  display: table;
+  width: 100%;
+}
+
+.sl-markdown-content img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border: 1px solid var(--sl-color-hairline);
+  box-shadow: 0 1.5rem 4rem rgb(0 0 0 / 28%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

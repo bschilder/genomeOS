@@ -1,0 +1,63 @@
+---
+import GitHubLink from './GitHubLink.astro';
+import { sitePath } from '../lib/paths';
+
+const path = Astro.url.pathname;
+const links = [
+  { label: 'Project', href: '/project/' },
+  { label: 'Preview', href: '/app/' },
+  { label: 'Working groups', href: '/working-groups/' },
+  { label: 'Contribute', href: '/contribute/' },
+  { label: 'Technical docs', href: '/docs/' },
+];
+
+const isCurrent = (href: string) =>
+  path === sitePath(href) || path.startsWith(sitePath(href));
+---
+
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="wordmark" href={sitePath('/')}>genomeOS</a>
+
+    <nav class="desktop-nav" aria-label="Primary navigation">
+      <ul>
+        {
+          links.map(({ label, href }) => (
+            <li>
+              <a
+                href={sitePath(href)}
+                aria-current={isCurrent(href) ? 'page' : undefined}
+              >
+                {label}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+    </nav>
+
+    <div class="site-header__actions">
+      <div class="desktop-nav"><GitHubLink /></div>
+      <details class="mobile-nav">
+        <summary>Menu</summary>
+        <nav aria-label="Mobile navigation">
+          <ul>
+            {
+              links.map(({ label, href }) => (
+                <li>
+                  <a
+                    href={sitePath(href)}
+                    aria-current={isCurrent(href) ? 'page' : undefined}
+                  >
+                    {label}
+                  </a>
+                </li>
+              ))
+            }
+          </ul>
+          <GitHubLink />
+        </nav>
+      </details>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,44 @@
+---
+const states = [
+  {
+    state: 'Available now',
+    className: 'current',
+    detail:
+      'Foundational tools can organize population locations and allele measurements, run early models, and power the live preview with synthetic test data.',
+  },
+  {
+    state: 'In active development',
+    className: 'active',
+    detail:
+      'The community is adding literature evidence, checking models against published science, preparing public datasets, and building the interactive map.',
+  },
+  {
+    state: 'Future exploration',
+    className: 'future',
+    detail:
+      'An agentic guide for conversational evidence access, opt-in personal-genome experiences, an ancient-DNA time slider, and the cellular atlas—all gated by evidence and governance.',
+  },
+];
+---
+
+<section class="status-section" aria-labelledby="status-title">
+  <div class="section-shell">
+    <div class="section-heading section-heading--split">
+      <h2 id="status-title">What exists—and what comes later</h2>
+      <p>
+        Ideas do not become product claims merely because they appear on a
+        roadmap.
+      </p>
+    </div>
+    <div class="status-band">
+      {
+        states.map(({ state, className, detail }) => (
+          <article class={`status-band__item status-band__item--${className}`}>
+            <h3>{state}</h3>
+            <p>{detail}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -1,0 +1,270 @@
+---
+import Callout from '../components/Callout.astro';
+import MultiScaleVision from '../components/MultiScaleVision.astro';
+import PageIntro from '../components/PageIntro.astro';
+import StatusBand from '../components/StatusBand.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+
+const safeguards = [
+  [
+    'Measurements and estimates never merge',
+    'Observed evidence and inferred surfaces remain separate tables, layers, and provenance paths.',
+  ],
+  [
+    'Unknown stays visible',
+    'Places with too little evidence are marked and left out of summaries, rather than filled with a convincing-looking number.',
+  ],
+  [
+    'Zoom cannot manufacture detail',
+    'Resolution follows evidence support rather than the viewer’s zoom level.',
+  ],
+  [
+    'Sampling corrections stay inspectable',
+    'How participants were recruited and which studies they came from remain visible, rather than becoming hidden adjustments.',
+  ],
+  [
+    'Clinical scope is enforced',
+    'Version one focuses on defensible single-variant conditions and genetic differences that affect medicine response; behavioral, cognitive, and body-measurement burden maps are excluded.',
+  ],
+  [
+    'No evidence means no number',
+    'Missing sample totals, evidence about how often a variant causes a condition, locations, or model support produce no number and a clear explanation.',
+  ],
+];
+
+const pipeline = [
+  [
+    '01',
+    'Population-location registry',
+    'Locate independently sampled populations, preserving coordinate uncertainty, provenance, and governance.',
+  ],
+  [
+    '02',
+    'Observations',
+    'Store allele counts and the recruitment details needed to interpret them without inventing missing fields.',
+  ],
+  [
+    '03',
+    'Frequency modeling',
+    'Fit offline frequency estimates with uncertainty and explicit unsupported regions.',
+  ],
+  [
+    '04',
+    'Disease-burden modeling',
+    'Carry frequency, inheritance, penetrance, and population denominators into supported health estimates.',
+  ],
+  [
+    '05',
+    'Data service',
+    'Deliver versioned measurements and model results quickly without changing the science while someone is using the website.',
+  ],
+  [
+    '06',
+    'Interactive public map',
+    'Render distinct evidence layers, uncertainty, refusal states, and shareable versioned views.',
+  ],
+];
+---
+
+<SiteLayout
+  title="The project"
+  description="Why genomeOS exists, what the multi-scale vision includes, and the scientific safeguards that govern the work."
+>
+  <PageIntro
+    note="The project"
+    title="A world atlas built from evidence, not assumptions."
+    lede="Genetic measurements exist across databases, national programs, and individual papers. genomeOS is building the shared system needed to locate them, model only what they support, and make both knowledge and uncertainty explorable."
+  />
+
+  <section class="story-section">
+    <div class="section-shell story-grid">
+      <h2>The data exists. It just doesn’t work together yet.</h2>
+      <div class="story-copy">
+        <p>
+          Large resources such as the <a
+            href="https://gnomad.broadinstitute.org/"
+            >Genome Aggregation Database (gnomAD)</a
+          > contain extraordinary amounts of genetic variation, but broad continental
+          analysis groups cannot be placed on a useful geographic map. Smaller studies
+          often preserve location, yet live in incompatible tables and publications.
+        </p>
+        <p>
+          Joining them requires more than coordinates. Allele orientation,
+          sample denominators, recruitment, cohort overlap, source anchors,
+          reuse terms, and spatial uncertainty all change what a measurement can
+          support.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="story-section story-section--hbs">
+    <div class="section-shell story-grid" data-reveal>
+      <div>
+        <p class="section-kicker">One change, a worldwide story</p>
+        <h2>Why haemoglobin S makes the mission tangible</h2>
+      </div>
+      <div class="story-copy">
+        <p>
+          Haemoglobin S—often shortened to HbS—is a change in the gene for
+          haemoglobin. One inherited copy can protect against severe malaria;
+          two copies cause sickle-cell disease. Its frequency therefore traces a
+          history of biology, environment, and human movement.
+        </p>
+        <p>
+          Researchers spent years combining blood surveys, models, and birth
+          rates to estimate where sickle-cell disease affects newborns. genomeOS
+          asks how that careful work can become a reusable system for many
+          clinically meaningful variants—and a public resource for discovering
+          what should be studied next.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <MultiScaleVision />
+
+  <section class="safeguards-section" aria-labelledby="safeguards-title">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2 id="safeguards-title">Six rules the interface cannot hide</h2>
+        <p>
+          These are engineering invariants. Breaking one is a bug, even when the
+          result looks plausible.
+        </p>
+      </div>
+      <div class="safeguards-grid">
+        {
+          safeguards.map(([title, detail]) => (
+            <article>
+              <>
+                <h3>{title}</h3>
+                <p>{detail}</p>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="pipeline-section" aria-labelledby="pipeline-title">
+    <div class="section-shell">
+      <div class="section-heading section-heading--split">
+        <h2 id="pipeline-title">From evidence to an explorable map</h2>
+        <p>
+          Each part has a narrow public contract, so data, models, serving, and
+          rendering can improve independently.
+        </p>
+      </div>
+      <ol class="pipeline-list">
+        {
+          pipeline.map(([part, title, detail]) => (
+            <li>
+              <>
+                <span>{part}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{detail}</p>
+                  </>
+                </div>
+              </>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="story-section">
+    <div class="section-shell story-grid">
+      <h2>Who could use it</h2>
+      <div class="story-copy compact-list">
+        <p>
+          People and families seeking context—not personal genetic predictions
+          from geography.
+        </p>
+        <p>
+          Researchers and drug developers looking for variants, protective
+          biology, and missing evidence.
+        </p>
+        <p>
+          Health programs deciding where screening evidence is strong enough to
+          guide planning.
+        </p>
+        <p>
+          Sequencing initiatives asking which places and populations remain
+          underrepresented.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="validation-section">
+    <div class="section-shell">
+      <Callout title="A plausible map is not success" tone="signal">
+        <p>
+          Publication is gated on independently reproducing established results
+          for haemoglobin S (HbS), glucose-6-phosphate dehydrogenase (G6PD)
+          deficiency, and measured carrier-screening rates. If the system cannot
+          recover science already known to be right, it has not earned the right
+          to publish new results.
+        </p>
+      </Callout>
+    </div>
+  </section>
+
+  <StatusBand />
+
+  <section class="source-section">
+    <div class="section-shell source-section__inner">
+      <div>
+        <h2>Follow the work</h2>
+        <p>
+          The public project board tracks what is available now, what is in
+          active development, and which future ideas still need scientific or
+          governance foundations. The working-group and contribution guides
+          explain where each kind of work belongs.
+        </p>
+        <a
+          class="github-cta github-cta--inline"
+          href="https://github.com/users/bschilder/projects/8"
+          target="_blank"
+          rel="noopener noreferrer"
+          ><span>See current priorities</span><strong
+            >Open the project board</strong
+          ><span aria-hidden="true">↗</span></a
+        >
+      </div>
+      <div>
+        <h2>Authoritative sources</h2>
+        <ul>
+          <li>
+            <a
+              href="https://github.com/bschilder/genomeOS/blob/main/docs/overview.md"
+              target="_blank"
+              rel="noopener noreferrer">Project overview</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md"
+              target="_blank"
+              rel="noopener noreferrer">Scientific and engineering objectives</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://github.com/bschilder/genomeOS/blob/main/docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md"
+              target="_blank"
+              rel="noopener noreferrer">Atlas v1 design</a
+            >
+          </li>
+          <li><a href={sitePath('/docs/')}>Technical documentation</a></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</SiteLayout>

@@ -1,0 +1,76 @@
+---
+import { sitePath } from '../lib/paths';
+
+const views = [
+  {
+    status: 'In active development',
+    statusClass: 'active',
+    title: 'Variation across Earth',
+    description:
+      'Move from a variant or condition to the evidence collected across populations, the patterns supported by that evidence, and the places where more research is still needed.',
+    image: sitePath('/images/vision-earth.webp'),
+    alt: 'A luminous globe showing genetic evidence points distributed unevenly across the world',
+  },
+  {
+    status: 'Future exploration',
+    statusClass: 'future',
+    title: 'The genome inside the cell',
+    description:
+      'Zoom from the nucleus through chromosome structure and folded genomic regions to the location and context of an individual gene.',
+    image: sitePath('/images/vision-cell.webp'),
+    alt: 'A visual journey from a cell nucleus through a chromosome and folded chromatin to one highlighted gene region',
+  },
+  {
+    status: 'Future exploration',
+    statusClass: 'future',
+    title: 'The bridge',
+    description:
+      'Connect where a gene sits and how it folds to which variants exist, where they have been observed, and what researchers have learned about them.',
+    image: sitePath('/images/vision-bridge.webp'),
+    alt: 'Folded chromatin and a highlighted gene connected by evidence traces to observation points across Earth',
+  },
+];
+---
+
+<section class="vision-section" aria-labelledby="vision-title">
+  <div class="section-shell">
+    <div class="section-heading section-heading--split" data-reveal>
+      <div>
+        <p class="section-kicker">The multi-scale vision</p>
+        <h2 id="vision-title">One connected view, from cells to Earth.</h2>
+      </div>
+      <p>
+        The geographic atlas comes first. Future views could connect what we
+        learn across the world with the physical organization of the genome
+        inside our cells.
+      </p>
+    </div>
+
+    <div class="vision-list">
+      {
+        views.map((view, index) => (
+          <article class="vision-card" data-reveal>
+            <div class="vision-card__media">
+              <img
+                src={view.image}
+                alt={view.alt}
+                width="1536"
+                height="1024"
+                loading="lazy"
+                decoding="async"
+              />
+              <span class={`status-label status-label--${view.statusClass}`}>
+                {view.status}
+              </span>
+            </div>
+            <div class="vision-card__copy">
+              <span aria-hidden="true">0{index + 1}</span>
+              <h3>{view.title}</h3>
+              <p>{view.description}</p>
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

@@ -1,0 +1,94 @@
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "website/**"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "website/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Check formatting
+        run: npm run format:check
+      - name: Check Astro and TypeScript
+        run: npm run check
+      - name: Run unit and content contracts
+        run: npm test
+      - name: Build custom-domain site
+        run: npm run build
+      - name: Check custom-domain links
+        run: npm run check:links -- dist /
+      - name: Build GitHub project-site fallback
+        run: npm run build:fallback
+      - name: Check fallback links
+        run: npm run check:links -- dist-fallback /genomeOS/
+      - name: Install browser runtime
+        run: npx playwright install --with-deps chromium
+      - name: Run browser and accessibility contracts
+        run: npm run test:e2e
+
+  build:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install exact dependencies
+        run: npm ci
+        working-directory: website
+      - name: Build production site
+        run: npm run build
+        working-directory: website
+      - name: Refuse broken production links
+        run: npm run check:links -- dist /
+        working-directory: website
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v5

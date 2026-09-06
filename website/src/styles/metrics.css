@@ -1,0 +1,175 @@
+.metrics-section {
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-orbit);
+}
+
+.metrics-heading {
+  padding-block: clamp(3.5rem, 7vw, 6rem);
+  display: grid;
+  grid-template-columns: minmax(17rem, 1fr) minmax(20rem, 0.72fr);
+  gap: clamp(2rem, 8vw, 8rem);
+  align-items: end;
+}
+
+.metrics-heading h2 {
+  max-width: 13ch;
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.6rem, 5vw, 4.6rem);
+  font-weight: 420;
+  letter-spacing: -0.05em;
+  line-height: 1;
+}
+
+.metrics-heading > p {
+  max-width: 34rem;
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-block: 1px solid var(--color-line);
+}
+
+.metric {
+  min-height: 30rem;
+  padding: clamp(2rem, 4vw, 3.25rem);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  border-right: 1px solid var(--color-line);
+  transition:
+    background-color 240ms ease,
+    transform 240ms ease;
+}
+
+.metric:last-child {
+  border-right: 0;
+}
+
+.metric:hover {
+  z-index: 1;
+  background: rgb(112 230 255 / 5%);
+  transform: translateY(-0.5rem);
+}
+
+.metric-icon {
+  width: 5.2rem;
+  height: 5.2rem;
+  margin-bottom: auto;
+  display: grid;
+  place-items: center;
+  color: var(--color-ion);
+  filter: drop-shadow(0 0 1rem rgb(112 230 255 / 24%));
+}
+
+.metric-icon--people {
+  color: var(--color-aurora);
+  filter: drop-shadow(0 0 1rem rgb(114 231 193 / 24%));
+}
+
+.metric-icon--diseases {
+  color: var(--color-genome);
+  filter: drop-shadow(0 0 1rem rgb(173 139 255 / 24%));
+}
+
+.metric-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentcolor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.metric-icon--diseases path:last-child {
+  fill: rgb(173 139 255 / 14%);
+}
+
+.metric data {
+  margin-top: 3rem;
+  color: var(--color-starlight);
+  font-family: var(--font-body);
+  font-size: clamp(3.5rem, 7vw, 6rem);
+  font-weight: 340;
+  font-feature-settings:
+    'lnum' 1,
+    'tnum' 1;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: -0.06em;
+  line-height: 0.9;
+}
+
+.metric h3 {
+  margin: 1.2rem 0 0.8rem;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 2vw, 1.8rem);
+  font-weight: 580;
+}
+
+.metric p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.metrics-method {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.metrics-method summary {
+  padding: 1.35rem 0;
+  cursor: pointer;
+  color: var(--color-ion);
+  font-weight: 650;
+}
+
+.metrics-method summary::marker {
+  color: var(--color-genome);
+}
+
+.metrics-method > div {
+  max-width: var(--reading-width);
+  padding-bottom: 2rem;
+  color: var(--color-muted);
+}
+
+.metrics-method p {
+  margin: 0 0 1rem;
+}
+
+@media (max-width: 64rem) {
+  .metrics-heading {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 46rem) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metric {
+    min-height: 24rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-line);
+  }
+
+  .metric:last-child {
+    border-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .metric {
+    transition: none;
+  }
+
+  .metric:hover {
+    transform: none;
+  }
+}

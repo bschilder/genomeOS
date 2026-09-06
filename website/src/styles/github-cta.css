@@ -1,0 +1,75 @@
+.github-cta:not(.button-link) {
+  position: relative;
+  min-height: 6.25rem;
+  padding: 1rem 3.25rem 1rem 1.15rem;
+  display: grid;
+  align-content: center;
+  border: 1px solid rgb(112 230 255 / 32%);
+  background: rgb(7 24 49 / 66%);
+  color: var(--color-starlight);
+  text-decoration: none;
+  transition:
+    border-color 220ms ease,
+    background-color 220ms ease,
+    transform 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.github-cta:not(.button-link) > span:first-child {
+  color: var(--color-ion);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.github-cta:not(.button-link) strong {
+  margin-top: 0.15rem;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 610;
+}
+
+.github-cta:not(.button-link) > span:last-child {
+  position: absolute;
+  top: 50%;
+  right: 1.2rem;
+  color: var(--color-ion);
+  font-size: 1.4rem;
+  translate: 0 -50%;
+  transition: translate 220ms ease;
+}
+
+.github-cta:not(.button-link):hover,
+.github-cta:not(.button-link):focus-visible {
+  border-color: var(--color-ion);
+  background: rgb(10 35 67 / 96%);
+  color: var(--color-starlight);
+  box-shadow: 0 1.2rem 3rem rgb(0 0 0 / 28%);
+  transform: translateY(-0.25rem);
+}
+
+.github-cta:not(.button-link):hover > span:last-child,
+.github-cta:not(.button-link):focus-visible > span:last-child {
+  translate: 0.3rem -50%;
+}
+
+.github-cta--primary:not(.button-link) {
+  border-color: rgb(114 231 193 / 54%);
+  background: linear-gradient(115deg, rgb(22 66 73 / 88%), rgb(7 24 49 / 92%));
+}
+
+.github-cta--compact:not(.button-link) {
+  min-height: 5.2rem;
+  min-width: 15rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .github-cta:not(.button-link),
+  .github-cta:not(.button-link) > span:last-child {
+    transition: none;
+  }
+
+  .github-cta:not(.button-link):hover,
+  .github-cta:not(.button-link):focus-visible {
+    transform: none;
+  }
+}

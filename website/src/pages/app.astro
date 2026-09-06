@@ -1,0 +1,66 @@
+---
+import PageIntro from '../components/PageIntro.astro';
+import PageVisual from '../components/PageVisual.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+
+const previewUrl = 'https://genomeos-api-357876699511.us-east1.run.app/preview';
+---
+
+<SiteLayout
+  title="Preview"
+  description="Explore the work-in-progress genomeOS map preview using sample data created for software testing."
+>
+  <PageIntro
+    note="Work-in-progress preview"
+    title="See the first map experience taking shape."
+    lede="This early preview shows how the genomeOS software can retrieve prepared genetic evidence and display it on a map. It is a development demo—not the finished public atlas."
+  />
+
+  <PageVisual
+    image={sitePath('/images/preview-atlas.webp')}
+    alt="A luminous interactive Earth with geographic layers, observation points, uncertainty bands, and an AI constellation"
+    kicker="The experience we are building"
+    title="Move through global variation—and ask the atlas questions."
+    description="The finished experience will combine fluid globe exploration with clear evidence layers and an AI guide that can help people investigate what the data supports."
+  />
+
+  <section class="preview-section" aria-labelledby="preview-title">
+    <div class="section-shell">
+      <div class="preview-toolbar" data-reveal>
+        <div>
+          <p class="section-kicker">Live diagnostic</p>
+          <h2 id="preview-title">Current application preview</h2>
+        </div>
+        <a class="button-link button-link--quiet" href={previewUrl}
+          >Open full screen</a
+        >
+      </div>
+
+      <aside class="preview-notice" data-reveal>
+        <strong>Sample data for testing</strong>
+        <p>
+          Everything shown here uses sample data created for software testing.
+          It demonstrates how the map and data service work together; the values
+          are not scientific findings and should not be used or cited as real
+          genetic evidence.
+        </p>
+      </aside>
+
+      <div class="preview-frame" data-reveal>
+        <div class="preview-frame__bar" aria-hidden="true">
+          <span></span><span></span><span></span>
+          <p>genomeos-api · /preview</p>
+        </div>
+        <iframe
+          src={previewUrl}
+          title="genomeOS diagnostic application preview"
+          loading="eager"
+          referrerpolicy="strict-origin-when-cross-origin"
+          allow="fullscreen"
+        >
+        </iframe>
+      </div>
+    </div>
+  </section>
+</SiteLayout>

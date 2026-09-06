@@ -1,0 +1,12 @@
+---
+import GitHubLink from './GitHubLink.astro';
+
+const year = new Date().getFullYear();
+---
+
+<footer class="site-footer">
+  <div class="site-footer__inner">
+    <p>© {year} genomeOS</p>
+    <GitHubLink />
+  </div>
+</footer>

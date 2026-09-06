@@ -1,0 +1,34 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+
+const { editUrl } = Astro.locals.starlightRoute;
+---
+
+{
+  editUrl && (
+    <a
+      href={editUrl}
+      class="sl-flex print:hidden"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      <Icon name="pencil" size="1.2em" />
+      {Astro.locals.t('page.editLink')}
+    </a>
+  )
+}
+
+<style>
+  @layer starlight.core {
+    a {
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--sl-color-gray-3);
+      text-decoration: none;
+    }
+
+    a:hover {
+      color: var(--sl-color-white);
+    }
+  }
+</style>

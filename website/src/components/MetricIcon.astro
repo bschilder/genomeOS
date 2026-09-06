@@ -1,0 +1,36 @@
+---
+interface Props {
+  kind: 'variants' | 'people' | 'diseases';
+}
+
+const { kind } = Astro.props;
+---
+
+<span class:list={['metric-icon', `metric-icon--${kind}`]} aria-hidden="true">
+  {
+    kind === 'variants' && (
+      <svg viewBox="0 0 64 64">
+        <path d="M18 6c0 18 28 34 28 52M46 6c0 18-28 34-28 52" />
+        <path d="M22 15h20M19 27h26M19 39h26M22 51h20" />
+      </svg>
+    )
+  }
+  {
+    kind === 'people' && (
+      <svg viewBox="0 0 64 64">
+        <circle cx="32" cy="20" r="8" />
+        <circle cx="14" cy="27" r="6" />
+        <circle cx="50" cy="27" r="6" />
+        <path d="M18 55c0-11 6-19 14-19s14 8 14 19M3 55c0-8 4-14 11-14 3 0 5 1 7 3M61 55c0-8-4-14-11-14-3 0-5 1-7 3" />
+      </svg>
+    )
+  }
+  {
+    kind === 'diseases' && (
+      <svg viewBox="0 0 64 64">
+        <path d="M32 6 54 18v28L32 58 10 46V18Z" />
+        <path d="M27 18h10v9h9v10h-9v9H27v-9h-9V27h9Z" />
+      </svg>
+    )
+  }
+</span>

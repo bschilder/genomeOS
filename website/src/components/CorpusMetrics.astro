@@ -1,0 +1,87 @@
+---
+import MetricIcon from './MetricIcon.astro';
+import { corpusMetrics, metricTotal } from '../data/corpusMetrics';
+
+const metrics = [
+  {
+    kind: 'variants' as const,
+    value: metricTotal(corpusMetrics.variants).toLocaleString('en-US'),
+    rawValue: metricTotal(corpusMetrics.variants),
+    label: 'Genetic variants & alleles',
+    detail:
+      'Distinct DNA variants and named allele forms collected from the current allele-frequency database and haemoglobin S studies.',
+  },
+  {
+    kind: 'people' as const,
+    value: '6.69M',
+    rawValue: metricTotal(corpusMetrics.people),
+    label: 'People represented',
+    detail:
+      'People included across the current allele-frequency, haemoglobin S, and glucose-6-phosphate dehydrogenase deficiency evidence sources.',
+  },
+  {
+    kind: 'diseases' as const,
+    value: metricTotal(corpusMetrics.diseases).toLocaleString('en-US'),
+    rawValue: metricTotal(corpusMetrics.diseases),
+    label: 'Diseases represented',
+    detail:
+      'Sickle-cell disease and glucose-6-phosphate dehydrogenase deficiency are the first disease-focused collections.',
+  },
+];
+---
+
+<section class="metrics-section" aria-labelledby="metrics-title">
+  <div class="section-shell">
+    <div class="metrics-heading" data-reveal>
+      <div>
+        <p class="section-kicker">Collected so far</p>
+        <h2 id="metrics-title">A growing global evidence base.</h2>
+      </div>
+      <p>
+        This is what the community has brought together so far—and the
+        collection is growing with every new source.
+      </p>
+    </div>
+
+    <div class="metrics-grid">
+      {
+        metrics.map((metric, index) => (
+          <article
+            class={`metric metric--${metric.kind}`}
+            data-metric-kind={metric.kind}
+            data-reveal
+            style={`--reveal-delay: ${index * 90}ms`}
+          >
+            <MetricIcon kind={metric.kind} />
+            <data value={metric.rawValue}>{metric.value}</data>
+            <h3>{metric.label}</h3>
+            <p>{metric.detail}</p>
+          </article>
+        ))
+      }
+    </div>
+
+    <details class="metrics-method" data-reveal>
+      <summary>How these counts are defined</summary>
+      <div>
+        <p>
+          Variant total: 4,391 identifiers from the <a
+            href="https://www.allelefrequencies.net/"
+            >Allele Frequency Net Database (AFND)</a
+          > after the current quality filters, plus the haemoglobin S variant associated
+          with sickle-cell disease (also known as HbS or rs334). Participant total:
+          each retained database population sample counted once, plus people tested
+          in the retained haemoglobin S surveys and male participants in the retained
+          glucose-6-phosphate dehydrogenase (G6PD) deficiency surveys. Some studies
+          may include overlapping groups, so this total describes the scale of the
+          collected evidence rather than a verified census of unique individuals.
+        </p>
+        <p>
+          Recomputed {corpusMetrics.countedAt} from source snapshot {
+            corpusMetrics.sourceRevision
+          }, last updated {corpusMetrics.sourceUpdatedAt}.
+        </p>
+      </div>
+    </details>
+  </div>
+</section>

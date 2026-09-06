@@ -1,0 +1,81 @@
+---
+import Applications from '../components/Applications.astro';
+import CorpusMetrics from '../components/CorpusMetrics.astro';
+import Hero from '../components/Hero.astro';
+import HowItWorks from '../components/HowItWorks.astro';
+import MissionIntro from '../components/MissionIntro.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { sitePath } from '../lib/paths';
+---
+
+<SiteLayout
+  title="genomeOS"
+  description="Make the world's genetic diversity useful for better screening, medicine, discovery, and more representative research."
+>
+  <Hero />
+  <MissionIntro />
+  <CorpusMetrics />
+  <Applications />
+
+  <HowItWorks />
+
+  <section class="home-project-path" aria-labelledby="home-project-path-title">
+    <div class="section-shell home-project-path__inner" data-reveal>
+      <div class="home-project-path__media">
+        <img
+          src={sitePath('/images/vision-earth.webp')}
+          alt="A luminous globe showing genetic evidence points distributed unevenly across the world"
+          width="1536"
+          height="1024"
+          loading="lazy"
+          decoding="async"
+        />
+      </div>
+      <div class="home-project-path__copy">
+        <p class="section-kicker">Explore the larger vision</p>
+        <h2 id="home-project-path-title">
+          From one world map to many biological scales.
+        </h2>
+        <p>
+          See why geographic evidence comes first, how genomeOS could later
+          connect Earth to the genome inside our cells, and which scientific
+          safeguards govern every layer.
+        </p>
+        <a class="button-link button-link--quiet" href={sitePath('/project/')}
+          >Explore the project</a
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="final-invitation">
+    <div class="section-shell final-invitation__inner">
+      <p class="section-kicker">Your perspective belongs here</p>
+      <h2>Help build a genomic resource for everyone.</h2>
+      <p>
+        Introduce yourself, find a task, or start a conversation about evidence,
+        places, communities, applications, and ideas the current roadmap has
+        missed.
+      </p>
+      <div class="final-invitation__actions">
+        <a
+          class="github-cta github-cta--primary"
+          href="https://github.com/bschilder/genomeOS/discussions/76"
+          target="_blank"
+          rel="noopener noreferrer"
+          ><span>Start here</span><strong>Join the conversation</strong><span
+            aria-hidden="true">↗</span
+          ></a
+        >
+        <a
+          class="github-cta"
+          href="https://github.com/bschilder/genomeOS/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          ><span>See what needs doing</span><strong>Explore open issues</strong
+          ><span aria-hidden="true">↗</span></a
+        >
+      </div>
+    </div>
+  </section>
+</SiteLayout>

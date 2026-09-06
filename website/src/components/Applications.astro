@@ -1,0 +1,95 @@
+---
+const applications = [
+  {
+    number: '01',
+    horizon: 'First-release direction',
+    title: 'Screening programmes',
+    description:
+      'Help regions decide which carrier or newborn conditions to screen for, estimate the expected yield per 100,000 people, and find consequential gaps in existing panels.',
+  },
+  {
+    number: '02',
+    horizon: 'Clinical validation needed',
+    title: 'Diagnostic context',
+    description:
+      'Give clinicians transparent regional context before testing—information that can support a diagnostic decision, never replace an individual genetic test.',
+  },
+  {
+    number: '03',
+    horizon: 'Study planning',
+    title: 'Trial planning',
+    description:
+      'Estimate where enough carriers may be present to make a rare-disease or gene-therapy study feasible, with uncertainty and source coverage visible from the start.',
+  },
+  {
+    number: '04',
+    horizon: 'Headline output',
+    title: 'The map of what we don’t know',
+    description:
+      'Show funders, biobanks, and sequencing programmes which populations remain poorly represented—and where the next dataset could matter most.',
+  },
+  {
+    number: '05',
+    horizon: 'Future exploration',
+    title: 'Medicines and drug response',
+    description:
+      'Surface naturally protective variants, population differences relevant to drug response, and evidence that can motivate safer studies and therapeutic targets.',
+  },
+  {
+    number: '06',
+    horizon: 'Hypothesis generation',
+    title: 'Research and discovery',
+    description:
+      'Move between genotype, phenotype, geography, linked variants, and selection to generate testable questions about gene function and human history.',
+  },
+];
+---
+
+<section
+  class="applications-section"
+  aria-labelledby="applications-title"
+  data-motion-surface
+>
+  <div class="section-shell applications-layout">
+    <div class="applications-intro" data-reveal>
+      <p class="section-kicker">Potential applications</p>
+      <h2 id="applications-title">
+        From scattered evidence to better decisions.
+      </h2>
+      <p>
+        genomeOS is infrastructure for questions that currently take years of
+        one-off work. Every use still inherits the same rule: population
+        evidence provides context, not an individual diagnosis.
+      </p>
+      <a
+        class="github-cta github-cta--inline"
+        href="https://github.com/bschilder/genomeOS/discussions/1"
+        target="_blank"
+        rel="noopener noreferrer"
+        ><span>Help shape what genomeOS could become</span><strong
+          >Explore and add applications on GitHub</strong
+        ><span aria-hidden="true">↗</span></a
+      >
+    </div>
+
+    <div class="applications-grid">
+      {
+        applications.map((application, index) => (
+          <article
+            class="application-card"
+            data-reveal
+            style={`--reveal-delay: ${Math.min(index * 70, 280)}ms`}
+          >
+            <div class="application-card__meta">
+              <span>{application.number}</span>
+              <span>{application.horizon}</span>
+            </div>
+            <h3>{application.title}</h3>
+            <p>{application.description}</p>
+            <span class="application-card__signal" aria-hidden="true" />
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>

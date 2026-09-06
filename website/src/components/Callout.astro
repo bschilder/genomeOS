@@ -1,0 +1,15 @@
+---
+interface Props {
+  title: string;
+  tone?: 'ion' | 'genome' | 'signal' | 'aurora';
+  headingLevel?: 'h2' | 'h3';
+}
+
+const { title, tone = 'ion', headingLevel = 'h2' } = Astro.props;
+const Heading = headingLevel;
+---
+
+<aside class={`callout callout--${tone}`}>
+  <Heading>{title}</Heading>
+  <div class="callout__body"><slot /></div>
+</aside>

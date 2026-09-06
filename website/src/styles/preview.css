@@ -1,0 +1,117 @@
+.preview-section {
+  padding-block: clamp(4rem, 8vw, 7rem);
+  border-bottom: 1px solid var(--color-line);
+  background:
+    radial-gradient(
+      circle at 78% 15%,
+      rgb(173 139 255 / 10%),
+      transparent 34rem
+    ),
+    var(--color-void);
+}
+
+.preview-toolbar {
+  margin-bottom: 2rem;
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.preview-toolbar h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2.35rem, 4vw, 4rem);
+  font-weight: 430;
+  letter-spacing: -0.045em;
+  line-height: 1.04;
+}
+
+.preview-notice {
+  margin: 0 0 2rem;
+  padding: 1.25rem 1.4rem;
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.35fr) minmax(0, 1fr);
+  gap: 1.5rem;
+  border: 1px solid rgb(244 200 106 / 48%);
+  background: rgb(244 200 106 / 6%);
+}
+
+.preview-notice strong {
+  color: var(--color-signal);
+  font-family: var(--font-display);
+  font-weight: 620;
+}
+
+.preview-notice p {
+  margin: 0;
+  color: #d6e1f0;
+}
+
+.preview-frame {
+  overflow: hidden;
+  border: 1px solid rgb(112 230 255 / 34%);
+  background: #030913;
+  box-shadow:
+    0 2rem 6rem rgb(0 0 0 / 42%),
+    0 0 4rem rgb(112 230 255 / 7%);
+}
+
+.preview-frame__bar {
+  min-height: 3.25rem;
+  padding-inline: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-orbit);
+}
+
+.preview-frame__bar span {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid var(--color-muted);
+  border-radius: 50%;
+}
+
+.preview-frame__bar span:first-child {
+  border-color: var(--color-signal);
+}
+
+.preview-frame__bar span:nth-child(2) {
+  border-color: var(--color-genome);
+}
+
+.preview-frame__bar span:nth-child(3) {
+  border-color: var(--color-aurora);
+}
+
+.preview-frame__bar p {
+  margin: 0 0 0 0.5rem;
+  color: var(--color-muted);
+  font-family: ui-monospace, 'SFMono-Regular', Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.preview-frame iframe {
+  width: 100%;
+  height: clamp(40rem, 78vh, 58rem);
+  display: block;
+  border: 0;
+  background: #fff;
+}
+
+@media (max-width: 46rem) {
+  .preview-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .preview-notice {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-frame iframe {
+    height: 42rem;
+  }
+}
