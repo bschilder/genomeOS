@@ -419,7 +419,7 @@ Run: `cd website && npx vitest run tests/atlas-visual-encoding.test.ts tests/atl
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit deterministic state**
+- [x] **Step 6: Commit deterministic state**
 
 ```bash
 git add website/src/atlas/visual-encoding.ts website/src/atlas/url-state.ts website/tests/atlas-visual-encoding.test.ts website/tests/atlas-url-state.test.ts
@@ -444,7 +444,7 @@ git commit -m "feat: encode atlas metrics and shareable state (#55)"
   `buildSurfaceLayer(artifact, options) -> ScientificPrimitiveGroup`,
   `buildObservationLayer(artifact) -> ObservationPrimitiveGroup`, and typed `AtlasPick` events.
 
-- [ ] **Step 1: Write failing pure scene-policy tests**
+- [x] **Step 1: Write failing pure scene-policy tests**
 
 Test quantization, H3 boundary ordering, pick IDs, support partitioning, view transitions, and
 keyboard-command filtering without constructing a WebGL context:
@@ -463,13 +463,13 @@ it("partitions inferred values from unsupported cells", () => {
 });
 ```
 
-- [ ] **Step 2: Run tests and verify that they fail**
+- [x] **Step 2: Run tests and verify that they fail**
 
 Run: `cd website && npx vitest run tests/atlas-scene.test.ts`
 
 Expected: FAIL because scene modules do not exist.
 
-- [ ] **Step 3: Implement the scene controller**
+- [x] **Step 3: Implement the scene controller**
 
 Create `Viewer` with all ion-dependent widgets and the default base layer disabled. Style the
 ellipsoid, sky atmosphere, stars, fog, globe lighting, resolution scale, and bloom using the site
@@ -492,21 +492,22 @@ export interface AtlasSceneController {
 }
 ```
 
-- [ ] **Step 4: Implement batched surface and support primitives**
+- [x] **Step 4: Implement batched surface and support primitives**
 
 Use `h3-js.cellToBoundary()` for exact cells, Cesium `PolygonGeometry` instances, and 32 shared
 color bins so cells do not become independent draw calls. Supported cells use a material color;
 unsupported cells use separate shader materials for crosshatch and stipple. Elevation rebuilds
 geometry asynchronously with `extrudedHeight`; old primitives remain visible until the new group
-is ready, then group material alpha cross-fades over 180 ms unless reduced motion is active.
+is ready, then spatially registered groups and their palettes morph with an eased 720 ms blend
+unless reduced motion is active.
 
-- [ ] **Step 5: Implement measured-observation primitives**
+- [x] **Step 5: Implement measured-observation primitives**
 
 Batch geodesic radius rings into one `GroundPolylinePrimitive`, add a point collection for precise
 centres, scale point pixels from explicit denominator quantiles, and attach pick IDs that identify
 the object as `kind: 'observation'`. Never derive a radius in TypeScript.
 
-- [ ] **Step 6: Implement context imagery and camera controls**
+- [x] **Step 6: Implement context imagery and camera controls**
 
 Add a replaceable OSM-derived `UrlTemplateImageryProvider` below scientific layers, with attribution.
 Load the pinned Natural Earth GeoJSON as a low-resolution country-outline layer that remains visible
@@ -514,7 +515,7 @@ when imagery is disabled or unavailable. Cesium handles mouse/touch controls; `c
 focus-scoped arrow/WASD and `+`/`-` controls, ignores editable elements, and debounces settled camera
 state for URL synchronization.
 
-- [ ] **Step 7: Run scene tests and a production build**
+- [x] **Step 7: Run scene tests and a production build**
 
 Run:
 

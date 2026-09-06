@@ -221,9 +221,11 @@ Height is normalized within a documented metric domain shared across the active 
 renormalized to the current viewport. This prevents the same value from appearing taller merely
 because the camera moved. `unknown` and `prior_dominated` cells never receive a fabricated height.
 
-Geometry changes are built off the interaction path, then cross-faded into the scene. Camera motion
-continues against the old geometry until the replacement is ready; the app never freezes rotation
-while rebuilding an elevation layer.
+Geometry changes are built off the interaction path, then smoothly morphed into the scene over an
+eased 720 ms transition. Both spatially registered H3 layers remain alive during the transition so
+heatmap patterns and palette changes blend continuously rather than flashing between states. Camera
+motion continues against the old geometry until the replacement is ready; the app never freezes
+rotation while rebuilding an elevation layer. Reduced-motion mode swaps immediately.
 
 ### 8.3 Observations
 
@@ -259,8 +261,9 @@ idle → loading catalog → loading artifact → validating → rendering → r
 ```
 
 Changing the entity or metric aborts stale requests. The current scene remains visible with a
-loading indicator until the replacement is validated and ready, then layers cross-fade. The UI does
-not clear to an empty globe and does not briefly display one entity under another entity's legend.
+loading indicator until the replacement is validated and ready, then spatially registered layers
+morph continuously with an eased blend, including a smooth palette transition. The UI does not
+clear to an empty globe and does not briefly display one entity under another entity's legend.
 
 Posterior mean and uncertainty use the same artifact, so switching between them requires no network
 request. A future burden artifact may be lazy-loaded because it has a separate scientific meaning
