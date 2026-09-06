@@ -348,7 +348,7 @@ Run: `cd website && npx vitest run tests/atlas-contracts.test.ts tests/atlas-pro
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the provider boundary**
+- [x] **Step 6: Commit the provider boundary**
 
 ```bash
 git add website/src/atlas/contracts.ts website/src/atlas/provider.ts website/src/atlas/static-provider.ts website/tests/atlas-contracts.test.ts website/tests/atlas-provider.test.ts
@@ -371,7 +371,7 @@ git commit -m "feat: add strict atlas data provider (#55)"
 'perspective'`, `ExplorerState`, `colorForCell`, `heightForCell`, `parseExplorerState`, and
   `serializeExplorerState`.
 
-- [ ] **Step 1: Write failing encoding and URL tests**
+- [x] **Step 1: Write failing encoding and URL tests**
 
 ```ts
 it.each(["unknown", "prior_dominated"] as const)(
@@ -393,27 +393,27 @@ it("preserves an unavailable requested entity instead of substituting", () => {
 Also test stable artifact-wide domains, metric palette endpoints, elevation/map behavior, camera
 bounds, malformed booleans, complete round-tripping, and omission of transient inspector state.
 
-- [ ] **Step 2: Run tests and verify that they fail**
+- [x] **Step 2: Run tests and verify that they fail**
 
 Run: `cd website && npx vitest run tests/atlas-visual-encoding.test.ts tests/atlas-url-state.test.ts`
 
 Expected: FAIL because the modules do not exist.
 
-- [ ] **Step 3: Implement encoding**
+- [x] **Step 3: Implement encoding**
 
 Use frequency colors `#10213e → #27a9d0 → #72e7c1` and uncertainty colors
 `#24144b → #ad8bff → #f4c86a`. Interpolate in linear RGB. `heightForCell` maps the catalog's full
 metric domain to `0..180_000 * exaggeration` metres and returns zero unless support is `observed`
 or `interpolated`.
 
-- [ ] **Step 4: Implement URL state**
+- [x] **Step 4: Implement URL state**
 
 The serializer writes `entity`, `version`, `metric`, comma-separated `layers`, `view`, `elevation`,
 `exaggeration`, `lon`, `lat`, `height`, `heading`, and `pitch`. The parser validates each field
 independently and returns `{ state, corrections }`; an unavailable requested entity is retained in
 state and blocks artifact loading until the user makes an explicit choice.
 
-- [ ] **Step 5: Run encoding and state tests**
+- [x] **Step 5: Run encoding and state tests**
 
 Run: `cd website && npx vitest run tests/atlas-visual-encoding.test.ts tests/atlas-url-state.test.ts`
 
