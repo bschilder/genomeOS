@@ -29,6 +29,7 @@ as a dense array. This is offline batch work by design (§5), not a serving-path
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,6 +50,7 @@ class PopulationGrid:
     cells: pd.DataFrame  # h3_index, population
     resolution: int
     source: str
+    source_version: str
     pixels_counted: int
     pixels_nodata: int
     coverage_stride: int
@@ -57,7 +59,7 @@ class PopulationGrid:
         total = self.cells["population"].sum()
         return (
             f"{len(self.cells):,} H3 res-{self.resolution} cells, "
-            f"total population {total:,.0f} ({self.source}); "
+            f"total population {total:,.0f} ({self.source}, {self.source_version}); "
             f"{self.pixels_counted:,} pixels counted, {self.pixels_nodata:,} nodata"
         )
 
@@ -67,6 +69,7 @@ def aggregate_raster_to_h3(
     resolution: int,
     *,
     source: str = WORLDPOP_SOURCE,
+    source_version: str,
     window_size: int = 1024,
     coverage_stride: int = 16,
 ) -> PopulationGrid:
@@ -83,6 +86,10 @@ def aggregate_raster_to_h3(
     from rasterio.windows import Window
 
     _check_resolution(resolution)
+    if not source.strip():
+        raise ValueError("population source must be non-empty")
+    if not source_version.strip():
+        raise ValueError("population source_version must be non-empty")
 
     totals: dict[str, float] = defaultdict(float)
     counted = nodata_count = 0
@@ -137,10 +144,77 @@ def aggregate_raster_to_h3(
         cells=cells,
         resolution=resolution,
         source=source,
+        source_version=source_version,
         pixels_counted=counted,
         pixels_nodata=nodata_count,
         coverage_stride=coverage_stride,
     )
+
+
+def publication_target_cells(
+    population_grid: PopulationGrid,
+    observation_cells: Iterable[str],
+) -> list[str]:
+    """Select WorldPop-positive targets and refuse observation/coverage conflicts (§7, §9).
+
+    A visual land polygon is not evidence that a cell has a population denominator. Publication
+    therefore starts from versioned WorldPop coverage and only unions observation cells after
+    proving that each is covered and has positive population.
+    """
+    import h3
+
+    if population_grid.source != WORLDPOP_SOURCE:
+        raise ValueError(
+            f"publication targets require {WORLDPOP_SOURCE}; got {population_grid.source!r}"
+        )
+    if not population_grid.source_version.strip():
+        raise ValueError("publication targets require a non-empty WorldPop source_version")
+    required = {"h3_index", "population"}
+    missing = required - set(population_grid.cells.columns)
+    if missing:
+        raise ValueError(f"population grid is missing required columns {sorted(missing)}")
+    if population_grid.cells["h3_index"].duplicated().any():
+        raise ValueError("population grid h3_index values must be unique")
+
+    population = pd.to_numeric(population_grid.cells["population"], errors="coerce")
+    if population.isna().any() or not np.isfinite(population).all():
+        raise ValueError("population values must be finite numbers")
+    if (population < 0).any():
+        raise ValueError("population values must be non-negative")
+
+    cells = population_grid.cells["h3_index"].astype(str)
+    invalid = [
+        cell
+        for cell in cells
+        if not h3.is_valid_cell(cell) or h3.get_resolution(cell) != population_grid.resolution
+    ]
+    if invalid:
+        raise ValueError(
+            f"population grid cells must be valid H3 resolution {population_grid.resolution}; "
+            f"got {invalid[:3]}"
+        )
+
+    by_cell = dict(zip(cells, population.astype(float), strict=True))
+    observed = {str(cell) for cell in observation_cells}
+    invalid_observed = [
+        cell
+        for cell in observed
+        if not h3.is_valid_cell(cell) or h3.get_resolution(cell) != population_grid.resolution
+    ]
+    if invalid_observed:
+        raise ValueError(
+            f"observation cells must be valid H3 resolution {population_grid.resolution}; "
+            f"got {invalid_observed[:3]}"
+        )
+    uncovered = sorted(observed - set(by_cell))
+    if uncovered:
+        raise ValueError(f"observation cells have no WorldPop coverage: {uncovered[:3]}")
+    empty = sorted(cell for cell in observed if by_cell[cell] == 0)
+    if empty:
+        raise ValueError(f"observation cells report zero population: {empty[:3]}")
+
+    positive = {cell for cell, value in by_cell.items() if value > 0}
+    return sorted(positive | observed)
 
 
 def births_from_population(

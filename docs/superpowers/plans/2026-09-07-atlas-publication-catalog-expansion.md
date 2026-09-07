@@ -139,7 +139,8 @@ git commit -m "feat: support surface-only Atlas artifacts (#55)"
 - Modify: `genomeos/geo/population.py`
 - Modify: `genomeos/surfaces/artifacts.py`
 - Modify: `tests/test_population.py`
-- Modify: `tests/test_surface_artifacts.py`
+- Modify: `tests/test_artifacts.py`
+- Create: `tests/test_publish_artifacts.py`
 - Modify: `scripts/publish_artifacts.py`
 - Create: `scripts/build_population_grid.py`
 - Create: `tests/fixtures/worldpop_small_islands.csv`
@@ -222,7 +223,7 @@ def build_population_grid(
     return grid
 ```
 
-The CLI accepts `--raster`, `--out`, `--resolution`, and required `--source-version`. It refuses an existing output unless `--overwrite` is explicitly supplied and prints cell count, total population, source, version, and output SHA-256.
+The CLI accepts `--raster`, `--out`, `--resolution`, and required `--source-version`. It writes a checksum-bearing `.parquet.manifest.json` sidecar containing resolution, source, version, pixel counts, nodata count, and coverage stride. It refuses either existing output unless `--overwrite` is explicitly supplied and prints cell count, total population, source, version, and output SHA-256.
 
 - [ ] **Step 6: Replace `h3_land_cells` in the artifact publisher**
 
@@ -241,7 +242,7 @@ Add a test that publishes the original identity, attempts the WorldPop-backed pu
 Run:
 
 ```bash
-python -m pytest tests/test_population.py tests/test_surface_artifacts.py -q
+python -m pytest tests/test_population.py tests/test_artifacts.py tests/test_publish_artifacts.py -q
 python scripts/smoke.py
 ```
 
@@ -250,7 +251,7 @@ Expected: PASS; the fixture names both Cabo Verde and Malta in assertion message
 - [ ] **Step 10: Commit the target-grid slice**
 
 ```bash
-git add genomeos/geo/population.py genomeos/surfaces/artifacts.py scripts/build_population_grid.py scripts/publish_artifacts.py tests/test_population.py tests/test_surface_artifacts.py tests/fixtures/worldpop_small_islands.csv
+git add genomeos/geo/population.py genomeos/surfaces/artifacts.py scripts/build_population_grid.py scripts/publish_artifacts.py tests/test_population.py tests/test_artifacts.py tests/test_publish_artifacts.py tests/fixtures/worldpop_small_islands.csv
 python scripts/check_private_files.py
 git diff --cached --name-only
 git commit -m "fix: publish surfaces over populated islands (#55)"
@@ -330,7 +331,7 @@ git commit -m "feat: publish thirty Atlas map choices (#55)"
 - Modify: `data/store/INVENTORY.json`
 - Create: new immutable directories under `data/store/artifacts/`
 - Modify: `website/src/atlas/public-artifacts.json`
-- Test: `tests/test_surface_artifacts.py`
+- Test: `tests/test_artifacts.py`
 
 **Interfaces:**
 
