@@ -2,6 +2,7 @@ import { cellToBoundary } from 'h3-js';
 import {
   Cartesian3,
   MaterialAppearance,
+  PinBuilder,
   PolygonGeometry,
   PolygonHierarchy,
 } from 'cesium';
@@ -27,6 +28,7 @@ import {
   createFrameThrottle,
   preferredAtlasPick,
 } from '../src/atlas/scene/picking';
+import { waitForReady } from '../src/atlas/scene/scene-transition';
 import {
   buildSurfaceLayer,
   h3BoundaryDegrees,
@@ -61,6 +63,52 @@ function stubCesiumBrowserImageTypes(): void {
     'OffscreenCanvas',
   ])
     vi.stubGlobal(browserType, class BrowserImageType {});
+}
+
+function buildObservationLayerForTest(shape: 'circle' | 'pin' = 'circle') {
+  const surface = {
+    artifact: {
+      metric_domains: { post_mean: [0, 1], post_sd: [0, 1] },
+      resolution: 3,
+    },
+    cells: [baseCell],
+  } as SurfaceArtifact;
+  const observations = {
+    artifact: surface.artifact,
+    observations: [
+      {
+        ac: 25,
+        an: 100,
+        assay: 'genotype',
+        citation_text: 'Example publication.',
+        cohort_id: 'map-study-1',
+        disease_ascertainment_excluded: true,
+        ingest_version: 'map-2026-08',
+        lat: 5,
+        lon: -1,
+        population_label: 'Example population',
+        radius_km: 12,
+        sampling_design: 'population_random',
+        source_locator: 'MAP survey 1',
+        source_record_id: 'map-surveys:1',
+        source_url: 'https://example.org/source',
+        study_id: 'map-study-1',
+        study_label: 'Example study',
+      },
+    ],
+  } as ObservationArtifact;
+  return buildObservationLayer(observations, {
+    colorVariable: 'white',
+    elevation: false,
+    exaggeration: 1,
+    hemisphereRange: [40, 300],
+    metric: 'post_mean',
+    pointRange: [6, 18],
+    samplingAreas: true,
+    shape,
+    sizeVariable: 'fixed',
+    surface,
+  });
 }
 
 describe('Cesium scene policy', () => {
@@ -171,50 +219,8 @@ describe('Cesium scene policy', () => {
 
   it('hides sampling areas with the measured-observations layer', () => {
     stubCesiumBrowserImageTypes();
-    const surface = {
-      artifact: {
-        metric_domains: { post_mean: [0, 1], post_sd: [0, 1] },
-        resolution: 3,
-      },
-      cells: [baseCell],
-    } as SurfaceArtifact;
-    const observations = {
-      artifact: surface.artifact,
-      observations: [
-        {
-          ac: 25,
-          an: 100,
-          assay: 'genotype',
-          citation_text: 'Example publication.',
-          cohort_id: 'map-study-1',
-          disease_ascertainment_excluded: true,
-          ingest_version: 'map-2026-08',
-          lat: 5,
-          lon: -1,
-          population_label: 'Example population',
-          radius_km: 12,
-          sampling_design: 'population_random',
-          source_locator: 'MAP survey 1',
-          source_record_id: 'map-surveys:1',
-          source_url: 'https://example.org/source',
-          study_id: 'map-study-1',
-          study_label: 'Example study',
-        },
-      ],
-    } as ObservationArtifact;
     try {
-      const layer = buildObservationLayer(observations, {
-        colorVariable: 'white',
-        elevation: false,
-        exaggeration: 1,
-        hemisphereRange: [40, 300],
-        metric: 'post_mean',
-        pointRange: [6, 18],
-        samplingAreas: true,
-        shape: 'circle',
-        sizeVariable: 'fixed',
-        surface,
-      });
+      const layer = buildObservationLayerForTest();
       const samplingAreas = layer.collection.get(0);
 
       layer.setVisibility(false, true);
@@ -222,6 +228,117 @@ describe('Cesium scene policy', () => {
       expect(samplingAreas.show).toBe(false);
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it.each([
+    ['circle', 2],
+    ['pin', 3],
+  ] as const)(
+    'depth-tests %s observations against the globe',
+    (shape, index) => {
+      stubCesiumBrowserImageTypes();
+      try {
+        if (shape === 'pin')
+          vi.spyOn(PinBuilder.prototype, 'fromColor').mockReturnValue(
+            new HTMLCanvasElement(),
+          );
+        const layer = buildObservationLayerForTest(shape);
+        const symbols = layer.collection.get(index);
+
+        expect(symbols.get(0).disableDepthTestDistance).toBe(0);
+      } finally {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it('fades circle outlines with their observation layer', () => {
+    stubCesiumBrowserImageTypes();
+    try {
+      const layer = buildObservationLayerForTest();
+      const points = layer.collection.get(2);
+
+      layer.setOpacity(0);
+
+      expect(points.get(0).outlineColor.alpha).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('extends the readiness deadline while geometry makes progress', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('window', { setTimeout: globalThis.setTimeout });
+    try {
+      let postRender = () => {};
+      let readyCount = 0;
+      const group = {
+        collection: { show: true },
+        isReady: () => readyCount === 2,
+        readyCount: () => readyCount,
+      };
+      const viewer = {
+        scene: {
+          postRender: {
+            addEventListener(listener: () => void) {
+              postRender = listener;
+              return () => {};
+            },
+          },
+          requestRender: vi.fn(),
+        },
+      };
+      const outcome = waitForReady(viewer as never, group as never).then(
+        () => null,
+        (error: Error) => error,
+      );
+
+      await vi.advanceTimersByTimeAsync(29_000);
+      readyCount = 1;
+      postRender();
+      await vi.advanceTimersByTimeAsync(29_000);
+      readyCount = 2;
+      postRender();
+
+      await expect(outcome).resolves.toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
+  it('hides geometry that stops making readiness progress', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal('window', { setTimeout: globalThis.setTimeout });
+    try {
+      const group = {
+        collection: { show: true },
+        isReady: () => false,
+        readyCount: () => 0,
+      };
+      const viewer = {
+        scene: {
+          postRender: {
+            addEventListener: () => () => {},
+          },
+          requestRender: vi.fn(),
+        },
+      };
+      const outcome = waitForReady(viewer as never, group as never).catch(
+        (error: Error) => error,
+      );
+
+      await vi.advanceTimersByTimeAsync(30_000);
+
+      await expect(outcome).resolves.toMatchObject({
+        message: 'Cesium geometry build timed out',
+      });
+      expect(group.collection.show).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
     }
   });
 

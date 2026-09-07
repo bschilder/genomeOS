@@ -55,6 +55,7 @@ export interface ObservationLayerOptions {
 export interface ObservationPrimitiveGroup {
   collection: PrimitiveCollection;
   isReady(): boolean;
+  readyCount(): number;
   setOpacity(opacity: number): void;
   setVisibility(symbols: boolean, samplingAreas: boolean): void;
 }
@@ -276,6 +277,7 @@ export function buildObservationLayer(
 
   const pinBuilder = new PinBuilder();
   const pointBaseColors: Color[] = [];
+  const pointOutlineBaseColors: Color[] = [];
   const pinBaseColors: Color[] = [];
   for (const symbol of symbols) {
     const { color, observation, size, topHeight } = symbol;
@@ -286,12 +288,14 @@ export function buildObservationLayer(
       topHeight,
     );
     if (options.shape === 'circle') {
+      const outlineColor = Color.fromCssColorString('#071426').withAlpha(0.92);
       pointBaseColors.push(cesiumColor.clone());
+      pointOutlineBaseColors.push(outlineColor.clone());
       points.add({
         color: cesiumColor,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 0,
         id: observationPickId(observation.source_record_id),
-        outlineColor: Color.fromCssColorString('#071426').withAlpha(0.92),
+        outlineColor,
         outlineWidth: 2,
         pixelSize: size,
         position,
@@ -300,7 +304,7 @@ export function buildObservationLayer(
       pinBaseColors.push(cesiumColor.clone());
       pins.add({
         color: cesiumColor,
-        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        disableDepthTestDistance: 0,
         id: observationPickId(observation.source_record_id),
         image: pinBuilder.fromColor(Color.WHITE, Math.round(size * 1.7)),
         position,
@@ -315,6 +319,8 @@ export function buildObservationLayer(
   return {
     collection,
     isReady: () => hemisphere.primitives.every((primitive) => primitive.ready),
+    readyCount: () =>
+      hemisphere.primitives.filter((primitive) => primitive.ready).length,
     setOpacity(opacity: number) {
       for (let index = 0; index < rings.length; index += 1) {
         const material = rings.get(index).material;
@@ -324,6 +330,8 @@ export function buildObservationLayer(
       }
       for (let index = 0; index < points.length; index += 1) {
         points.get(index).color.alpha = pointBaseColors[index].alpha * opacity;
+        points.get(index).outlineColor.alpha =
+          pointOutlineBaseColors[index].alpha * opacity;
       }
       for (let index = 0; index < pins.length; index += 1) {
         pins.get(index).color.alpha = pinBaseColors[index].alpha * opacity;

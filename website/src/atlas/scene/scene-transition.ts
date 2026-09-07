@@ -9,6 +9,7 @@ export type FadeableGroup =
   ScientificPrimitiveGroup | ObservationPrimitiveGroup;
 
 const HEATMAP_TRANSITION_MS = 720;
+const GEOMETRY_IDLE_TIMEOUT_MS = 30_000;
 
 export function transitionProgress(
   elapsedMs: number,
@@ -24,16 +25,32 @@ export function waitForReady(
 ): Promise<void> {
   if (group.isReady()) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    const remove = viewer.scene.postRender.addEventListener(() => {
-      if (!group.isReady()) return;
+    let readyCount = group.readyCount();
+    let timeout = 0;
+    const stopWaiting = () => {
       clearTimeout(timeout);
       remove();
+    };
+    const failIfStalled = () => {
+      group.collection.show = false;
+      stopWaiting();
+      reject(new Error('Cesium geometry build timed out'));
+    };
+    const extendDeadline = () => {
+      clearTimeout(timeout);
+      timeout = window.setTimeout(failIfStalled, GEOMETRY_IDLE_TIMEOUT_MS);
+    };
+    const remove = viewer.scene.postRender.addEventListener(() => {
+      const nextReadyCount = group.readyCount();
+      if (nextReadyCount > readyCount) {
+        readyCount = nextReadyCount;
+        extendDeadline();
+      }
+      if (!group.isReady()) return;
+      stopWaiting();
       resolve();
     });
-    const timeout = window.setTimeout(() => {
-      remove();
-      reject(new Error('Cesium geometry build timed out'));
-    }, 30_000);
+    extendDeadline();
     viewer.scene.requestRender();
   });
 }

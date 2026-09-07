@@ -34,6 +34,7 @@ export interface ScientificPrimitiveGroup {
   collection: PrimitiveCollection;
   primitives: Primitive[];
   isReady(): boolean;
+  readyCount(): number;
   setOpacity(opacity: number): void;
   setSurfaceOpacity(opacity: number): void;
   setCellEdges(visible: boolean): void;
@@ -252,6 +253,7 @@ export function buildSurfaceLayer(
     collection,
     primitives,
     isReady: () => primitives.every((primitive) => primitive.ready),
+    readyCount: () => primitives.filter((primitive) => primitive.ready).length,
     setOpacity(opacity: number) {
       fadeOpacity = opacity;
       edgeCollection.show = surfaceVisible && edgesVisible && opacity > 0.05;
