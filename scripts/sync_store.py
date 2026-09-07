@@ -18,6 +18,8 @@ store rather than a disk.
 **What is synced, and what each part is for.**
 
 - ``store/artifacts/`` — the citable per-cell surfaces. Small, durable, the thing #33 will publish.
+- ``store/population/`` — the H3 target grid and provenance sidecar used by format-2 surfaces.
+- ``store/external/`` — normalized, immutable gnomAD/dbSNP context for explicitly eligible variants.
 - ``store/fits/`` — trained models. ~100 MB each and **a cache, not an artifact**: pickle is
   coupled to the installed PyMC and executes on load. Synced because refitting costs ~20 minutes,
   not because it is archival.
@@ -37,6 +39,7 @@ publication veto. A future explicit restriction still takes precedence.
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 
 REPO_ID = "bschilder/genomeos-data"
@@ -46,6 +49,15 @@ REPO_TYPE = "dataset"
 #: interrupted push still leaves the artifacts present.
 SYNCED: tuple[tuple[str, str], ...] = (
     ("data/store/artifacts", "store/artifacts"),
+    (
+        "data/store/worldpop-res4-2020-plus-cok.parquet",
+        "store/population/worldpop-res4-2020-plus-cok.parquet",
+    ),
+    (
+        "data/store/worldpop-res4-2020-plus-cok.parquet.manifest.json",
+        "store/population/worldpop-res4-2020-plus-cok.parquet.manifest.json",
+    ),
+    ("data/store/external", "store/external"),
     ("data/store/INVENTORY.json", "store/INVENTORY.json"),
     ("data/raw/afnd_populations.tsv", "raw/afnd_populations.tsv"),
     ("data/raw/afnd_frequencies.tsv", "raw/afnd_frequencies.tsv"),
@@ -68,11 +80,84 @@ SYNCED: tuple[tuple[str, str], ...] = (
 #: Never synced. See the module docstring.
 EXCLUDED = ("data/raw/afnd_cache", "data/raw/afnd_freq_cache")
 
+ATLAS_RELEASE_SUPPORT: tuple[tuple[str, str], ...] = (
+    (
+        "data/store/worldpop-res4-2020-plus-cok.parquet",
+        "store/population/worldpop-res4-2020-plus-cok.parquet",
+    ),
+    (
+        "data/store/worldpop-res4-2020-plus-cok.parquet.manifest.json",
+        "store/population/worldpop-res4-2020-plus-cok.parquet.manifest.json",
+    ),
+    (
+        "data/store/external/gnomad/chr11-5227002-t-a.json",
+        "store/external/gnomad/chr11-5227002-t-a.json",
+    ),
+    (
+        "data/store/external/dbsnp/rs334.json",
+        "store/external/dbsnp/rs334.json",
+    ),
+    ("data/store/INVENTORY.json", "store/INVENTORY.json"),
+)
+
 
 def _api():
     from huggingface_hub import HfApi
 
     return HfApi()
+
+
+def atlas_release_targets(
+    allowlist_path: Path = Path("website/src/atlas/public-artifacts.json"),
+) -> tuple[tuple[str, str], ...]:
+    """Return the exact public Atlas release set; never infer a broad data directory."""
+    allowlist = json.loads(Path(allowlist_path).read_text())
+    artifacts = allowlist.get("artifacts")
+    if not isinstance(artifacts, list) or len(artifacts) != 30:
+        raise ValueError("Atlas release requires exactly 30 allowlisted artifacts")
+    names = [entry.get("artifact_dir") for entry in artifacts if isinstance(entry, dict)]
+    if len(names) != 30 or any(
+        not isinstance(name, str) or Path(name).name != name for name in names
+    ):
+        raise ValueError("every Atlas artifact_dir must be a safe basename")
+    if len(set(names)) != 30:
+        raise ValueError("Atlas release artifact directories must be unique")
+    artifact_targets = tuple(
+        (f"data/store/artifacts/{name}", f"store/artifacts/{name}") for name in names
+    )
+    return artifact_targets + ATLAS_RELEASE_SUPPORT
+
+
+def push_atlas_release(dry_run: bool) -> None:
+    """Publish only the website's reviewed release payload, excluding raw tables and fits."""
+    targets = atlas_release_targets()
+    api = None if dry_run else _api()
+    for local, remote in targets:
+        path = Path(local)
+        if not path.exists():
+            raise FileNotFoundError(f"Atlas release input is absent: {local}")
+        size = (
+            sum(file.stat().st_size for file in path.rglob("*") if file.is_file())
+            if path.is_dir()
+            else path.stat().st_size
+        )
+        print(f"  release {size / 1e6:8.1f} MB  {local} -> {remote}")
+        if dry_run:
+            continue
+        if path.is_dir():
+            api.upload_folder(
+                folder_path=str(path),
+                path_in_repo=remote,
+                repo_id=REPO_ID,
+                repo_type=REPO_TYPE,
+            )
+        else:
+            api.upload_file(
+                path_or_fileobj=str(path),
+                path_in_repo=remote,
+                repo_id=REPO_ID,
+                repo_type=REPO_TYPE,
+            )
 
 
 def push(dry_run: bool) -> None:
@@ -134,12 +219,15 @@ def status() -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("action", choices=("push", "pull", "status"))
+    ap.add_argument("action", choices=("push", "push-atlas-release", "pull", "status"))
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
-    {"push": lambda: push(args.dry_run), "pull": lambda: pull(args.dry_run), "status": status}[
-        args.action
-    ]()
+    {
+        "push": lambda: push(args.dry_run),
+        "push-atlas-release": lambda: push_atlas_release(args.dry_run),
+        "pull": lambda: pull(args.dry_run),
+        "status": status,
+    }[args.action]()
 
 
 if __name__ == "__main__":

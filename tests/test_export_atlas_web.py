@@ -74,6 +74,23 @@ def _write_source_tree(root: Path) -> Path:
             }
         )
     )
+    cache = root / "external" / "gnomad" / "chr11-5227002-t-a.json"
+    cache.parent.mkdir(parents=True)
+    cache.write_text(
+        json.dumps(
+            {
+                "query": {
+                    "dataset": "gnomad_r4",
+                    "normalized_variant_id": VARIANT_ID,
+                },
+                "record": {"fixture": True},
+                "retrieved_at": "2026-09-07T00:00:00Z",
+                "schema_version": 1,
+                "source": "gnomad",
+                "source_release": "gnomad_r4",
+            }
+        )
+    )
     return artifact
 
 
@@ -126,6 +143,14 @@ def _write_allowlist(path: Path) -> None:
                         "variant_id": VARIANT_ID,
                         "artifact_dir": "hbs-test__v1__map-test",
                         "observation_source": "map_hbs_surveys.csv",
+                        "external_resources": [
+                            {
+                                "source": "gnomad",
+                                "normalized_variant_id": VARIANT_ID,
+                                "dataset": "gnomad_r4",
+                                "cache_file": "external/gnomad/chr11-5227002-t-a.json",
+                            }
+                        ],
                     }
                 ],
             }
@@ -168,8 +193,10 @@ def test_export_preserves_support_versions_and_observation_evidence(
     export_inputs: dict[str, Path],
 ) -> None:
     paths = _export(export_inputs)
-    assert {path.name for path in paths} == {
+    assert {path.relative_to(export_inputs["out"]).as_posix() for path in paths} == {
         "catalog.json",
+        "external/gnomad/chr11-5227002-t-a.json",
+        "hbs-rs334.manifest.json",
         "hbs-rs334.observations.json",
         "hbs-rs334.surface.json",
     }
@@ -190,16 +217,32 @@ def test_export_preserves_support_versions_and_observation_evidence(
     assert observations["observations"][0]["study_label"] == "IBDTEST"
     assert catalog["artifacts"][0]["surface_sha256"]
     assert catalog["artifacts"][0]["observations_sha256"]
+    assert catalog["artifacts"][0]["downloads"]["manifest"]["sha256"]
+    assert catalog["artifacts"][0]["external_resources"] == [
+        {
+            "cache_sha256": catalog["artifacts"][0]["external_resources"][0][
+                "cache_sha256"
+            ],
+            "cache_url": "external/gnomad/chr11-5227002-t-a.json",
+            "dataset": "gnomad_r4",
+            "normalized_variant_id": VARIANT_ID,
+            "source": "gnomad",
+        }
+    ]
 
 
 def test_export_is_byte_deterministic(export_inputs: dict[str, Path]) -> None:
     _export(export_inputs)
     before = {
-        path.name: path.read_bytes() for path in sorted(export_inputs["out"].iterdir())
+        path.relative_to(export_inputs["out"]).as_posix(): path.read_bytes()
+        for path in sorted(export_inputs["out"].rglob("*"))
+        if path.is_file()
     }
     _export(export_inputs)
     after = {
-        path.name: path.read_bytes() for path in sorted(export_inputs["out"].iterdir())
+        path.relative_to(export_inputs["out"]).as_posix(): path.read_bytes()
+        for path in sorted(export_inputs["out"].rglob("*"))
+        if path.is_file()
     }
     assert after == before
 
@@ -277,8 +320,10 @@ def test_export_keeps_reviewed_surface_when_observations_are_unavailable(
 
     paths = _export(export_inputs)
 
-    assert {path.name for path in paths} == {
+    assert {path.relative_to(export_inputs["out"]).as_posix() for path in paths} == {
         "catalog.json",
+        "external/gnomad/chr11-5227002-t-a.json",
+        "hbs-rs334.manifest.json",
         "hbs-rs334.surface.json",
     }
     catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())

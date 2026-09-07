@@ -45,6 +45,11 @@ store/
   artifacts/<variant>__<model_version>__<data_version>/
     cells.parquet             per-H3-cell posterior summaries  <- the citable output
     manifest.json             what was published, under which assumptions
+  population/
+    worldpop-res4-2020-plus-cok.parquet
+    worldpop-res4-2020-plus-cok.parquet.manifest.json
+                              target cells plus exact raster URLs, hashes, and merge effects
+  external/{gnomad,dbsnp}/   normalized API context for explicitly eligible variants
   fits/<variant>.fit.pkl      trained PyMC models  <- a CACHE, not an artifact (see below)
   INVENTORY.json              sha256 of every file
 ```
@@ -74,8 +79,18 @@ numpyro NUTS. A fit that has not mixed is refused rather than published.
 
 **`store/artifacts/`** — `scripts/publish_artifacts.py`, predicting each fit onto versioned H3
 targets. Format-1 artifacts used a coarse Natural Earth land-centre mask. Format-2 artifacts use
-population-positive cells from a pinned WorldPop grid, union validated observation cells, and
-record that grid's source/version in the manifest.
+population-positive cells from a pinned WorldPop grid and record that grid's source/version in the
+manifest. Measured observations remain separate: an administrative centroid may lie outside
+populated land and is not treated as a claim that people live in its exact H3 cell.
+
+**`store/population/`** — an H3-resolution-4 population grid built from WorldPop's 2020 global
+1 km mosaic plus its official Cook Islands raster. The supplement is fill-only: the primary mosaic
+wins all overlaps, preventing double-counting. The sidecar records both source URLs and SHA-256
+hashes, one added cell, and 17 ignored overlaps.
+
+**`store/external/`** — normalized snapshots fetched from the public gnomAD and NCBI dbSNP APIs.
+The browser exposes them only when a catalog item is an actual normalized variant and the cache's
+variant/rsID exactly matches that item; phenotype, HLA, and KIR labels do not receive guessed links.
 
 ## Using it
 
@@ -89,7 +104,7 @@ path = snapshot_download("bschilder/genomeos-data", repo_type="dataset")
 ### The surfaces (start here)
 
 ```python
-cells = pd.read_parquet(f"{path}/store/artifacts/chr11-5227002-T-A__v1__map-2026-08/cells.parquet")
+cells = pd.read_parquet(f"{path}/store/artifacts/chr11-5227002-T-A__v3__map-2026-08/cells.parquet")
 print(cells.columns.tolist())
 # ['h3_index', 'variant_id', 'post_median', 'post_mean', 'post_sd',
 #  'q025', 'q975', 'q25', 'q75', 'support', 'posterior_contraction',
@@ -119,7 +134,7 @@ without refitting.
 
 ```python
 import json
-m = json.load(open(f"{path}/store/artifacts/chr11-5227002-T-A__v1__map-2026-08/manifest.json"))
+m = json.load(open(f"{path}/store/artifacts/chr11-5227002-T-A__v3__map-2026-08/manifest.json"))
 # correlation_range_km, likelihood, lengthscale_sigma, n_observations, support_counts, ...
 ```
 

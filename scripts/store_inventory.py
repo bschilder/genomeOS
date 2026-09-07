@@ -53,6 +53,8 @@ def main() -> None:
     for path in sorted(args.root.rglob("*")):
         if not path.is_file():
             continue
+        if path.resolve() == args.out.resolve():
+            continue
         parts = set(path.parts)
         total += path.stat().st_size
         bucket = next((name for name in SUMMARISE_ONLY if name in parts), None)

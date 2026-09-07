@@ -1,0 +1,1 @@
+{"artifact_format":1,"correlation_range_km":2563.4,"data_version":"afnd-2026-08","lengthscale_sigma":0.7,"likelihood":"beta_binomial","measurement":"allele_frequency","model_version":"v2","n_cells":11680,"n_observations":416,"prior_frequency_sd":0.11681,"resolution":3,"support_counts":{"interpolated":11353,"observed":152,"unknown":175},"variant_id":"hla:drb1-04-03"}

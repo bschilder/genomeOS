@@ -1,18 +1,32 @@
 {
   "schema_version": 1,
   "hf_dataset": "bschilder/genomeos-data",
-  "hf_revision": "fc17bc1c1d96a0d0766746dcf26277ccdc669717",
+  "hf_revision": "6e77ef278e71fbb86dafd252f4cecc824388f5fc",
   "artifacts": [
     {
       "id": "hbs-rs334",
       "variant_id": "chr11-5227002-T-A",
-      "artifact_dir": "chr11-5227002-T-A__v1__map-2026-08",
-      "observation_source": "map_hbs_surveys.csv"
+      "artifact_dir": "chr11-5227002-T-A__v3__map-2026-08",
+      "observation_source": "map_hbs_surveys.csv",
+      "external_resources": [
+        {
+          "source": "gnomad",
+          "normalized_variant_id": "chr11-5227002-T-A",
+          "dataset": "gnomad_r4",
+          "cache_file": "external/gnomad/chr11-5227002-t-a.json"
+        },
+        {
+          "source": "dbsnp",
+          "normalized_variant_id": "chr11-5227002-T-A",
+          "rsid": "rs334",
+          "cache_file": "external/dbsnp/rs334.json"
+        }
+      ]
     },
     {
       "id": "g6pd-deficiency",
       "variant_id": "phenotype:g6pd-deficiency",
-      "artifact_dir": "phenotype__g6pd-deficiency__v1__map-2026-08",
+      "artifact_dir": "phenotype__g6pd-deficiency__v3__map-2026-08",
       "observation_source": "map_g6pd_surveys.csv"
     },
     {

@@ -21,9 +21,14 @@
       "sha256": "ab92edd3059aa59a37f3e2d10361d67e490c573fc3c03bf13eb902e3820e98fd"
     },
     {
-      "bytes": 19363,
-      "path": "data/store/INVENTORY.json",
-      "sha256": "0a11074a07352dad200e0c08c92bfdbff2acd3c016ef0fd9c660575947a1f348"
+      "bytes": 869715253,
+      "path": "data/raw/worldpop_1km_2020.tif",
+      "sha256": "d98f9efd911ed4afed696dff9024b20a4e3ec5bf6c0e21f241a26725b7df0866"
+    },
+    {
+      "bytes": 793435,
+      "path": "data/raw/worldpop_cok_100m_2020_UNadj.tif",
+      "sha256": "701030c52abf90a2ba2ffad505f789edf23307b8a671146d595f38e25b2e4a5e"
     },
     {
       "bytes": 1115304,
@@ -34,6 +39,26 @@
       "bytes": 408,
       "path": "data/store/artifacts/chr11-5227002-T-A__v1__map-2026-08/manifest.json",
       "sha256": "ff11e9fdbf503768a7bba3c3e16a676e2dafea850a99cff331d1d5f6be3ff617"
+    },
+    {
+      "bytes": 7517799,
+      "path": "data/store/artifacts/chr11-5227002-T-A__v2__map-2026-08/cells.parquet",
+      "sha256": "f3df252471d5980cf0455b59b5fd61bc7124d1cdbe90177064d9d349f37be76e"
+    },
+    {
+      "bytes": 592,
+      "path": "data/store/artifacts/chr11-5227002-T-A__v2__map-2026-08/manifest.json",
+      "sha256": "0022e390aea61f736f395f373da99e949f8276133c6cf5e1ce7866d5d109d9ef"
+    },
+    {
+      "bytes": 7517799,
+      "path": "data/store/artifacts/chr11-5227002-T-A__v3__map-2026-08/cells.parquet",
+      "sha256": "19b1eae4f900862adf0df03ea618e772e15a96adad37e2a37dbdcd579f0cec15"
+    },
+    {
+      "bytes": 641,
+      "path": "data/store/artifacts/chr11-5227002-T-A__v3__map-2026-08/manifest.json",
+      "sha256": "28dbc0477b93b4d28bff4c51ad9c54aa2ca3fb18076f0bd0877cfbe6da453efc"
     },
     {
       "bytes": 1115178,
@@ -324,6 +349,31 @@
       "bytes": 415,
       "path": "data/store/artifacts/phenotype__g6pd-deficiency__v1__map-2026-08/manifest.json",
       "sha256": "76e61383a5ec7fd647b41d74667197f9d2b719ef7ddfcd1766d42d73fd8c988a"
+    },
+    {
+      "bytes": 7499424,
+      "path": "data/store/artifacts/phenotype__g6pd-deficiency__v3__map-2026-08/cells.parquet",
+      "sha256": "dd521e502c5c02d0e78d0629fb267b2880271ef699bed0c84e723bd9054d0873"
+    },
+    {
+      "bytes": 648,
+      "path": "data/store/artifacts/phenotype__g6pd-deficiency__v3__map-2026-08/manifest.json",
+      "sha256": "c3fa8a0c7063fc9b41c51a503e5acf5f671b0f2aa00309a4e119973916662186"
+    },
+    {
+      "bytes": 17334,
+      "path": "data/store/catalog-metadata.json",
+      "sha256": "9777516843296a09a52cb0aec74029964d374b823398fbfc8088dc0853b51802"
+    },
+    {
+      "bytes": 569,
+      "path": "data/store/external/dbsnp/rs334.json",
+      "sha256": "49ef38501d1be967b89d0b64a8759234727a356300764c6eb8b7f49b195f2cb6"
+    },
+    {
+      "bytes": 1101,
+      "path": "data/store/external/gnomad/chr11-5227002-t-a.json",
+      "sha256": "52bfeade1b8e26b24d4b2931e4adb6568dc98b682f3c2e831a74dd29ba18551b"
     },
     {
       "bytes": 121009995,
@@ -726,6 +776,26 @@
       "sha256": "4d0b34d585931a1fd296fe820a1e1c34d10ceae47d38edc66437bf37fa03e338"
     },
     {
+      "bytes": 1302884,
+      "path": "data/store/worldpop-res4-2020-plus-cok.parquet",
+      "sha256": "baedd37e9f7320ef7155f611c6494812137edfb0985f1fbb6fbbe9f350706fed"
+    },
+    {
+      "bytes": 1218,
+      "path": "data/store/worldpop-res4-2020-plus-cok.parquet.manifest.json",
+      "sha256": "0571f6d668f6a062ce47ee177ab1902ad4a71d970b866608a725ce6539fecb39"
+    },
+    {
+      "bytes": 1302231,
+      "path": "data/store/worldpop-res4-2020.parquet",
+      "sha256": "df0ccb985688bafd6eaeb8f1affc7a7a1ada6a97927bce107fe8d5b356517798"
+    },
+    {
+      "bytes": 374,
+      "path": "data/store/worldpop-res4-2020.parquet.manifest.json",
+      "sha256": "b1548b767349963931fbce65588b43776dc98dacf37b8f7548e5e2b752d370de"
+    },
+    {
       "bytes": 1088,
       "path": "data/validation/crossval_grouped.csv",
       "sha256": "9f1daaf6ac50ca7b8af65eee015768c6b589b4747a0c86349ddf8b5d9a23169c"
@@ -761,8 +831,8 @@
       "sha256": "929967ac2b065e79c8c038343a9998e4ac9ec58fcdd9ebf34aeba46e0c94ab6f"
     }
   ],
-  "generated_at": "2026-08-27T22:27:03+00:00",
-  "n_files_hashed": 152,
+  "generated_at": "2026-09-07T06:37:06+00:00",
+  "n_files_hashed": 166,
   "root": "data",
   "summarised_directories": [
     {
@@ -778,5 +848,5 @@
       "path": "data/raw/afnd_freq_cache"
     }
   ],
-  "total_bytes": 1155865912
+  "total_bytes": 2051517851
 }

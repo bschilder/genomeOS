@@ -1,0 +1,1 @@
+{"artifact_format":1,"correlation_range_km":1184.0,"data_version":"afnd-2026-08","lengthscale_sigma":0.7,"likelihood":"beta_binomial","measurement":"allele_frequency","model_version":"v2","n_cells":11680,"n_observations":99,"prior_frequency_sd":0.15652,"resolution":3,"support_counts":{"interpolated":7918,"observed":40,"unknown":3722},"variant_id":"cyt:tnfalpha-308-a"}

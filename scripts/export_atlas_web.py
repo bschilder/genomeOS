@@ -47,6 +47,7 @@ MANIFEST_FIELDS = {
     "support_counts",
     "variant_id",
 }
+FORMAT_2_MANIFEST_FIELDS = {"target_grid_source", "target_grid_version"}
 OBSERVATION_FIELDS = {
     "source_record_id",
     "lat",
@@ -89,8 +90,11 @@ def _canonical_bytes(value: Any) -> bytes:
     ).encode()
 
 
-def _write_json(path: Path, value: Any) -> str:
+def _write_json(path: Path, value: Any, *, refuse_conflict: bool = False) -> str:
     content = _canonical_bytes(value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if refuse_conflict and path.exists() and path.read_bytes() != content:
+        raise ValueError(f"{path}: two exports produced different content for one cache path")
     path.write_bytes(content)
     return hashlib.sha256(content).hexdigest()
 
@@ -109,6 +113,12 @@ def _validated_surface(
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     manifest = _read_json(artifact_dir / "manifest.json")
     _require_fields(manifest, MANIFEST_FIELDS, str(artifact_dir / "manifest.json"))
+    if int(manifest["artifact_format"]) == 2:
+        _require_fields(
+            manifest,
+            FORMAT_2_MANIFEST_FIELDS,
+            str(artifact_dir / "manifest.json"),
+        )
     if manifest["variant_id"] != expected_variant_id:
         raise ValueError(
             f"{artifact_dir}: manifest variant_id {manifest['variant_id']!r} does not match "
@@ -302,8 +312,7 @@ def _surface_payload(
         {key: _json_value(value) for key, value in record.items()}
         for record in selected.to_dict(orient="records")
     ]
-    return {
-        "artifact": {
+    identity = {
             "artifact_format": int(manifest["artifact_format"]),
             "data_version": str(manifest["data_version"]),
             "entity_type": str(variant_metadata["entity_type"]),
@@ -317,10 +326,100 @@ def _surface_payload(
             "registry_version": registry_version,
             "resolution": int(manifest["resolution"]),
             "variant_id": str(manifest["variant_id"]),
-        },
+        }
+    if int(manifest["artifact_format"]) == 2:
+        identity.update(
+            {
+                "target_grid_source": str(manifest["target_grid_source"]),
+                "target_grid_version": str(manifest["target_grid_version"]),
+            }
+        )
+    return {
+        "artifact": identity,
         "cells": cell_rows,
         "schema_version": SCHEMA_VERSION,
     }
+
+
+def _external_resources(
+    entry: Mapping[str, Any],
+    *,
+    artifact_id: str,
+    variant_id: str,
+    entity_type: str,
+    source_root: Path,
+    out_dir: Path,
+) -> tuple[list[dict[str, Any]], list[Path]]:
+    """Validate declared capabilities and publish their normalized cache payloads."""
+    declared = entry.get("external_resources", [])
+    if not isinstance(declared, list):
+        raise ValueError(f"allowlist artifact {artifact_id}: external_resources must be a list")
+    if declared and entity_type != "variant":
+        raise ValueError(
+            f"allowlist artifact {artifact_id}: external lookup requires entity_type=variant"
+        )
+    resources: list[dict[str, Any]] = []
+    written: list[Path] = []
+    seen: set[str] = set()
+    for resource in declared:
+        if not isinstance(resource, Mapping):
+            raise ValueError(f"allowlist artifact {artifact_id}: invalid external resource")
+        _require_fields(
+            resource,
+            {"source", "normalized_variant_id", "cache_file"},
+            f"allowlist artifact {artifact_id} external resource",
+        )
+        source = str(resource["source"])
+        if source not in {"gnomad", "dbsnp"} or source in seen:
+            raise ValueError(
+                f"allowlist artifact {artifact_id}: external source must be unique gnomad/dbsnp"
+            )
+        seen.add(source)
+        normalized = str(resource["normalized_variant_id"])
+        if normalized != variant_id:
+            raise ValueError(
+                f"allowlist artifact {artifact_id}: external normalized variant does not match "
+                "the artifact"
+            )
+        cache_file = Path(str(resource["cache_file"]))
+        if cache_file.is_absolute() or ".." in cache_file.parts:
+            raise ValueError(
+                f"allowlist artifact {artifact_id}: cache_file must be a safe relative path"
+            )
+        cache_payload = _read_json(source_root / cache_file)
+        _require_fields(
+            cache_payload,
+            {"schema_version", "source", "source_release", "retrieved_at", "query", "record"},
+            str(source_root / cache_file),
+        )
+        if cache_payload["source"] != source or cache_payload["schema_version"] != 1:
+            raise ValueError(f"{source_root / cache_file}: cache source/schema mismatch")
+        query = cache_payload["query"]
+        if not isinstance(query, Mapping) or query.get("normalized_variant_id") != normalized:
+            raise ValueError(f"{source_root / cache_file}: cache query identity mismatch")
+        published_path = out_dir / cache_file
+        cache_hash = _write_json(published_path, cache_payload, refuse_conflict=True)
+        published: dict[str, Any] = {
+            "cache_sha256": cache_hash,
+            "cache_url": cache_file.as_posix(),
+            "normalized_variant_id": normalized,
+            "source": source,
+        }
+        if source == "gnomad":
+            _require_fields(resource, {"dataset"}, f"{artifact_id} gnomad resource")
+            dataset = str(resource["dataset"])
+            if query.get("dataset") != dataset:
+                raise ValueError(f"{source_root / cache_file}: gnomAD dataset mismatch")
+            published["dataset"] = dataset
+        else:
+            _require_fields(resource, {"rsid"}, f"{artifact_id} dbsnp resource")
+            rsid = str(resource["rsid"])
+            if query.get("rsid") != rsid:
+                raise ValueError(f"{source_root / cache_file}: dbSNP rsID mismatch")
+            published["rsid"] = rsid
+        resources.append(published)
+        written.append(published_path)
+    return resources, written
 
 
 def export_catalog(
@@ -434,6 +533,8 @@ def export_catalog(
 
         surface_path = out_dir / f"{artifact_id}.surface.json"
         surface_hash = _write_json(surface_path, surface)
+        manifest_path = out_dir / f"{artifact_id}.manifest.json"
+        manifest_hash = _write_json(manifest_path, manifest)
         observations_path: Path | None = None
         observation_hash: str | None = None
         if observation_rows is not None:
@@ -446,14 +547,50 @@ def export_catalog(
                     "schema_version": SCHEMA_VERSION,
                 },
             )
-        written.extend(
-            path for path in (surface_path, observations_path) if path is not None
+        external_resources, external_paths = _external_resources(
+            entry,
+            artifact_id=artifact_id,
+            variant_id=variant_id,
+            entity_type=str(variant_metadata["entity_type"]),
+            source_root=source_root,
+            out_dir=out_dir,
         )
+        written.extend(
+            path
+            for path in (surface_path, observations_path, manifest_path)
+            if path is not None
+        )
+        written.extend(external_paths)
         artifacts.append(
             {
                 **surface["artifact"],
                 "assumptions": list(variant_metadata["assumptions"]),
                 "correlation_range_km": float(manifest["correlation_range_km"]),
+                "downloads": {
+                    "manifest": {
+                        "label": "Artifact manifest",
+                        "media_type": "application/json",
+                        "sha256": manifest_hash,
+                        "url": manifest_path.name,
+                    },
+                    "observations": (
+                        {
+                            "label": "Measured observations",
+                            "media_type": "application/json",
+                            "sha256": observation_hash,
+                            "url": observations_path.name,
+                        }
+                        if observations_path is not None
+                        else None
+                    ),
+                    "surface": {
+                        "label": "Inferred surface",
+                        "media_type": "application/json",
+                        "sha256": surface_hash,
+                        "url": surface_path.name,
+                    },
+                },
+                "external_resources": external_resources,
                 "likelihood": str(manifest["likelihood"]),
                 "n_cells": int(manifest["n_cells"]),
                 "n_observations": int(manifest["n_observations"]),
@@ -493,7 +630,7 @@ def export_catalog(
     catalog_path = out_dir / "catalog.json"
     _write_json(catalog_path, catalog)
     written.append(catalog_path)
-    return sorted(written)
+    return sorted(set(written))
 
 
 def _parser() -> argparse.ArgumentParser:
