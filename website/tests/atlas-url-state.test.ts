@@ -29,6 +29,7 @@ describe('explorer URL state', () => {
   it('round-trips every stable public field', () => {
     const state: ExplorerState = {
       artifactVersion: 'v1/map-2026-08',
+      basemap: 'aerial-labels',
       camera: {
         heading: 30,
         height: 4_500_000,
@@ -39,6 +40,7 @@ describe('explorer URL state', () => {
       elevation: true,
       entityId: 'hbs-rs334',
       exaggeration: 2.5,
+      cellEdges: true,
       layers: {
         context: true,
         observations: false,
@@ -46,6 +48,16 @@ describe('explorer URL state', () => {
         surface: true,
       },
       metric: 'post_sd',
+      observationColor: 'study',
+      observationHemisphereRange: [40, 320],
+      observationPointRange: [7, 22],
+      observationShape: 'pin',
+      observationSize: 'ac',
+      paletteMode: 'custom',
+      samplingAreas: false,
+      surfaceOpacity: 0.72,
+      surfacePalette: 'cividis',
+      terrain: 'world-terrain',
       view: 'perspective',
     };
 
@@ -90,5 +102,40 @@ describe('explorer URL state', () => {
     expect(parsed.corrections).toContainEqual(
       expect.objectContaining({ field: 'version', reason: 'unavailable' }),
     );
+  });
+
+  it('uses metric-specific palettes only when no explicit palette is present', () => {
+    expect(
+      parseExplorerState('?entity=hbs-rs334&metric=post_mean', catalog).state,
+    ).toMatchObject({
+      paletteMode: 'metric-default',
+      surfacePalette: 'genome',
+    });
+    expect(
+      parseExplorerState('?entity=hbs-rs334&metric=post_sd', catalog).state,
+    ).toMatchObject({
+      paletteMode: 'metric-default',
+      surfacePalette: 'signal',
+    });
+    expect(
+      parseExplorerState(
+        '?entity=hbs-rs334&metric=post_sd&palette=genome',
+        catalog,
+      ).state,
+    ).toMatchObject({ paletteMode: 'custom', surfacePalette: 'genome' });
+  });
+
+  it('corrects both fields of a reversed size range without touching valid state', () => {
+    const parsed = parseExplorerState(
+      '?entity=hbs-rs334&pointMin=20&pointMax=5&domeMin=40&domeMax=300&opacity=0.7',
+      catalog,
+    );
+    expect(parsed.state.observationPointRange).toEqual([6, 18]);
+    expect(parsed.state.observationHemisphereRange).toEqual([40, 300]);
+    expect(parsed.state.surfaceOpacity).toBe(0.7);
+    expect(parsed.corrections.map(({ field }) => field).sort()).toEqual([
+      'pointMax',
+      'pointMin',
+    ]);
   });
 });

@@ -1,9 +1,17 @@
 /** Shareable, field-by-field explorer URL state for Atlas design §11. */
 
 import type { AtlasCatalog } from './contracts';
-import type { Metric } from './visual-encoding';
+import type {
+  ObservationColorVariable,
+  ObservationShape,
+  ObservationSizeRange,
+  ObservationSizeVariable,
+} from './observation-encoding';
+import { defaultPalette, type Metric, type PaletteId } from './visual-encoding';
 
 export type ExplorerSceneMode = 'globe' | 'map' | 'perspective';
+export type BasemapId = 'dark-streets' | 'roads' | 'aerial' | 'aerial-labels';
+export type TerrainId = 'smooth-globe' | 'world-terrain';
 export type LayerId = 'surface' | 'observations' | 'support' | 'context';
 export type LayerVisibility = Record<LayerId, boolean>;
 
@@ -18,11 +26,23 @@ export interface CameraState {
 export interface ExplorerState {
   entityId: string;
   artifactVersion: string;
+  basemap: BasemapId;
   metric: Metric;
+  surfacePalette: PaletteId;
+  paletteMode: 'metric-default' | 'custom';
+  surfaceOpacity: number;
+  cellEdges: boolean;
   layers: LayerVisibility;
   view: ExplorerSceneMode;
+  terrain: TerrainId;
   elevation: boolean;
   exaggeration: number;
+  observationShape: ObservationShape;
+  observationColor: ObservationColorVariable;
+  observationSize: ObservationSizeVariable;
+  observationPointRange: ObservationSizeRange;
+  observationHemisphereRange: ObservationSizeRange;
+  samplingAreas: boolean;
   camera: CameraState;
 }
 
@@ -51,6 +71,9 @@ const DEFAULT_CAMERA: CameraState = {
   heading: 0,
   pitch: -90,
 };
+const PALETTES = ['genome', 'signal', 'viridis', 'cividis', 'plasma'] as const;
+const DEFAULT_POINT_RANGE: ObservationSizeRange = [6, 18];
+const DEFAULT_HEMISPHERE_RANGE: ObservationSizeRange = [40, 300];
 
 function versionOf(ref: AtlasCatalog['artifacts'][number]): string {
   return `${ref.model_version}/${ref.data_version}`;
@@ -119,6 +142,46 @@ function parseLayers(
   ) as LayerVisibility;
 }
 
+function parseRange(
+  params: URLSearchParams,
+  minimumField: string,
+  maximumField: string,
+  fallback: ObservationSizeRange,
+  bounds: ObservationSizeRange,
+  corrections: StateCorrection[],
+): ObservationSizeRange {
+  const correctionsBefore = corrections.length;
+  const minimum = parseNumber(
+    params,
+    minimumField,
+    fallback[0],
+    bounds,
+    corrections,
+  );
+  const maximum = parseNumber(
+    params,
+    maximumField,
+    fallback[1],
+    bounds,
+    corrections,
+  );
+  if (corrections.length !== correctionsBefore) return fallback;
+  if (minimum <= maximum) return [minimum, maximum];
+  corrections.push(
+    {
+      field: minimumField,
+      reason: 'malformed',
+      value: params.get(minimumField) ?? String(minimum),
+    },
+    {
+      field: maximumField,
+      reason: 'malformed',
+      value: params.get(maximumField) ?? String(maximum),
+    },
+  );
+  return fallback;
+}
+
 export function parseExplorerState(
   input: string | URLSearchParams,
   catalog: AtlasCatalog,
@@ -156,11 +219,37 @@ export function parseExplorerState(
       value: requestedVersion,
     });
   }
+  const metric = parseEnum(
+    params,
+    'metric',
+    ['post_mean', 'post_sd'],
+    'post_mean',
+    corrections,
+  );
+  const paletteValue = params.get('palette');
+  const surfacePalette = parseEnum(
+    params,
+    'palette',
+    PALETTES,
+    defaultPalette(metric),
+    corrections,
+  );
+  const paletteMode =
+    paletteValue !== null && PALETTES.includes(paletteValue as PaletteId)
+      ? 'custom'
+      : 'metric-default';
 
   return {
     corrections,
     state: {
       artifactVersion,
+      basemap: parseEnum(
+        params,
+        'basemap',
+        ['dark-streets', 'roads', 'aerial', 'aerial-labels'],
+        'dark-streets',
+        corrections,
+      ),
       camera: {
         heading: parseNumber(
           params,
@@ -199,6 +288,7 @@ export function parseExplorerState(
         ),
       },
       elevation: parseBoolean(params, 'elevation', false, corrections),
+      cellEdges: parseBoolean(params, 'edges', true, corrections),
       entityId,
       exaggeration: parseNumber(
         params,
@@ -208,11 +298,59 @@ export function parseExplorerState(
         corrections,
       ),
       layers: parseLayers(params, corrections),
-      metric: parseEnum(
+      metric,
+      observationColor: parseEnum(
         params,
-        'metric',
-        ['post_mean', 'post_sd'],
-        'post_mean',
+        'obsColor',
+        ['white', 'study', 'frequency', 'ac'],
+        'white',
+        corrections,
+      ),
+      observationHemisphereRange: parseRange(
+        params,
+        'domeMin',
+        'domeMax',
+        DEFAULT_HEMISPHERE_RANGE,
+        [10, 500],
+        corrections,
+      ),
+      observationPointRange: parseRange(
+        params,
+        'pointMin',
+        'pointMax',
+        DEFAULT_POINT_RANGE,
+        [4, 40],
+        corrections,
+      ),
+      observationShape: parseEnum(
+        params,
+        'obsShape',
+        ['circle', 'hemisphere', 'pin'],
+        'circle',
+        corrections,
+      ),
+      observationSize: parseEnum(
+        params,
+        'obsSize',
+        ['fixed', 'frequency', 'ac', 'an'],
+        'fixed',
+        corrections,
+      ),
+      paletteMode,
+      samplingAreas: parseBoolean(params, 'samplingAreas', true, corrections),
+      surfaceOpacity: parseNumber(
+        params,
+        'opacity',
+        0.86,
+        [0.45, 1],
+        corrections,
+      ),
+      surfacePalette,
+      terrain: parseEnum(
+        params,
+        'terrain',
+        ['smooth-globe', 'world-terrain'],
+        'smooth-globe',
         corrections,
       ),
       view: parseEnum(
@@ -230,11 +368,25 @@ export function serializeExplorerState(state: ExplorerState): string {
   const params = new URLSearchParams();
   params.set('entity', state.entityId);
   params.set('version', state.artifactVersion);
+  params.set('basemap', state.basemap);
   params.set('metric', state.metric);
+  if (state.paletteMode === 'custom')
+    params.set('palette', state.surfacePalette);
+  params.set('opacity', String(state.surfaceOpacity));
+  params.set('edges', String(state.cellEdges));
   params.set('layers', LAYERS.filter((layer) => state.layers[layer]).join(','));
   params.set('view', state.view);
+  params.set('terrain', state.terrain);
   params.set('elevation', String(state.elevation));
   params.set('exaggeration', String(state.exaggeration));
+  params.set('obsShape', state.observationShape);
+  params.set('obsColor', state.observationColor);
+  params.set('obsSize', state.observationSize);
+  params.set('pointMin', String(state.observationPointRange[0]));
+  params.set('pointMax', String(state.observationPointRange[1]));
+  params.set('domeMin', String(state.observationHemisphereRange[0]));
+  params.set('domeMax', String(state.observationHemisphereRange[1]));
+  params.set('samplingAreas', String(state.samplingAreas));
   params.set('lon', String(state.camera.lon));
   params.set('lat', String(state.camera.lat));
   params.set('height', String(state.camera.height));
