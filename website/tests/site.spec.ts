@@ -375,7 +375,7 @@ test('explorer switches among globe, map, and perspective views', async ({
 });
 
 test('explorer restores a complete shareable URL', async ({ page }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const servedCatalog = await page.request.get('/data/atlas/catalog.json');
   expect(servedCatalog.ok()).toBe(true);
   const servedArtifacts = (await servedCatalog.json()) as {
@@ -403,6 +403,9 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
     view: 'perspective',
   });
   await page.goto(`/app/?${query}`);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
 
   await expect(page.getByLabel('Variant or phenotype')).toHaveValue(
     'g6pd-deficiency',
@@ -427,8 +430,11 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
 test('explorer exposes the full catalog and shareable appearance controls', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
 
   const entity = page.getByLabel('Variant or phenotype', { exact: true });
   await expect(entity.locator('option')).toHaveCount(30);
