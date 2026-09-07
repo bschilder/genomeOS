@@ -13,5 +13,5 @@ export type AtlasDataProvider = {
   getObservations(
     ref: ArtifactRef,
     signal?: AbortSignal,
-  ): Promise<ObservationArtifact>;
+  ): Promise<ObservationArtifact | null>;
 };

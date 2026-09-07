@@ -38,26 +38,58 @@ function assertIdentity(ref: ArtifactRef, loaded: ArtifactIdentity): void {
 }
 
 export class StaticAtlasDataProvider implements AtlasDataProvider {
+  static readonly defaultRequestTimeoutMs = 15_000;
+
   readonly #baseUrl: string;
+  readonly #requestTimeoutMs: number;
   #catalog: AtlasCatalog | null = null;
   readonly #surfaces = new Map<string, SurfaceArtifact>();
   readonly #observations = new Map<string, ObservationArtifact>();
 
-  constructor(baseUrl: string) {
+  constructor(
+    baseUrl: string,
+    requestTimeoutMs = StaticAtlasDataProvider.defaultRequestTimeoutMs,
+  ) {
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+      throw new Error('Atlas request timeout must be positive and finite');
+    }
     this.#baseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    this.#requestTimeoutMs = requestTimeoutMs;
   }
 
   async #getJson(path: string, signal?: AbortSignal): Promise<unknown> {
-    const response = await fetch(
-      `${this.#baseUrl}${path.replace(/^\/+/, '')}`,
-      { signal },
-    );
-    if (!response.ok) {
-      throw new Error(
-        `Atlas request failed with HTTP ${response.status}: ${path}`,
+    const controller = new AbortController();
+    let timedOut = false;
+    const forwardAbort = () => controller.abort(signal?.reason);
+    if (signal?.aborted) forwardAbort();
+    else signal?.addEventListener('abort', forwardAbort, { once: true });
+    const timeout = globalThis.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, this.#requestTimeoutMs);
+
+    try {
+      const response = await fetch(
+        `${this.#baseUrl}${path.replace(/^\/+/, '')}`,
+        { signal: controller.signal },
       );
+      if (!response.ok) {
+        throw new Error(
+          `Atlas request failed with HTTP ${response.status}: ${path}`,
+        );
+      }
+      return response.json();
+    } catch (error) {
+      if (timedOut) {
+        throw new Error(
+          `Atlas request timed out after ${this.#requestTimeoutMs} ms: ${path}`,
+        );
+      }
+      throw error;
+    } finally {
+      globalThis.clearTimeout(timeout);
+      signal?.removeEventListener('abort', forwardAbort);
     }
-    return response.json();
   }
 
   async getCatalog(signal?: AbortSignal): Promise<AtlasCatalog> {
@@ -93,7 +125,8 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   async getObservations(
     ref: ArtifactRef,
     signal?: AbortSignal,
-  ): Promise<ObservationArtifact> {
+  ): Promise<ObservationArtifact | null> {
+    if (!ref.observations_available) return null;
     const key = `${ref.id}:${ref.model_version}:${ref.data_version}:${ref.observations_url}`;
     const cached = this.#observations.get(key);
     if (cached) return cached;

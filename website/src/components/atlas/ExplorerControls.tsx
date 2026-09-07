@@ -42,6 +42,10 @@ export function ExplorerControls({
   onHome,
   onZoom,
 }: ExplorerControlsProps) {
+  const selectedArtifact = catalog.artifacts.find(
+    (artifact) => artifact.id === state.entityId,
+  );
+
   return (
     <aside className="atlas-controls" aria-label="Explorer controls">
       <div className="atlas-controls__intro">
@@ -54,7 +58,7 @@ export function ExplorerControls({
       </div>
 
       <label className="atlas-field atlas-field--entity">
-        <span>Variant or phenotype</span>
+        <span>Choose a map</span>
         <select
           value={state.entityId}
           disabled={disabled}
@@ -108,10 +112,24 @@ export function ExplorerControls({
               <label key={layer}>
                 <input
                   type="checkbox"
-                  checked={state.layers[layer]}
+                  checked={
+                    state.layers[layer] &&
+                    !(
+                      layer === 'observations' &&
+                      selectedArtifact?.observations_available === false
+                    )
+                  }
+                  disabled={
+                    disabled ||
+                    (layer === 'observations' &&
+                      selectedArtifact?.observations_available === false)
+                  }
                   onChange={(event) => onLayer(layer, event.target.checked)}
                 />
                 {layerLabels[layer]}
+                {layer === 'observations' &&
+                  selectedArtifact?.observations_available === false &&
+                  ' (not available yet)'}
               </label>
             ))}
           </fieldset>

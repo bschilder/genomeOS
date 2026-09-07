@@ -19,6 +19,7 @@ const ref: ArtifactRef = {
   model_version: 'v1',
   n_cells: 1,
   n_observations: 0,
+  observations_available: true,
   observations_sha256: 'b'.repeat(64),
   observations_url: 'hbs-rs334.observations.json',
   registry_version: 'map-survey-coordinates-v1',
@@ -29,9 +30,36 @@ const ref: ArtifactRef = {
   variant_id: 'chr11-5227002-T-A',
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('StaticAtlasDataProvider', () => {
+  it('fails a stalled request at the configured deadline', async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((_url: URL, init?: RequestInit) => {
+        return new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            reject(init.signal?.reason);
+          });
+        });
+      }),
+    );
+    const provider = new StaticAtlasDataProvider('/data/atlas/', 25);
+
+    const request = provider.getCatalog();
+    const rejection = expect(request).rejects.toThrow(
+      'Atlas request timed out after 25 ms: catalog.json',
+    );
+    await vi.advanceTimersByTimeAsync(25);
+
+    await rejection;
+    vi.useRealTimers();
+  });
+
   it('passes cancellation through to fetch', async () => {
     vi.stubGlobal(
       'fetch',
@@ -98,7 +126,7 @@ describe('StaticAtlasDataProvider', () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       '/genomeOS/data/atlas/hbs-rs334.surface.json',
-      expect.objectContaining({ signal: undefined }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -124,5 +152,20 @@ describe('StaticAtlasDataProvider', () => {
     const provider = new StaticAtlasDataProvider('/data/atlas/');
 
     await expect(provider.getSurface(ref)).rejects.toThrow(/404/);
+  });
+
+  it('does not request an observation payload declared unavailable', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const surfaceOnly = {
+      ...ref,
+      observations_available: false,
+      observations_sha256: null,
+      observations_url: null,
+    } as unknown as ArtifactRef;
+    const provider = new StaticAtlasDataProvider('/data/atlas/');
+
+    await expect(provider.getObservations(surfaceOnly)).resolves.toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

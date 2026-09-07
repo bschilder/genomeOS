@@ -48,7 +48,7 @@ export interface AtlasSceneOptions {
 export interface AtlasSceneController {
   setArtifact(
     surface: SurfaceArtifact,
-    observations: ObservationArtifact,
+    observations: ObservationArtifact | null,
   ): Promise<void>;
   setMetric(metric: Metric): Promise<void>;
   setLayerVisibility(layers: LayerVisibility): void;
@@ -320,40 +320,51 @@ class CesiumAtlasScene implements AtlasSceneController {
 
   async setArtifact(
     surface: SurfaceArtifact,
-    observations: ObservationArtifact,
+    observations: ObservationArtifact | null,
   ): Promise<void> {
     const sequence = ++this.#artifactSequence;
     this.#surfaceArtifact = surface;
-    const identity = observations.artifact;
-    const observationKey = [
-      identity.id,
-      identity.model_version,
-      identity.data_version,
-    ].join(':');
-    let incomingObservations = this.#observationCache.get(observationKey);
-    if (!incomingObservations) {
-      incomingObservations = buildObservationLayer(observations);
-      this.#observationCache.set(observationKey, incomingObservations);
-      this.#viewer.scene.primitives.add(incomingObservations.collection);
+    let incomingObservations: ObservationPrimitiveGroup | null = null;
+    if (observations) {
+      const identity = observations.artifact;
+      const observationKey = [
+        identity.id,
+        identity.model_version,
+        identity.data_version,
+      ].join(':');
+      incomingObservations = this.#observationCache.get(observationKey) ?? null;
+      if (!incomingObservations) {
+        incomingObservations = buildObservationLayer(observations);
+        this.#observationCache.set(observationKey, incomingObservations);
+        this.#viewer.scene.primitives.add(incomingObservations.collection);
+      }
+      incomingObservations.collection.show = true;
+      incomingObservations.setOpacity(0);
     }
-    incomingObservations.collection.show = true;
-    incomingObservations.setOpacity(0);
     const oldObservations = this.#observationGroup;
     const [surfaceSwap] = await Promise.all([
       this.#prepareSurface(),
-      waitForReady(this.#viewer, incomingObservations),
+      incomingObservations
+        ? waitForReady(this.#viewer, incomingObservations)
+        : Promise.resolve(),
     ]);
     if (
       !surfaceSwap ||
       this.#destroyed ||
       sequence !== this.#artifactSequence
     ) {
-      if (incomingObservations !== this.#observationGroup)
+      if (
+        incomingObservations &&
+        incomingObservations !== this.#observationGroup
+      )
         incomingObservations.collection.show = false;
       return;
     }
     let observationTransition = Promise.resolve();
-    if (oldObservations === incomingObservations) {
+    if (!incomingObservations) {
+      this.#observationGroup = null;
+      if (oldObservations) oldObservations.collection.show = false;
+    } else if (oldObservations === incomingObservations) {
       incomingObservations.collection.show = this.#layers.observations;
       incomingObservations.setOpacity(1);
     } else if (this.#layers.observations) {
@@ -375,9 +386,11 @@ class CesiumAtlasScene implements AtlasSceneController {
       this.#activateSurface(surfaceSwap),
       observationTransition,
     ]);
-    this.#observationCache.prune(incomingObservations, (group) => {
-      this.#viewer.scene.primitives.remove(group.collection);
-    });
+    if (incomingObservations) {
+      this.#observationCache.prune(incomingObservations, (group) => {
+        this.#viewer.scene.primitives.remove(group.collection);
+      });
+    }
   }
 
   async setMetric(metric: Metric): Promise<void> {

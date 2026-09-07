@@ -171,6 +171,8 @@ def test_export_preserves_support_versions_and_observation_evidence(
     assert all(row["radius_km"] > 0 for row in observations["observations"])
     assert observations["observations"][0]["citation_text"] == "Example citation."
     assert observations["observations"][0]["population_label"] == "Ghana"
+    assert observations["observations"][0]["study_id"] == "map-study-IBDTEST"
+    assert observations["observations"][0]["study_label"] == "IBDTEST"
     assert catalog["artifacts"][0]["surface_sha256"]
     assert catalog["artifacts"][0]["observations_sha256"]
 
@@ -208,6 +210,16 @@ def test_export_refuses_missing_observation_radius(
         _export(export_inputs)
 
 
+def test_export_refuses_missing_source_native_study_label(
+    export_inputs: dict[str, Path],
+) -> None:
+    source = pd.read_csv(export_inputs["hbs"])
+    source.loc[0, "source"] = ""
+    source.to_csv(export_inputs["hbs"], index=False)
+    with pytest.raises(ValueError, match="study_label"):
+        _export(export_inputs)
+
+
 def test_export_refuses_non_finite_surface_values(export_inputs: dict[str, Path]) -> None:
     artifact = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test"
     cells = pd.read_parquet(artifact / "cells.parquet")
@@ -235,3 +247,30 @@ def test_export_refuses_variant_mismatch(export_inputs: dict[str, Path]) -> None
     cells.to_parquet(artifact / "cells.parquet", index=False)
     with pytest.raises(ValueError, match="variant_id"):
         _export(export_inputs)
+
+
+def test_export_keeps_reviewed_surface_when_observations_are_unavailable(
+    export_inputs: dict[str, Path],
+) -> None:
+    allowlist = json.loads(export_inputs["allowlist"].read_text())
+    allowlist["artifacts"][0]["observation_source"] = None
+    export_inputs["allowlist"].write_text(json.dumps(allowlist))
+    metadata_path = export_inputs["store"] / "catalog-metadata.json"
+    metadata = json.loads(metadata_path.read_text())
+    metadata["variants"][VARIANT_ID]["registry_version"] = "afnd-test-registry"
+    metadata_path.write_text(json.dumps(metadata))
+
+    paths = _export(export_inputs)
+
+    assert {path.name for path in paths} == {
+        "catalog.json",
+        "hbs-rs334.surface.json",
+    }
+    catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())
+    artifact = catalog["artifacts"][0]
+    assert artifact["registry_version"] == "afnd-test-registry"
+    assert artifact["n_observations"] == 1
+    assert artifact["observations_available"] is False
+    assert artifact["observations_sha256"] is None
+    assert artifact["observations_url"] is None
+    assert catalog["registry_versions"] == ["afnd-test-registry"]

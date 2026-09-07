@@ -190,7 +190,7 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
           surface.cells.map((cell) => [cell.h3_index, cell]),
         );
         observations.current = new Map(
-          measured.observations.map((observation) => [
+          (measured?.observations ?? []).map((observation) => [
             observation.source_record_id,
             observation,
           ]),

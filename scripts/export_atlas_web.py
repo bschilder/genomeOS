@@ -189,24 +189,27 @@ def _load_observations(
         observations, _ = map_surveys.load(hbs_csv, ingest_version)
         prefix = "map-surveys:"
         source_url = "raw/map_hbs_surveys.csv"
+        study_label_field = "source"
     elif observation_source == "map_g6pd_surveys.csv":
         raw = pd.read_csv(g6pd_csv)
         observations, _ = map_g6pd.load(g6pd_csv, ingest_version)
         prefix = "map-g6pd:"
         source_url = "raw/map_g6pd_surveys.csv"
+        study_label_field = "citation"
     else:
         raise ValueError(f"unsupported observation source {observation_source!r}")
 
     missing = OBSERVATION_FIELDS - set(observations.columns)
     if missing:
         raise ValueError(f"{observation_source}: missing observation fields {sorted(missing)}")
-    raw_missing = {"id", "country", "citation"} - set(raw.columns)
+    raw_missing = {"id", "country", "citation", study_label_field} - set(raw.columns)
     if raw_missing:
         raise ValueError(f"{observation_source}: missing source fields {sorted(raw_missing)}")
     if raw["id"].duplicated().any():
         raise ValueError(f"{observation_source}: source-native id must be unique")
     raw = raw.copy()
     raw["source_record_id"] = raw["id"].map(lambda value: f"{prefix}{int(value)}")
+    raw["study_label"] = raw[study_label_field]
     evidence = raw.set_index("source_record_id")
     return observations, evidence, source_url, prefix
 
@@ -227,10 +230,16 @@ def _serialize_observations(
         source = evidence.loc[source_record_id]
         population_label = source["country"]
         citation = source["citation"]
+        study_id = record["cohort_id"]
+        study_label = source["study_label"]
         if not isinstance(population_label, str) or not population_label.strip():
             raise ValueError(f"observation {source_record_id}: population_label is required")
         if not isinstance(citation, str) or not citation.strip():
             raise ValueError(f"observation {source_record_id}: citation_text is required")
+        if not isinstance(study_id, str) or not study_id.strip():
+            raise ValueError(f"observation {source_record_id}: study_id is required")
+        if not isinstance(study_label, str) or not study_label.strip():
+            raise ValueError(f"observation {source_record_id}: study_label is required")
         radius = _json_value(record["radius_km"])
         if not isinstance(radius, (int, float)) or not math.isfinite(radius) or radius <= 0:
             raise ValueError(f"observation {source_record_id}: radius_km must be positive and finite")
@@ -259,6 +268,8 @@ def _serialize_observations(
                 "source_url": (
                     f"https://huggingface.co/datasets/{dataset}/blob/{revision}/{source_url}"
                 ),
+                "study_id": study_id.strip(),
+                "study_label": study_label.strip(),
             }
         )
     return rows
@@ -353,6 +364,7 @@ def export_catalog(
     )
     out_dir.mkdir(parents=True, exist_ok=True)
     artifacts: list[dict[str, Any]] = []
+    registry_versions: set[str] = set()
     written: list[Path] = []
     hf_dataset = str(allowlist["hf_dataset"])
 
@@ -376,50 +388,67 @@ def export_catalog(
             {"label", "entity_type", "measurement", "assumptions"},
             f"catalog variant {variant_id}",
         )
+        registry_version = str(
+            variant_metadata.get("registry_version", catalog_metadata["registry_version"])
+        )
+        if not registry_version:
+            raise ValueError(f"catalog variant {variant_id}: registry_version must be non-empty")
+        registry_versions.add(registry_version)
 
         manifest, cells = _validated_surface(
             source_root / "artifacts" / artifact_name,
             variant_id,
         )
-        observations, evidence, raw_source_url, _ = _load_observations(
-            str(entry["observation_source"]),
-            Path(hbs_csv),
-            Path(g6pd_csv),
-            str(manifest["data_version"]),
-        )
-        if len(observations) != int(manifest["n_observations"]):
-            raise ValueError(
-                f"{artifact_id}: manifest n_observations={manifest['n_observations']} but "
-                f"adapter retained {len(observations)}"
+        observation_source = entry["observation_source"]
+        observation_rows: list[dict[str, Any]] | None = None
+        if observation_source is not None:
+            observations, evidence, raw_source_url, _ = _load_observations(
+                str(observation_source),
+                Path(hbs_csv),
+                Path(g6pd_csv),
+                str(manifest["data_version"]),
             )
+            if len(observations) != int(manifest["n_observations"]):
+                raise ValueError(
+                    f"{artifact_id}: manifest n_observations={manifest['n_observations']} but "
+                    f"adapter retained {len(observations)}"
+                )
 
         surface = _surface_payload(
             artifact_id,
             variant_metadata,
             manifest,
             cells,
-            registry_version=str(catalog_metadata["registry_version"]),
+            registry_version=registry_version,
             hf_dataset=hf_dataset,
             hf_revision=hf_revision,
         )
-        observation_rows = _serialize_observations(
-            observations,
-            evidence,
-            source_url=raw_source_url,
-            dataset=hf_dataset,
-            revision=hf_revision,
-        )
-        observation_payload = {
-            "artifact": surface["artifact"],
-            "observations": observation_rows,
-            "schema_version": SCHEMA_VERSION,
-        }
+        if observation_source is not None:
+            observation_rows = _serialize_observations(
+                observations,
+                evidence,
+                source_url=raw_source_url,
+                dataset=hf_dataset,
+                revision=hf_revision,
+            )
 
         surface_path = out_dir / f"{artifact_id}.surface.json"
-        observations_path = out_dir / f"{artifact_id}.observations.json"
         surface_hash = _write_json(surface_path, surface)
-        observation_hash = _write_json(observations_path, observation_payload)
-        written.extend([surface_path, observations_path])
+        observations_path: Path | None = None
+        observation_hash: str | None = None
+        if observation_rows is not None:
+            observations_path = out_dir / f"{artifact_id}.observations.json"
+            observation_hash = _write_json(
+                observations_path,
+                {
+                    "artifact": surface["artifact"],
+                    "observations": observation_rows,
+                    "schema_version": SCHEMA_VERSION,
+                },
+            )
+        written.extend(
+            path for path in (surface_path, observations_path) if path is not None
+        )
         artifacts.append(
             {
                 **surface["artifact"],
@@ -427,9 +456,12 @@ def export_catalog(
                 "correlation_range_km": float(manifest["correlation_range_km"]),
                 "likelihood": str(manifest["likelihood"]),
                 "n_cells": int(manifest["n_cells"]),
-                "n_observations": len(observation_rows),
+                "n_observations": int(manifest["n_observations"]),
+                "observations_available": observation_rows is not None,
                 "observations_sha256": observation_hash,
-                "observations_url": observations_path.name,
+                "observations_url": (
+                    observations_path.name if observations_path is not None else None
+                ),
                 "support_counts": {
                     str(key): int(value) for key, value in manifest["support_counts"].items()
                 },
@@ -455,7 +487,7 @@ def export_catalog(
         "created_at": str(catalog_metadata["created_at"]),
         "hf_dataset": hf_dataset,
         "hf_revision": hf_revision,
-        "registry_version": str(catalog_metadata["registry_version"]),
+        "registry_versions": sorted(registry_versions),
         "schema_version": SCHEMA_VERSION,
     }
     catalog_path = out_dir / "catalog.json"

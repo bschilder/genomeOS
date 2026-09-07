@@ -49,9 +49,23 @@ const observation = {
   source_locator: 'MAP survey 1',
   source_record_id: 'map-surveys:1',
   source_url: 'https://example.org/source',
+  study_id: 'map-study-1',
+  study_label: 'Example study',
 };
 
 describe('atlas browser contracts', () => {
+  it('accepts a complete source-backed observation', () => {
+    const parsed = observationArtifactSchema.parse({
+      artifact,
+      observations: [observation],
+      schema_version: 1,
+    });
+    expect(parsed.observations[0]).toMatchObject({
+      study_id: 'map-study-1',
+      study_label: 'Example study',
+    });
+  });
+
   it('does not invent support or an observation radius', () => {
     const { support: _support, ...surfaceWithoutSupport } = cell;
     const { radius_km: _radius, ...observationWithoutRadius } = observation;
@@ -102,6 +116,26 @@ describe('atlas browser contracts', () => {
     }
   });
 
+  it('requires a source-backed study identity and label', () => {
+    const { study_id: _studyId, ...withoutStudyId } = observation;
+    const { study_label: _studyLabel, ...withoutStudyLabel } = observation;
+
+    for (const invalid of [
+      withoutStudyId,
+      withoutStudyLabel,
+      { ...observation, study_id: '' },
+      { ...observation, study_label: '' },
+    ]) {
+      expect(() =>
+        observationArtifactSchema.parse({
+          artifact,
+          observations: [invalid],
+          schema_version: 1,
+        }),
+      ).toThrow();
+    }
+  });
+
   it('requires the supported schema version, revisions, and checksums', () => {
     const catalogArtifact = {
       ...artifact,
@@ -110,6 +144,7 @@ describe('atlas browser contracts', () => {
       likelihood: 'beta_binomial',
       n_cells: 1,
       n_observations: 1,
+      observations_available: true,
       observations_sha256: 'b'.repeat(64),
       observations_url: 'hbs-rs334.observations.json',
       support_counts: { observed: 1 },
@@ -124,7 +159,7 @@ describe('atlas browser contracts', () => {
       created_at: '2026-09-06T00:00:00Z',
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
-      registry_version: artifact.registry_version,
+      registry_versions: [artifact.registry_version],
       schema_version: 1,
     };
 
@@ -142,6 +177,54 @@ describe('atlas browser contracts', () => {
       atlasCatalogSchema.parse({
         ...catalog,
         artifacts: [{ ...catalogArtifact, surface_sha256: undefined }],
+      }),
+    ).toThrow();
+  });
+
+  it('distinguishes a reviewed surface-only artifact from an empty observation set', () => {
+    const surfaceOnly = {
+      ...artifact,
+      assumptions: ['AFND observation publication pending corpus rebuild'],
+      correlation_range_km: 400,
+      entity_type: 'gene',
+      likelihood: 'beta_binomial',
+      measurement: 'carrier_frequency',
+      n_cells: 1,
+      n_observations: 233,
+      observations_available: false,
+      observations_sha256: null,
+      observations_url: null,
+      support_counts: { observed: 1 },
+      surface_sha256: 'a'.repeat(64),
+      surface_url: 'kir-2dl1.surface.json',
+      variant_id: 'kir:2dl1',
+    };
+    const catalog = {
+      artifact_version: 'v1',
+      artifacts: [surfaceOnly],
+      assumptions: ['fixture'],
+      context_sources: [],
+      created_at: '2026-09-06T00:00:00Z',
+      hf_dataset: 'bschilder/genomeos-data',
+      hf_revision: artifact.hf_revision,
+      registry_versions: [artifact.registry_version],
+      schema_version: 1,
+    };
+
+    expect(atlasCatalogSchema.parse(catalog).artifacts[0]).toMatchObject({
+      n_observations: 233,
+      observations_available: false,
+      observations_url: null,
+    });
+    expect(() =>
+      atlasCatalogSchema.parse({
+        ...catalog,
+        artifacts: [
+          {
+            ...surfaceOnly,
+            observations_available: true,
+          },
+        ],
       }),
     ).toThrow();
   });

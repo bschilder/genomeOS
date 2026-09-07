@@ -28,12 +28,16 @@ export const metricDomainsSchema = z.strictObject({
 export const artifactIdentitySchema = z.strictObject({
   artifact_format: z.literal(1),
   data_version: nonEmpty,
-  entity_type: z.enum(['variant', 'phenotype']),
+  entity_type: z.enum(['variant', 'allele', 'gene', 'phenotype']),
   hf_dataset: nonEmpty,
   hf_revision: nonEmpty,
   id: nonEmpty,
   label: nonEmpty,
-  measurement: z.enum(['allele_frequency', 'phenotype_frequency']),
+  measurement: z.enum([
+    'allele_frequency',
+    'carrier_frequency',
+    'phenotype_frequency',
+  ]),
   metric_domains: metricDomainsSchema,
   model_version: nonEmpty,
   registry_version: nonEmpty,
@@ -46,18 +50,32 @@ const supportCountsSchema = z.partialRecord(
   z.int().nonnegative(),
 );
 
-export const artifactRefSchema = artifactIdentitySchema.extend({
+const artifactRefBaseSchema = artifactIdentitySchema.extend({
   assumptions: z.array(nonEmpty),
   correlation_range_km: finiteNumber.positive(),
   likelihood: nonEmpty,
   n_cells: z.int().positive(),
   n_observations: z.int().nonnegative(),
-  observations_sha256: sha256,
-  observations_url: nonEmpty,
   support_counts: supportCountsSchema,
   surface_sha256: sha256,
   surface_url: nonEmpty,
 });
+
+export const artifactRefSchema = z.discriminatedUnion(
+  'observations_available',
+  [
+    artifactRefBaseSchema.extend({
+      observations_available: z.literal(true),
+      observations_sha256: sha256,
+      observations_url: nonEmpty,
+    }),
+    artifactRefBaseSchema.extend({
+      observations_available: z.literal(false),
+      observations_sha256: z.null(),
+      observations_url: z.null(),
+    }),
+  ],
+);
 
 export const contextSourceSchema = z.strictObject({
   id: nonEmpty,
@@ -76,7 +94,7 @@ export const atlasCatalogSchema = z.strictObject({
   created_at: nonEmpty,
   hf_dataset: nonEmpty,
   hf_revision: nonEmpty,
-  registry_version: nonEmpty,
+  registry_versions: z.array(nonEmpty).min(1),
   schema_version: z.literal(1),
 });
 
@@ -119,6 +137,8 @@ export const observationSchema = z
     source_locator: nonEmpty,
     source_record_id: nonEmpty,
     source_url: z.url(),
+    study_id: nonEmpty,
+    study_label: nonEmpty,
   })
   .refine(({ ac, an }) => ac <= an, 'ac must not exceed an');
 
