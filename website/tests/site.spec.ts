@@ -439,6 +439,14 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   expect(
     ((await completeSurface.json()) as { cells: unknown[] }).cells,
   ).toHaveLength(77_844);
+  const completeObservations = await page.request.get(
+    '/data/atlas/hbs-rs334.observations.json',
+  );
+  expect(completeObservations.ok()).toBe(true);
+  expect(
+    ((await completeObservations.json()) as { observations: unknown[] })
+      .observations,
+  ).toHaveLength(1_071);
 
   const mapHelp = page.getByRole('button', { name: 'About map selection' });
   await mapHelp.click();

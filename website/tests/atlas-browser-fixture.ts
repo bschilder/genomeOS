@@ -12,10 +12,20 @@ interface BrowserSurfaceArtifact {
 }
 
 interface BrowserCatalog {
-  artifacts: { n_cells: number }[];
+  artifacts: { n_cells: number; n_observations: number }[];
 }
 
-const RENDER_CELL_BUDGET = 640;
+interface BrowserObservation {
+  lat: number;
+  lon: number;
+}
+
+interface BrowserObservationArtifact {
+  observations: BrowserObservation[];
+}
+
+const RENDER_CELL_BUDGET = 256;
+const RENDER_OBSERVATION_BUDGET = 64;
 const INSPECTOR_TARGET = { lat: 40.4407, lon: -3.7201 };
 
 function compactSurface(
@@ -47,6 +57,29 @@ function compactSurface(
   return { ...payload, cells };
 }
 
+function compactObservations(
+  payload: BrowserObservationArtifact,
+): BrowserObservationArtifact {
+  if (payload.observations.length <= RENDER_OBSERVATION_BUDGET) return payload;
+  const ordered = [...payload.observations].sort((left, right) => {
+    const leftDistance =
+      (left.lat - INSPECTOR_TARGET.lat) ** 2 +
+      (left.lon - INSPECTOR_TARGET.lon) ** 2;
+    const rightDistance =
+      (right.lat - INSPECTOR_TARGET.lat) ** 2 +
+      (right.lon - INSPECTOR_TARGET.lon) ** 2;
+    return leftDistance - rightDistance;
+  });
+  const nearest = ordered.slice(0, 8);
+  const remaining = ordered.slice(8);
+  const slots = RENDER_OBSERVATION_BUDGET - nearest.length;
+  const sampled = Array.from(
+    { length: slots },
+    (_, index) => remaining[Math.floor((index * remaining.length) / slots)],
+  );
+  return { ...payload, observations: [...nearest, ...sampled] };
+}
+
 /**
  * Keep deterministic interaction/accessibility tests within a software-WebGL
  * geometry budget. APIRequestContext calls bypass these page routes, so tests
@@ -62,6 +95,10 @@ export async function installAtlasBrowserFixture(page: Page): Promise<void> {
     const artifacts = payload.artifacts.map((artifact) => ({
       ...artifact,
       n_cells: Math.min(artifact.n_cells, RENDER_CELL_BUDGET),
+      n_observations: Math.min(
+        artifact.n_observations,
+        RENDER_OBSERVATION_BUDGET,
+      ),
     }));
     await route.fulfill({ response, json: { ...payload, artifacts } });
   });
@@ -69,5 +106,10 @@ export async function installAtlasBrowserFixture(page: Page): Promise<void> {
     const response = await route.fetch();
     const payload = (await response.json()) as BrowserSurfaceArtifact;
     await route.fulfill({ response, json: compactSurface(payload) });
+  });
+  await page.route('**/data/atlas/*.observations.json', async (route) => {
+    const response = await route.fetch();
+    const payload = (await response.json()) as BrowserObservationArtifact;
+    await route.fulfill({ response, json: compactObservations(payload) });
   });
 }
