@@ -17,7 +17,7 @@
 - Observations and inferred surfaces remain separate payloads and capabilities.
 - Missing WorldPop coverage, population conflicts, identifiers, versions, checksums, or required provenance are hard errors.
 - `uncertainty_radius_km`, ascertainment fields, study identity, rsID, and normalized variant IDs receive no defaults.
-- WorldPop-positive cells and retained observation cells are predicted from saved fits offline and published under new immutable artifact identities.
+- WorldPop-positive cells are predicted from saved fits offline and published under new immutable artifact identities; measured observations remain a separate layer even when an administrative centroid lies outside populated land.
 - Natural Earth remains geographic context only; it is not a scientific target-grid fallback.
 - The public catalog contains exactly 2 MAP entries and 28 AFND surface-only entries for this release.
 - The 28 AFND entries expose no browser observations until PR #160 is merged and a new validated observation export is built.
@@ -147,41 +147,39 @@ git commit -m "feat: support surface-only Atlas artifacts (#55)"
 
 **Interfaces:**
 
-- Consumes: `PopulationGrid.cells` with `h3_index` and `population`, a pinned source/version string, and retained observation coordinates.
-- Produces: `publication_target_cells(population_grid, observation_cells) -> list[str]`, a reproducible population-grid CLI, and artifact-format 2 manifests carrying the target-grid source/version.
+- Consumes: `PopulationGrid.cells` with `h3_index` and `population`, plus pinned raster URLs, versions, and checksums.
+- Produces: `publication_target_cells(population_grid) -> list[str]`, a reproducible fill-only population-grid CLI, and artifact-format 2 manifests carrying the target-grid source/version.
 
 - [ ] **Step 1: Create a readable small-island fixture**
 
-The fixture contains verified H3-resolution-3 cells `835494fffffffff` for Praia/Cabo Verde and `833f30fffffffff` for Malta with positive population, plus `835969fffffffff` as a valid zero-population conflict fixture. Store `h3_index,population,source,source_version`; represent nodata by omitting its cell, as the production aggregator does.
+The fixture contains verified H3-resolution-4 cells `845494bffffffff` for Praia/Cabo Verde and `843f305ffffffff` for Malta with positive population, plus `8459653ffffffff` as a valid zero-population conflict fixture. Resolution 4 is the global rung of the approved v1 ladder (§6); the earlier resolution-3 web demo remains immutable but is not the target for this publication. Store `h3_index,population,source,source_version`; represent nodata by omitting its cell, as the production aggregator does.
 
 - [ ] **Step 2: Write the failing grid tests**
 
 ```python
-def test_publication_grid_keeps_populated_islands_and_observation_cells() -> None:
+def test_publication_grid_keeps_populated_islands() -> None:
     grid = PopulationGrid(
         cells=pd.DataFrame(
             {
-                "h3_index": ["835494fffffffff", "833f30fffffffff"],
+                "h3_index": ["845494bffffffff", "843f305ffffffff"],
                 "population": [1.0, 2.0],
             }
         ),
-        resolution=3,
+        resolution=4,
         source=WORLDPOP_SOURCE,
         source_version="2020-unconstrained-v1",
         pixels_counted=2,
         pixels_nodata=0,
         coverage_stride=16,
     )
-    assert publication_target_cells(grid, ["835494fffffffff"]) == ["833f30fffffffff", "835494fffffffff"]
+    assert publication_target_cells(grid) == ["843f305ffffffff", "845494bffffffff"]
 
 
-def test_publication_grid_refuses_observation_in_zero_population_cell() -> None:
-    grid = island_fixture_grid()
-    with pytest.raises(ValueError, match="zero population"):
-        publication_target_cells(grid, ["835969fffffffff"])
+def test_publication_grid_excludes_zero_population_cells() -> None:
+    assert "8459653ffffffff" not in publication_target_cells(island_fixture_grid())
 ```
 
-Also test an observation cell absent from coverage, a mismatched H3 resolution, duplicate population cells, and a blank source version.
+Also test a mismatched H3 resolution, duplicate population cells, a blank source version, and that an administrative centroid does not create a surface cell.
 
 - [ ] **Step 3: Run the tests and verify the helper is absent**
 
@@ -194,12 +192,11 @@ Expected: FAIL because `publication_target_cells` and `source_version` do not ex
 ```python
 def publication_target_cells(
     population_grid: PopulationGrid,
-    observation_cells: Iterable[str],
 ) -> list[str]:
-    """Select versioned WorldPop-positive targets and refuse denominator conflicts (§7, §9)."""
+    """Select versioned WorldPop-positive surface targets (§7, §9)."""
 ```
 
-Validate unique H3 indices, finite non-negative population, non-empty source/version, and matching resolution. Return the sorted union of positive-population cells and observation cells only after proving each observation cell has coverage and positive population.
+Validate unique H3 indices, finite non-negative population, non-empty source/version, and matching resolution. Return positive-population cells only. Observation coordinates remain separate: an administrative centroid may legitimately lie in open water and represents uncertain evidence, not a claim that people live in its exact H3 cell (§4).
 
 - [ ] **Step 5: Add a reproducible population-grid command**
 
@@ -210,6 +207,8 @@ def build_population_grid(
     *,
     resolution: int,
     source_version: str,
+    source_url: str,
+    supplements: Sequence[PopulationRasterSource] = (),
 ) -> PopulationGrid:
     grid = aggregate_raster_to_h3(
         raster,
@@ -223,11 +222,11 @@ def build_population_grid(
     return grid
 ```
 
-The CLI accepts `--raster`, `--out`, `--resolution`, and required `--source-version`. It writes a checksum-bearing `.parquet.manifest.json` sidecar containing resolution, source, version, pixel counts, nodata count, and coverage stride. It refuses either existing output unless `--overwrite` is explicitly supplied and prints cell count, total population, source, version, and output SHA-256.
+The CLI requires a primary URL/version and accepts ordered supplemental raster/URL/version triplets. Supplements may fill absent H3 cells but never overwrite or add to primary values. It writes a checksum-bearing `.parquet.manifest.json` sidecar containing every input URL and SHA-256, cells added, overlaps ignored, resolution, source, composite version, pixel counts, nodata count, and coverage stride. It refuses either existing output unless `--overwrite` is explicitly supplied.
 
 - [ ] **Step 6: Replace `h3_land_cells` in the artifact publisher**
 
-Add required CLI arguments `--population-cells`, `--population-source`, and `--population-version`. Load the table, map every retained observation through `h3.latlng_to_cell`, call `publication_target_cells`, and assert after `cell_table` that every observation cell appears in the emitted frame. Do not keep a code path that silently falls back to `h3_land_cells`.
+Add required CLI arguments `--population-cells`, `--population-source`, and `--population-version`. Load the table and call `publication_target_cells`. Keep observations separate from the population-backed surface target; do not require administrative centroids to fall in populated cells. Do not keep a code path that silently falls back to `h3_land_cells`.
 
 - [ ] **Step 7: Record the target grid in artifact format 2**
 
@@ -354,42 +353,42 @@ Expected: a finite raster with a recorded checksum. If download or checksum vali
 Run:
 
 ```bash
-python scripts/build_population_grid.py --raster data/raw/worldpop_1km_2020.tif --out data/store/worldpop-res3-2020.parquet --resolution 3 --source-version 2020-unconstrained-v1
+python scripts/build_population_grid.py --raster data/raw/worldpop_1km_2020.tif --out data/store/worldpop-res4-2020-plus-cok.parquet --resolution 4 --source-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif --source-url https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif --supplement-raster data/raw/worldpop_cok_100m_2020_UNadj.tif --supplement-version Global_2000_2020/2020/COK/cok_ppp_2020_UNadj.tif --supplement-url https://data.worldpop.org/GIS/Population/Global_2000_2020/2020/COK/cok_ppp_2020_UNadj.tif
 ```
 
-Expected: the output has unique cells, finite population values, and positive population for Cabo Verde cell `835494fffffffff`.
+Expected: the output has unique cells, finite population values, positive population for Cabo Verde cell `845494bffffffff`, and records one Cook Islands cell added without double-counting the 17 overlaps.
 
 - [ ] **Step 3: Republish MAP artifacts under new identities**
 
 Run:
 
 ```bash
-python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv --population-cells data/store/worldpop-res3-2020.parquet --population-source worldpop-1km-unconstrained --population-version 2020-unconstrained-v1 --h3-res 3 --model-version v2 --data-version map-2026-08
+python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv --population-cells data/store/worldpop-res4-2020-plus-cok.parquet --population-source worldpop-1km-unconstrained --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif+Global_2000_2020/2020/COK/cok_ppp_2020_UNadj.tif --h3-res 4 --model-version v3 --data-version map-2026-08
 ```
 
-Expected: two new format-2 artifacts; the format-1 directories remain untouched.
+Expected: two new format-2 artifacts; earlier directories remain untouched.
 
 - [ ] **Step 4: Republish AFND artifacts under new identities**
 
 Run:
 
 ```bash
-python scripts/publish_artifacts.py --fits data/store/screen_v2 --out data/store/artifacts --afnd data/raw/afnd_frequencies.tsv --afnd-populations data/raw/afnd_populations.tsv --cytokines --kir --min-populations 30 --population-cells data/store/worldpop-res3-2020.parquet --population-source worldpop-1km-unconstrained --population-version 2020-unconstrained-v1 --h3-res 3 --model-version v3 --data-version afnd-2026-08
+python scripts/publish_artifacts.py --fits data/store/screen_v2 --out data/store/artifacts --afnd data/raw/afnd_frequencies.tsv --afnd-populations data/raw/afnd_populations.tsv --cytokines --kir --min-populations 30 --population-cells data/store/worldpop-res4-2020-plus-cok.parquet --population-source worldpop-1km-unconstrained --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif+Global_2000_2020/2020/COK/cok_ppp_2020_UNadj.tif --h3-res 4 --model-version v3 --data-version afnd-2026-08
 ```
 
-Expected: 28 new format-2 artifacts. A missing fit aborts the release because the catalog inventory must stay at exactly 30 entries.
+Expected before PR #160 merges: the duplicate source-record identity hard error aborts without writing an artifact. Keep the 28 existing format-2 AFND surfaces as surface-only catalog entries; never bypass the schema gate. Republish them only after PR #160 is incorporated.
 
 - [ ] **Step 5: Verify island and observation-cell coverage**
 
-Run a test that loads both MAP artifacts and asserts every source observation's H3 cell is present. Assert at least one emitted Cabo Verde cell has a literal model support state and posterior summaries produced by `cell_table`; never accept a copied neighboring value.
+Run a test that loads both MAP artifacts and asserts populated Cabo Verde, Malta, and Cook Islands cells have literal model support states and posterior summaries produced by `cell_table`; never accept a copied neighboring value. Assert the Cook Islands administrative centroid's ocean cell is not manufactured in the surface.
 
 - [ ] **Step 6: Update the immutable inventory and allowlist**
 
-Record each new directory and SHA-256 in `data/store/INVENTORY.json`. Point all 30 allowlist entries at the new directories. Keep the old directories intact.
+Record the new MAP directories and SHA-256 in `data/store/INVENTORY.json`. Point the two MAP allowlist entries at v3 and retain the 28 AFND v2 directories until PR #160 enables a clean rebuild. Keep all earlier directories intact.
 
 - [ ] **Step 7: Sync the new artifacts to Hugging Face**
 
-Add `data/store/worldpop-res3-2020.parquet` to `SYNCED`, then run:
+Add `data/store/worldpop-res4-2020-plus-cok.parquet` and its manifest to `SYNCED`, then run:
 
 ```bash
 python scripts/sync_store.py push --dry-run
@@ -402,7 +401,7 @@ Expected: the dry run names only approved sync roots; the final status shows the
 - [ ] **Step 8: Commit publication metadata, not raw source credentials**
 
 ```bash
-git add data/store/INVENTORY.json data/store/worldpop-res3-2020.parquet data/store/artifacts website/src/atlas/public-artifacts.json scripts/sync_store.py
+git add data/store/INVENTORY.json website/src/atlas/public-artifacts.json scripts/sync_store.py
 python scripts/check_private_files.py
 git diff --cached --name-only
 git commit -m "data: publish WorldPop-backed Atlas surfaces (#55)"

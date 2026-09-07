@@ -19,10 +19,12 @@ from genomeos.geo.population import (  # noqa: E402
     PopulationGrid,
     aggregate_raster_to_h3,
     births_from_population,
+    merge_population_grids,
     publication_target_cells,
     resolution_ladder_grids,
 )
 from scripts.build_population_grid import (  # noqa: E402
+    PopulationRasterSource,
     build_population_grid,
     population_grid_manifest_path,
     read_population_grid,
@@ -36,7 +38,7 @@ def _island_grid() -> PopulationGrid:
     source = pd.read_csv(ISLAND_FIXTURE)
     return PopulationGrid(
         cells=source[["h3_index", "population"]],
-        resolution=3,
+        resolution=4,
         source=str(source["source"].iloc[0]),
         source_version=str(source["source_version"].iloc[0]),
         pixels_counted=2,
@@ -46,20 +48,16 @@ def _island_grid() -> PopulationGrid:
 
 
 def test_publication_target_keeps_population_backed_small_islands():
-    targets = publication_target_cells(_island_grid(), ["835494fffffffff"])
-    assert "835494fffffffff" in targets, "Praia/Cabo Verde must survive target selection"
-    assert "833f30fffffffff" in targets, "Malta must survive target selection"
-    assert "835969fffffffff" not in targets, "valid zero population is not a target"
+    targets = publication_target_cells(_island_grid())
+    assert "845494bffffffff" in targets, "Praia/Cabo Verde must survive target selection"
+    assert "843f305ffffffff" in targets, "Malta must survive target selection"
+    assert "8459653ffffffff" not in targets, "valid zero population is not a target"
 
 
-def test_publication_target_refuses_zero_population_observation_cell():
-    with pytest.raises(ValueError, match="zero population"):
-        publication_target_cells(_island_grid(), ["835969fffffffff"])
-
-
-def test_publication_target_refuses_observation_without_worldpop_coverage():
-    with pytest.raises(ValueError, match="no WorldPop coverage"):
-        publication_target_cells(_island_grid(), ["83754efffffffff"])
+def test_publication_target_does_not_add_an_observation_centroid():
+    """An administrative centroid may be in open water; it is not a population claim."""
+    targets = publication_target_cells(_island_grid())
+    assert "84754a9ffffffff" not in targets
 
 
 def test_publication_target_refuses_duplicate_population_cells():
@@ -75,16 +73,15 @@ def test_publication_target_refuses_duplicate_population_cells():
                 pixels_counted=grid.pixels_counted,
                 pixels_nodata=grid.pixels_nodata,
                 coverage_stride=grid.coverage_stride,
-            ),
-            [],
+            )
         )
 
 
 def test_publication_target_refuses_mismatched_h3_resolution():
     grid = _island_grid()
     cells = grid.cells.copy()
-    cells.loc[0, "h3_index"] = "845494bffffffff"
-    with pytest.raises(ValueError, match="resolution 3"):
+    cells.loc[0, "h3_index"] = "835494fffffffff"
+    with pytest.raises(ValueError, match="resolution 4"):
         publication_target_cells(
             PopulationGrid(
                 cells=cells,
@@ -94,8 +91,7 @@ def test_publication_target_refuses_mismatched_h3_resolution():
                 pixels_counted=grid.pixels_counted,
                 pixels_nodata=grid.pixels_nodata,
                 coverage_stride=grid.coverage_stride,
-            ),
-            [],
+            )
         )
 
 
@@ -212,13 +208,67 @@ def test_population_source_version_is_required(tmp_path):
         )
 
 
+def _grid(cells: dict[str, float], version: str, *, resolution: int = 4) -> PopulationGrid:
+    return PopulationGrid(
+        cells=pd.DataFrame(
+            {"h3_index": list(cells), "population": list(cells.values())}
+        ),
+        resolution=resolution,
+        source="worldpop-1km-unconstrained",
+        source_version=version,
+        pixels_counted=len(cells),
+        pixels_nodata=0,
+        coverage_stride=16,
+    )
+
+
+def test_population_supplement_fills_only_cells_absent_from_primary():
+    primary = _grid({"845494bffffffff": 100.0, "843f305ffffffff": 200.0}, "global")
+    supplement = _grid(
+        {"845494bffffffff": 999.0, "84b4c3bffffffff": 50.0}, "cook-islands"
+    )
+
+    merged, reports = merge_population_grids(primary, [supplement])
+
+    values = dict(zip(merged.cells["h3_index"], merged.cells["population"], strict=True))
+    assert values["845494bffffffff"] == 100.0, "overlap must retain the primary value"
+    assert values["84b4c3bffffffff"] == 50.0, "an absent island cell must be filled"
+    assert merged.source_version == "global+cook-islands"
+    assert reports[0].cells_added == 1
+    assert reports[0].overlap_cells_ignored == 1
+
+
+def test_population_supplement_refuses_a_different_resolution():
+    primary = _grid({"845494bffffffff": 100.0}, "global")
+    supplement = _grid({"835494fffffffff": 50.0}, "cook-islands", resolution=3)
+    with pytest.raises(ValueError, match="same resolution"):
+        merge_population_grids(primary, [supplement])
+
+
+def test_population_supplement_refuses_duplicate_cells():
+    supplement = _grid({"84b4c3bffffffff": 50.0}, "cook-islands")
+    supplement = PopulationGrid(
+        cells=pd.concat([supplement.cells, supplement.cells], ignore_index=True),
+        resolution=supplement.resolution,
+        source=supplement.source,
+        source_version=supplement.source_version,
+        pixels_counted=supplement.pixels_counted,
+        pixels_nodata=supplement.pixels_nodata,
+        coverage_stride=supplement.coverage_stride,
+    )
+    with pytest.raises(ValueError, match="unique"):
+        merge_population_grids(_grid({"845494bffffffff": 100.0}, "global"), [supplement])
+
+
 def test_population_grid_builder_writes_source_version_and_hash(tmp_path):
     out = tmp_path / "worldpop-res4.parquet"
+    raster = _raster(tmp_path, np.array([[10.0, 20.0]]))
     result = build_population_grid(
-        _raster(tmp_path, np.array([[10.0, 20.0]])),
+        raster,
         out,
         resolution=4,
         source_version="fixture-2020",
+        source_url="https://example.test/fixture-2020.tif",
     )
     saved = pd.read_parquet(out)
     assert set(saved["source"]) == {"worldpop-1km-unconstrained"}
@@ -227,11 +277,21 @@ def test_population_grid_builder_writes_source_version_and_hash(tmp_path):
     manifest = json.loads(population_grid_manifest_path(out).read_text())
     assert manifest == {
         "coverage_stride": 16,
+        "input_rasters": [
+            {
+                "cells_added": len(saved),
+                "overlap_cells_ignored": 0,
+                "role": "primary",
+                "sha256": hashlib.sha256(raster.read_bytes()).hexdigest(),
+                "source_url": "https://example.test/fixture-2020.tif",
+                "source_version": "fixture-2020",
+            }
+        ],
         "n_cells": len(saved),
         "parquet_sha256": hashlib.sha256(out.read_bytes()).hexdigest(),
         "pixels_counted": 2,
         "pixels_nodata": 0,
-        "population_grid_format": 1,
+        "population_grid_format": 2,
         "resolution": 4,
         "source": "worldpop-1km-unconstrained",
         "source_version": "fixture-2020",
@@ -256,7 +316,43 @@ def test_population_grid_builder_refuses_overwrite(tmp_path):
             out,
             resolution=4,
             source_version="fixture-2020",
+            source_url="https://example.test/fixture-2020.tif",
         )
+
+
+def test_population_grid_builder_records_fill_only_supplement(tmp_path):
+    primary = _raster(tmp_path, np.array([[10.0]]), west=0.0, north=0.0)
+    supplement_dir = tmp_path / "supplement"
+    supplement_dir.mkdir()
+    supplement = _raster(supplement_dir, np.array([[20.0]]), west=30.0, north=10.0)
+    out = tmp_path / "worldpop-res4.parquet"
+
+    result = build_population_grid(
+        primary,
+        out,
+        resolution=4,
+        source_version="global",
+        source_url="https://example.test/global.tif",
+        supplements=(
+            PopulationRasterSource(
+                path=supplement,
+                source_version="territory",
+                source_url="https://example.test/territory.tif",
+            ),
+        ),
+    )
+
+    assert result.source_version == "global+territory"
+    assert result.cells["population"].sum() == pytest.approx(30.0)
+    manifest = json.loads(population_grid_manifest_path(out).read_text())
+    assert manifest["input_rasters"][1] == {
+        "cells_added": 1,
+        "overlap_cells_ignored": 0,
+        "role": "supplement",
+        "sha256": hashlib.sha256(supplement.read_bytes()).hexdigest(),
+        "source_url": "https://example.test/territory.tif",
+        "source_version": "territory",
+    }
 
 
 def test_population_grid_reader_refuses_parquet_checksum_mismatch(tmp_path):
@@ -266,6 +362,7 @@ def test_population_grid_reader_refuses_parquet_checksum_mismatch(tmp_path):
         out,
         resolution=4,
         source_version="fixture-2020",
+        source_url="https://example.test/fixture-2020.tif",
     )
     out.write_bytes(out.read_bytes() + b"corruption")
     with pytest.raises(ValueError, match="checksum"):

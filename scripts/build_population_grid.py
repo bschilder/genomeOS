@@ -11,6 +11,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
@@ -18,10 +20,21 @@ import pandas as pd
 from genomeos.geo.population import (
     PopulationGrid,
     aggregate_raster_to_h3,
+    merge_population_grids,
     publication_target_cells,
 )
 
-POPULATION_GRID_FORMAT = 1
+POPULATION_GRID_FORMAT = 2
+SUPPORTED_POPULATION_GRID_FORMATS = {1, POPULATION_GRID_FORMAT}
+
+
+@dataclass(frozen=True)
+class PopulationRasterSource:
+    """One exact raster input and its public provenance."""
+
+    path: Path
+    source_version: str
+    source_url: str
 
 
 def population_grid_manifest_path(parquet_path: Path) -> Path:
@@ -60,11 +73,43 @@ def read_population_grid(path: Path) -> PopulationGrid:
     missing = required - set(manifest)
     if missing:
         raise ValueError(f"{manifest_path}: missing required fields {sorted(missing)}")
-    if manifest["population_grid_format"] != POPULATION_GRID_FORMAT:
+    grid_format = manifest["population_grid_format"]
+    if grid_format not in SUPPORTED_POPULATION_GRID_FORMATS:
         raise ValueError(
             f"{manifest_path}: unsupported population_grid_format "
-            f"{manifest['population_grid_format']!r}"
+            f"{grid_format!r}"
         )
+    if grid_format == 2:
+        inputs = manifest.get("input_rasters")
+        if not isinstance(inputs, list) or not inputs:
+            raise ValueError(f"{manifest_path}: format 2 requires non-empty input_rasters")
+        required_input = {
+            "cells_added",
+            "overlap_cells_ignored",
+            "role",
+            "sha256",
+            "source_url",
+            "source_version",
+        }
+        for index, item in enumerate(inputs):
+            if not isinstance(item, dict) or required_input - set(item):
+                raise ValueError(
+                    f"{manifest_path}: input_rasters[{index}] is missing required provenance"
+                )
+            if item["role"] not in {"primary", "supplement"}:
+                raise ValueError(f"{manifest_path}: input_rasters[{index}] has invalid role")
+            if not str(item["source_url"]).strip() or not str(item["source_version"]).strip():
+                raise ValueError(
+                    f"{manifest_path}: input_rasters[{index}] requires source_url and source_version"
+                )
+            digest = str(item["sha256"])
+            if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+                raise ValueError(f"{manifest_path}: input_rasters[{index}] has invalid sha256")
+        expected_version = "+".join(str(item["source_version"]) for item in inputs)
+        if manifest["source_version"] != expected_version:
+            raise ValueError(
+                f"{manifest_path}: source_version does not match ordered input_rasters"
+            )
     actual_hash = _sha256_file(path)
     if actual_hash != manifest["parquet_sha256"]:
         raise ValueError(f"{path}: checksum does not match {manifest_path}")
@@ -94,7 +139,7 @@ def read_population_grid(path: Path) -> PopulationGrid:
         pixels_nodata=int(manifest["pixels_nodata"]),
         coverage_stride=int(manifest["coverage_stride"]),
     )
-    publication_target_cells(grid, [])
+    publication_target_cells(grid)
     return grid
 
 
@@ -104,22 +149,38 @@ def build_population_grid(
     *,
     resolution: int,
     source_version: str,
+    source_url: str,
+    supplements: Sequence[PopulationRasterSource] = (),
     overwrite: bool = False,
 ) -> PopulationGrid:
-    """Aggregate `raster` and write a provenance-complete parquet without silent overwrite."""
+    """Aggregate ordered rasters and write a provenance-complete, fill-only H3 grid."""
     raster = Path(raster)
     out = Path(out)
+    if not source_url.strip():
+        raise ValueError("source_url must be non-empty")
+    for supplement in supplements:
+        if not supplement.source_url.strip() or not supplement.source_version.strip():
+            raise ValueError("supplement source_url and source_version must be non-empty")
     manifest_path = population_grid_manifest_path(out)
     existing = [path for path in (out, manifest_path) if path.exists()]
     if existing and not overwrite:
         raise FileExistsError(
             f"{existing[0]} already exists; pass overwrite=True deliberately"
         )
-    grid = aggregate_raster_to_h3(
+    primary_grid = aggregate_raster_to_h3(
         raster,
         resolution,
         source_version=source_version,
     )
+    supplement_grids = [
+        aggregate_raster_to_h3(
+            Path(supplement.path),
+            resolution,
+            source_version=supplement.source_version,
+        )
+        for supplement in supplements
+    ]
+    grid, reports = merge_population_grids(primary_grid, supplement_grids)
     out.parent.mkdir(parents=True, exist_ok=True)
     grid.cells.assign(
         source=grid.source,
@@ -127,6 +188,27 @@ def build_population_grid(
     ).to_parquet(out, index=False)
     manifest = {
         "coverage_stride": grid.coverage_stride,
+        "input_rasters": [
+            {
+                "cells_added": len(primary_grid.cells),
+                "overlap_cells_ignored": 0,
+                "role": "primary",
+                "sha256": _sha256_file(raster),
+                "source_url": source_url,
+                "source_version": primary_grid.source_version,
+            },
+            *[
+                {
+                    "cells_added": report.cells_added,
+                    "overlap_cells_ignored": report.overlap_cells_ignored,
+                    "role": "supplement",
+                    "sha256": _sha256_file(Path(supplement.path)),
+                    "source_url": supplement.source_url,
+                    "source_version": supplement.source_version,
+                }
+                for supplement, report in zip(supplements, reports, strict=True)
+            ],
+        ],
         "n_cells": len(grid.cells),
         "parquet_sha256": _sha256_file(out),
         "pixels_counted": grid.pixels_counted,
@@ -146,17 +228,41 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--resolution", type=int, required=True)
     parser.add_argument("--source-version", required=True)
+    parser.add_argument("--source-url", required=True)
+    parser.add_argument("--supplement-raster", type=Path, action="append", default=[])
+    parser.add_argument("--supplement-version", action="append", default=[])
+    parser.add_argument("--supplement-url", action="append", default=[])
     parser.add_argument("--overwrite", action="store_true")
     return parser
 
 
 def main() -> int:
     args = _parser().parse_args()
+    supplement_lengths = {
+        len(args.supplement_raster),
+        len(args.supplement_version),
+        len(args.supplement_url),
+    }
+    if len(supplement_lengths) != 1:
+        raise SystemExit(
+            "--supplement-raster, --supplement-version, and --supplement-url must repeat equally"
+        )
+    supplements = tuple(
+        PopulationRasterSource(path=path, source_version=version, source_url=url)
+        for path, version, url in zip(
+            args.supplement_raster,
+            args.supplement_version,
+            args.supplement_url,
+            strict=True,
+        )
+    )
     grid = build_population_grid(
         args.raster,
         args.out,
         resolution=args.resolution,
         source_version=args.source_version,
+        source_url=args.source_url,
+        supplements=supplements,
         overwrite=args.overwrite,
     )
     digest = _sha256_file(args.out)

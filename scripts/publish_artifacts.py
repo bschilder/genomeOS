@@ -2,16 +2,18 @@
 
     python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
         --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv \
-        --population-cells data/store/worldpop-res3-2020.parquet \
+        --population-cells data/store/worldpop-res4-2020.parquet \
         --population-source worldpop-1km-unconstrained \
-        --population-version 2020-unconstrained-v1
+        --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif \
+        --h3-res 4
 
     python scripts/publish_artifacts.py --fits data/store/screen --out data/store/artifacts \
         --afnd data/raw/afnd_frequencies.tsv --afnd-populations data/raw/afnd_populations.tsv \
         --data-version afnd-2026-08 \
-        --population-cells data/store/worldpop-res3-2020.parquet \
+        --population-cells data/store/worldpop-res4-2020.parquet \
         --population-source worldpop-1km-unconstrained \
-        --population-version 2020-unconstrained-v1
+        --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif \
+        --h3-res 4
 
 Reads the fits `build_surfaces.py` saved and writes the immutable parquet each variant is meant to
 be cited as. Separated from fitting on purpose: fitting is expensive and environment-coupled,
@@ -37,7 +39,11 @@ from genomeos.observations.sources import (
 )
 from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish
 from genomeos.surfaces.fit import load_fit
-from scripts.build_population_grid import read_population_grid
+
+try:
+    from scripts.build_population_grid import read_population_grid
+except ModuleNotFoundError:  # Direct `python scripts/publish_artifacts.py` entry.
+    from build_population_grid import read_population_grid
 
 LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}
 
@@ -45,8 +51,8 @@ LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}
 def publication_coordinates(
     population_grid: PopulationGrid,
     observations,
-) -> tuple[list[str], np.ndarray, np.ndarray, set[str]]:
-    """Resolve target/observation H3 cells without a visual-geography fallback (§7, §9)."""
+) -> tuple[list[str], np.ndarray, np.ndarray]:
+    """Resolve population-backed surface targets without a visual-geography fallback (§7, §9)."""
     required = {"lat", "lon"}
     missing = required - set(observations.columns)
     if missing:
@@ -57,13 +63,9 @@ def publication_coordinates(
         raise ValueError("observation lat and lon must be finite")
     if ((lat < -90) | (lat > 90)).any() or ((lon < -180) | (lon > 180)).any():
         raise ValueError("observation lat and lon are outside geographic bounds")
-    observation_cells = {
-        h3.latlng_to_cell(float(row_lat), float(row_lon), population_grid.resolution)
-        for row_lat, row_lon in zip(lat, lon, strict=True)
-    }
-    cells = publication_target_cells(population_grid, observation_cells)
+    cells = publication_target_cells(population_grid)
     centres = np.asarray([h3.cell_to_latlng(cell) for cell in cells], dtype=float)
-    return cells, centres[:, 0], centres[:, 1], observation_cells
+    return cells, centres[:, 0], centres[:, 1]
 
 
 def main() -> None:
@@ -167,9 +169,7 @@ def main() -> None:
             continue
 
         fit = load_fit(fit_path)
-        cells, lat, lon, observation_cells = publication_coordinates(
-            population_grid, observations
-        )
+        cells, lat, lon = publication_coordinates(population_grid, observations)
         frame = cell_table(
             fit,
             h3_index=cells,
@@ -180,12 +180,6 @@ def main() -> None:
             model_version=args.model_version,
             data_version=args.data_version,
         )
-        missing_observation_cells = observation_cells - set(frame["h3_index"])
-        if missing_observation_cells:
-            raise RuntimeError(
-                f"{variant_id}: published surface omitted observation cells "
-                f"{sorted(missing_observation_cells)[:3]}"
-            )
         counts = {s: int((frame["support"] == s).sum()) for s in sorted(set(frame["support"]))}
         manifest = ArtifactManifest(
             variant_id=variant_id,
