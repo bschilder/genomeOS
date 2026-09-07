@@ -427,6 +427,40 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
   await expect(page).toHaveURL(/height=4200000(?:&|%|$)/);
 });
 
+test('explorer recovers a stale version link for an available map', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
+  expect(servedCatalog.ok()).toBe(true);
+  const servedArtifacts = (await servedCatalog.json()) as {
+    artifacts: {
+      data_version: string;
+      id: string;
+      model_version: string;
+    }[];
+  };
+  const current = servedArtifacts.artifacts.find(
+    ({ id }) => id === 'hbs-rs334',
+  );
+  expect(current).toBeDefined();
+
+  await page.goto(
+    '/app/?entity=hbs-rs334&version=v1%2Fmap-2026-08&metric=post_mean',
+  );
+
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('version'))
+    .toBe(`${current!.model_version}/${current!.data_version}`);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+  await expect(
+    page.getByText('Corrected invalid link fields: version.', { exact: false }),
+  ).toBeVisible();
+});
+
 test('explorer exposes the full catalog and shareable appearance controls', async ({
   page,
 }) => {

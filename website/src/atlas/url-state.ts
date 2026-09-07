@@ -206,13 +206,14 @@ export function parseExplorerState(
   }
 
   const requestedVersion = params.get('version');
-  const artifactVersion =
+  let artifactVersion =
     requestedVersion ?? (selectedRef ? versionOf(selectedRef) : '');
   if (
     requestedVersion !== null &&
     selectedRef !== undefined &&
     requestedVersion !== versionOf(selectedRef)
   ) {
+    artifactVersion = versionOf(selectedRef);
     corrections.push({
       field: 'version',
       reason: 'unavailable',

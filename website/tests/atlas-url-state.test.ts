@@ -93,12 +93,12 @@ describe('explorer URL state', () => {
     expect(mapWithElevation.state.elevation).toBe(true);
   });
 
-  it('retains a requested unavailable version', () => {
+  it('corrects an unavailable version for an available entity', () => {
     const parsed = parseExplorerState(
       '?entity=hbs-rs334&version=v9%2Ffuture',
       catalog,
     );
-    expect(parsed.state.artifactVersion).toBe('v9/future');
+    expect(parsed.state.artifactVersion).toBe('v1/map-2026-08');
     expect(parsed.corrections).toContainEqual(
       expect.objectContaining({ field: 'version', reason: 'unavailable' }),
     );
