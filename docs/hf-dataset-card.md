@@ -1,7 +1,7 @@
 ---
 license: other
 license_name: mixed-see-provenance
-license_link: https://github.com/bschilder/genomeOS/issues/117
+license_link: https://github.com/bschilder/genomeOS/issues/66
 language:
   - en
 tags:
@@ -72,8 +72,10 @@ Gaussian process on the **unit sphere** (not lon/lat — a degree of longitude i
 equator and 47 km at 65°N), with inducing points placed on an H3 geodesic grid, sampled with
 numpyro NUTS. A fit that has not mixed is refused rather than published.
 
-**`store/artifacts/`** — `scripts/publish_artifacts.py`, predicting each fit onto H3 res-3 land
-cells.
+**`store/artifacts/`** — `scripts/publish_artifacts.py`, predicting each fit onto versioned H3
+targets. Format-1 artifacts used a coarse Natural Earth land-centre mask. Format-2 artifacts use
+population-positive cells from a pinned WorldPop grid, union validated observation cells, and
+record that grid's source/version in the manifest.
 
 ## Using it
 
@@ -96,12 +98,12 @@ print(cells.columns.tolist())
 
 **Read the `support` column before the numbers.** It is the point of the whole design:
 
-| `support` | meaning |
-|---|---|
-| `observed` | a survey sits in this cell |
-| `interpolated` | inferred, with data within twice the correlation range |
-| `unknown` | no data close enough — **the model is not making a claim here** |
-| `prior_dominated` | the posterior never moved off the prior |
+| `support`         | meaning                                                         |
+| ----------------- | --------------------------------------------------------------- |
+| `observed`        | a survey sits in this cell                                      |
+| `interpolated`    | inferred, with data within twice the correlation range          |
+| `unknown`         | no data close enough — **the model is not making a claim here** |
+| `prior_dominated` | the posterior never moved off the prior                         |
 
 ```python
 # Never aggregate without masking. A mean over unmasked cells is a mean over the prior.
@@ -156,22 +158,28 @@ Reproduce the environment exactly with
 
 ## Provenance and terms
 
-**This dataset is private, and that is deliberate.** AFND publishes no licence — its "Licensing"
-link carries only a disclaimer, and re3data's "public domain" record is third-party catalogue
-metadata rather than a grant. Collection here proceeds on an assumed-open basis
-([#117](https://github.com/bschilder/genomeOS/issues/117)); keeping the dataset private makes this
-**storage rather than redistribution**, which is what that decision covers. Redistribution of
-anything derived from indigenous-population panels is separately unsettled
-([#66](https://github.com/bschilder/genomeOS/issues/66)).
+**This dataset is public.** AFND publishes no standalone licence — its "Licensing" link carries a
+disclaimer rather than an explicit reuse prohibition, and re3data's "public domain" record is
+third-party catalogue metadata. The project therefore records the source as
+`no_restriction_found`: lack of a clearly stated licence does not by itself block valuable data,
+while any explicit restriction discovered later still governs that source
+([#117](https://github.com/bschilder/genomeOS/issues/117)).
+
+[Issue #66](https://github.com/bschilder/genomeOS/issues/66) records the completed decision that
+fitted surfaces derived from AFND, HGDP, SGDP, and AADR may be published with source attribution,
+Biocultural Notices, measured/inferred separation, and explicit source restrictions preserved.
+The [CARE Principles](https://www.gida-global.org/careprinciples)—Collective Benefit, Authority to
+Control, Responsibility, and Ethics—remain a provenance and responsible-use framework, not a
+standalone publication veto or substitute for source-specific terms.
 
 Cite the sources, not this store:
 
-- **AFND** — Gonzalez-Galarza et al., *Allele frequency net database (AFND) 2020 update*, Nucleic
+- **AFND** — Gonzalez-Galarza et al., _Allele frequency net database (AFND) 2020 update_, Nucleic
   Acids Research 48:D783. [doi:10.1093/nar/gkz1029](https://doi.org/10.1093/nar/gkz1029)
-- **MAP HbS** — Piel et al., *Global epidemiology of sickle haemoglobin in neonates*, The Lancet
+- **MAP HbS** — Piel et al., _Global epidemiology of sickle haemoglobin in neonates_, The Lancet
   381:142 (2013).
-- **MAP G6PD** — Howes et al., *G6PD deficiency prevalence and estimates of affected populations in
-  malaria endemic countries*, PLoS Medicine 9:e1001339 (2012).
+- **MAP G6PD** — Howes et al., _G6PD deficiency prevalence and estimates of affected populations in
+  malaria endemic countries_, PLoS Medicine 9:e1001339 (2012).
 - **Frequency redistribution** — [slowkow/allelefrequencies](https://github.com/slowkow/allelefrequencies).
 
 ## Known limitations

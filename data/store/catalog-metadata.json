@@ -3,8 +3,9 @@
   "registry_version": "map-survey-coordinates-v1",
   "created_at": "2026-08-27T00:00:00Z",
   "assumptions": [
-    "surface-only catalog; observation and burden serving artifacts are not yet published",
-    "MAP survey coordinates do not use the P0 population registry"
+    "MAP artifacts include validated browser observation payloads; AFND artifacts are surface-only until PR #160 is incorporated",
+    "MAP survey coordinates do not use the P0 population registry",
+    "AFND fitted surfaces are publishable under the completed Issue #66 decision with attribution, Biocultural Notices, and explicit source restrictions preserved"
   ],
   "variants": {
     "chr11-5227002-T-A": {
@@ -12,9 +13,7 @@
       "entity_type": "variant",
       "measurement": "allele_frequency",
       "surface_eligible": true,
-      "assumptions": [
-        "beta-binomial spatial surface over MAP HbS surveys"
-      ]
+      "assumptions": ["beta-binomial spatial surface over MAP HbS surveys"]
     },
     "phenotype:g6pd-deficiency": {
       "label": "G6PD deficiency in hemizygous males",
@@ -24,6 +23,342 @@
       "assumptions": [
         "enzyme-deficiency phenotype pools multiple causal G6PD alleles",
         "frequency is measured in hemizygous males"
+      ]
+    },
+    "cyt:il-10-1082-g": {
+      "label": "IL-10 −1082 G",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "cyt:il-10-819-t": {
+      "label": "IL-10 −819 T",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "cyt:il-6-174-c": {
+      "label": "IL-6 −174 C",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "cyt:tnfalpha-308-a": {
+      "label": "TNF-α −308 A",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:a-02-01": {
+      "label": "HLA-A*02:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:a-26-01": {
+      "label": "HLA-A*26:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:a-32-01": {
+      "label": "HLA-A*32:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:b-40-01": {
+      "label": "HLA-B*40:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:b-40-02": {
+      "label": "HLA-B*40:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:b-58-01": {
+      "label": "HLA-B*58:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:c-03-03": {
+      "label": "HLA-C*03:03",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:c-06-02": {
+      "label": "HLA-C*06:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:c-07-02": {
+      "label": "HLA-C*07:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:dpb1-04-01": {
+      "label": "HLA-DPB1*04:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:dpb1-04-02": {
+      "label": "HLA-DPB1*04:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:dpb1-13-01": {
+      "label": "HLA-DPB1*13:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:dqb1-03-01": {
+      "label": "HLA-DQB1*03:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:dqb1-06-02": {
+      "label": "HLA-DQB1*06:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:drb1-01-01": {
+      "label": "HLA-DRB1*01:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:drb1-04-03": {
+      "label": "HLA-DRB1*04:03",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:drb1-07-01": {
+      "label": "HLA-DRB1*07:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:drb1-11-01": {
+      "label": "HLA-DRB1*11:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:drb1-14-01": {
+      "label": "HLA-DRB1*14:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "hla:drb1-15-01": {
+      "label": "HLA-DRB1*15:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "kir:2dl1": {
+      "label": "KIR2DL1 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "kir:2dl2": {
+      "label": "KIR2DL2 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "kir:2ds1": {
+      "label": "KIR2DS1 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
+      ]
+    },
+    "kir:3ds1": {
+      "label": "KIR3DS1 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured-observation browser export remains unavailable until the duplicate source-record identity repair in PR #160 is incorporated"
       ]
     }
   }

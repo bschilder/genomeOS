@@ -12,6 +12,7 @@ from scripts import export_atlas_web
 
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
 VARIANT_ID = "chr11-5227002-T-A"
+PUBLIC_ALLOWLIST = Path("website/src/atlas/public-artifacts.json")
 
 
 def _write_source_tree(root: Path) -> Path:
@@ -74,6 +75,20 @@ def _write_source_tree(root: Path) -> Path:
         )
     )
     return artifact
+
+
+def test_public_catalog_inventory_has_two_map_and_twenty_eight_afnd_entries() -> None:
+    allowlist = json.loads(PUBLIC_ALLOWLIST.read_text())
+    entries = allowlist["artifacts"]
+    assert len(entries) == 30
+    assert len({entry["id"] for entry in entries}) == 30
+    assert len({entry["artifact_dir"] for entry in entries}) == 30
+    assert sum(entry["observation_source"] is not None for entry in entries) == 2
+    families = {entry["variant_id"].split(":", 1)[0] for entry in entries}
+    assert families == {"chr11-5227002-T-A", "phenotype", "cyt", "hla", "kir"}
+    assert sum(entry["variant_id"].startswith("cyt:") for entry in entries) == 4
+    assert sum(entry["variant_id"].startswith("hla:") for entry in entries) == 20
+    assert sum(entry["variant_id"].startswith("kir:") for entry in entries) == 4
 
 
 def _write_hbs_csv(path: Path) -> None:

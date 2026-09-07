@@ -298,7 +298,7 @@ Expected: FAIL with `2 != 30`.
 
 - [ ] **Step 3: Add all manifest-backed entries**
 
-Use each manifest's literal `variant_id`, `model_version`, `data_version`, and measurement. Add 4 cytokine, 20 HLA, and 4 KIR entries with `observation_source: null` and `registry_version: afnd-populations-2026-08-v1`. Do not derive study identity or browser observations from artifact counts.
+Use each manifest's literal `variant_id`, `model_version`, `data_version`, and measurement. Add 4 cytokine, 20 HLA, and 4 KIR entries with `observation_source: null` and the adapter's literal `registry_version: afnd-2026-08`. Do not derive study identity or browser observations from artifact counts.
 
 - [ ] **Step 4: Correct interim-storage policy text**
 

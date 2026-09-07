@@ -1,4 +1,4 @@
-"""Sync the local data store to a private Hugging Face dataset (design §5).
+"""Sync the local data store to the public interim Hugging Face dataset (design §5).
 
     python scripts/sync_store.py push          # local -> hub
     python scripts/sync_store.py pull          # hub -> local
@@ -28,9 +28,10 @@ The 37 MB AFND page cache is **not** synced. It exists only to re-derive the pop
 without re-scraping, and that table is itself committed — so shipping the pages would be paying
 for the same thing twice.
 
-**Licence.** AFND publishes none (#117). The dataset is **private**, so this is storage rather
-than redistribution; that distinction is what makes it acceptable under the assumed-open decision,
-and it is why `private=True` is not negotiable here.
+**Reuse.** Issue #66 records the project's decision: fitted AFND surfaces may be public when source
+attribution, Biocultural Notices, and explicit restrictions are preserved. AFND publishes no
+standalone licence (#117), which is recorded as ``no_restriction_found`` rather than treated as a
+publication veto. A future explicit restriction still takes precedence.
 """
 
 from __future__ import annotations
