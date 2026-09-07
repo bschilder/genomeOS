@@ -4,12 +4,26 @@ import type { SurfaceCell } from './contracts';
 
 export type Metric = 'post_mean' | 'post_sd';
 export type MetricDomain = readonly [number, number];
+export type PaletteId = 'genome' | 'signal' | 'viridis' | 'cividis' | 'plasma';
 
 const MAX_HEIGHT_METRES = 180_000;
-const PALETTES: Record<Metric, readonly [string, string, string]> = {
-  post_mean: ['#10213e', '#27a9d0', '#72e7c1'],
-  post_sd: ['#24144b', '#ad8bff', '#f4c86a'],
+const PALETTES: Record<PaletteId, readonly [string, string, string]> = {
+  cividis: ['#00204c', '#7d7c78', '#fee838'],
+  genome: ['#10213e', '#27a9d0', '#72e7c1'],
+  plasma: ['#0d0887', '#cc4778', '#f0f921'],
+  signal: ['#24144b', '#ad8bff', '#f4c86a'],
+  viridis: ['#440154', '#21918c', '#fde725'],
 };
+
+export function defaultPalette(metric: Metric): PaletteId {
+  return metric === 'post_mean' ? 'genome' : 'signal';
+}
+
+export function paletteStops(
+  palette: PaletteId,
+): readonly [string, string, string] {
+  return PALETTES[palette];
+}
 
 function clamp(value: number, lower = 0, upper = 1): number {
   return Math.min(upper, Math.max(lower, value));
@@ -52,12 +66,21 @@ export function colorForCell(
   cell: SurfaceCell,
   metric: Metric,
   domain: MetricDomain,
+  paletteId: PaletteId = defaultPalette(metric),
 ): string {
   const position = normalized(cell[metric], domain);
-  const palette = PALETTES[metric];
-  if (position <= 0.5)
-    return interpolateColor(palette[0], palette[1], position * 2);
-  return interpolateColor(palette[1], palette[2], (position - 0.5) * 2);
+  return colorAtPosition(paletteId, position);
+}
+
+export function colorAtPosition(
+  paletteId: PaletteId,
+  position: number,
+): string {
+  const palette = PALETTES[paletteId];
+  const bounded = clamp(position);
+  if (bounded <= 0.5)
+    return interpolateColor(palette[0], palette[1], bounded * 2);
+  return interpolateColor(palette[1], palette[2], (bounded - 0.5) * 2);
 }
 
 export function heightForCell(

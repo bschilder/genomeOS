@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { SurfaceCell } from '../src/atlas/contracts';
-import { colorForCell, heightForCell } from '../src/atlas/visual-encoding';
+import {
+  colorForCell,
+  defaultPalette,
+  heightForCell,
+  paletteStops,
+} from '../src/atlas/visual-encoding';
 
 const baseCell: SurfaceCell = {
   dist_nearest_obs_km: 25,
@@ -34,6 +39,8 @@ describe('atlas visual encoding', () => {
   });
 
   it('uses distinct, deterministic palette endpoints', () => {
+    expect(defaultPalette('post_mean')).toBe('genome');
+    expect(defaultPalette('post_sd')).toBe('signal');
     expect(colorForCell(cell({ post_mean: 0 }), 'post_mean', [0, 1])).toBe(
       '#10213e',
     );
@@ -46,5 +53,22 @@ describe('atlas visual encoding', () => {
     expect(colorForCell(cell({ post_sd: 1 }), 'post_sd', [0, 1])).toBe(
       '#f4c86a',
     );
+  });
+
+  it.each([
+    ['genome', '#10213e', '#72e7c1'],
+    ['signal', '#24144b', '#f4c86a'],
+    ['viridis', '#440154', '#fde725'],
+    ['cividis', '#00204c', '#fee838'],
+    ['plasma', '#0d0887', '#f0f921'],
+  ] as const)('exposes fixed %s endpoints', (palette, low, high) => {
+    expect(paletteStops(palette)[0]).toBe(low);
+    expect(paletteStops(palette).at(-1)).toBe(high);
+    expect(
+      colorForCell(cell({ post_mean: 0 }), 'post_mean', [0, 1], palette),
+    ).toBe(low);
+    expect(
+      colorForCell(cell({ post_mean: 1 }), 'post_mean', [0, 1], palette),
+    ).toBe(high);
   });
 });
