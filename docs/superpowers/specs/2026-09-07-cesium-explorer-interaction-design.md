@@ -1,6 +1,6 @@
 # genomeOS Cesium Explorer Interaction and Catalog Expansion — Design
 
-**Status:** approved in conversation; awaiting written-spec review
+**Status:** approved
 
 **Date:** 2026-09-07
 
