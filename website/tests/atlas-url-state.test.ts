@@ -125,6 +125,20 @@ describe('explorer URL state', () => {
     ).toMatchObject({ paletteMode: 'custom', surfacePalette: 'genome' });
   });
 
+  it('builds cell edges only when explicitly requested', () => {
+    expect(
+      parseExplorerState('?entity=hbs-rs334', catalog).state.cellEdges,
+    ).toBe(false);
+    expect(
+      parseExplorerState('?entity=hbs-rs334&elevation=true', catalog).state
+        .cellEdges,
+    ).toBe(false);
+    expect(
+      parseExplorerState('?entity=hbs-rs334&elevation=true&edges=true', catalog)
+        .state.cellEdges,
+    ).toBe(true);
+  });
+
   it('corrects both fields of a reversed size range without touching valid state', () => {
     const parsed = parseExplorerState(
       '?entity=hbs-rs334&pointMin=20&pointMax=5&domeMin=40&domeMax=300&opacity=0.7',

@@ -16,7 +16,9 @@ import {
   resolveElevationView,
   type AtlasSceneController,
   type ContextStatus,
+  type SceneCapabilities,
 } from '../../atlas/scene/atlas-scene';
+import type { ContextWarning } from '../../atlas/scene/context-controller';
 import { StaticAtlasDataProvider } from '../../atlas/static-provider';
 import {
   parseExplorerState,
@@ -26,13 +28,14 @@ import {
   type LayerId,
   type StateCorrection,
 } from '../../atlas/url-state';
-import type { Metric } from '../../atlas/visual-encoding';
+import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus, type ExplorerLoadStatus } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 
 interface AtlasExplorerProps {
+  cesiumToken?: string;
   dataBaseUrl: string;
 }
 
@@ -57,7 +60,20 @@ function supportsWebGL(): boolean {
   return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
 }
 
-export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
+const PUBLIC_CAPABILITIES: SceneCapabilities = {
+  basemaps: {
+    'aerial-labels': false,
+    aerial: false,
+    'dark-streets': true,
+    roads: false,
+  },
+  terrains: { 'smooth-globe': true, 'world-terrain': false },
+};
+
+export default function AtlasExplorer({
+  cesiumToken = '',
+  dataBaseUrl,
+}: AtlasExplorerProps) {
   const provider = useMemo(
     () => new StaticAtlasDataProvider(dataBaseUrl),
     [dataBaseUrl],
@@ -79,6 +95,11 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
   const [selection, setSelection] = useState<InspectorSelection | null>(null);
   const [status, setStatus] = useState<ExplorerLoadStatus>('loading catalog');
   const [contextStatus, setContextStatus] = useState<ContextStatus>('loading');
+  const [sceneWarnings, setSceneWarnings] = useState<readonly ContextWarning[]>(
+    [],
+  );
+  const [capabilities, setCapabilities] =
+    useState<SceneCapabilities>(PUBLIC_CAPABILITIES);
   const [corrections, setCorrections] = useState<StateCorrection[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [webglFailed, setWebglFailed] = useState(false);
@@ -105,10 +126,12 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
     }
     try {
       const controller = createAtlasScene(element, {
+        cesiumToken,
         naturalEarthUrl: `${dataBaseUrl}ne-110m-admin-0.geojson`,
         reducedMotion,
       });
       scene.current = controller;
+      setCapabilities(controller.capabilities());
       const removePick = controller.onPick((pick) => {
         if (pick?.kind === 'surface') {
           const value = surfaceCells.current.get(pick.h3Index);
@@ -123,17 +146,19 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
         setState((current) => (current ? { ...current, camera } : current));
       });
       const removeContext = controller.onContextStatus(setContextStatus);
+      const removeWarnings = controller.onWarning(setSceneWarnings);
       return () => {
         removePick();
         removeCamera();
         removeContext();
+        removeWarnings();
         controller.destroy();
         scene.current = null;
       };
     } catch {
       setWebglFailed(true);
     }
-  }, [dataBaseUrl, reducedMotion, sceneAttempt]);
+  }, [cesiumToken, dataBaseUrl, reducedMotion, sceneAttempt]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -260,6 +285,42 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
   }, [state?.metric]);
 
   useEffect(() => {
+    if (state)
+      void scene.current?.setSurfaceStyle(
+        state.surfacePalette,
+        state.surfaceOpacity,
+        state.cellEdges,
+      );
+  }, [state?.surfacePalette, state?.surfaceOpacity, state?.cellEdges]);
+
+  useEffect(() => {
+    if (state)
+      void scene.current?.setObservationStyle({
+        colorVariable: state.observationColor,
+        hemisphereRange: state.observationHemisphereRange,
+        pointRange: state.observationPointRange,
+        samplingAreas: state.samplingAreas,
+        shape: state.observationShape,
+        sizeVariable: state.observationSize,
+      });
+  }, [
+    state?.observationColor,
+    state?.observationHemisphereRange,
+    state?.observationPointRange,
+    state?.observationShape,
+    state?.observationSize,
+    state?.samplingAreas,
+  ]);
+
+  useEffect(() => {
+    if (state) void scene.current?.setBasemap(state.basemap);
+  }, [state?.basemap, sceneAttempt]);
+
+  useEffect(() => {
+    if (state) void scene.current?.setTerrain(state.terrain);
+  }, [state?.terrain, sceneAttempt]);
+
+  useEffect(() => {
     if (state) scene.current?.setLayerVisibility(state.layers);
   }, [state?.layers]);
 
@@ -328,6 +389,7 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
     <div
       className="atlas-explorer"
       data-atlas-explorer="AtlasExplorer"
+      data-atlas-active={activeArtifact?.id ?? ''}
       data-atlas-ready={status === 'ready' ? 'true' : 'false'}
       role="application"
       aria-label="genomeOS globe explorer"
@@ -344,11 +406,57 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
 
       {catalog && state ? (
         <ExplorerControls
+          capabilities={capabilities}
           catalog={catalog}
+          dataBaseUrl={dataBaseUrl}
           state={state}
           disabled={false}
           onEntity={chooseEntity}
-          onMetric={(metric: Metric) => update({ metric })}
+          onExternalInfo={(source, signal) => {
+            const selected = catalog.artifacts.find(
+              (artifact) => artifact.id === state.entityId,
+            );
+            if (!selected || activeArtifact?.id !== selected.id)
+              return Promise.reject(
+                new Error('Wait for the selected map to finish loading.'),
+              );
+            return provider.getExternalInfo(selected, source, signal);
+          }}
+          onMetric={(metric: Metric) =>
+            setState((current) =>
+              current
+                ? {
+                    ...current,
+                    metric,
+                    surfacePalette:
+                      current.paletteMode === 'metric-default'
+                        ? defaultPalette(metric)
+                        : current.surfacePalette,
+                  }
+                : current,
+            )
+          }
+          onBasemap={(basemap) => update({ basemap })}
+          onTerrain={(terrain) => update({ terrain })}
+          onSurfacePalette={(surfacePalette) =>
+            update({ paletteMode: 'custom', surfacePalette })
+          }
+          onSurfaceOpacity={(surfaceOpacity) => update({ surfaceOpacity })}
+          onCellEdges={(cellEdges) => update({ cellEdges })}
+          onObservationShape={(observationShape) =>
+            update({ observationShape })
+          }
+          onObservationColor={(observationColor) =>
+            update({ observationColor })
+          }
+          onObservationSize={(observationSize) => update({ observationSize })}
+          onObservationPointRange={(observationPointRange) =>
+            update({ observationPointRange })
+          }
+          onObservationHemisphereRange={(observationHemisphereRange) =>
+            update({ observationHemisphereRange })
+          }
+          onSamplingAreas={(samplingAreas) => update({ samplingAreas })}
           onLayer={chooseLayer}
           onView={(view: ExplorerSceneMode) => update({ view })}
           onElevation={chooseElevation}
@@ -367,6 +475,7 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
       <AtlasStatus
         status={status}
         contextStatus={contextStatus}
+        sceneWarnings={sceneWarnings}
         corrections={corrections}
         error={error}
         webglFailed={webglFailed}
@@ -387,17 +496,20 @@ export default function AtlasExplorer({ dataBaseUrl }: AtlasExplorerProps) {
         <InspectorPanel
           artifact={activeArtifact}
           selection={selection}
-          onClose={() => setSelection(null)}
+          onClose={() => {
+            scene.current?.setSelection(null);
+            setSelection(null);
+          }}
         />
       )}
       <p className="atlas-data-credit">
-        Scientific data:{' '}
+        Scientific data and provenance:{' '}
         <a
           href="https://huggingface.co/datasets/bschilder/genomeos-data"
           target="_blank"
           rel="noreferrer"
         >
-          Malaria Atlas Project collections
+          <span className="brand-name">genomeOS</span> public dataset
         </a>
       </p>
     </div>

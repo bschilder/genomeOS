@@ -25,8 +25,8 @@ export const metricDomainsSchema = z.strictObject({
   post_sd: domainSchema,
 });
 
-export const artifactIdentitySchema = z.strictObject({
-  artifact_format: z.literal(1),
+const artifactIdentityFields = {
+  artifact_format: z.union([z.literal(1), z.literal(2)]),
   data_version: nonEmpty,
   entity_type: z.enum(['variant', 'allele', 'gene', 'phenotype']),
   hf_dataset: nonEmpty,
@@ -43,39 +43,124 @@ export const artifactIdentitySchema = z.strictObject({
   registry_version: nonEmpty,
   resolution: z.int().min(0).max(15),
   variant_id: nonEmpty,
-});
+  target_grid_source: nonEmpty.optional(),
+  target_grid_version: nonEmpty.optional(),
+};
+
+function requireFormat2TargetGrid(
+  value: {
+    artifact_format: 1 | 2;
+    target_grid_source?: string;
+    target_grid_version?: string;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (
+    value.artifact_format === 2 &&
+    (!value.target_grid_source || !value.target_grid_version)
+  ) {
+    context.addIssue({
+      code: 'custom',
+      message: 'artifact format 2 requires target-grid source and version',
+    });
+  }
+}
+
+export const artifactIdentitySchema = z
+  .strictObject(artifactIdentityFields)
+  .superRefine(requireFormat2TargetGrid);
 
 const supportCountsSchema = z.partialRecord(
   supportSchema,
   z.int().nonnegative(),
 );
 
-const artifactRefBaseSchema = artifactIdentitySchema.extend({
+const downloadRefSchema = z.strictObject({
+  label: nonEmpty,
+  media_type: nonEmpty,
+  sha256,
+  url: nonEmpty,
+});
+
+const externalResourceSchema = z.discriminatedUnion('source', [
+  z.strictObject({
+    cache_sha256: sha256,
+    cache_url: nonEmpty,
+    dataset: nonEmpty,
+    normalized_variant_id: z
+      .string()
+      .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
+    source: z.literal('gnomad'),
+  }),
+  z.strictObject({
+    cache_sha256: sha256,
+    cache_url: nonEmpty,
+    normalized_variant_id: z
+      .string()
+      .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
+    rsid: z.string().regex(/^rs[1-9][0-9]*$/),
+    source: z.literal('dbsnp'),
+  }),
+]);
+
+const artifactRefBaseFields = {
   assumptions: z.array(nonEmpty),
   correlation_range_km: finiteNumber.positive(),
+  downloads: z.strictObject({
+    manifest: downloadRefSchema,
+    observations: downloadRefSchema.nullable(),
+    surface: downloadRefSchema,
+  }),
+  external_resources: z.array(externalResourceSchema),
   likelihood: nonEmpty,
   n_cells: z.int().positive(),
   n_observations: z.int().nonnegative(),
   support_counts: supportCountsSchema,
   surface_sha256: sha256,
   surface_url: nonEmpty,
-});
+};
 
-export const artifactRefSchema = z.discriminatedUnion(
-  'observations_available',
-  [
-    artifactRefBaseSchema.extend({
+export const artifactRefSchema = z
+  .discriminatedUnion('observations_available', [
+    z.strictObject({
+      ...artifactIdentityFields,
+      ...artifactRefBaseFields,
       observations_available: z.literal(true),
       observations_sha256: sha256,
       observations_url: nonEmpty,
     }),
-    artifactRefBaseSchema.extend({
+    z.strictObject({
+      ...artifactIdentityFields,
+      ...artifactRefBaseFields,
       observations_available: z.literal(false),
       observations_sha256: z.null(),
       observations_url: z.null(),
     }),
-  ],
-);
+  ])
+  .superRefine((value, context) => {
+    requireFormat2TargetGrid(value, context);
+    if (
+      (value.downloads.observations === null) !==
+      !value.observations_available
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'observation download must match observations_available',
+      });
+    }
+    for (const resource of value.external_resources) {
+      if (
+        value.entity_type !== 'variant' ||
+        resource.normalized_variant_id !== value.variant_id
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            "external lookup requires the artifact's verified variant identity",
+        });
+      }
+    }
+  });
 
 export const contextSourceSchema = z.strictObject({
   id: nonEmpty,
@@ -148,6 +233,75 @@ export const observationArtifactSchema = z.strictObject({
   schema_version: z.literal(1),
 });
 
+const externalFrequencySchema = z.strictObject({
+  ac: z.int().nonnegative(),
+  ac_hemi: z.int().nonnegative().optional(),
+  ac_hom: z.int().nonnegative().optional(),
+  af: probability,
+  an: z.int().positive(),
+});
+
+const externalBaseSchema = {
+  retrieved_at: nonEmpty,
+  schema_version: z.literal(1),
+  source_release: nonEmpty,
+};
+
+export const externalInfoSchema = z.discriminatedUnion('source', [
+  z.strictObject({
+    ...externalBaseSchema,
+    query: z.strictObject({
+      dataset: nonEmpty,
+      normalized_variant_id: nonEmpty,
+    }),
+    record: z.strictObject({
+      alt: nonEmpty,
+      canonical_consequence: z
+        .strictObject({
+          gene_id: nonEmpty.nullable(),
+          gene_symbol: nonEmpty.nullable(),
+          hgvsc: nonEmpty.nullable(),
+          hgvsp: nonEmpty.nullable(),
+          is_canonical: z.boolean().nullable(),
+          is_mane_select: z.boolean().nullable(),
+          major_consequence: nonEmpty.nullable(),
+          transcript_id: nonEmpty.nullable(),
+        })
+        .nullable(),
+      chrom: nonEmpty,
+      exome: externalFrequencySchema.nullable(),
+      genome: externalFrequencySchema.nullable(),
+      joint: externalFrequencySchema.nullable(),
+      pos: z.int().positive(),
+      ref: nonEmpty,
+      rsids: z.array(nonEmpty),
+      source_url: z.url(),
+    }),
+    source: z.literal('gnomad'),
+  }),
+  z.strictObject({
+    ...externalBaseSchema,
+    query: z.strictObject({
+      normalized_variant_id: nonEmpty,
+      rsid: z.string().regex(/^rs[1-9][0-9]*$/),
+    }),
+    record: z.strictObject({
+      citation_count: z.int().nonnegative(),
+      hgvs: nonEmpty,
+      last_update_date: nonEmpty,
+      rsid: z.string().regex(/^rs[1-9][0-9]*$/),
+      source_url: z.url(),
+      spdi: z.strictObject({
+        deleted_sequence: nonEmpty,
+        inserted_sequence: nonEmpty,
+        position: z.int().nonnegative(),
+        seq_id: nonEmpty,
+      }),
+    }),
+    source: z.literal('dbsnp'),
+  }),
+]);
+
 export type Support = z.infer<typeof supportSchema>;
 export type ArtifactIdentity = z.infer<typeof artifactIdentitySchema>;
 export type ArtifactRef = z.infer<typeof artifactRefSchema>;
@@ -156,3 +310,5 @@ export type SurfaceCell = z.infer<typeof surfaceCellSchema>;
 export type SurfaceArtifact = z.infer<typeof surfaceArtifactSchema>;
 export type Observation = z.infer<typeof observationSchema>;
 export type ObservationArtifact = z.infer<typeof observationArtifactSchema>;
+export type ExternalResource = z.infer<typeof externalResourceSchema>;
+export type ExternalInfo = z.infer<typeof externalInfoSchema>;

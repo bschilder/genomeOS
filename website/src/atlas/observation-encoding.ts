@@ -8,6 +8,12 @@ export type ObservationColorVariable = 'white' | 'study' | 'frequency' | 'ac';
 export type ObservationShape = 'circle' | 'hemisphere' | 'pin';
 export type ObservationSizeRange = readonly [number, number];
 
+export interface ObservationDomains {
+  ac: MetricDomain;
+  an: MetricDomain;
+  frequency: MetricDomain;
+}
+
 const STUDY_COLORS = [
   '#72e7c1',
   '#70e6ff',
@@ -54,6 +60,23 @@ function observedFrequency(observation: Observation): number {
     throw new Error('observation requires integer 0 <= ac <= an with an > 0');
   }
   return observation.ac / observation.an;
+}
+
+function extent(values: readonly number[]): MetricDomain {
+  if (values.length === 0)
+    throw new Error('observation domains require at least one observation');
+  return [Math.min(...values), Math.max(...values)];
+}
+
+export function observationDomains(
+  observations: readonly Observation[],
+): ObservationDomains {
+  for (const observation of observations) observedFrequency(observation);
+  return {
+    ac: extent(observations.map(({ ac }) => ac)),
+    an: extent(observations.map(({ an }) => an)),
+    frequency: extent(observations.map(observedFrequency)),
+  };
 }
 
 export function validateObservationSizeRange(

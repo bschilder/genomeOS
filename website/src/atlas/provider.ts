@@ -3,6 +3,7 @@
 import type {
   ArtifactRef,
   AtlasCatalog,
+  ExternalInfo,
   ObservationArtifact,
   SurfaceArtifact,
 } from './contracts';
@@ -14,4 +15,9 @@ export type AtlasDataProvider = {
     ref: ArtifactRef,
     signal?: AbortSignal,
   ): Promise<ObservationArtifact | null>;
+  getExternalInfo(
+    ref: ArtifactRef,
+    source: 'gnomad' | 'dbsnp',
+    signal?: AbortSignal,
+  ): Promise<ExternalInfo>;
 };

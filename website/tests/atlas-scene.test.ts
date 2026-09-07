@@ -5,13 +5,30 @@ import {
   PolygonGeometry,
   PolygonHierarchy,
 } from 'cesium';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
-import type { SurfaceArtifact, SurfaceCell } from '../src/atlas/contracts';
+import type {
+  ObservationArtifact,
+  SurfaceArtifact,
+  SurfaceCell,
+} from '../src/atlas/contracts';
 import { cameraState, keyboardCommandFor } from '../src/atlas/scene/camera';
-import { LayerCache } from '../src/atlas/scene/layer-cache';
-import { observationPickId } from '../src/atlas/scene/observation-layer';
 import {
+  availableBasemaps,
+  ionCapability,
+} from '../src/atlas/scene/context-controller';
+import { LayerCache } from '../src/atlas/scene/layer-cache';
+import { highlightStyle } from '../src/atlas/scene/highlight-layer';
+import {
+  buildObservationLayer,
+  observationPickId,
+} from '../src/atlas/scene/observation-layer';
+import {
+  createFrameThrottle,
+  preferredAtlasPick,
+} from '../src/atlas/scene/picking';
+import {
+  buildSurfaceLayer,
   h3BoundaryDegrees,
   h3PolygonParts,
   surfacePickId,
@@ -21,7 +38,6 @@ import {
   quantizeMetric,
 } from '../src/atlas/scene/support-material';
 import {
-  preferredAtlasPick,
   resolveElevationView,
   transitionProgress,
 } from '../src/atlas/scene/atlas-scene';
@@ -36,6 +52,16 @@ const baseCell: SurfaceCell = {
   q975: 0.6,
   support: 'observed',
 };
+
+function stubCesiumBrowserImageTypes(): void {
+  for (const browserType of [
+    'HTMLCanvasElement',
+    'HTMLImageElement',
+    'ImageBitmap',
+    'OffscreenCanvas',
+  ])
+    vi.stubGlobal(browserType, class BrowserImageType {});
+}
 
 describe('Cesium scene policy', () => {
   it('keeps recently used render layers and evicts the least recent inactive layer', () => {
@@ -78,6 +104,31 @@ describe('Cesium scene policy', () => {
     expect(groups.support.prior_dominated).toHaveLength(1);
   });
 
+  it('uses the selected palette without changing support partitions', () => {
+    const groups = partitionSurfaceCells(
+      [baseCell],
+      'post_mean',
+      [0, 1],
+      'plasma',
+    );
+    expect(groups.surface[0].color).toBe('#cc4778');
+    expect(groups.support).toEqual({ prior_dominated: [], unknown: [] });
+  });
+
+  it('gates ion-backed context without disabling the public basemap', () => {
+    expect(ionCapability('')).toEqual({
+      available: false,
+      reason: 'Cesium ion access is unavailable in this build.',
+    });
+    expect(ionCapability('read-only-token')).toEqual({ available: true });
+    expect(availableBasemaps('')).toEqual({
+      'aerial-labels': false,
+      aerial: false,
+      'dark-streets': true,
+      roads: false,
+    });
+  });
+
   it('quantizes the full artifact domain into 32 stable bins', () => {
     expect(quantizeMetric(0, [0, 1])).toBe(0);
     expect(quantizeMetric(0.5, [0, 1])).toBe(16);
@@ -118,12 +169,134 @@ describe('Cesium scene policy', () => {
     });
   });
 
+  it('hides sampling areas with the measured-observations layer', () => {
+    stubCesiumBrowserImageTypes();
+    const surface = {
+      artifact: {
+        metric_domains: { post_mean: [0, 1], post_sd: [0, 1] },
+        resolution: 3,
+      },
+      cells: [baseCell],
+    } as SurfaceArtifact;
+    const observations = {
+      artifact: surface.artifact,
+      observations: [
+        {
+          ac: 25,
+          an: 100,
+          assay: 'genotype',
+          citation_text: 'Example publication.',
+          cohort_id: 'map-study-1',
+          disease_ascertainment_excluded: true,
+          ingest_version: 'map-2026-08',
+          lat: 5,
+          lon: -1,
+          population_label: 'Example population',
+          radius_km: 12,
+          sampling_design: 'population_random',
+          source_locator: 'MAP survey 1',
+          source_record_id: 'map-surveys:1',
+          source_url: 'https://example.org/source',
+          study_id: 'map-study-1',
+          study_label: 'Example study',
+        },
+      ],
+    } as ObservationArtifact;
+    try {
+      const layer = buildObservationLayer(observations, {
+        colorVariable: 'white',
+        elevation: false,
+        exaggeration: 1,
+        hemisphereRange: [40, 300],
+        metric: 'post_mean',
+        pointRange: [6, 18],
+        samplingAreas: true,
+        shape: 'circle',
+        sizeVariable: 'fixed',
+        surface,
+      });
+      const samplingAreas = layer.collection.get(0);
+
+      layer.setVisibility(false, true);
+
+      expect(samplingAreas.show).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps cell edges hidden with the inferred-surface layer', () => {
+    stubCesiumBrowserImageTypes();
+    const surface = {
+      artifact: {
+        metric_domains: { post_mean: [0, 1], post_sd: [0, 1] },
+      },
+      cells: [baseCell],
+    } as SurfaceArtifact;
+    try {
+      const layer = buildSurfaceLayer(surface, {
+        cellEdges: true,
+        elevation: false,
+        exaggeration: 1,
+        metric: 'post_mean',
+        opacity: 0.86,
+        palette: 'genome',
+      });
+      const cellEdges = layer.collection.get(2);
+
+      layer.setVisibility(false, true);
+      layer.setCellEdges(true);
+      layer.setOpacity(0.8);
+
+      expect(cellEdges.show).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('distinguishes transient hover from persistent selection', () => {
+    expect(highlightStyle('hover')).toEqual({
+      color: '#b9f8ff',
+      pointSize: 26,
+      width: 4,
+    });
+    expect(highlightStyle('selection')).toEqual({
+      color: '#ffd56a',
+      pointSize: 32,
+      width: 5,
+    });
+  });
+
   it('prefers a measured point when it overlaps a modeled cell', () => {
     const surface = { id: surfacePickId(baseCell) };
     const observation = { id: observationPickId('map-surveys:1') };
     expect(preferredAtlasPick([surface, observation])).toEqual(observation.id);
     expect(preferredAtlasPick([surface])).toEqual(surface.id);
     expect(preferredAtlasPick([{ id: 'context' }])).toBeNull();
+  });
+
+  it('coalesces hover work to the newest pointer position per frame', () => {
+    const frames: FrameRequestCallback[] = [];
+    const picked: string[] = [];
+    const hover = createFrameThrottle(
+      (position: string) => picked.push(position),
+      (frame) => {
+        frames.push(frame);
+        return frames.length;
+      },
+    );
+
+    hover.queue('first');
+    hover.queue('newest');
+    expect(frames).toHaveLength(1);
+    expect(picked).toEqual([]);
+    frames[0](0);
+    expect(picked).toEqual(['newest']);
+
+    hover.queue('after');
+    hover.cancel();
+    frames[1](16);
+    expect(picked).toEqual(['newest']);
   });
 
   it('moves elevation out of 2D while preserving other view choices', () => {

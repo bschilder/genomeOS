@@ -70,6 +70,8 @@ jobs:
       - name: Build production site
         run: npm run build
         working-directory: website
+        env:
+          CESIUM_TOKEN: ${{ secrets.CESIUM_TOKEN }}
       - name: Refuse broken production links
         run: npm run check:links -- dist /
         working-directory: website

@@ -8,13 +8,15 @@ import {
   MaterialAppearance,
   PolygonGeometry,
   PolygonHierarchy,
+  PolygonOutlineGeometry,
+  PolylineMaterialAppearance,
   Primitive,
   PrimitiveCollection,
   GeometryInstance,
 } from 'cesium';
 
 import type { SurfaceArtifact, SurfaceCell } from '../contracts';
-import { heightForCell, type Metric } from '../visual-encoding';
+import { heightForCell, type Metric, type PaletteId } from '../visual-encoding';
 import { materialForSupport, partitionSurfaceCells } from './support-material';
 
 export type SurfacePick = { kind: 'surface'; h3Index: string };
@@ -23,6 +25,9 @@ export interface SurfaceLayerOptions {
   metric: Metric;
   elevation: boolean;
   exaggeration: number;
+  palette: PaletteId;
+  opacity: number;
+  cellEdges: boolean;
 }
 
 export interface ScientificPrimitiveGroup {
@@ -30,6 +35,8 @@ export interface ScientificPrimitiveGroup {
   primitives: Primitive[];
   isReady(): boolean;
   setOpacity(opacity: number): void;
+  setSurfaceOpacity(opacity: number): void;
+  setCellEdges(visible: boolean): void;
   setVisibility(surface: boolean, support: boolean): void;
 }
 
@@ -124,6 +131,26 @@ function geometryForCell(
   );
 }
 
+function outlineGeometryForCell(
+  cell: SurfaceCell,
+  domain: readonly [number, number],
+  options: SurfaceLayerOptions,
+): PolygonOutlineGeometry[] {
+  const height = options.elevation
+    ? heightForCell(cell, domain, options.exaggeration, options.metric)
+    : 0;
+  return h3PolygonParts(cell.h3_index).map(
+    (part) =>
+      new PolygonOutlineGeometry({
+        extrudedHeight: height > 0 ? 0 : undefined,
+        height: height + (height > 0 ? 250 : 1_200),
+        polygonHierarchy: new PolygonHierarchy(
+          Cartesian3.fromDegreesArray(part.flat()),
+        ),
+      }),
+  );
+}
+
 function addPrimitive(
   collection: PrimitiveCollection,
   cells: readonly SurfaceCell[],
@@ -160,15 +187,22 @@ export function buildSurfaceLayer(
   const collection = new PrimitiveCollection();
   const surfaceCollection = new PrimitiveCollection();
   const supportCollection = new PrimitiveCollection();
+  const edgeCollection = new PrimitiveCollection();
   collection.add(surfaceCollection);
   collection.add(supportCollection);
+  collection.add(edgeCollection);
   const primitives: Primitive[] = [];
   const opacityMaterials: OpacityMaterial[] = [];
+  let fadeOpacity = 1;
+  let surfaceOpacity = options.opacity;
+  let edgesVisible = options.cellEdges;
+  let surfaceVisible = true;
   const domain = artifact.artifact.metric_domains[options.metric];
   const partitions = partitionSurfaceCells(
     artifact.cells,
     options.metric,
     domain,
+    options.palette,
   );
 
   for (const group of partitions.surface) {
@@ -178,6 +212,28 @@ export function buildSurfaceLayer(
     primitives.push(
       addPrimitive(surfaceCollection, group.cells, material, domain, options),
     );
+  }
+
+  const supportedCells = partitions.surface.flatMap(({ cells }) => cells);
+  if (options.cellEdges && supportedCells.length > 0) {
+    const edgeColor = Color.fromCssColorString('#b9f5ff').withAlpha(0.26);
+    const edgeMaterial = Material.fromType('Color', { color: edgeColor });
+    const edgePrimitive = new Primitive({
+      allowPicking: false,
+      appearance: new PolylineMaterialAppearance({
+        material: edgeMaterial,
+        translucent: true,
+      }),
+      asynchronous: true,
+      geometryInstances: supportedCells.flatMap((cell) =>
+        outlineGeometryForCell(cell, domain, options).map(
+          (geometry) => new GeometryInstance({ geometry }),
+        ),
+      ),
+    });
+    edgeCollection.add(edgePrimitive);
+    primitives.push(edgePrimitive);
+    opacityMaterials.push(opacityMaterial(edgeMaterial));
   }
   for (const support of ['unknown', 'prior_dominated'] as const) {
     const cells = partitions.support[support];
@@ -197,18 +253,31 @@ export function buildSurfaceLayer(
     primitives,
     isReady: () => primitives.every((primitive) => primitive.ready),
     setOpacity(opacity: number) {
+      fadeOpacity = opacity;
+      edgeCollection.show = surfaceVisible && edgesVisible && opacity > 0.05;
       for (const { cellAlpha, colors, material } of opacityMaterials) {
         for (const { baseAlpha, key } of colors) {
           const color = material.uniforms[key];
-          if (color instanceof Color) color.alpha = baseAlpha * opacity;
+          if (color instanceof Color)
+            color.alpha = baseAlpha * opacity * surfaceOpacity;
         }
         if (cellAlpha !== undefined)
           material.uniforms.cellAlpha = cellAlpha * opacity;
       }
     },
+    setSurfaceOpacity(opacity: number) {
+      surfaceOpacity = opacity;
+      this.setOpacity(fadeOpacity);
+    },
+    setCellEdges(visible: boolean) {
+      edgesVisible = visible;
+      edgeCollection.show = surfaceVisible && visible && fadeOpacity > 0.05;
+    },
     setVisibility(surface: boolean, support: boolean) {
+      surfaceVisible = surface;
       surfaceCollection.show = surface;
       supportCollection.show = support;
+      edgeCollection.show = surface && edgesVisible;
     },
   };
 }

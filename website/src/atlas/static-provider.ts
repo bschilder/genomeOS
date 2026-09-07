@@ -2,6 +2,7 @@
 
 import {
   atlasCatalogSchema,
+  externalInfoSchema,
   observationArtifactSchema,
   surfaceArtifactSchema,
   type ArtifactIdentity,
@@ -9,6 +10,7 @@ import {
   type AtlasCatalog,
   type ObservationArtifact,
   type SurfaceArtifact,
+  type ExternalInfo,
 } from './contracts';
 import type { AtlasDataProvider } from './provider';
 
@@ -23,6 +25,8 @@ const IDENTITY_FIELDS = [
   'model_version',
   'registry_version',
   'resolution',
+  'target_grid_source',
+  'target_grid_version',
   'variant_id',
 ] as const satisfies readonly (keyof ArtifactIdentity)[];
 
@@ -45,6 +49,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   #catalog: AtlasCatalog | null = null;
   readonly #surfaces = new Map<string, SurfaceArtifact>();
   readonly #observations = new Map<string, ObservationArtifact>();
+  readonly #external = new Map<string, ExternalInfo>();
 
   constructor(
     baseUrl: string,
@@ -142,5 +147,43 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     }
     this.#observations.set(key, artifact);
     return artifact;
+  }
+
+  async getExternalInfo(
+    ref: ArtifactRef,
+    source: 'gnomad' | 'dbsnp',
+    signal?: AbortSignal,
+  ): Promise<ExternalInfo> {
+    const resource = ref.external_resources.find(
+      (candidate) => candidate.source === source,
+    );
+    if (!resource) {
+      throw new Error(
+        `${source} lookup is unavailable because ${ref.label} has no reviewed identifier for that resource.`,
+      );
+    }
+    const key = `${source}:${resource.cache_sha256}`;
+    const cached = this.#external.get(key);
+    if (cached) return cached;
+    const info = externalInfoSchema.parse(
+      await this.#getJson(resource.cache_url, signal),
+    );
+    if (
+      info.source !== source ||
+      info.query.normalized_variant_id !== resource.normalized_variant_id
+    ) {
+      throw new Error(`${source} cache identity does not match the catalog`);
+    }
+    if (
+      (resource.source === 'gnomad' &&
+        (info.source !== 'gnomad' ||
+          info.query.dataset !== resource.dataset)) ||
+      (resource.source === 'dbsnp' &&
+        (info.source !== 'dbsnp' || info.query.rsid !== resource.rsid))
+    ) {
+      throw new Error(`${source} cache query does not match the catalog`);
+    }
+    this.#external.set(key, info);
+    return info;
   }
 }

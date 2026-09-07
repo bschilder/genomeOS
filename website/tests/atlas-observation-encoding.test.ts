@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Observation } from '../src/atlas/contracts';
 import {
   observationColor,
+  observationDomains,
   observationSize,
   studyColor,
   validateObservationSizeRange,
@@ -85,5 +86,14 @@ describe('observation visual encoding', () => {
     );
     expect(observationColor(base, 'frequency', [0, 1])).not.toBe('#f4fbff');
     expect(observationColor(base, 'ac', [0, 100])).not.toBe('#f4fbff');
+  });
+
+  it('derives display domains only from source-backed observation fields', () => {
+    expect(
+      observationDomains([
+        observation({ ac: 0, an: 20 }),
+        observation({ ac: 30, an: 100 }),
+      ]),
+    ).toEqual({ ac: [0, 30], an: [20, 100], frequency: [0, 0.3] });
   });
 });

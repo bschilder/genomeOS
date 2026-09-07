@@ -6,8 +6,8 @@ process.env.NO_UPDATE_NOTIFIER = '1';
 export default defineConfig({
   testDir: './tests',
   testMatch: 'site.spec.ts',
-  fullyParallel: true,
-  workers: 2,
+  fullyParallel: false,
+  workers: 1,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? 'github' : 'list',
@@ -22,7 +22,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run serve:test',
     url: 'http://127.0.0.1:4322/',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });

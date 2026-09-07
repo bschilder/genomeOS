@@ -238,6 +238,7 @@ export function parseExplorerState(
     paletteValue !== null && PALETTES.includes(paletteValue as PaletteId)
       ? 'custom'
       : 'metric-default';
+  const elevation = parseBoolean(params, 'elevation', false, corrections);
 
   return {
     corrections,
@@ -287,8 +288,8 @@ export function parseExplorerState(
           corrections,
         ),
       },
-      elevation: parseBoolean(params, 'elevation', false, corrections),
-      cellEdges: parseBoolean(params, 'edges', true, corrections),
+      elevation,
+      cellEdges: parseBoolean(params, 'edges', false, corrections),
       entityId,
       exaggeration: parseNumber(
         params,

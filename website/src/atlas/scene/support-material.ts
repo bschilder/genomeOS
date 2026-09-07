@@ -7,6 +7,7 @@ import {
   colorForCell,
   type Metric,
   type MetricDomain,
+  type PaletteId,
 } from '../visual-encoding';
 
 export interface SurfaceBin {
@@ -39,6 +40,7 @@ export function partitionSurfaceCells(
   cells: readonly SurfaceCell[],
   metric: Metric,
   domain: MetricDomain,
+  palette?: PaletteId,
 ): SurfacePartitions {
   const bins = new Map<number, SurfaceCell[]>();
   const support: SurfacePartitions['support'] = {
@@ -62,7 +64,7 @@ export function partitionSurfaceCells(
       .map(([bin, binCells]) => ({
         bin,
         cells: binCells,
-        color: colorForCell(binCells[0], metric, domain),
+        color: colorForCell(binCells[0], metric, domain, palette),
       })),
   };
 }

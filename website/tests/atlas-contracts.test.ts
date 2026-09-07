@@ -53,6 +53,27 @@ const observation = {
   study_label: 'Example study',
 };
 
+const downloads = {
+  manifest: {
+    label: 'Artifact manifest',
+    media_type: 'application/json',
+    sha256: 'c'.repeat(64),
+    url: 'hbs-rs334.manifest.json',
+  },
+  observations: {
+    label: 'Measured observations',
+    media_type: 'application/json',
+    sha256: 'b'.repeat(64),
+    url: 'hbs-rs334.observations.json',
+  },
+  surface: {
+    label: 'Inferred surface',
+    media_type: 'application/json',
+    sha256: 'a'.repeat(64),
+    url: 'hbs-rs334.surface.json',
+  },
+};
+
 describe('atlas browser contracts', () => {
   it('accepts a complete source-backed observation', () => {
     const parsed = observationArtifactSchema.parse({
@@ -141,6 +162,16 @@ describe('atlas browser contracts', () => {
       ...artifact,
       assumptions: ['fixture'],
       correlation_range_km: 400,
+      downloads,
+      external_resources: [
+        {
+          cache_sha256: 'd'.repeat(64),
+          cache_url: 'external/gnomad/chr11-5227002-t-a.json',
+          dataset: 'gnomad_r4',
+          normalized_variant_id: artifact.variant_id,
+          source: 'gnomad',
+        },
+      ],
       likelihood: 'beta_binomial',
       n_cells: 1,
       n_observations: 1,
@@ -186,7 +217,9 @@ describe('atlas browser contracts', () => {
       ...artifact,
       assumptions: ['AFND observation publication pending corpus rebuild'],
       correlation_range_km: 400,
+      downloads: { ...downloads, observations: null },
       entity_type: 'gene',
+      external_resources: [],
       likelihood: 'beta_binomial',
       measurement: 'carrier_frequency',
       n_cells: 1,
@@ -227,5 +260,24 @@ describe('atlas browser contracts', () => {
         ],
       }),
     ).toThrow();
+    expect(() =>
+      atlasCatalogSchema.parse({
+        ...catalog,
+        artifacts: [
+          {
+            ...surfaceOnly,
+            external_resources: [
+              {
+                cache_sha256: 'd'.repeat(64),
+                cache_url: 'external/gnomad/kir.json',
+                dataset: 'gnomad_r4',
+                normalized_variant_id: 'chr11-1-A-C',
+                source: 'gnomad',
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/verified variant identity/);
   });
 });

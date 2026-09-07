@@ -321,24 +321,31 @@ test('application cards reveal on scroll and respond to hover', async ({
 test('explorer changes entity, metric, context, and elevation', async ({
   page,
 }) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
   );
   await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
   await expect(
     page.getByRole('application', { name: 'genomeOS globe explorer' }),
   ).toBeVisible();
   await page.getByLabel('Variant or phenotype').selectOption('g6pd-deficiency');
   await page.getByRole('radio', { name: 'Uncertainty' }).check();
   await page.getByLabel('Geographic context').uncheck();
+  await page.getByText('Map appearance', { exact: true }).click();
   await page.getByRole('radio', { name: 'Map' }).check();
-  await page.getByLabel('Elevation').check();
+  await page.getByLabel('Statistical elevation', { exact: true }).check();
   await expect(
-    page.getByRole('heading', {
-      name: 'G6PD deficiency in hemizygous males',
-    }),
-  ).toBeVisible({ timeout: 30_000 });
+    page.locator('[data-atlas-active="g6pd-deficiency"]'),
+  ).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
   await expect(page.getByRole('radio', { name: 'Perspective' })).toBeChecked();
   await expect(page).toHaveURL(/entity=g6pd-deficiency/);
   await expect(page).toHaveURL(/metric=post_sd/);
@@ -348,6 +355,7 @@ test('explorer switches among globe, map, and perspective views', async ({
   page,
 }) => {
   test.setTimeout(60_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
   );
@@ -355,6 +363,7 @@ test('explorer switches among globe, map, and perspective views', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
   });
+  await page.getByText('Map appearance', { exact: true }).click();
 
   for (const view of ['Map', 'Perspective', 'Globe']) {
     const control = page.getByRole('radio', { name: view });
@@ -369,6 +378,18 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
   );
+  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
+  expect(servedCatalog.ok()).toBe(true);
+  const servedArtifacts = (await servedCatalog.json()) as {
+    artifacts: { id: string; model_version: string }[];
+  };
+  expect(servedArtifacts.artifacts).toHaveLength(30);
+  expect(servedArtifacts.artifacts).toContainEqual(
+    expect.objectContaining({
+      id: 'g6pd-deficiency',
+      model_version: 'v3',
+    }),
+  );
   const query = new URLSearchParams({
     elevation: 'true',
     entity: 'g6pd-deficiency',
@@ -380,7 +401,7 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
     lon: '9',
     metric: 'post_sd',
     pitch: '-55',
-    version: 'v1/map-2026-08',
+    version: 'v3/map-2026-08',
     view: 'perspective',
   });
   await page.goto(`/app/?${query}`);
@@ -389,8 +410,11 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
     'g6pd-deficiency',
   );
   await expect(page.getByRole('radio', { name: 'Uncertainty' })).toBeChecked();
+  await page.getByText('Map appearance', { exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Perspective' })).toBeChecked();
-  await expect(page.getByLabel('Elevation')).toBeChecked();
+  await expect(
+    page.getByLabel('Statistical elevation', { exact: true }),
+  ).toBeChecked();
   await expect(page.getByLabel('Height exaggeration')).toHaveValue('2.5');
   await expect(page.getByLabel('Measured observations')).not.toBeChecked();
   await expect(page.getByLabel('Geographic context')).not.toBeChecked();
@@ -402,10 +426,127 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
   await expect(page).toHaveURL(/height=4200000(?:&|%|$)/);
 });
 
+test('explorer exposes the full catalog and shareable appearance controls', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.abort(),
+  );
+  await page.goto('/app/');
+
+  const entity = page.getByLabel('Variant or phenotype', { exact: true });
+  await expect(entity.locator('option')).toHaveCount(30);
+
+  const mapHelp = page.getByRole('button', { name: 'About map selection' });
+  await mapHelp.click();
+  await expect(
+    page.getByRole('tooltip').filter({ hasText: 'Choose a versioned' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('tooltip').filter({ hasText: 'Choose a versioned' }),
+  ).toHaveCount(0);
+  await expect(mapHelp).toBeFocused();
+
+  await page.getByText('Map appearance', { exact: true }).click();
+  await expect(page.getByLabel('Basemap', { exact: true })).toHaveValue(
+    'dark-streets',
+  );
+  await expect(
+    page
+      .getByLabel('Basemap', { exact: true })
+      .locator('option[value="roads"]'),
+  ).toBeDisabled();
+  await expect(
+    page.getByLabel('Physical terrain', { exact: true }),
+  ).toHaveValue('smooth-globe');
+  await page
+    .getByLabel('Surface palette', { exact: true })
+    .selectOption('plasma');
+  await page.getByLabel(/Surface opacity/).fill('0.65');
+  await page.getByLabel('Cell edges', { exact: true }).check();
+  await page.getByRole('radio', { name: 'Map' }).check();
+
+  await page.getByText('Measured points', { exact: true }).click();
+  await page
+    .getByLabel('Marker shape', { exact: true })
+    .selectOption('hemisphere');
+  await page.getByLabel('Marker shape', { exact: true }).selectOption('pin');
+  await page
+    .getByLabel('Marker color', { exact: true })
+    .selectOption('frequency');
+  await page.getByLabel('Marker size', { exact: true }).selectOption('an');
+  await page.getByLabel('Sampling areas', { exact: true }).uncheck();
+
+  await expect(page).toHaveURL(/palette=plasma/);
+  await expect(page).toHaveURL(/opacity=0.65/);
+  await expect(page).toHaveURL(/edges=true/);
+  await expect(page).toHaveURL(/view=map/);
+  await expect(page).toHaveURL(/obsShape=pin/);
+  await expect(page).toHaveURL(/obsColor=frequency/);
+  await expect(page).toHaveURL(/obsSize=an/);
+  await expect(page).toHaveURL(/samplingAreas=false/);
+
+  await page.getByText('Keys', { exact: true }).click();
+  await expect(page.getByText(/arrows or WASD to pan/)).toBeVisible();
+});
+
+test('explorer provides versioned downloads and gated external lookups', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.route('https://tile.openstreetmap.org/**', (route) =>
+    route.abort(),
+  );
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  await page.locator('.atlas-downloads > summary').click();
+  await expect(
+    page.getByRole('link', { name: 'Artifact manifest' }),
+  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.manifest.json');
+  await expect(
+    page.getByRole('link', { name: 'Measured observations' }),
+  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.observations.json');
+  await expect(
+    page.getByRole('link', { name: 'Inferred surface' }),
+  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.surface.json');
+
+  await page.locator('.atlas-external-info > summary').click();
+  const external = page.locator('.atlas-external-info select');
+  await external.selectOption('gnomad');
+  await expect(
+    page.getByText('chr11-5227002-T-A', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /Open this variant in gnomAD/ }),
+  ).toHaveAttribute('target', '_blank');
+  await external.selectOption('dbsnp');
+  await expect(page.getByText('rs334', { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: /Open this record in dbSNP/ }),
+  ).toHaveAttribute('target', '_blank');
+
+  await page
+    .getByLabel('Variant or phenotype', { exact: true })
+    .selectOption('g6pd-deficiency');
+  await expect(
+    page.getByText(/does not resolve to a reviewed normalized variant/),
+  ).toBeVisible();
+  await expect(page.locator('.atlas-external-info select')).toHaveCount(0);
+});
+
 test('explorer opens separate surface and observation inspectors', async ({
   page,
   isMobile,
 }) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route('https://tile.openstreetmap.org/**', (route) =>
@@ -446,9 +587,6 @@ test('explorer opens separate surface and observation inspectors', async ({
   };
 
   await page.getByLabel('Measured observations').uncheck();
-  if (isMobile) {
-    await page.getByText('Map controls', { exact: true }).click();
-  }
   await expect
     .poll(() => new URL(page.url()).searchParams.get('layers'))
     .not.toContain('observations');
@@ -459,13 +597,7 @@ test('explorer opens separate surface and observation inspectors', async ({
   await expect(surfaceInspector).toBeVisible();
   await page.getByRole('button', { name: 'Close inspector' }).click();
 
-  if (isMobile) {
-    await page.getByText('Map controls', { exact: true }).click();
-  }
   await page.getByLabel('Measured observations').check();
-  if (isMobile) {
-    await page.getByText('Map controls', { exact: true }).click();
-  }
   await expect(page).toHaveURL(/layers=[^&]*observations/);
   await page.waitForTimeout(650);
   const observationInspector = page.getByRole('complementary', {

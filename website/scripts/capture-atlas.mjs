@@ -59,7 +59,11 @@ try {
     viewport: { height: 1440, width: 2560 },
   });
   const pageErrors = [];
+  const consoleErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error));
+  page.on('console', (entry) => {
+    if (entry.type() === 'error') consoleErrors.push(entry.text());
+  });
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.fulfill({
       body: neutralTile,
@@ -68,21 +72,34 @@ try {
     }),
   );
   const query = new URLSearchParams({
-    elevation: 'true',
-    entity: 'hbs-rs334',
+    elevation: process.env.ATLAS_CAPTURE_ELEVATION ?? 'true',
+    entity: process.env.ATLAS_CAPTURE_ENTITY ?? 'hbs-rs334',
     exaggeration: '2',
     heading: '0',
     height: '14500000',
     lat: '10',
-    layers: 'surface,observations,support,context',
+    layers:
+      process.env.ATLAS_CAPTURE_LAYERS ??
+      'surface,observations,support,context',
     lon: '20',
-    metric: 'post_mean',
+    metric: process.env.ATLAS_CAPTURE_METRIC ?? 'post_mean',
     pitch: '-90',
-    version: 'v1/map-2026-08',
-    view: 'globe',
+    version: process.env.ATLAS_CAPTURE_VERSION ?? 'v3/map-2026-08',
+    view: process.env.ATLAS_CAPTURE_VIEW ?? 'globe',
   });
   await page.goto(`${baseUrl}/app/?${query}`);
-  await page.locator('[data-atlas-ready="true"]').waitFor({ timeout: 60_000 });
+  try {
+    await page
+      .locator('[data-atlas-ready="true"]')
+      .waitFor({ timeout: 60_000 });
+  } catch (error) {
+    const panel = page.locator('.cesium-widget-errorPanel');
+    if (await panel.isVisible()) {
+      process.stderr.write(`${await panel.innerText()}\n`);
+    }
+    for (const message of consoleErrors) process.stderr.write(`${message}\n`);
+    throw error;
+  }
   await page.waitForTimeout(1_000);
   if (pageErrors.length > 0) throw pageErrors[0];
   await page.screenshot({ path: outputPath });

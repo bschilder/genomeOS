@@ -8,3 +8,4 @@ package-lock.json
 public/images/*.png
 public/data/atlas/*.json
 public/data/atlas/*.geojson
+public/data/atlas/**/*.json

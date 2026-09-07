@@ -7,8 +7,29 @@ const ref: ArtifactRef = {
   artifact_format: 1,
   assumptions: ['fixture'],
   correlation_range_km: 400,
+  downloads: {
+    manifest: {
+      label: 'Artifact manifest',
+      media_type: 'application/json',
+      sha256: 'c'.repeat(64),
+      url: 'hbs-rs334.manifest.json',
+    },
+    observations: {
+      label: 'Measured observations',
+      media_type: 'application/json',
+      sha256: 'b'.repeat(64),
+      url: 'hbs-rs334.observations.json',
+    },
+    surface: {
+      label: 'Inferred surface',
+      media_type: 'application/json',
+      sha256: 'a'.repeat(64),
+      url: 'hbs-rs334.surface.json',
+    },
+  },
   data_version: 'map-2026-08',
   entity_type: 'variant',
+  external_resources: [],
   hf_dataset: 'bschilder/genomeos-data',
   hf_revision: 'fc17bc1c1d96a0d0766746dcf26277ccdc669717',
   id: 'hbs-rs334',
@@ -142,6 +163,32 @@ describe('StaticAtlasDataProvider', () => {
       '/genomeOS/data/atlas/',
     );
     await expect(invalidProvider.getSurface(ref)).rejects.toThrow(/identity/i);
+
+    const format2Ref = {
+      ...ref,
+      artifact_format: 2 as const,
+      target_grid_source: 'worldpop-1km-unconstrained',
+      target_grid_version: 'worldpop-2020-plus-cok',
+    };
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          ...response,
+          artifact: {
+            ...response.artifact,
+            artifact_format: 2,
+            target_grid_source: format2Ref.target_grid_source,
+            target_grid_version: 'wrong-grid-version',
+          },
+        }),
+      ),
+    );
+    const wrongGridProvider = new StaticAtlasDataProvider(
+      '/genomeOS/data/atlas/',
+    );
+    await expect(wrongGridProvider.getSurface(format2Ref)).rejects.toThrow(
+      /target_grid_version/,
+    );
   });
 
   it('reports HTTP failures instead of falling back', async () => {
@@ -167,5 +214,57 @@ describe('StaticAtlasDataProvider', () => {
 
     await expect(provider.getObservations(surfaceOnly)).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('loads external information only through reviewed catalog capabilities', async () => {
+    const eligible = {
+      ...ref,
+      external_resources: [
+        {
+          cache_sha256: 'd'.repeat(64),
+          cache_url: 'external/gnomad/chr11-5227002-t-a.json',
+          dataset: 'gnomad_r4',
+          normalized_variant_id: ref.variant_id,
+          source: 'gnomad' as const,
+        },
+      ],
+    };
+    const cached = {
+      query: { dataset: 'gnomad_r4', normalized_variant_id: ref.variant_id },
+      record: {
+        alt: 'A',
+        canonical_consequence: null,
+        chrom: '11',
+        exome: null,
+        genome: null,
+        joint: { ac: 4, af: 0.04, an: 100 },
+        pos: 5227002,
+        ref: 'T',
+        rsids: ['rs334'],
+        source_url: 'https://gnomad.broadinstitute.org/variant/11-5227002-T-A',
+      },
+      retrieved_at: '2026-09-07T00:00:00Z',
+      schema_version: 1,
+      source: 'gnomad',
+      source_release: 'gnomad_r4',
+    };
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(cached), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const provider = new StaticAtlasDataProvider('/data/atlas/');
+
+    await expect(
+      provider.getExternalInfo(eligible, 'gnomad'),
+    ).resolves.toMatchObject({
+      source: 'gnomad',
+      source_release: 'gnomad_r4',
+    });
+    await expect(provider.getExternalInfo(ref, 'gnomad')).rejects.toThrow(
+      /no reviewed identifier/,
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

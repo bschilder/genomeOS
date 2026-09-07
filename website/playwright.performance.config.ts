@@ -20,7 +20,7 @@ export default defineConfig({
   webServer: {
     command: 'npm run serve:test',
     url: 'http://127.0.0.1:4322/',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: false,
     timeout: 30_000,
   },
 });
