@@ -341,4 +341,26 @@ describe('Cesium scene policy', () => {
     };
     expect(cameraState(viewer as never)).toBeNull();
   });
+
+  it('canonicalizes harmless Cesium floating-point noise in shared camera state', () => {
+    const viewer = {
+      camera: {
+        heading: (11.999999999999966 * Math.PI) / 180,
+        pitch: (-54.999999999999936 * Math.PI) / 180,
+        positionCartographic: {
+          height: 4_199_999.999_999_998,
+          latitude: (0.999999999999998 * Math.PI) / 180,
+          longitude: (9.000000000000005 * Math.PI) / 180,
+        },
+      },
+    };
+
+    expect(cameraState(viewer as never)).toEqual({
+      heading: 12,
+      height: 4_200_000,
+      lat: 1,
+      lon: 9,
+      pitch: -55,
+    });
+  });
 });

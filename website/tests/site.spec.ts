@@ -1,6 +1,13 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator } from '@playwright/test';
 
+import { installAtlasBrowserFixture } from './atlas-browser-fixture';
+
+test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 const topLevelRoutes = [
   '/',
   '/project/',
@@ -322,9 +329,6 @@ test('explorer changes entity, metric, context, and elevation', async ({
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
@@ -356,9 +360,6 @@ test('explorer switches among globe, map, and perspective views', async ({
 }) => {
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
@@ -375,9 +376,6 @@ test('explorer switches among globe, map, and perspective views', async ({
 
 test('explorer restores a complete shareable URL', async ({ page }) => {
   test.setTimeout(60_000);
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
   const servedCatalog = await page.request.get('/data/atlas/catalog.json');
   expect(servedCatalog.ok()).toBe(true);
   const servedArtifacts = (await servedCatalog.json()) as {
@@ -430,13 +428,17 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   page,
 }) => {
   test.setTimeout(60_000);
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
   await page.goto('/app/');
 
   const entity = page.getByLabel('Variant or phenotype', { exact: true });
   await expect(entity.locator('option')).toHaveCount(30);
+  const completeSurface = await page.request.get(
+    '/data/atlas/hbs-rs334.surface.json',
+  );
+  expect(completeSurface.ok()).toBe(true);
+  expect(
+    ((await completeSurface.json()) as { cells: unknown[] }).cells,
+  ).toHaveLength(77_844);
 
   const mapHelp = page.getByRole('button', { name: 'About map selection' });
   await mapHelp.click();
@@ -496,9 +498,6 @@ test('explorer provides versioned downloads and gated external lookups', async (
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
@@ -549,9 +548,6 @@ test('explorer opens separate surface and observation inspectors', async ({
   );
   test.setTimeout(60_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
   const query = new URLSearchParams({
     heading: '0',
     height: '1000000',

@@ -22,6 +22,11 @@ interface KeyboardInput {
   metaKey?: boolean;
 }
 
+function canonicalCameraNumber(value: number): number {
+  const rounded = Number(value.toFixed(6));
+  return Object.is(rounded, -0) ? 0 : rounded;
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (target === null || typeof target !== 'object') return false;
   const element = target as HTMLElement;
@@ -77,11 +82,11 @@ export function cameraState(viewer: Viewer): CameraState | null {
     return null;
   }
   return {
-    heading: CesiumMath.toDegrees(viewer.camera.heading),
-    height: cartographic.height,
-    lat: CesiumMath.toDegrees(cartographic.latitude),
-    lon: CesiumMath.toDegrees(cartographic.longitude),
-    pitch: CesiumMath.toDegrees(viewer.camera.pitch),
+    heading: canonicalCameraNumber(CesiumMath.toDegrees(viewer.camera.heading)),
+    height: canonicalCameraNumber(cartographic.height),
+    lat: canonicalCameraNumber(CesiumMath.toDegrees(cartographic.latitude)),
+    lon: canonicalCameraNumber(CesiumMath.toDegrees(cartographic.longitude)),
+    pitch: canonicalCameraNumber(CesiumMath.toDegrees(viewer.camera.pitch)),
   };
 }
 
