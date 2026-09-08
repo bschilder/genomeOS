@@ -382,8 +382,8 @@ test('explorer changes entity, metric, context, and elevation', async ({
     layers.getByRole('checkbox', { name: 'Observation radii', exact: true }),
   ).toBeVisible();
   await expect(
-    layers.getByRole('checkbox', { name: 'Cell edges', exact: true }),
-  ).toBeVisible();
+    layers.getByRole('checkbox', { name: 'Cell outlines', exact: true }),
+  ).toBeChecked();
   await expect(
     layers.locator('.atlas-layer-row .atlas-info-tip__trigger'),
   ).toHaveCount(7);

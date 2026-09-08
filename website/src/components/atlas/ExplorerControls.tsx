@@ -273,7 +273,7 @@ export function ExplorerControls({
               </div>
             ))}
             <div className="atlas-layer-row">
-              <InfoTip label="cell edges">
+              <InfoTip label="cell outlines">
                 Draws a visible outline around every rendered map polygon.
               </InfoTip>
               <label htmlFor="atlas-cell-edges">
@@ -284,7 +284,7 @@ export function ExplorerControls({
                   disabled={disabled}
                   onChange={(event) => onCellEdges(event.target.checked)}
                 />
-                Cell edges
+                Cell outlines
               </label>
             </div>
           </fieldset>

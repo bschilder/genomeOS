@@ -309,12 +309,16 @@ describe('explorer URL state', () => {
     ).toMatchObject({ paletteMode: 'custom', surfacePalette: 'genome' });
   });
 
-  it('builds cell edges only when explicitly requested', () => {
+  it('shows cell outlines by default while preserving explicit URL choices', () => {
     expect(
       parseExplorerState('?entity=hbs-rs334', catalog).state.cellEdges,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       parseExplorerState('?entity=hbs-rs334&elevation=true', catalog).state
+        .cellEdges,
+    ).toBe(true);
+    expect(
+      parseExplorerState('?entity=hbs-rs334&edges=false', catalog).state
         .cellEdges,
     ).toBe(false);
     expect(
