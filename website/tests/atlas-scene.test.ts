@@ -10,6 +10,7 @@ import {
   MaterialAppearance,
   PolygonGeometry,
   PolygonHierarchy,
+  PrimitiveCollection,
   VerticalOrigin,
 } from 'cesium';
 import { describe, expect, it, vi } from 'vitest';
@@ -84,6 +85,7 @@ import {
   resolveElevationView,
   transitionProgress,
 } from '../src/atlas/scene/atlas-scene';
+import * as atlasScene from '../src/atlas/scene/atlas-scene';
 import { styleAtlasScene } from '../src/atlas/scene/scene-policy';
 import * as scenePolicy from '../src/atlas/scene/scene-policy';
 import { heightForCell } from '../src/atlas/visual-encoding';
@@ -749,7 +751,7 @@ describe('Cesium scene policy', () => {
     },
   );
 
-  it('gives surface-mounted studs a low dome with the circle footprint', () => {
+  it('keeps surface-mounted studs screen-upright and opaque above map lines', () => {
     stubCesiumBrowserImageTypes();
     try {
       const circleLayer = buildObservationLayerForTest('circle');
@@ -761,23 +763,41 @@ describe('Cesium scene policy', () => {
       expect(hemisphere.height).toBeLessThan(hemisphere.width);
       expect(hemisphere.verticalOrigin).toBe(VerticalOrigin.BOTTOM);
       expect(hemisphere.eyeOffset.z).toBeLessThan(0);
-      const surfaceNormal = Ellipsoid.WGS84.geodeticSurfaceNormal(
-        hemisphere.position,
-        new Cartesian3(),
-      );
-      expect(
-        Cartesian3.equalsEpsilon(
-          hemisphere.alignedAxis,
-          surfaceNormal,
-          Number.EPSILON,
-        ),
-      ).toBe(true);
+      expect(hemisphere.alignedAxis).toEqual(Cartesian3.ZERO);
+      hemisphereLayer.setStyleOpacity(1);
+      hemisphereLayer.setOpacity(1);
+      expect(hemisphere.color.alpha).toBe(1);
+
+      hemisphereLayer.setElevationFactor(4, true);
+      expect(hemisphere.alignedAxis).toEqual(Cartesian3.ZERO);
       expect(hemisphere.image).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('raises observations above a replacement surface and keeps highlights last', () => {
+    const primitives = new PrimitiveCollection();
+    const observations = new PrimitiveCollection();
+    const highlights = new PrimitiveCollection();
+    const replacementSurface = new PrimitiveCollection();
+    primitives.add(observations);
+    primitives.add(highlights);
+    primitives.add(replacementSurface);
+    const scene = atlasScene as typeof atlasScene & {
+      raiseScientificOverlays?: (
+        target: PrimitiveCollection,
+        observationLayer: PrimitiveCollection | null,
+        highlightLayer: PrimitiveCollection,
+      ) => void;
+    };
+
+    scene.raiseScientificOverlays?.(primitives, observations, highlights);
+
+    expect(primitives.get(primitives.length - 2)).toBe(observations);
+    expect(primitives.get(primitives.length - 1)).toBe(highlights);
   });
 
   it('renders pins as fixed-pixel, shaded teardrops anchored at their tip', () => {

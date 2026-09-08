@@ -321,7 +321,7 @@ export function buildObservationLayer(
   if (options.shape === 'hemisphere') {
     const hemisphereImage = litStudImage();
     for (const { anchor, color, observation, size } of symbols) {
-      const cesiumColor = Color.fromCssColorString(color).withAlpha(0.98);
+      const cesiumColor = Color.fromCssColorString(color).withAlpha(1);
       const placement = observationSurfacePlacement(
         anchor,
         observation,
@@ -329,7 +329,7 @@ export function buildObservationLayer(
       );
       hemisphereBaseColors.push(cesiumColor.clone());
       hemispheres.add({
-        alignedAxis: placement.normal,
+        alignedAxis: Cartesian3.ZERO,
         color: cesiumColor,
         disableDepthTestDistance: 0,
         eyeOffset: placement.eyeOffset,
@@ -422,7 +422,6 @@ export function buildObservationLayer(
           pins.get(index).alignedAxis = placement.normal;
         } else {
           hemispheres.get(index).position = placement.position;
-          hemispheres.get(index).alignedAxis = placement.normal;
         }
       }
     },

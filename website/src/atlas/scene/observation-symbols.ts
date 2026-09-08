@@ -262,8 +262,8 @@ export function observationSurfacePlacement(
 const LIT_STUD_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="128" height="96" viewBox="0 0 128 96">
     <defs><radialGradient id="stud" cx="32%" cy="22%" r="76%">
-      <stop offset="0" stop-color="white"/><stop offset="0.38" stop-color="#edf7ff" stop-opacity=".94"/>
-      <stop offset="0.78" stop-color="#7d91a8" stop-opacity=".86"/><stop offset="1" stop-color="#101b2b" stop-opacity=".98"/>
+      <stop offset="0" stop-color="white"/><stop offset="0.38" stop-color="#edf7ff"/>
+      <stop offset="0.78" stop-color="#7d91a8"/><stop offset="1" stop-color="#101b2b"/>
     </radialGradient></defs>
     <ellipse cx="64" cy="87" rx="55" ry="9" fill="#020712" fill-opacity=".32"/>
     <path d="M9 84C12 38 33 8 64 8S116 38 119 84C105 94 23 94 9 84Z" fill="url(#stud)"/>
@@ -291,9 +291,9 @@ export function litStudImage(): HTMLCanvasElement | string {
   context.closePath();
   const body = context.createRadialGradient(41, 23, 2, 64, 55, 60);
   body.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  body.addColorStop(0.38, 'rgba(237, 247, 255, 0.94)');
-  body.addColorStop(0.78, 'rgba(125, 145, 168, 0.86)');
-  body.addColorStop(1, 'rgba(16, 27, 43, 0.98)');
+  body.addColorStop(0.38, 'rgba(237, 247, 255, 1)');
+  body.addColorStop(0.78, 'rgba(125, 145, 168, 1)');
+  body.addColorStop(1, 'rgba(16, 27, 43, 1)');
   context.fillStyle = body;
   context.fill();
   context.strokeStyle = 'rgba(255, 255, 255, 0.38)';
