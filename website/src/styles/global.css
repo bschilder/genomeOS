@@ -137,6 +137,87 @@ svg {
 .site-header__actions {
   display: flex;
   align-items: center;
+  gap: 0.8rem;
+}
+
+.atlas-navbar-status-slot:empty {
+  display: none;
+}
+
+.launch-atlas-cta {
+  padding: 0.56rem 0.78rem 0.56rem 0.88rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.48rem;
+  overflow: hidden;
+  border: 1px solid rgb(205 255 247 / 72%);
+  border-radius: 0.5rem;
+  background: linear-gradient(135deg, #86f3d8 0%, #62ddf4 100%);
+  color: #03111f;
+  box-shadow:
+    0 0.4rem 1.35rem rgb(78 225 221 / 20%),
+    inset 0 1px rgb(255 255 255 / 52%);
+  font-size: 0.94rem;
+  font-weight: 820;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.launch-atlas-cta:hover,
+.launch-atlas-cta:focus-visible,
+.launch-atlas-cta[aria-current='page'] {
+  background: linear-gradient(135deg, #b1ffe8 0%, #78e8ff 100%);
+  box-shadow:
+    0 0.55rem 1.7rem rgb(78 225 221 / 32%),
+    inset 0 1px rgb(255 255 255 / 64%);
+  transform: translateY(-1px);
+}
+
+.launch-atlas-cta:focus-visible {
+  outline: 2px solid var(--color-starlight);
+  outline-offset: 3px;
+}
+
+.launch-atlas-cta__rocket {
+  width: 1.12rem;
+  height: 1.12rem;
+  fill: none;
+  stroke: #465565;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transform-origin: center;
+}
+
+.launch-atlas-cta:hover .launch-atlas-cta__rocket,
+.launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
+  animation: launch-rocket 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes launch-rocket {
+  0% {
+    transform: translate(0, 0) rotate(0);
+  }
+  42% {
+    opacity: 1;
+    transform: translate(0.3rem, -0.34rem) rotate(4deg);
+  }
+  43% {
+    opacity: 0;
+  }
+  44% {
+    opacity: 0;
+    transform: translate(-0.34rem, 0.34rem) rotate(4deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
 }
 
 .desktop-nav ul {
@@ -259,6 +340,19 @@ svg {
 }
 
 @media (max-width: 46rem) {
+  .launch-atlas-cta {
+    padding-inline: 0.7rem;
+  }
+
+  .launch-atlas-cta > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
   .hero {
     min-height: min(43rem, calc(100svh - 4.75rem));
   }
@@ -298,7 +392,12 @@ svg {
   }
   .site-header,
   .site-header__inner,
-  .wordmark {
+  .wordmark,
+  .launch-atlas-cta {
     transition: none;
+  }
+  .launch-atlas-cta:hover .launch-atlas-cta__rocket,
+  .launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
+    animation: none;
   }
 }

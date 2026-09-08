@@ -10,15 +10,19 @@ import type {
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
 import type {
   BasemapId,
+  EdgeColorMode,
   ExplorerSceneMode,
   ExplorerState,
   LayerId,
+  SurfaceGeometry,
   TerrainId,
 } from '../../atlas/url-state';
 import type { Metric, PaletteId } from '../../atlas/visual-encoding';
 import { InfoTip } from './InfoTip';
 import { ExternalInfoPanel } from './ExternalInfoPanel';
+import { InferredSurfaceControls } from './InferredSurfaceControls';
 import { MapStyleControls } from './MapStyleControls';
+import { MapCatalogPicker } from './MapCatalogPicker';
 import { ObservationControls } from './ObservationControls';
 
 interface ExplorerControlsProps {
@@ -28,7 +32,17 @@ interface ExplorerControlsProps {
   state: ExplorerState;
   disabled: boolean;
   onBasemap: (value: BasemapId) => void;
+  onBasemapBrightness: (value: number) => void;
+  onBasemapOpacity: (value: number) => void;
+  onCountryBorderColor: (value: string) => void;
+  onCountryBorderOpacity: (value: number) => void;
+  onDayNightLighting: (value: boolean) => void;
   onCellEdges: (visible: boolean) => void;
+  onEdgeColorMode: (value: EdgeColorMode) => void;
+  onEdgeFixedColor: (value: string) => void;
+  onEarthOpacity: (value: number) => void;
+  onOceanColor: (value: string) => void;
+  onSurfaceGeometry: (value: SurfaceGeometry) => void;
   onEntity: (id: string) => void;
   onExternalInfo: (
     source: 'gnomad' | 'dbsnp',
@@ -41,10 +55,13 @@ interface ExplorerControlsProps {
   onSurfacePalette: (value: PaletteId) => void;
   onSurfaceOpacity: (value: number) => void;
   onObservationColor: (value: ObservationColorVariable) => void;
-  onObservationHemisphereRange: (value: ObservationSizeRange) => void;
-  onObservationPointRange: (value: ObservationSizeRange) => void;
+  onObservationGradient: (value: readonly [string, string, string]) => void;
+  onObservationOpacity: (value: number) => void;
+  onObservationRange: (value: ObservationSizeRange) => void;
   onObservationShape: (value: ObservationShape) => void;
   onObservationSize: (value: ObservationSizeVariable) => void;
+  onObservationSolidColor: (value: string) => void;
+  onSamplingAreaColor: (value: string) => void;
   onSamplingAreas: (visible: boolean) => void;
   onElevation: (enabled: boolean) => void;
   onExaggeration: (value: number) => void;
@@ -53,10 +70,24 @@ interface ExplorerControlsProps {
 }
 
 const layerLabels: Record<LayerId, string> = {
-  context: 'Geographic context',
-  observations: 'Measured observations',
+  context: 'Geography',
+  countries: 'Country outlines',
+  observations: 'Measured points',
   support: 'Evidence support',
   surface: 'Inferred surface',
+};
+
+const layerDescriptions: Record<LayerId, string> = {
+  context:
+    'Shows the selected basemap imagery and physical terrain beneath the scientific layers.',
+  countries:
+    'Shows country outlines and country names above the scientific surface. Their color and opacity are adjustable under Map.',
+  observations:
+    'Shows source-recorded measurements as markers. These are measured data, not model estimates.',
+  support:
+    'A dotted fill means nearby measurements did not outweigh the model’s starting assumptions. Its palette color still shows the estimate, but the cell is excluded from summaries. Neutral hatching means the value is unknown.',
+  surface:
+    'Shows the model’s inferred geographic pattern across supported cells, separately from measured points.',
 };
 
 export function ExplorerControls({
@@ -66,7 +97,17 @@ export function ExplorerControls({
   state,
   disabled,
   onBasemap,
+  onBasemapBrightness,
+  onBasemapOpacity,
+  onCountryBorderColor,
+  onCountryBorderOpacity,
+  onDayNightLighting,
   onCellEdges,
+  onEdgeColorMode,
+  onEdgeFixedColor,
+  onEarthOpacity,
+  onOceanColor,
+  onSurfaceGeometry,
   onEntity,
   onExternalInfo,
   onMetric,
@@ -76,10 +117,13 @@ export function ExplorerControls({
   onSurfacePalette,
   onSurfaceOpacity,
   onObservationColor,
-  onObservationHemisphereRange,
-  onObservationPointRange,
+  onObservationGradient,
+  onObservationOpacity,
+  onObservationRange,
   onObservationShape,
   onObservationSize,
+  onObservationSolidColor,
+  onSamplingAreaColor,
   onSamplingAreas,
   onElevation,
   onExaggeration,
@@ -97,7 +141,9 @@ export function ExplorerControls({
   return (
     <aside className="atlas-controls" aria-label="Explorer controls">
       <div className="atlas-controls__intro">
-        <p className="atlas-kicker">Interactive atlas</p>
+        <p className="atlas-kicker atlas-kicker--brand">
+          <span className="brand-name">genomeOS</span> Atlas
+        </p>
         <h1>Explore human genetic variation</h1>
         <p>
           Compare measurements with modeled geographic patterns—and see where
@@ -107,31 +153,18 @@ export function ExplorerControls({
 
       <div className="atlas-field atlas-field--entity">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-entity">Variant or phenotype</label>
+          <span>Select dataset</span>
           <InfoTip label="map selection">
             Choose a versioned genetic variant, allele, gene, or phenotype map
             from the public genomeOS catalog.
           </InfoTip>
         </span>
-        <select
-          id="atlas-entity"
-          value={state.entityId}
+        <MapCatalogPicker
+          catalog={catalog}
           disabled={disabled}
-          onChange={(event) => onEntity(event.target.value)}
-        >
-          {!catalog.artifacts.some(
-            (artifact) => artifact.id === state.entityId,
-          ) && (
-            <option value={state.entityId} disabled>
-              Unavailable: {state.entityId}
-            </option>
-          )}
-          {catalog.artifacts.map((artifact) => (
-            <option value={artifact.id} key={artifact.id}>
-              {artifact.label}
-            </option>
-          ))}
-        </select>
+          selectedId={state.entityId}
+          onSelect={onEntity}
+        />
       </div>
 
       {selectedArtifact && (
@@ -141,7 +174,7 @@ export function ExplorerControls({
       <details className="atlas-control-sheet" open>
         <summary>Scientific layers</summary>
         <div className="atlas-control-sheet__body">
-          <fieldset className="atlas-fieldset">
+          <fieldset className="atlas-fieldset atlas-fieldset--display">
             <legend>
               Display
               <InfoTip label="displayed metric">
@@ -179,100 +212,120 @@ export function ExplorerControls({
                 support marks cells that cannot be treated as numeric results.
               </InfoTip>
             </legend>
-            {(Object.keys(layerLabels) as LayerId[]).map((layer) => (
-              <label key={layer}>
+            {(['context', 'countries', 'observations'] as LayerId[]).map(
+              (layer) => (
+                <div className="atlas-layer-row" key={layer}>
+                  <InfoTip label={`${layerLabels[layer]} layer`}>
+                    {layerDescriptions[layer]}
+                  </InfoTip>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={
+                        state.layers[layer] &&
+                        !(layer === 'observations' && !observationsAvailable)
+                      }
+                      disabled={
+                        disabled ||
+                        (layer === 'observations' && !observationsAvailable)
+                      }
+                      onChange={(event) => onLayer(layer, event.target.checked)}
+                    />
+                    {layerLabels[layer]}
+                    {layer === 'observations' &&
+                      !observationsAvailable &&
+                      ' (not available yet)'}
+                  </label>
+                </div>
+              ),
+            )}
+            <div className="atlas-layer-row">
+              <InfoTip label="observation radii">
+                Outlines the source-supported geographic precision. Very large
+                rings mean the source located a sample only to a broad
+                administrative area.
+              </InfoTip>
+              <label htmlFor="atlas-sampling-areas">
                 <input
+                  id="atlas-sampling-areas"
                   type="checkbox"
-                  checked={
-                    state.layers[layer] &&
-                    !(layer === 'observations' && !observationsAvailable)
-                  }
-                  disabled={
-                    disabled ||
-                    (layer === 'observations' && !observationsAvailable)
-                  }
-                  onChange={(event) => onLayer(layer, event.target.checked)}
+                  checked={state.samplingAreas && observationsAvailable}
+                  disabled={disabled || !observationsAvailable}
+                  onChange={(event) => onSamplingAreas(event.target.checked)}
                 />
-                {layerLabels[layer]}
-                {layer === 'observations' &&
-                  !observationsAvailable &&
-                  ' (not available yet)'}
+                Observation radii
               </label>
+            </div>
+            {(['support', 'surface'] as LayerId[]).map((layer) => (
+              <div className="atlas-layer-row" key={layer}>
+                <InfoTip label={`${layerLabels[layer]} layer`}>
+                  {layerDescriptions[layer]}
+                </InfoTip>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={state.layers[layer]}
+                    disabled={disabled}
+                    onChange={(event) => onLayer(layer, event.target.checked)}
+                  />
+                  {layerLabels[layer]}
+                </label>
+              </div>
             ))}
+            <div className="atlas-layer-row">
+              <InfoTip label="cell edges">
+                Draws a visible outline around every rendered map polygon.
+              </InfoTip>
+              <label htmlFor="atlas-cell-edges">
+                <input
+                  id="atlas-cell-edges"
+                  type="checkbox"
+                  checked={state.cellEdges}
+                  disabled={disabled}
+                  onChange={(event) => onCellEdges(event.target.checked)}
+                />
+                Cell edges
+              </label>
+            </div>
           </fieldset>
         </div>
       </details>
 
       <details className="atlas-control-sheet">
-        <summary>Map appearance</summary>
+        <summary>Map</summary>
         <div className="atlas-control-sheet__body">
           <MapStyleControls
             capabilities={capabilities}
             disabled={disabled}
             state={state}
             onBasemap={onBasemap}
-            onCellEdges={onCellEdges}
+            onBasemapBrightness={onBasemapBrightness}
+            onBasemapOpacity={onBasemapOpacity}
+            onCountryBorderColor={onCountryBorderColor}
+            onCountryBorderOpacity={onCountryBorderOpacity}
+            onDayNightLighting={onDayNightLighting}
+            onEarthOpacity={onEarthOpacity}
+            onOceanColor={onOceanColor}
+            onTerrain={onTerrain}
+            onView={onView}
+          />
+        </div>
+      </details>
+
+      <details className="atlas-control-sheet">
+        <summary>Inferred surface</summary>
+        <div className="atlas-control-sheet__body">
+          <InferredSurfaceControls
+            disabled={disabled}
+            state={state}
+            onEdgeColorMode={onEdgeColorMode}
+            onEdgeFixedColor={onEdgeFixedColor}
+            onElevation={onElevation}
+            onExaggeration={onExaggeration}
+            onGeometry={onSurfaceGeometry}
             onPalette={onSurfacePalette}
             onSurfaceOpacity={onSurfaceOpacity}
-            onTerrain={onTerrain}
           />
-
-          <fieldset className="atlas-fieldset atlas-fieldset--view">
-            <legend>
-              View
-              <InfoTip label="view">
-                Globe is 3D, Map is flat, and Perspective is an angled 2.5D
-                view. Statistical elevation requires an angled view.
-              </InfoTip>
-            </legend>
-            <div className="atlas-segments">
-              {(['globe', 'map', 'perspective'] as ExplorerSceneMode[]).map(
-                (view) => (
-                  <label key={view}>
-                    <input
-                      type="radio"
-                      name="view"
-                      value={view}
-                      checked={state.view === view}
-                      onChange={() => onView(view)}
-                    />
-                    <span>{view[0].toUpperCase() + view.slice(1)}</span>
-                  </label>
-                ),
-              )}
-            </div>
-          </fieldset>
-
-          <div className="atlas-elevation">
-            <div className="atlas-check-row">
-              <label htmlFor="atlas-statistical-elevation">
-                <input
-                  id="atlas-statistical-elevation"
-                  type="checkbox"
-                  checked={state.elevation}
-                  onChange={(event) => onElevation(event.target.checked)}
-                />
-                Statistical elevation
-              </label>
-              <InfoTip label="statistical elevation">
-                Raises supported H3 cells using the currently displayed metric;
-                it is not physical topography.
-              </InfoTip>
-            </div>
-            <label className="atlas-field atlas-field--range">
-              <span>{state.exaggeration.toFixed(1)}× height</span>
-              <input
-                type="range"
-                min="0.25"
-                max="5"
-                step="0.25"
-                value={state.exaggeration}
-                disabled={!state.elevation}
-                onChange={(event) => onExaggeration(Number(event.target.value))}
-                aria-label="Height exaggeration"
-              />
-            </label>
-          </div>
         </div>
       </details>
 
@@ -283,11 +336,13 @@ export function ExplorerControls({
             disabled={disabled || !observationsAvailable}
             state={state}
             onColor={onObservationColor}
-            onHemisphereRange={onObservationHemisphereRange}
-            onPointRange={onObservationPointRange}
-            onSamplingAreas={onSamplingAreas}
+            onGradient={onObservationGradient}
+            onOpacity={onObservationOpacity}
+            onRange={onObservationRange}
+            onSamplingAreaColor={onSamplingAreaColor}
             onShape={onObservationShape}
             onSize={onObservationSize}
+            onSolidColor={onObservationSolidColor}
           />
         </div>
       </details>

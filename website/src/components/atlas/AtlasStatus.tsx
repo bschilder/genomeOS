@@ -1,5 +1,8 @@
 /** Loading, correction, and refusal states for Atlas design §11. */
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+
 import type { ContextStatus } from '../../atlas/scene/atlas-scene';
 import type { ContextWarning } from '../../atlas/scene/context-controller';
 import type { StateCorrection } from '../../atlas/url-state';
@@ -15,6 +18,25 @@ interface AtlasStatusProps {
   error: string | null;
   webglFailed: boolean;
   onRetry: () => void;
+}
+
+function NavbarAtlasStatus({ status }: { status: ExplorerLoadStatus }) {
+  const [target, setTarget] = useState<Element | null>(null);
+
+  useEffect(() => {
+    setTarget(document.querySelector('[data-atlas-status-slot]'));
+  }, []);
+
+  if (!target) return null;
+  return createPortal(
+    <p className="atlas-status" aria-live="polite">
+      <span
+        className={`atlas-status__light atlas-status__light--${status.replace(' ', '-')}`}
+      />
+      {status === 'ready' ? 'Atlas ready' : status}
+    </p>,
+    target,
+  );
 }
 
 export function AtlasStatus({
@@ -68,19 +90,14 @@ export function AtlasStatus({
 
   return (
     <>
+      <NavbarAtlasStatus status={status} />
       {notices.length > 0 && (
         <p className="atlas-warning-banner" role="status">
           <strong>Notice:</strong> {notices.join(' · ')}
         </p>
       )}
-      <div className="atlas-status-stack">
-        <p className="atlas-status" aria-live="polite">
-          <span
-            className={`atlas-status__light atlas-status__light--${status.replace(' ', '-')}`}
-          />
-          {status === 'ready' ? 'Atlas ready' : status}
-        </p>
-        {error && (
+      {error && (
+        <div className="atlas-status-stack">
           <section className="atlas-error" role="alert">
             <strong>That map could not be displayed.</strong>
             <p>{error}</p>
@@ -88,8 +105,8 @@ export function AtlasStatus({
               Retry data
             </button>
           </section>
-        )}
-      </div>
+        </div>
+      )}
     </>
   );
 }

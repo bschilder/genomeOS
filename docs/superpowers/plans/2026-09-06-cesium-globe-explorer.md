@@ -144,7 +144,7 @@ git commit -m "feat: package Cesium globe runtime (#55)"
 - Create: `website/public/data/atlas/hbs-rs334.observations.json`
 - Create: `website/public/data/atlas/g6pd-deficiency.surface.json`
 - Create: `website/public/data/atlas/g6pd-deficiency.observations.json`
-- Create: `website/public/data/atlas/ne-110m-admin-0.geojson`
+- Create: `website/public/data/atlas/ne-50m-admin-0.geojson`
 
 **Interfaces:**
 
@@ -226,11 +226,11 @@ available, the identical command works without a token.
 
 - [x] **Step 5: Download the immutable Natural Earth fallback**
 
-Download `geojson/ne_110m_admin_0_countries.geojson` from Natural Earth revision
+Download `geojson/ne_50m_admin_0_countries.geojson` from Natural Earth revision
 `ca96624a56bd078437bca8184e78163e5039ad19`, write it as
-`website/public/data/atlas/ne-110m-admin-0.geojson`, and record the source URL and revision in the
+`website/public/data/atlas/ne-50m-admin-0.geojson`, and record the source URL and revision in the
 catalog's `context_sources`. Natural Earth is the neutral country-outline fallback, not the detailed
-context map.
+context map. The 1:50m source keeps borders aligned with the basemap at ordinary explorer zooms.
 
 - [x] **Step 6: Generate and inspect the public payloads**
 

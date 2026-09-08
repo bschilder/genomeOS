@@ -1,17 +1,24 @@
 /** Basemap and physical-terrain lifecycle for Atlas design §11. */
 
 import {
+  ArcGisBaseMapType,
+  ArcGisMapServerImageryProvider,
   Credit,
   EllipsoidTerrainProvider,
   ImageryLayer,
   Ion,
+  IonImageryProvider,
   IonWorldImageryStyle,
+  OpenStreetMapImageryProvider,
+  TileMapServiceImageryProvider,
   UrlTemplateImageryProvider,
+  buildModuleUrl,
   createWorldImageryAsync,
   createWorldTerrainAsync,
   type Viewer,
 } from 'cesium';
 
+import { BASEMAP_OPTIONS, TERRAIN_OPTIONS } from '../earth-style-catalog';
 import type { BasemapId, TerrainId } from '../url-state';
 
 export interface SceneCapability {
@@ -42,32 +49,36 @@ export function ionCapability(token: string): SceneCapability {
 
 export function availableBasemaps(token: string): Record<BasemapId, boolean> {
   const ionAvailable = ionCapability(token).available;
-  return {
-    'aerial-labels': ionAvailable,
-    aerial: ionAvailable,
-    'dark-streets': true,
-    roads: ionAvailable,
-  };
+  return Object.fromEntries(
+    BASEMAP_OPTIONS.map(({ id, requiresIon }) => [
+      id,
+      !requiresIon || ionAvailable,
+    ]),
+  ) as Record<BasemapId, boolean>;
 }
 
 export function availableTerrains(token: string): Record<TerrainId, boolean> {
-  return {
-    'smooth-globe': true,
-    'world-terrain': ionCapability(token).available,
-  };
+  const ionAvailable = ionCapability(token).available;
+  return Object.fromEntries(
+    TERRAIN_OPTIONS.map(({ id, requiresIon }) => [
+      id,
+      !requiresIon || ionAvailable,
+    ]),
+  ) as Record<TerrainId, boolean>;
 }
 
-function styleLayer(layer: ImageryLayer, basemap: BasemapId): void {
-  const style = {
-    'aerial-labels': { alpha: 0.78, brightness: 0.64, saturation: 0.68 },
-    aerial: { alpha: 0.72, brightness: 0.6, saturation: 0.72 },
-    'dark-streets': { alpha: 0.63, brightness: 0.55, saturation: 0.48 },
-    roads: { alpha: 0.72, brightness: 0.58, saturation: 0.52 },
-  }[basemap];
-  layer.alpha = style.alpha;
-  layer.brightness = style.brightness;
-  layer.contrast = 1.2;
-  layer.saturation = style.saturation;
+export interface BasemapAppearanceTarget {
+  alpha: number;
+  brightness: number;
+}
+
+export function applyBasemapAppearance(
+  layer: BasemapAppearanceTarget,
+  opacity: number,
+  brightness: number,
+): void {
+  layer.alpha = Math.min(1, Math.max(0, opacity));
+  layer.brightness = Math.min(1, Math.max(0, brightness));
 }
 
 function publicMapLayer(url: string): ImageryLayer {
@@ -84,13 +95,101 @@ function publicMapLayer(url: string): ImageryLayer {
   );
 }
 
-async function ionMapLayer(basemap: Exclude<BasemapId, 'dark-streets'>) {
-  const style = {
-    'aerial-labels': IonWorldImageryStyle.AERIAL_WITH_LABELS,
-    aerial: IonWorldImageryStyle.AERIAL,
-    roads: IonWorldImageryStyle.ROAD,
+const STADIA_CREDIT = `&copy; <a href="https://www.stadiamaps.com/" target="_blank">Stadia Maps</a>
+  &copy; <a href="https://stamen.com/" target="_blank">Stamen Design</a>
+  &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a>
+  &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap contributors</a>`;
+
+async function galleryMapLayer(
+  basemap: BasemapId,
+  publicImageryUrl: string,
+): Promise<ImageryLayer> {
+  if (basemap === 'dark-streets') return publicMapLayer(publicImageryUrl);
+  if (
+    basemap === 'aerial' ||
+    basemap === 'aerial-labels' ||
+    basemap === 'roads'
+  ) {
+    const style = {
+      aerial: IonWorldImageryStyle.AERIAL,
+      'aerial-labels': IonWorldImageryStyle.AERIAL_WITH_LABELS,
+      roads: IonWorldImageryStyle.ROAD,
+    }[basemap];
+    return new ImageryLayer(await createWorldImageryAsync({ style }));
+  }
+  if (basemap === 'arcgis-imagery') {
+    return new ImageryLayer(
+      await ArcGisMapServerImageryProvider.fromBasemapType(
+        ArcGisBaseMapType.SATELLITE,
+        { enablePickFeatures: false },
+      ),
+    );
+  }
+  if (basemap === 'arcgis-hillshade') {
+    return new ImageryLayer(
+      await ArcGisMapServerImageryProvider.fromBasemapType(
+        ArcGisBaseMapType.HILLSHADE,
+        { enablePickFeatures: false },
+      ),
+    );
+  }
+  if (basemap === 'esri-ocean') {
+    return new ImageryLayer(
+      await ArcGisMapServerImageryProvider.fromBasemapType(
+        ArcGisBaseMapType.OCEANS,
+        { enablePickFeatures: false },
+      ),
+    );
+  }
+  if (basemap === 'openstreetmap') {
+    return new ImageryLayer(
+      new OpenStreetMapImageryProvider({
+        url: 'https://tile.openstreetmap.org/',
+      }),
+    );
+  }
+  if (
+    basemap === 'stadia-watercolor' ||
+    basemap === 'stadia-toner' ||
+    basemap === 'stadia-smooth' ||
+    basemap === 'stadia-dark'
+  ) {
+    const details = {
+      'stadia-dark': ['alidade_smooth_dark', 'png'],
+      'stadia-smooth': ['alidade_smooth', 'png'],
+      'stadia-toner': ['stamen_toner', 'png'],
+      'stadia-watercolor': ['stamen_watercolor', 'jpg'],
+    }[basemap];
+    return new ImageryLayer(
+      new OpenStreetMapImageryProvider({
+        credit: STADIA_CREDIT,
+        fileExtension: details[1],
+        retinaTiles:
+          basemap !== 'stadia-watercolor' &&
+          (globalThis.devicePixelRatio ?? 1) >= 2,
+        url: `https://tiles.stadiamaps.com/tiles/${details[0]}/`,
+      }),
+    );
+  }
+  if (basemap === 'natural-earth-ii') {
+    return new ImageryLayer(
+      await TileMapServiceImageryProvider.fromUrl(
+        buildModuleUrl('Assets/Textures/NaturalEarthII'),
+      ),
+    );
+  }
+  const assetId = {
+    'azure-aerial': 3891168,
+    'azure-roads': 3891169,
+    'blue-marble': 3845,
+    'earth-at-night': 3812,
+    'google-contour': 3830186,
+    'google-roadmap': 3830184,
+    'google-satellite': 3830182,
+    'google-satellite-labels': 3830183,
+    'sentinel-2': 3954,
   }[basemap];
-  return new ImageryLayer(await createWorldImageryAsync({ style }));
+  return new ImageryLayer(await IonImageryProvider.fromAssetId(assetId));
 }
 
 export class ContextController {
@@ -99,6 +198,8 @@ export class ContextController {
   readonly #publicImageryUrl: string;
   readonly #onWarning: ContextWarningListener;
   #activeLayer: ImageryLayer | null = null;
+  #basemapBrightness = 0.5;
+  #basemapOpacity = 1;
   #basemapSequence = 0;
   #terrainSequence = 0;
 
@@ -135,12 +236,13 @@ export class ContextController {
       return false;
     }
     try {
-      const incoming =
-        basemap === 'dark-streets'
-          ? publicMapLayer(this.#publicImageryUrl)
-          : await ionMapLayer(basemap);
+      const incoming = await galleryMapLayer(basemap, this.#publicImageryUrl);
       if (sequence !== this.#basemapSequence) return false;
-      styleLayer(incoming, basemap);
+      applyBasemapAppearance(
+        incoming,
+        this.#basemapOpacity,
+        this.#basemapBrightness,
+      );
       const previous = this.#activeLayer;
       this.#viewer.imageryLayers.add(incoming, 0);
       this.#activeLayer = incoming;
@@ -201,5 +303,13 @@ export class ContextController {
 
   setVisible(visible: boolean): void {
     if (this.#activeLayer) this.#activeLayer.show = visible;
+  }
+
+  setAppearance(opacity: number, brightness: number): void {
+    this.#basemapOpacity = opacity;
+    this.#basemapBrightness = brightness;
+    if (this.#activeLayer)
+      applyBasemapAppearance(this.#activeLayer, opacity, brightness);
+    this.#viewer.scene.requestRender();
   }
 }

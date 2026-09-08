@@ -1,0 +1,186 @@
+---
+const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="robots" content="noindex" />
+    <title>Selected cell boundary | genomeOS</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: #020917;
+        color: #eff8ff;
+      }
+
+      html,
+      body,
+      main,
+      #polygon-map {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
+
+      main {
+        position: relative;
+      }
+
+      #polygon-map {
+        background: radial-gradient(circle at 50% 40%, #173957, #020917 70%);
+      }
+
+      .polygon-map__status {
+        position: absolute;
+        z-index: 1;
+        top: 1rem;
+        left: 50%;
+        width: min(38rem, calc(100% - 2rem));
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0.8rem 1rem;
+        transform: translateX(-50%);
+        border: 1px solid rgb(112 230 255 / 35%);
+        border-radius: 0.7rem;
+        background: rgb(3 15 33 / 90%);
+        box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
+        color: #dceafb;
+        font-size: 0.95rem;
+        line-height: 1.45;
+        backdrop-filter: blur(14px);
+      }
+
+      .polygon-map__status[data-state='ready'] {
+        left: 1rem;
+        width: auto;
+        transform: none;
+        color: #72e7c1;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="polygon-map-shell" data-api-key={googleMapsApiKey}>
+      <p class="polygon-map__status" id="polygon-map-status" role="status">
+        Loading selected cell boundary…
+      </p>
+      <div
+        id="polygon-map"
+        aria-label="Google Map showing selected cell polygon"
+      >
+      </div>
+    </main>
+
+    <script>
+      import { cellToBoundary, cellToLatLng, isValidCell } from 'h3-js';
+
+      interface LatLngLiteral {
+        lat: number;
+        lng: number;
+      }
+
+      interface GoogleMapsApi {
+        maps: {
+          LatLngBounds: new () => {
+            extend(point: LatLngLiteral): void;
+          };
+          Map: new (
+            element: HTMLElement,
+            options: { center: LatLngLiteral; mapTypeId: string; zoom: number },
+          ) => {
+            fitBounds(bounds: unknown, padding: number): void;
+          };
+          Polygon: new (options: {
+            fillColor: string;
+            fillOpacity: number;
+            paths: LatLngLiteral[];
+            strokeColor: string;
+            strokeOpacity: number;
+            strokeWeight: number;
+          }) => { setMap(map: unknown): void };
+        };
+      }
+
+      function setStatus(message: string, state: 'error' | 'ready' = 'error') {
+        const status = document.querySelector<HTMLElement>(
+          '#polygon-map-status',
+        );
+        if (!status) return;
+        status.textContent = message;
+        status.dataset.state = state;
+      }
+
+      function loadGoogleMaps(apiKey: string): Promise<GoogleMapsApi> {
+        return new Promise((resolve, reject) => {
+          const callback = `genomeOSGoogleMaps${Date.now()}`;
+          const host = window as unknown as Record<string, unknown>;
+          host[callback] = () => {
+            delete host[callback];
+            resolve((window as unknown as { google: GoogleMapsApi }).google);
+          };
+          const script = document.createElement('script');
+          script.async = true;
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async&callback=${callback}&v=weekly`;
+          script.onerror = () => {
+            delete host[callback];
+            reject(new Error('Google Maps could not be loaded.'));
+          };
+          document.head.append(script);
+        });
+      }
+
+      async function renderPolygon() {
+        const shell = document.querySelector<HTMLElement>('#polygon-map-shell');
+        const container = document.querySelector<HTMLElement>('#polygon-map');
+        const cell = new URLSearchParams(window.location.search).get('cell');
+        if (!shell || !container) return;
+        if (!cell || !isValidCell(cell)) {
+          setStatus('The selected model cell ID is missing or invalid.');
+          return;
+        }
+        const apiKey = shell.dataset.apiKey ?? '';
+        if (!apiKey) {
+          setStatus(
+            'Polygon view is ready, but this deployment still needs a domain-restricted Google Maps browser key.',
+          );
+          return;
+        }
+
+        try {
+          const google = await loadGoogleMaps(apiKey);
+          const [latitude, longitude] = cellToLatLng(cell);
+          const path = cellToBoundary(cell).map(([lat, lng]) => ({ lat, lng }));
+          const map = new google.maps.Map(container, {
+            center: { lat: latitude, lng: longitude },
+            mapTypeId: 'terrain',
+            zoom: 7,
+          });
+          const polygon = new google.maps.Polygon({
+            fillColor: '#70e6ff',
+            fillOpacity: 0.28,
+            paths: path,
+            strokeColor: '#0b4764',
+            strokeOpacity: 0.95,
+            strokeWeight: 3,
+          });
+          polygon.setMap(map);
+          const bounds = new google.maps.LatLngBounds();
+          for (const point of path) bounds.extend(point);
+          map.fitBounds(bounds, 48);
+          setStatus(`Cell ${cell}`, 'ready');
+        } catch (error) {
+          setStatus(
+            error instanceof Error
+              ? error.message
+              : 'Google Maps could not display this cell.',
+          );
+        }
+      }
+
+      void renderPolygon();
+    </script>
+  </body>
+</html>

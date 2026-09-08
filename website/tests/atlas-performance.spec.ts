@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 interface AtlasPerformanceMetrics {
   interactionFrameRate: number;
@@ -7,6 +7,13 @@ interface AtlasPerformanceMetrics {
   warmArtifactMs: number;
   warmRenderMs: number;
   warmSelectMs: number;
+}
+
+async function chooseAtlasMap(page: Page, id: string): Promise<void> {
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  await page.locator(`[role="option"][data-map-id="${id}"]`).click();
 }
 
 test('atlas meets the warm-switch and interaction budget', async ({
@@ -41,17 +48,16 @@ test('atlas meets the warm-switch and interaction budget', async ({
       fetch('/data/atlas/g6pd-deficiency.observations.json'),
     ]);
   });
-  const entity = page.getByLabel('Variant or phenotype');
-  await entity.selectOption('g6pd-deficiency');
-  await expect(page.locator('[data-atlas-ready="false"]')).toBeVisible();
-  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
-    timeout: 45_000,
-  });
-  await entity.selectOption('hbs-rs334');
-  await expect(page.locator('[data-atlas-ready="false"]')).toBeVisible();
-  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
-    timeout: 10_000,
-  });
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await expect(
+    page.locator(
+      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+    ),
+  ).toBeVisible({ timeout: 45_000 });
+  await chooseAtlasMap(page, 'hbs-rs334');
+  await expect(
+    page.locator('[data-atlas-active="hbs-rs334"][data-atlas-ready="true"]'),
+  ).toBeVisible({ timeout: 10_000 });
   await page.evaluate(() => {
     (window as Window & { __atlasLongTasks?: number[] }).__atlasLongTasks = [];
   });
@@ -84,13 +90,14 @@ test('atlas meets the warm-switch and interaction budget', async ({
   await page.waitForTimeout(1_500);
 
   const warmStarted = Date.now();
-  await entity.selectOption('g6pd-deficiency');
+  await chooseAtlasMap(page, 'g6pd-deficiency');
   const warmSelected = Date.now();
-  await expect(page.locator('[data-atlas-ready="false"]')).toBeVisible();
   const warmRendering = Date.now();
-  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
-    timeout: 45_000,
-  });
+  await expect(
+    page.locator(
+      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+    ),
+  ).toBeVisible({ timeout: 45_000 });
   const warmReady = Date.now();
   const warmArtifactMs = warmReady - warmStarted;
 

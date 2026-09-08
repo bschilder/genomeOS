@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { Observation } from '../src/atlas/contracts';
 import {
+  DEFAULT_OBSERVATION_SIZE_RANGE,
+  MAX_OBSERVATION_MARKER_SIZE,
+  MIN_OBSERVATION_MARKER_SIZE,
   observationColor,
+  observationColorEncoding,
   observationDomains,
   observationSize,
   studyColor,
@@ -69,23 +73,74 @@ describe('observation visual encoding', () => {
     expect(() => validateObservationSizeRange('circle', [20, 5])).toThrow(
       'minimum',
     );
-    expect(() => validateObservationSizeRange('circle', [1, 20])).toThrow(
-      '4..40 pixels',
+    expect(() => validateObservationSizeRange('circle', [11, 20])).toThrow(
+      '12..96 pixels',
     );
-    expect(() => validateObservationSizeRange('hemisphere', [5, 200])).toThrow(
-      '10..500 visual kilometres',
+    expect(() => validateObservationSizeRange('hemisphere', [12, 97])).toThrow(
+      '12..96 pixels',
     );
   });
 
-  it('assigns stable study colors and keeps white as the default', () => {
+  it('uses a readable default and a wider selectable marker range', () => {
+    expect(MIN_OBSERVATION_MARKER_SIZE).toBe(12);
+    expect(MAX_OBSERVATION_MARKER_SIZE).toBe(96);
+    expect(DEFAULT_OBSERVATION_SIZE_RANGE).toEqual([12, 32]);
+  });
+
+  it('assigns stable study colors and keeps a solid color as the default', () => {
     expect(studyColor('map-study-1')).toBe(studyColor('map-study-1'));
     expect(studyColor('map-study-1')).not.toBe(studyColor('map-study-2'));
-    expect(observationColor(base, 'white', [0, 100])).toBe('#f4fbff');
+    expect(observationColor(base, 'solid', [0, 100])).toBe('#f4fbff');
     expect(observationColor(base, 'study', [0, 100])).toBe(
       studyColor(base.study_id),
     );
-    expect(observationColor(base, 'frequency', [0, 1])).not.toBe('#f4fbff');
+    expect(observationColor(base, 'gradient', [0, 1])).not.toBe('#f4fbff');
     expect(observationColor(base, 'ac', [0, 100])).not.toBe('#f4fbff');
+  });
+
+  it('uses logarithmic allele-count color scaling for skewed studies', () => {
+    expect(observationColor(observation({ ac: 9 }), 'ac', [0, 99])).toBe(
+      '#ad8bff',
+    );
+  });
+
+  it('supports user-selected solid and three-stop gradient colors', () => {
+    const colors = ['#112233', '#44aa88', '#ffcc66'] as const;
+    expect(observationColor(base, 'solid', [0, 1], '#abcdef', colors)).toBe(
+      '#abcdef',
+    );
+    expect(
+      observationColor(
+        observation({ ac: 50, an: 100 }),
+        'gradient',
+        [0, 1],
+        '#abcdef',
+        colors,
+      ),
+    ).toBe('#44aa88');
+  });
+
+  it('describes the metadata value represented by a marker color', () => {
+    expect(observationColorEncoding(base, 'ac', [0, 99])).toEqual({
+      color: observationColor(base, 'ac', [0, 99]),
+      label: 'Allele count (AC)',
+      value: 25,
+    });
+    expect(observationColorEncoding(base, 'gradient', [0, 1])).toEqual({
+      color: observationColor(base, 'gradient', [0, 1]),
+      label: 'Observed frequency',
+      value: 0.25,
+    });
+    expect(observationColorEncoding(base, 'study', [0, 1])).toEqual({
+      color: studyColor(base.study_id),
+      label: 'Study',
+      value: 'Example study',
+    });
+    expect(observationColorEncoding(base, 'solid', [0, 1])).toEqual({
+      color: '#f4fbff',
+      label: null,
+      value: null,
+    });
   });
 
   it('derives display domains only from source-backed observation fields', () => {

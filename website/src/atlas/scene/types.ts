@@ -11,8 +11,10 @@ import type { Metric, PaletteId } from '../visual-encoding';
 import type {
   BasemapId,
   CameraState,
+  EdgeColorMode,
   ExplorerSceneMode,
   LayerVisibility,
+  SurfaceGeometry,
   TerrainId,
 } from '../url-state';
 import type { ContextWarning } from './context-controller';
@@ -20,6 +22,10 @@ import type { ObservationPick } from './observation-layer';
 import type { SurfacePick } from './surface-layer';
 
 export type AtlasPick = SurfacePick | ObservationPick;
+export interface AtlasHover {
+  pick: AtlasPick;
+  screenPosition: { x: number; y: number };
+}
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
 
 export interface SceneCapabilities {
@@ -29,11 +35,14 @@ export interface SceneCapabilities {
 
 export interface ObservationPresentation {
   colorVariable: ObservationColorVariable;
-  hemisphereRange: ObservationSizeRange;
-  pointRange: ObservationSizeRange;
+  gradient: readonly [string, string, string];
+  opacity: number;
+  samplingAreaColor: string;
+  sizeRange: ObservationSizeRange;
   samplingAreas: boolean;
   shape: ObservationShape;
   sizeVariable: ObservationSizeVariable;
+  solidColor: string;
 }
 
 export interface AtlasSceneOptions {
@@ -53,12 +62,23 @@ export interface AtlasSceneController {
     palette: PaletteId,
     opacity: number,
     cellEdges: boolean,
+    edgeColorMode: EdgeColorMode,
+    edgeFixedColor: string,
+    geometry: SurfaceGeometry,
   ): Promise<void>;
   setObservationStyle(style: ObservationPresentation): Promise<void>;
   setBasemap(basemap: BasemapId): Promise<boolean>;
   setTerrain(terrain: TerrainId): Promise<boolean>;
   capabilities(): SceneCapabilities;
   setLayerVisibility(layers: LayerVisibility): void;
+  setMapPresentation(
+    basemapOpacity: number,
+    basemapBrightness: number,
+    dayNightLighting: boolean,
+  ): void;
+  setEarthOpacity(opacity: number): void;
+  setOceanColor(color: string): void;
+  setCountryBorderStyle(color: string, opacity: number): void;
   setElevation(enabled: boolean, exaggeration: number): Promise<void>;
   setSceneMode(mode: ExplorerSceneMode, reducedMotion: boolean): Promise<void>;
   setCamera(camera: CameraState, animated: boolean): void;
@@ -66,6 +86,7 @@ export interface AtlasSceneController {
   home(animated: boolean): void;
   zoom(direction: 'in' | 'out'): void;
   onPick(listener: (pick: AtlasPick | null) => void): () => void;
+  onHover(listener: (hover: AtlasHover | null) => void): () => void;
   onCameraSettled(listener: (camera: CameraState) => void): () => void;
   onContextStatus(listener: (status: ContextStatus) => void): () => void;
   onWarning(

@@ -1,12 +1,13 @@
-/** Basemap, surface, and terrain presentation controls for Atlas design §11. */
+/** Basemap, terrain, and globe presentation controls for Atlas design §11. */
 
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
 import type {
   BasemapId,
+  ExplorerSceneMode,
   ExplorerState,
   TerrainId,
 } from '../../atlas/url-state';
-import { defaultPalette, type PaletteId } from '../../atlas/visual-encoding';
+import { EarthStylePicker } from './EarthStylePicker';
 import { InfoTip } from './InfoTip';
 
 interface MapStyleControlsProps {
@@ -14,158 +15,197 @@ interface MapStyleControlsProps {
   disabled: boolean;
   state: ExplorerState;
   onBasemap: (value: BasemapId) => void;
-  onCellEdges: (visible: boolean) => void;
-  onPalette: (value: PaletteId) => void;
-  onSurfaceOpacity: (value: number) => void;
+  onBasemapBrightness: (value: number) => void;
+  onBasemapOpacity: (value: number) => void;
+  onCountryBorderColor: (value: string) => void;
+  onCountryBorderOpacity: (value: number) => void;
+  onDayNightLighting: (value: boolean) => void;
+  onEarthOpacity: (value: number) => void;
+  onOceanColor: (value: string) => void;
   onTerrain: (value: TerrainId) => void;
+  onView: (view: ExplorerSceneMode) => void;
 }
-
-const BASEMAPS: readonly [BasemapId, string][] = [
-  ['dark-streets', 'Dark streets'],
-  ['roads', 'Roads'],
-  ['aerial', 'Aerial'],
-  ['aerial-labels', 'Aerial + labels'],
-];
-const TERRAINS: readonly [TerrainId, string][] = [
-  ['smooth-globe', 'Smooth globe'],
-  ['world-terrain', 'World terrain'],
-];
-const PALETTES: readonly [PaletteId, string][] = [
-  ['genome', 'Genome'],
-  ['signal', 'Signal'],
-  ['viridis', 'Viridis'],
-  ['cividis', 'Cividis'],
-  ['plasma', 'Plasma'],
-];
 
 export function MapStyleControls({
   capabilities,
   disabled,
   state,
   onBasemap,
-  onCellEdges,
-  onPalette,
-  onSurfaceOpacity,
+  onBasemapBrightness,
+  onBasemapOpacity,
+  onCountryBorderColor,
+  onCountryBorderOpacity,
+  onDayNightLighting,
+  onEarthOpacity,
+  onOceanColor,
   onTerrain,
+  onView,
 }: MapStyleControlsProps) {
   return (
-    <div className="atlas-control-grid">
-      <div className="atlas-field">
-        <span className="atlas-field__title">
-          <label htmlFor="atlas-basemap">Basemap</label>
-          <InfoTip label="basemap">
-            Geographic imagery beneath the scientific map. Cesium ion styles
-            need the site’s read-only Cesium token.
-          </InfoTip>
-        </span>
-        <select
-          id="atlas-basemap"
-          value={state.basemap}
-          disabled={disabled}
-          onChange={(event) => onBasemap(event.target.value as BasemapId)}
-        >
-          {BASEMAPS.map(([value, label]) => (
-            <option
-              value={value}
-              key={value}
-              disabled={!capabilities.basemaps[value]}
-            >
-              {label}
-              {!capabilities.basemaps[value] ? ' (unavailable)' : ''}
-            </option>
-          ))}
-        </select>
-      </div>
+    <div className="atlas-control-grid atlas-control-grid--map">
+      <EarthStylePicker
+        basemap={state.basemap}
+        capabilities={capabilities}
+        disabled={disabled}
+        terrain={state.terrain}
+        onBasemap={onBasemap}
+        onTerrain={onTerrain}
+      />
 
-      <div className="atlas-field">
+      <div className="atlas-map-imagery-style">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-physical-terrain">Physical terrain</label>
-          <InfoTip label="physical terrain">
-            Earth’s topography. This is separate from statistical elevation,
-            which raises cells according to the selected metric.
+          <span>Basemap appearance</span>
+          <InfoTip label="basemap appearance">
+            Adjusts only the source map imagery. It does not alter the inferred
+            surface or measured observations.
           </InfoTip>
         </span>
-        <select
-          id="atlas-physical-terrain"
-          value={state.terrain}
-          disabled={disabled}
-          onChange={(event) => onTerrain(event.target.value as TerrainId)}
-        >
-          {TERRAINS.map(([value, label]) => (
-            <option
-              value={value}
-              key={value}
-              disabled={!capabilities.terrains[value]}
-            >
-              {label}
-              {!capabilities.terrains[value] ? ' (unavailable)' : ''}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div className="atlas-field">
-        <span className="atlas-field__title">
-          <label htmlFor="atlas-surface-palette">Surface palette</label>
-          <InfoTip label="surface palette">
-            Color changes presentation only. Posterior estimates default to
-            Genome; uncertainty defaults to Signal.
+        <label className="atlas-field atlas-field--range">
+          <span>Opacity · {Math.round(state.basemapOpacity * 100)}%</span>
+          <input
+            aria-label="Basemap opacity"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={Math.round(state.basemapOpacity * 100)}
+            disabled={disabled}
+            onChange={(event) =>
+              onBasemapOpacity(Number(event.target.value) / 100)
+            }
+          />
+        </label>
+        <label className="atlas-field atlas-field--range">
+          <span>Brightness · {Math.round(state.basemapBrightness * 100)}%</span>
+          <input
+            aria-label="Basemap brightness"
+            type="range"
+            min="0"
+            max="100"
+            step="1"
+            value={Math.round(state.basemapBrightness * 100)}
+            disabled={disabled}
+            onChange={(event) =>
+              onBasemapBrightness(Number(event.target.value) / 100)
+            }
+          />
+        </label>
+        <label className="atlas-color-control">
+          <span className="atlas-field__title">
+            <span>Ocean color</span>
+            <InfoTip label="ocean color">
+              Sets the globe color beneath translucent basemaps and imagery gaps
+              without recoloring scientific layers.
+            </InfoTip>
+          </span>
+          <input
+            aria-label="Ocean color"
+            type="color"
+            value={state.oceanColor}
+            disabled={disabled}
+            onChange={(event) => onOceanColor(event.target.value)}
+          />
+        </label>
+        <div className="atlas-check-row">
+          <label htmlFor="atlas-day-night-lighting">
+            <input
+              id="atlas-day-night-lighting"
+              type="checkbox"
+              checked={state.dayNightLighting}
+              disabled={disabled}
+              onChange={(event) => onDayNightLighting(event.target.checked)}
+            />
+            Day/night lighting
+          </label>
+          <InfoTip label="day and night lighting">
+            Shades the globe using Cesium’s current sun position. Turn it off to
+            keep basemap brightness uniform worldwide.
           </InfoTip>
-        </span>
-        <select
-          id="atlas-surface-palette"
-          value={state.surfacePalette}
-          disabled={disabled}
-          onChange={(event) => onPalette(event.target.value as PaletteId)}
-        >
-          {PALETTES.map(([value, label]) => (
-            <option value={value} key={value}>
-              {label}
-              {value === defaultPalette(state.metric)
-                ? ' (metric default)'
-                : ''}
-            </option>
-          ))}
-        </select>
+        </div>
       </div>
 
       <div className="atlas-field atlas-field--range">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-surface-opacity">
-            Surface opacity · {Math.round(state.surfaceOpacity * 100)}%
+          <label htmlFor="atlas-earth-opacity">
+            Earth opacity · {Math.round(state.earthOpacity * 100)}%
           </label>
-          <InfoTip label="surface opacity">
-            Lower opacity reveals more basemap context. It never changes the
-            modeled values.
+          <InfoTip label="Earth opacity">
+            Controls the globe beneath every rendered layer. Full opacity
+            prevents features on the far side of Earth from showing through.
           </InfoTip>
         </span>
         <input
-          id="atlas-surface-opacity"
+          id="atlas-earth-opacity"
           type="range"
-          min="0.45"
+          min="0.15"
           max="1"
           step="0.01"
-          value={state.surfaceOpacity}
+          value={state.earthOpacity}
           disabled={disabled}
-          onChange={(event) => onSurfaceOpacity(Number(event.target.value))}
+          onChange={(event) => onEarthOpacity(Number(event.target.value))}
         />
       </div>
 
-      <div className="atlas-check-row">
-        <label htmlFor="atlas-cell-edges">
+      <div className="atlas-country-border-style">
+        <span className="atlas-field__title">
+          <span>Country outlines</span>
+          <InfoTip label="country outline style">
+            Changes country-boundary color and transparency without changing the
+            scientific surface.
+          </InfoTip>
+        </span>
+        <label className="atlas-color-control">
+          <span>Color</span>
           <input
-            id="atlas-cell-edges"
-            type="checkbox"
-            checked={state.cellEdges}
+            aria-label="Country outline color"
+            type="color"
+            value={state.countryBorderColor}
             disabled={disabled}
-            onChange={(event) => onCellEdges(event.target.checked)}
+            onChange={(event) => onCountryBorderColor(event.target.value)}
           />
-          Cell edges
         </label>
-        <InfoTip label="cell edges">
-          Draws H3 top and vertical edges so elevated cells remain legible.
-        </InfoTip>
+        <label className="atlas-field atlas-field--range">
+          <span>Opacity · {Math.round(state.countryBorderOpacity * 100)}%</span>
+          <input
+            aria-label="Country outline opacity"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={state.countryBorderOpacity}
+            disabled={disabled}
+            onChange={(event) =>
+              onCountryBorderOpacity(Number(event.target.value))
+            }
+          />
+        </label>
       </div>
+
+      <fieldset className="atlas-fieldset atlas-fieldset--view">
+        <legend>
+          View
+          <InfoTip label="view">
+            Globe is 3D, Map is flat, and Perspective is an angled 2.5D view.
+            Statistical elevation requires an angled view.
+          </InfoTip>
+        </legend>
+        <div className="atlas-segments">
+          {(['globe', 'map', 'perspective'] as ExplorerSceneMode[]).map(
+            (view) => (
+              <label key={view}>
+                <input
+                  type="radio"
+                  name="view"
+                  value={view}
+                  checked={state.view === view}
+                  onChange={() => onView(view)}
+                />
+                <span>{view[0].toUpperCase() + view.slice(1)}</span>
+              </label>
+            ),
+          )}
+        </div>
+      </fieldset>
     </div>
   );
 }

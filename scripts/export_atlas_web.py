@@ -18,7 +18,15 @@ from typing import Any
 
 import pandas as pd
 
-from genomeos.observations.sources import map_g6pd, map_surveys
+from genomeos.observations.sources import (
+    afnd_carriers,
+    afnd_cytokines,
+    afnd_frequencies,
+    map_g6pd,
+    map_surveys,
+)
+from genomeos.publication.atlas_discovery import validate_artifact_discovery, validate_discovery_groups
+from genomeos.registry.sources import afnd as afnd_registry
 
 SCHEMA_VERSION = 1
 SUPPORT_STATES = {"observed", "interpolated", "prior_dominated", "unknown"}
@@ -64,7 +72,11 @@ OBSERVATION_FIELDS = {
 NATURAL_EARTH_REVISION = "ca96624a56bd078437bca8184e78163e5039ad19"
 NATURAL_EARTH_SOURCE = (
     "https://github.com/nvkelso/natural-earth-vector/blob/"
-    f"{NATURAL_EARTH_REVISION}/geojson/ne_110m_admin_0_countries.geojson"
+    f"{NATURAL_EARTH_REVISION}/geojson/ne_50m_admin_0_countries.geojson"
+)
+NATURAL_EARTH_PLACES_SOURCE = (
+    "https://github.com/nvkelso/natural-earth-vector/blob/"
+    f"{NATURAL_EARTH_REVISION}/geojson/ne_50m_populated_places.geojson"
 )
 
 
@@ -85,9 +97,7 @@ def _require_fields(value: Mapping[str, Any], fields: set[str], context: str) ->
 
 
 def _canonical_bytes(value: Any) -> bytes:
-    return (
-        json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n"
-    ).encode()
+    return (json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n").encode()
 
 
 def _write_json(path: Path, value: Any, *, refuse_conflict: bool = False) -> str:
@@ -130,9 +140,7 @@ def _validated_surface(
     if missing:
         raise ValueError(f"{artifact_dir}: missing surface columns {sorted(missing)}")
     if len(cells) != int(manifest["n_cells"]):
-        raise ValueError(
-            f"{artifact_dir}: n_cells={manifest['n_cells']} but parquet has {len(cells)} rows"
-        )
+        raise ValueError(f"{artifact_dir}: n_cells={manifest['n_cells']} but parquet has {len(cells)} rows")
     if cells["h3_index"].duplicated().any():
         raise ValueError(f"{artifact_dir}: h3_index must be unique")
 
@@ -152,9 +160,7 @@ def _validated_surface(
     actual_support = cells["support"].value_counts().to_dict()
     declared_support = {str(key): int(value) for key, value in manifest["support_counts"].items()}
     if actual_support != declared_support:
-        raise ValueError(
-            f"{artifact_dir}: support_counts {declared_support} != parquet {actual_support}"
-        )
+        raise ValueError(f"{artifact_dir}: support_counts {declared_support} != parquet {actual_support}")
 
     for field in (
         "post_mean",
@@ -173,6 +179,10 @@ def _validated_surface(
         raise ValueError(f"{artifact_dir}: credible interval bounds must be in [0, 1]")
     if (cells["post_sd"] < 0).any():
         raise ValueError(f"{artifact_dir}: post_sd must be non-negative")
+    if (cells["posterior_contraction"] < 0).any():
+        raise ValueError(f"{artifact_dir}: posterior_contraction must be non-negative")
+    if (cells["dist_nearest_obs_km"] < 0).any():
+        raise ValueError(f"{artifact_dir}: dist_nearest_obs_km must be non-negative")
     if ((cells["q025"] > cells["post_mean"]) | (cells["post_mean"] > cells["q975"])).any():
         raise ValueError(f"{artifact_dir}: q025 <= post_mean <= q975 is required")
     return manifest, cells
@@ -192,6 +202,8 @@ def _load_observations(
     observation_source: str,
     hbs_csv: Path,
     g6pd_csv: Path,
+    afnd_frequencies_tsv: Path | None,
+    afnd_populations_tsv: Path | None,
     ingest_version: str,
 ) -> tuple[pd.DataFrame, pd.DataFrame, str, str]:
     if observation_source == "map_hbs_surveys.csv":
@@ -206,6 +218,66 @@ def _load_observations(
         prefix = "map-g6pd:"
         source_url = "raw/map_g6pd_surveys.csv"
         study_label_field = "citation"
+    elif observation_source in {
+        "afnd_frequencies",
+        "afnd_cytokines",
+        "afnd_carriers",
+    }:
+        if afnd_frequencies_tsv is None or afnd_populations_tsv is None:
+            raise ValueError(f"{observation_source}: AFND frequency and population paths required")
+        if observation_source == "afnd_frequencies":
+            observations, _ = afnd_frequencies.load(
+                afnd_frequencies_tsv,
+                afnd_populations_tsv,
+                ingest_version,
+            )
+        elif observation_source == "afnd_cytokines":
+            observations, _ = afnd_cytokines.load(
+                afnd_frequencies_tsv,
+                afnd_populations_tsv,
+                ingest_version,
+            )
+        else:
+            carriers, _ = afnd_carriers.load(
+                afnd_frequencies_tsv,
+                afnd_populations_tsv,
+                ingest_version,
+            )
+            observations = afnd_carriers.as_binomial(carriers)
+        raw = pd.read_csv(
+            afnd_populations_tsv,
+            sep="\t",
+            dtype=str,
+            keep_default_na=False,
+        )
+        _require_fields(raw.iloc[0].to_dict(), {"pop_id", "population"}, str(afnd_populations_tsv))
+        raw["population_id"] = raw["pop_id"].map(afnd_registry.population_id)
+        raw["country"] = raw["population"]
+        raw["citation"] = raw["population"].map(
+            lambda value: f"Allele Frequency Net Database (AFND): {value}"
+        )
+        raw["study_label"] = raw["population"]
+        raw = raw.set_index("population_id")
+        evidence_rows: list[dict[str, Any]] = []
+        for record in observations.to_dict(orient="records"):
+            population_id = str(record["population_id"])
+            if population_id not in raw.index:
+                raise ValueError(f"{observation_source}: {population_id} has no AFND population evidence")
+            population = raw.loc[population_id]
+            evidence_rows.append(
+                {
+                    "citation": population["citation"],
+                    "country": population["country"],
+                    "source_locator": (
+                        f"AFND {record['variant_id']} measurement for {population['population']}"
+                    ),
+                    "source_record_id": record["source_record_id"],
+                    "source_url": population.get("source_url", ""),
+                    "study_label": population["study_label"],
+                }
+            )
+        evidence = pd.DataFrame(evidence_rows).set_index("source_record_id")
+        return observations, evidence, "raw/afnd_frequencies.tsv", "afnd:"
     else:
         raise ValueError(f"unsupported observation source {observation_source!r}")
 
@@ -257,6 +329,13 @@ def _serialize_observations(
         lon = float(record["lon"])
         if not (-90 <= lat <= 90 and -180 <= lon <= 180):
             raise ValueError(f"observation {source_record_id}: invalid coordinates")
+        evidence_url = source.get("source_url", "")
+        record_url = (
+            str(evidence_url).strip()
+            if isinstance(evidence_url, str) and evidence_url.strip()
+            else f"https://huggingface.co/datasets/{dataset}/blob/{revision}/{source_url}"
+        )
+        source_locator = source.get("source_locator", f"MAP survey {source_record_id.split(':', 1)[1]}")
         rows.append(
             {
                 "ac": int(record["ac"]),
@@ -264,20 +343,16 @@ def _serialize_observations(
                 "assay": str(record["assay"]),
                 "citation_text": citation.strip(),
                 "cohort_id": str(record["cohort_id"]),
-                "disease_ascertainment_excluded": bool(
-                    record["disease_ascertainment_excluded"]
-                ),
+                "disease_ascertainment_excluded": bool(record["disease_ascertainment_excluded"]),
                 "ingest_version": str(record["ingest_version"]),
                 "lat": lat,
                 "lon": lon,
                 "population_label": population_label.strip(),
                 "radius_km": float(radius),
                 "sampling_design": str(record["sampling_design"]),
-                "source_locator": f"MAP survey {source_record_id.split(':', 1)[1]}",
+                "source_locator": str(source_locator),
                 "source_record_id": source_record_id,
-                "source_url": (
-                    f"https://huggingface.co/datasets/{dataset}/blob/{revision}/{source_url}"
-                ),
+                "source_url": record_url,
                 "study_id": study_id.strip(),
                 "study_label": study_label.strip(),
             }
@@ -313,20 +388,20 @@ def _surface_payload(
         for record in selected.to_dict(orient="records")
     ]
     identity = {
-            "artifact_format": int(manifest["artifact_format"]),
-            "data_version": str(manifest["data_version"]),
-            "entity_type": str(variant_metadata["entity_type"]),
-            "hf_dataset": hf_dataset,
-            "hf_revision": hf_revision,
-            "id": artifact_id,
-            "label": str(variant_metadata["label"]),
-            "measurement": str(variant_metadata["measurement"]),
-            "metric_domains": domains,
-            "model_version": str(manifest["model_version"]),
-            "registry_version": registry_version,
-            "resolution": int(manifest["resolution"]),
-            "variant_id": str(manifest["variant_id"]),
-        }
+        "artifact_format": int(manifest["artifact_format"]),
+        "data_version": str(manifest["data_version"]),
+        "entity_type": str(variant_metadata["entity_type"]),
+        "hf_dataset": hf_dataset,
+        "hf_revision": hf_revision,
+        "id": artifact_id,
+        "label": str(variant_metadata["label"]),
+        "measurement": str(variant_metadata["measurement"]),
+        "metric_domains": domains,
+        "model_version": str(manifest["model_version"]),
+        "registry_version": registry_version,
+        "resolution": int(manifest["resolution"]),
+        "variant_id": str(manifest["variant_id"]),
+    }
     if int(manifest["artifact_format"]) == 2:
         identity.update(
             {
@@ -355,9 +430,7 @@ def _external_resources(
     if not isinstance(declared, list):
         raise ValueError(f"allowlist artifact {artifact_id}: external_resources must be a list")
     if declared and entity_type != "variant":
-        raise ValueError(
-            f"allowlist artifact {artifact_id}: external lookup requires entity_type=variant"
-        )
+        raise ValueError(f"allowlist artifact {artifact_id}: external lookup requires entity_type=variant")
     resources: list[dict[str, Any]] = []
     written: list[Path] = []
     seen: set[str] = set()
@@ -371,21 +444,16 @@ def _external_resources(
         )
         source = str(resource["source"])
         if source not in {"gnomad", "dbsnp"} or source in seen:
-            raise ValueError(
-                f"allowlist artifact {artifact_id}: external source must be unique gnomad/dbsnp"
-            )
+            raise ValueError(f"allowlist artifact {artifact_id}: external source must be unique gnomad/dbsnp")
         seen.add(source)
         normalized = str(resource["normalized_variant_id"])
         if normalized != variant_id:
             raise ValueError(
-                f"allowlist artifact {artifact_id}: external normalized variant does not match "
-                "the artifact"
+                f"allowlist artifact {artifact_id}: external normalized variant does not match the artifact"
             )
         cache_file = Path(str(resource["cache_file"]))
         if cache_file.is_absolute() or ".." in cache_file.parts:
-            raise ValueError(
-                f"allowlist artifact {artifact_id}: cache_file must be a safe relative path"
-            )
+            raise ValueError(f"allowlist artifact {artifact_id}: cache_file must be a safe relative path")
         cache_payload = _read_json(source_root / cache_file)
         _require_fields(
             cache_payload,
@@ -430,6 +498,8 @@ def export_catalog(
     out_dir: Path,
     hf_revision: str,
     requested_ids: Iterable[str] | None = None,
+    afnd_frequencies_tsv: Path | None = None,
+    afnd_populations_tsv: Path | None = None,
 ) -> list[Path]:
     """Export the requested allowlisted artifacts and return every written JSON path."""
     source_root = Path(source_root)
@@ -458,14 +528,28 @@ def export_catalog(
     catalog_metadata = _read_json(source_root / "catalog-metadata.json")
     _require_fields(
         catalog_metadata,
-        {"artifact_version", "registry_version", "created_at", "assumptions", "variants"},
+        {
+            "artifact_version",
+            "registry_version",
+            "created_at",
+            "discovery",
+            "assumptions",
+            "discovery_groups",
+            "variants",
+        },
         str(source_root / "catalog-metadata.json"),
     )
+    discovery_groups = validate_discovery_groups(catalog_metadata["discovery_groups"])
+    discovery_group_ids = {str(group["id"]) for group in discovery_groups}
+    discovery_by_variant = catalog_metadata["discovery"]
+    if not isinstance(discovery_by_variant, Mapping):
+        raise ValueError("catalog discovery must be an object keyed by variant_id")
     out_dir.mkdir(parents=True, exist_ok=True)
     artifacts: list[dict[str, Any]] = []
     registry_versions: set[str] = set()
     written: list[Path] = []
     hf_dataset = str(allowlist["hf_dataset"])
+    observation_cache: dict[str, tuple[pd.DataFrame, pd.DataFrame, str, str]] = {}
 
     for artifact_id in selected_ids:
         entry = by_id[artifact_id]
@@ -487,9 +571,14 @@ def export_catalog(
             {"label", "entity_type", "measurement", "assumptions"},
             f"catalog variant {variant_id}",
         )
-        registry_version = str(
-            variant_metadata.get("registry_version", catalog_metadata["registry_version"])
+        if variant_id not in discovery_by_variant:
+            raise ValueError(f"catalog variant {variant_id}: missing discovery metadata")
+        discovery = validate_artifact_discovery(
+            discovery_by_variant[variant_id],
+            context=f"catalog variant {variant_id}",
+            group_ids=discovery_group_ids,
         )
+        registry_version = str(variant_metadata.get("registry_version", catalog_metadata["registry_version"]))
         if not registry_version:
             raise ValueError(f"catalog variant {variant_id}: registry_version must be non-empty")
         registry_versions.add(registry_version)
@@ -501,12 +590,18 @@ def export_catalog(
         observation_source = entry["observation_source"]
         observation_rows: list[dict[str, Any]] | None = None
         if observation_source is not None:
-            observations, evidence, raw_source_url, _ = _load_observations(
-                str(observation_source),
-                Path(hbs_csv),
-                Path(g6pd_csv),
-                str(manifest["data_version"]),
-            )
+            source_key = str(observation_source)
+            if source_key not in observation_cache:
+                observation_cache[source_key] = _load_observations(
+                    source_key,
+                    Path(hbs_csv),
+                    Path(g6pd_csv),
+                    afnd_frequencies_tsv,
+                    afnd_populations_tsv,
+                    str(manifest["data_version"]),
+                )
+            loaded, evidence, raw_source_url, _ = observation_cache[source_key]
+            observations = loaded[loaded["variant_id"] == variant_id].reset_index(drop=True)
             if len(observations) != int(manifest["n_observations"]):
                 raise ValueError(
                     f"{artifact_id}: manifest n_observations={manifest['n_observations']} but "
@@ -555,17 +650,14 @@ def export_catalog(
             source_root=source_root,
             out_dir=out_dir,
         )
-        written.extend(
-            path
-            for path in (surface_path, observations_path, manifest_path)
-            if path is not None
-        )
+        written.extend(path for path in (surface_path, observations_path, manifest_path) if path is not None)
         written.extend(external_paths)
         artifacts.append(
             {
                 **surface["artifact"],
                 "assumptions": list(variant_metadata["assumptions"]),
                 "correlation_range_km": float(manifest["correlation_range_km"]),
+                "discovery": discovery,
                 "downloads": {
                     "manifest": {
                         "label": "Artifact manifest",
@@ -596,12 +688,8 @@ def export_catalog(
                 "n_observations": int(manifest["n_observations"]),
                 "observations_available": observation_rows is not None,
                 "observations_sha256": observation_hash,
-                "observations_url": (
-                    observations_path.name if observations_path is not None else None
-                ),
-                "support_counts": {
-                    str(key): int(value) for key, value in manifest["support_counts"].items()
-                },
+                "observations_url": (observations_path.name if observations_path is not None else None),
+                "support_counts": {str(key): int(value) for key, value in manifest["support_counts"].items()},
                 "surface_sha256": surface_hash,
                 "surface_url": surface_path.name,
             }
@@ -618,10 +706,19 @@ def export_catalog(
                 "license": "public_domain",
                 "revision": NATURAL_EARTH_REVISION,
                 "source_url": NATURAL_EARTH_SOURCE,
-                "url": "ne-110m-admin-0.geojson",
-            }
+                "url": "ne-50m-admin-0.geojson",
+            },
+            {
+                "id": "natural-earth-populated-places",
+                "label": "Natural Earth populated places",
+                "license": "public_domain",
+                "revision": NATURAL_EARTH_REVISION,
+                "source_url": NATURAL_EARTH_PLACES_SOURCE,
+                "url": "ne-50m-populated-places.json",
+            },
         ],
         "created_at": str(catalog_metadata["created_at"]),
+        "discovery_groups": discovery_groups,
         "hf_dataset": hf_dataset,
         "hf_revision": hf_revision,
         "registry_versions": sorted(registry_versions),
@@ -638,6 +735,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--store", type=Path, required=True)
     parser.add_argument("--hbs-csv", type=Path, required=True)
     parser.add_argument("--g6pd-csv", type=Path, required=True)
+    parser.add_argument("--afnd-frequencies", type=Path)
+    parser.add_argument("--afnd-populations", type=Path)
     parser.add_argument("--allowlist", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     return parser
@@ -653,6 +752,8 @@ def main() -> int:
         allowlist_path=args.allowlist,
         out_dir=args.out,
         hf_revision=str(allowlist.get("hf_revision", "")),
+        afnd_frequencies_tsv=args.afnd_frequencies,
+        afnd_populations_tsv=args.afnd_populations,
     )
     print(f"exported {len(paths) - 1} artifact payloads and catalog.json")
     return 0

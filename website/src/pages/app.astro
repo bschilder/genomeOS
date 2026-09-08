@@ -10,7 +10,7 @@ import { sitePath } from '../lib/paths';
 >
   <AtlasExplorer
     client:load
-    cesiumToken={process.env.CESIUM_TOKEN ?? ''}
+    cesiumToken={import.meta.env.CESIUM_TOKEN ?? ''}
     dataBaseUrl={sitePath('/data/atlas/')}
   />
 </SiteLayout>

@@ -1,17 +1,31 @@
 /** Deterministic measured-observation encodings for Atlas design §11. */
 
 import type { Observation } from './contracts';
-import { colorAtPosition, type MetricDomain } from './visual-encoding';
+import {
+  colorAtPosition,
+  colorAtStops,
+  type MetricDomain,
+} from './visual-encoding';
 
 export type ObservationSizeVariable = 'fixed' | 'frequency' | 'ac' | 'an';
-export type ObservationColorVariable = 'white' | 'study' | 'frequency' | 'ac';
+export type ObservationColorVariable = 'solid' | 'gradient' | 'study' | 'ac';
 export type ObservationShape = 'circle' | 'hemisphere' | 'pin';
 export type ObservationSizeRange = readonly [number, number];
+
+export const MIN_OBSERVATION_MARKER_SIZE = 12;
+export const MAX_OBSERVATION_MARKER_SIZE = 96;
+export const DEFAULT_OBSERVATION_SIZE_RANGE: ObservationSizeRange = [12, 32];
 
 export interface ObservationDomains {
   ac: MetricDomain;
   an: MetricDomain;
   frequency: MetricDomain;
+}
+
+export interface ObservationColorEncoding {
+  color: string;
+  label: 'Allele count (AC)' | 'Observed frequency' | 'Study' | null;
+  value: number | string | null;
 }
 
 const STUDY_COLORS = [
@@ -25,6 +39,19 @@ const STUDY_COLORS = [
   '#a7f3d0',
 ] as const;
 
+export const DEFAULT_OBSERVATION_SOLID_COLOR = '#f4fbff';
+export const DEFAULT_OBSERVATION_GRADIENT = [
+  '#24144b',
+  '#ad8bff',
+  '#f4c86a',
+] as const;
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+
+function validateColor(color: string): string {
+  if (!HEX_COLOR.test(color)) throw new Error(`invalid marker color ${color}`);
+  return color.toLowerCase();
+}
+
 function validateDomain([lower, upper]: MetricDomain): void {
   if (!Number.isFinite(lower) || !Number.isFinite(upper) || lower > upper) {
     throw new Error('observation encoding domain must be finite and ordered');
@@ -34,16 +61,22 @@ function validateDomain([lower, upper]: MetricDomain): void {
 function fraction(
   value: number,
   domain: MetricDomain,
-  squareRoot: boolean,
+  scale: 'linear' | 'logarithmic' | 'square-root',
 ): number {
   validateDomain(domain);
   const [lower, upper] = domain;
   if (lower === upper) return 0.5;
   const bounded = Math.min(upper, Math.max(lower, value));
-  if (squareRoot) {
+  if (scale === 'square-root') {
     return (
       (Math.sqrt(bounded) - Math.sqrt(lower)) /
       (Math.sqrt(upper) - Math.sqrt(lower))
+    );
+  }
+  if (scale === 'logarithmic') {
+    return (
+      (Math.log1p(bounded) - Math.log1p(lower)) /
+      (Math.log1p(upper) - Math.log1p(lower))
     );
   }
   return (bounded - lower) / (upper - lower);
@@ -80,7 +113,7 @@ export function observationDomains(
 }
 
 export function validateObservationSizeRange(
-  shape: ObservationShape,
+  _shape: ObservationShape,
   [minimum, maximum]: ObservationSizeRange,
 ): void {
   if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) {
@@ -89,15 +122,13 @@ export function validateObservationSizeRange(
   if (minimum > maximum) {
     throw new Error('observation size minimum must not exceed maximum');
   }
-  if (shape === 'hemisphere') {
-    if (minimum < 10 || maximum > 500) {
-      throw new Error(
-        'hemisphere size must stay within 10..500 visual kilometres',
-      );
-    }
-  } else if (minimum < 4 || maximum > 40) {
-    throw new Error(`${shape} size must stay within 4..40 pixels`);
-  }
+  if (
+    minimum < MIN_OBSERVATION_MARKER_SIZE ||
+    maximum > MAX_OBSERVATION_MARKER_SIZE
+  )
+    throw new Error(
+      `marker size must stay within ${MIN_OBSERVATION_MARKER_SIZE}..${MAX_OBSERVATION_MARKER_SIZE} pixels`,
+    );
 }
 
 export function observationSize(
@@ -121,7 +152,7 @@ export function observationSize(
   const position = fraction(
     value,
     domain,
-    variable === 'ac' || variable === 'an',
+    variable === 'ac' || variable === 'an' ? 'square-root' : 'linear',
   );
   return minimum + position * (maximum - minimum);
 }
@@ -136,18 +167,52 @@ export function studyColor(studyId: string): string {
   return STUDY_COLORS[(hash >>> 0) % STUDY_COLORS.length];
 }
 
+export function observationColorEncoding(
+  observation: Observation,
+  variable: ObservationColorVariable,
+  domain: MetricDomain,
+  solidColor = DEFAULT_OBSERVATION_SOLID_COLOR,
+  gradient: readonly string[] = DEFAULT_OBSERVATION_GRADIENT,
+): ObservationColorEncoding {
+  if (variable === 'solid')
+    return { color: validateColor(solidColor), label: null, value: null };
+  if (variable === 'study')
+    return {
+      color: studyColor(observation.study_id),
+      label: 'Study',
+      value: observation.study_label,
+    };
+  if (variable === 'gradient') {
+    const colors = gradient.map(validateColor);
+    const value = observedFrequency(observation);
+    return {
+      color: colorAtStops(colors, fraction(value, domain, 'linear')),
+      label: 'Observed frequency',
+      value,
+    };
+  }
+  return {
+    color: colorAtPosition(
+      'signal',
+      fraction(observation.ac, domain, 'logarithmic'),
+    ),
+    label: 'Allele count (AC)',
+    value: observation.ac,
+  };
+}
+
 export function observationColor(
   observation: Observation,
   variable: ObservationColorVariable,
   domain: MetricDomain,
+  solidColor = DEFAULT_OBSERVATION_SOLID_COLOR,
+  gradient: readonly string[] = DEFAULT_OBSERVATION_GRADIENT,
 ): string {
-  if (variable === 'white') return '#f4fbff';
-  if (variable === 'study') return studyColor(observation.study_id);
-  const value =
-    variable === 'frequency' ? observedFrequency(observation) : observation.ac;
-  const position = fraction(value, domain, variable === 'ac');
-  return colorAtPosition(
-    variable === 'frequency' ? 'genome' : 'signal',
-    position,
-  );
+  return observationColorEncoding(
+    observation,
+    variable,
+    domain,
+    solidColor,
+    gradient,
+  ).color;
 }

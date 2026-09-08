@@ -32,170 +32,170 @@
     {
       "id": "cyt-il-10-1082-g",
       "variant_id": "cyt:il-10-1082-g",
-      "artifact_dir": "cyt__il-10-1082-g__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "cyt__il-10-1082-g__v3__afnd-2026-08",
+      "observation_source": "afnd_cytokines"
     },
     {
       "id": "cyt-il-10-819-t",
       "variant_id": "cyt:il-10-819-t",
-      "artifact_dir": "cyt__il-10-819-t__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "cyt__il-10-819-t__v3__afnd-2026-08",
+      "observation_source": "afnd_cytokines"
     },
     {
       "id": "cyt-il-6-174-c",
       "variant_id": "cyt:il-6-174-c",
-      "artifact_dir": "cyt__il-6-174-c__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "cyt__il-6-174-c__v3__afnd-2026-08",
+      "observation_source": "afnd_cytokines"
     },
     {
       "id": "cyt-tnfalpha-308-a",
       "variant_id": "cyt:tnfalpha-308-a",
-      "artifact_dir": "cyt__tnfalpha-308-a__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "cyt__tnfalpha-308-a__v3__afnd-2026-08",
+      "observation_source": "afnd_cytokines"
     },
     {
       "id": "hla-a-02-01",
       "variant_id": "hla:a-02-01",
-      "artifact_dir": "hla__a-02-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__a-02-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-a-26-01",
       "variant_id": "hla:a-26-01",
-      "artifact_dir": "hla__a-26-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__a-26-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-a-32-01",
       "variant_id": "hla:a-32-01",
-      "artifact_dir": "hla__a-32-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__a-32-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-b-40-01",
       "variant_id": "hla:b-40-01",
-      "artifact_dir": "hla__b-40-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__b-40-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-b-40-02",
       "variant_id": "hla:b-40-02",
-      "artifact_dir": "hla__b-40-02__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__b-40-02__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-b-58-01",
       "variant_id": "hla:b-58-01",
-      "artifact_dir": "hla__b-58-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__b-58-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-c-03-03",
       "variant_id": "hla:c-03-03",
-      "artifact_dir": "hla__c-03-03__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__c-03-03__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-c-06-02",
       "variant_id": "hla:c-06-02",
-      "artifact_dir": "hla__c-06-02__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__c-06-02__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-c-07-02",
       "variant_id": "hla:c-07-02",
-      "artifact_dir": "hla__c-07-02__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__c-07-02__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-dpb1-04-01",
       "variant_id": "hla:dpb1-04-01",
-      "artifact_dir": "hla__dpb1-04-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__dpb1-04-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-dpb1-04-02",
       "variant_id": "hla:dpb1-04-02",
-      "artifact_dir": "hla__dpb1-04-02__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__dpb1-04-02__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-dpb1-13-01",
       "variant_id": "hla:dpb1-13-01",
-      "artifact_dir": "hla__dpb1-13-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__dpb1-13-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-dqb1-03-01",
       "variant_id": "hla:dqb1-03-01",
-      "artifact_dir": "hla__dqb1-03-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__dqb1-03-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-dqb1-06-02",
       "variant_id": "hla:dqb1-06-02",
-      "artifact_dir": "hla__dqb1-06-02__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__dqb1-06-02__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-drb1-01-01",
       "variant_id": "hla:drb1-01-01",
-      "artifact_dir": "hla__drb1-01-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__drb1-01-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-drb1-04-03",
       "variant_id": "hla:drb1-04-03",
-      "artifact_dir": "hla__drb1-04-03__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__drb1-04-03__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-drb1-07-01",
       "variant_id": "hla:drb1-07-01",
-      "artifact_dir": "hla__drb1-07-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__drb1-07-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-drb1-11-01",
       "variant_id": "hla:drb1-11-01",
-      "artifact_dir": "hla__drb1-11-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__drb1-11-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-drb1-14-01",
       "variant_id": "hla:drb1-14-01",
-      "artifact_dir": "hla__drb1-14-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__drb1-14-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "hla-drb1-15-01",
       "variant_id": "hla:drb1-15-01",
-      "artifact_dir": "hla__drb1-15-01__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "hla__drb1-15-01__v3__afnd-2026-08",
+      "observation_source": "afnd_frequencies"
     },
     {
       "id": "kir-2dl1",
       "variant_id": "kir:2dl1",
-      "artifact_dir": "kir__2dl1__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "kir__2dl1__v3__afnd-2026-08",
+      "observation_source": "afnd_carriers"
     },
     {
       "id": "kir-2dl2",
       "variant_id": "kir:2dl2",
-      "artifact_dir": "kir__2dl2__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "kir__2dl2__v3__afnd-2026-08",
+      "observation_source": "afnd_carriers"
     },
     {
       "id": "kir-2ds1",
       "variant_id": "kir:2ds1",
-      "artifact_dir": "kir__2ds1__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "kir__2ds1__v3__afnd-2026-08",
+      "observation_source": "afnd_carriers"
     },
     {
       "id": "kir-3ds1",
       "variant_id": "kir:3ds1",
-      "artifact_dir": "kir__3ds1__v2__afnd-2026-08",
-      "observation_source": null
+      "artifact_dir": "kir__3ds1__v3__afnd-2026-08",
+      "observation_source": "afnd_carriers"
     }
   ]
 }

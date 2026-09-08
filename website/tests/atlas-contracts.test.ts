@@ -74,6 +74,35 @@ const downloads = {
   },
 };
 
+const discovery = {
+  aliases: ['sickle hemoglobin', 'HBB'],
+  group_id: 'red-blood-cell-disorders',
+  map_measures: 'Frequency of the HbS allele in sampled populations.',
+  references: [
+    {
+      label: 'MedlinePlus Genetics: sickle cell disease',
+      url: 'https://medlineplus.gov/genetics/condition/sickle-cell-disease/',
+    },
+  ],
+  relevance: 'HbS is the causal hemoglobin variant in sickle cell disease.',
+  symbol_expansion: 'Hemoglobin S, HBB rs334',
+};
+
+const discoveryGroups = [
+  {
+    biology: 'These maps describe variation affecting red blood cells.',
+    id: 'red-blood-cell-disorders',
+    label: 'Red blood cell disorders',
+    references: [
+      {
+        label: 'NIH overview',
+        url: 'https://www.nhlbi.nih.gov/health/anemia',
+      },
+    ],
+    summary: 'Hemoglobin and red-cell enzyme traits.',
+  },
+];
+
 describe('atlas browser contracts', () => {
   it('accepts a complete source-backed observation', () => {
     const parsed = observationArtifactSchema.parse({
@@ -137,6 +166,23 @@ describe('atlas browser contracts', () => {
     }
   });
 
+  it('accepts posterior-to-prior uncertainty ratios above one', () => {
+    const parsed = surfaceArtifactSchema.parse({
+      artifact,
+      cells: [{ ...cell, posterior_contraction: 1.37 }],
+      schema_version: 1,
+    });
+
+    expect(parsed.cells[0].posterior_contraction).toBe(1.37);
+    expect(() =>
+      surfaceArtifactSchema.parse({
+        artifact,
+        cells: [{ ...cell, posterior_contraction: -0.01 }],
+        schema_version: 1,
+      }),
+    ).toThrow();
+  });
+
   it('requires a source-backed study identity and label', () => {
     const { study_id: _studyId, ...withoutStudyId } = observation;
     const { study_label: _studyLabel, ...withoutStudyLabel } = observation;
@@ -162,6 +208,7 @@ describe('atlas browser contracts', () => {
       ...artifact,
       assumptions: ['fixture'],
       correlation_range_km: 400,
+      discovery,
       downloads,
       external_resources: [
         {
@@ -188,13 +235,17 @@ describe('atlas browser contracts', () => {
       assumptions: ['fixture'],
       context_sources: [],
       created_at: '2026-09-06T00:00:00Z',
+      discovery_groups: discoveryGroups,
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
       schema_version: 1,
     };
 
-    expect(atlasCatalogSchema.parse(catalog).artifacts).toHaveLength(1);
+    const parsed = atlasCatalogSchema.parse(catalog);
+    expect(parsed.artifacts).toHaveLength(1);
+    expect(parsed.discovery_groups[0].label).toBe('Red blood cell disorders');
+    expect(parsed.artifacts[0].discovery.symbol_expansion).toContain('HBB');
     expect(() =>
       atlasCatalogSchema.parse({ ...catalog, schema_version: 2 }),
     ).toThrow();
@@ -217,6 +268,7 @@ describe('atlas browser contracts', () => {
       ...artifact,
       assumptions: ['AFND observation publication pending corpus rebuild'],
       correlation_range_km: 400,
+      discovery,
       downloads: { ...downloads, observations: null },
       entity_type: 'gene',
       external_resources: [],
@@ -238,6 +290,7 @@ describe('atlas browser contracts', () => {
       assumptions: ['fixture'],
       context_sources: [],
       created_at: '2026-09-06T00:00:00Z',
+      discovery_groups: discoveryGroups,
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
@@ -279,5 +332,16 @@ describe('atlas browser contracts', () => {
         ],
       }),
     ).toThrow(/verified variant identity/);
+    expect(() =>
+      atlasCatalogSchema.parse({
+        ...catalog,
+        artifacts: [
+          {
+            ...surfaceOnly,
+            discovery: { ...discovery, group_id: 'missing-group' },
+          },
+        ],
+      }),
+    ).toThrow(/known discovery group/);
   });
 });

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 
@@ -7,6 +7,13 @@ test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
 test.afterEach(async ({ page }) => {
   await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
+
+async function chooseAtlasMap(page: Page, id: string): Promise<void> {
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  await page.locator(`[role="option"][data-map-id="${id}"]`).click();
+}
 
 const topLevelRoutes = [
   '/',
@@ -50,17 +57,34 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
   isMobile,
 }) => {
   await page.goto('/');
+  const header = page.locator('.site-header');
+  const launchAtlas = header.getByRole('link', { name: 'Launch Atlas' });
+  await expect(launchAtlas).toHaveAttribute('href', '/app/');
+  await expect(header.getByRole('link', { name: 'Preview' })).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'View genomeOS on GitHub' }).first(),
   ).toHaveAttribute('href', 'https://github.com/bschilder/genomeOS');
 
   if (isMobile) {
     await page.getByText('Menu', { exact: true }).click();
+    await expect(launchAtlas).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Mobile navigation' })
       .getByRole('link', { name: 'Working groups' })
       .click();
   } else {
+    const headerLinks = await header.locator('a').allInnerTexts();
+    expect(headerLinks.indexOf('Technical docs')).toBeLessThan(
+      headerLinks.indexOf('Launch Atlas'),
+    );
+    expect(headerLinks.indexOf('Launch Atlas')).toBeLessThan(
+      headerLinks.indexOf('GitHub'),
+    );
+    await launchAtlas.hover();
+    await expect(launchAtlas.locator('svg')).toHaveCSS(
+      'animation-name',
+      'launch-rocket',
+    );
     await page
       .getByRole('navigation', { name: 'Primary navigation' })
       .getByRole('link', { name: 'Working groups' })
@@ -71,6 +95,25 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
   await expect(page.getByRole('heading', { level: 1 })).toContainText(
     'Choose the part of the problem',
   );
+});
+
+test('Atlas status replaces the launch action only on the Atlas page', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  const header = page.locator('.site-header');
+  await expect(
+    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+  ).toHaveCount(0);
+  await expect(header.getByLabel('Atlas status')).toContainText(
+    /loading catalog|loading artifact|validating|rendering|Atlas ready/i,
+  );
+
+  await page.goto('/project/');
+  await expect(header.getByLabel('Atlas status')).toHaveCount(0);
+  await expect(
+    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+  ).toBeVisible();
 });
 
 test('navigation stays visible and condenses after scrolling', async ({
@@ -333,13 +376,55 @@ test('explorer changes entity, metric, context, and elevation', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+
+  const layers = page.getByRole('group', { name: 'Layers' });
+  await expect(
+    layers.getByRole('checkbox', { name: 'Observation radii', exact: true }),
+  ).toBeVisible();
+  await expect(
+    layers.getByRole('checkbox', { name: 'Cell edges', exact: true }),
+  ).toBeVisible();
+  await expect(
+    layers.locator('.atlas-layer-row .atlas-info-tip__trigger'),
+  ).toHaveCount(7);
+  const countryContext = layers.getByRole('checkbox', {
+    name: 'Country outlines',
+    exact: true,
+  });
+  await expect(countryContext).toBeChecked();
+  await countryContext.uncheck();
+  await expect(page).toHaveURL(/layers=(?:(?!countries)[^&])*(?:&|$)/);
+  await expect(
+    layers.getByRole('checkbox', { name: 'Geography', exact: true }),
+  ).toBeChecked();
   await expect(
     page.getByRole('application', { name: 'genomeOS globe explorer' }),
   ).toBeVisible();
-  await page.getByLabel('Variant or phenotype').selectOption('g6pd-deficiency');
+  await expect(page.locator('.atlas-brand')).toHaveCount(0);
+  await expect(
+    page
+      .getByRole('complementary', { name: 'Explorer controls' })
+      .locator('.atlas-kicker'),
+  ).toHaveText('genomeOS Atlas');
+  await chooseAtlasMap(page, 'g6pd-deficiency');
   await page.getByRole('radio', { name: 'Uncertainty' }).check();
-  await page.getByLabel('Geographic context').uncheck();
-  await page.getByText('Map appearance', { exact: true }).click();
+  await page
+    .getByRole('checkbox', { name: 'Geography', exact: true })
+    .uncheck();
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Inferred surface$/ })
+    .click();
+  const surfacePalette = page.getByLabel('Surface palette', { exact: true });
+  await expect(surfacePalette).toHaveValue('plasma');
+  await surfacePalette.selectOption('cividis');
+  await expect(page).toHaveURL(/palette=cividis/);
+  await page.getByRole('radio', { name: 'Posterior estimate' }).check();
+  await expect(surfacePalette).toHaveValue('rainbow');
+  await expect(page).not.toHaveURL(/palette=cividis/);
+  await page.getByRole('radio', { name: 'Uncertainty' }).check();
+  await expect(surfacePalette).toHaveValue('plasma');
   await page.getByRole('radio', { name: 'Map' }).check();
   await page.getByLabel('Statistical elevation', { exact: true }).check();
   await expect(
@@ -364,7 +449,11 @@ test('explorer switches among globe, map, and perspective views', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
   });
-  await page.getByText('Map appearance', { exact: true }).click();
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Inferred surface$/ })
+    .click();
 
   for (const view of ['Map', 'Perspective', 'Globe']) {
     const control = page.getByRole('radio', { name: view });
@@ -407,18 +496,26 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
     timeout: 45_000,
   });
 
-  await expect(page.getByLabel('Variant or phenotype')).toHaveValue(
-    'g6pd-deficiency',
-  );
+  await expect(
+    page.getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+  ).toContainText('G6PD deficiency');
   await expect(page.getByRole('radio', { name: 'Uncertainty' })).toBeChecked();
-  await page.getByText('Map appearance', { exact: true }).click();
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Inferred surface$/ })
+    .click();
   await expect(page.getByRole('radio', { name: 'Perspective' })).toBeChecked();
   await expect(
     page.getByLabel('Statistical elevation', { exact: true }),
   ).toBeChecked();
   await expect(page.getByLabel('Height exaggeration')).toHaveValue('2.5');
-  await expect(page.getByLabel('Measured observations')).not.toBeChecked();
-  await expect(page.getByLabel('Geographic context')).not.toBeChecked();
+  await expect(
+    page.getByRole('checkbox', { name: 'Measured points', exact: true }),
+  ).not.toBeChecked();
+  await expect(
+    page.getByRole('checkbox', { name: 'Geography', exact: true }),
+  ).not.toBeChecked();
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
   });
@@ -469,9 +566,21 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expect(page.locator('[data-atlas-status-slot]')).toContainText(
+    'Atlas ready',
+  );
+  await expect(page.locator('.atlas-explorer > .atlas-status')).toHaveCount(0);
 
-  const entity = page.getByLabel('Variant or phenotype', { exact: true });
-  await expect(entity.locator('option')).toHaveCount(30);
+  const entity = page.getByRole('button', {
+    name: /Select dataset\. Current dataset:/,
+  });
+  await entity.click();
+  await expect(
+    page
+      .getByRole('listbox', { name: 'Available genetic maps' })
+      .getByRole('option'),
+  ).toHaveCount(30);
+  await page.keyboard.press('Escape');
   const completeSurface = await page.request.get(
     '/data/atlas/hbs-rs334.surface.json',
   );
@@ -499,47 +608,264 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   ).toHaveCount(0);
   await expect(mapHelp).toBeFocused();
 
-  await page.getByText('Map appearance', { exact: true }).click();
-  await expect(page.getByLabel('Basemap', { exact: true })).toHaveValue(
-    'dark-streets',
+  await expect(page.getByText('Map appearance', { exact: true })).toHaveCount(
+    0,
   );
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  const earthStyleButton = page.getByRole('button', {
+    name: 'Choose basemap and terrain',
+  });
+  await expect(earthStyleButton).toBeVisible();
+  const basemapOpacity = page.getByLabel(/Basemap opacity/);
+  const basemapBrightness = page.getByLabel(/Basemap brightness/);
+  const dayNight = page.getByRole('checkbox', {
+    name: 'Day/night lighting',
+    exact: true,
+  });
+  await expect(basemapOpacity).toHaveAttribute('min', '0');
+  await expect(basemapOpacity).toHaveAttribute('max', '100');
+  await expect(basemapBrightness).toHaveAttribute('min', '0');
+  await expect(basemapBrightness).toHaveAttribute('max', '100');
+  await expect(basemapOpacity).toHaveValue('100');
+  await expect(basemapBrightness).toHaveValue('50');
+  const oceanColor = page.getByLabel('Ocean color', { exact: true });
+  await expect(oceanColor).toHaveValue('#071b35');
+  await expect(dayNight).toBeChecked();
+  await basemapOpacity.fill('82');
+  await basemapBrightness.fill('70');
+  await oceanColor.fill('#225588');
+  await dayNight.uncheck();
   await expect(
-    page
-      .getByLabel('Basemap', { exact: true })
-      .locator('option[value="roads"]'),
-  ).toBeDisabled();
-  await expect(
-    page.getByLabel('Physical terrain', { exact: true }),
-  ).toHaveValue('smooth-globe');
+    page.getByLabel('Surface palette', { exact: true }),
+  ).not.toBeVisible();
+  await page
+    .locator('summary')
+    .filter({ hasText: /^Inferred surface$/ })
+    .click();
   await page
     .getByLabel('Surface palette', { exact: true })
-    .selectOption('plasma');
+    .selectOption('golden');
   await page.getByLabel(/Surface opacity/).fill('0.65');
-  await page.getByLabel('Cell edges', { exact: true }).check();
+  const earthOpacity = page.locator('#atlas-earth-opacity');
+  await expect(earthOpacity).toHaveValue('1');
+  await earthOpacity.fill('0.76');
+  await expect(
+    page
+      .getByLabel('Surface geometry', { exact: true })
+      .locator('option[value="hexagons"]'),
+  ).toHaveText('Flat hexagons');
+  await expect(
+    page
+      .getByLabel('Surface geometry', { exact: true })
+      .locator('option[value="honmoon"]'),
+  ).toHaveText('Honmoon');
+  await expect(
+    page
+      .getByLabel('Surface geometry', { exact: true })
+      .locator('option[value="honmoon-fill"]'),
+  ).toHaveText('Honmoon (fill)');
+  await page
+    .getByLabel('Surface geometry', { exact: true })
+    .selectOption('honmoon');
+  await expect(page).toHaveURL(/geometry=honmoon/);
+  await page
+    .getByLabel('Surface geometry', { exact: true })
+    .selectOption('honmoon-fill');
+  await page.getByRole('checkbox', { name: 'Cell edges', exact: true }).check();
+  await page
+    .getByRole('combobox', { name: 'Edge color', exact: true })
+    .selectOption('fixed');
+  await page.getByLabel('Fixed edge color', { exact: true }).fill('#ff3366');
   await page.getByRole('radio', { name: 'Map' }).check();
 
-  await page.getByText('Measured points', { exact: true }).click();
+  await page.locator('summary', { hasText: 'Measured points' }).click();
   await page
     .getByLabel('Marker shape', { exact: true })
     .selectOption('hemisphere');
   await page.getByLabel('Marker shape', { exact: true }).selectOption('pin');
   await page
     .getByLabel('Marker color', { exact: true })
-    .selectOption('frequency');
+    .selectOption('gradient');
+  const markerGradient = page.getByRole('group', {
+    name: 'Marker gradient colors',
+  });
+  await expect(markerGradient.getByText('Low', { exact: true })).toBeVisible();
+  await expect(
+    markerGradient.getByText('Midpoint', { exact: true }),
+  ).toBeVisible();
+  await expect(markerGradient.getByText('High', { exact: true })).toBeVisible();
+  await page.getByLabel('Low gradient color').fill('#112233');
+  await page.getByLabel(/Marker opacity/).fill('0.62');
   await page.getByLabel('Marker size', { exact: true }).selectOption('an');
-  await page.getByLabel('Sampling areas', { exact: true }).uncheck();
+  const sizeRanges = page
+    .getByRole('group', { name: 'Marker size range' })
+    .locator('input[type="range"]');
+  await expect(sizeRanges.nth(0)).toHaveAttribute('min', '12');
+  await expect(sizeRanges.nth(0)).toHaveAttribute('max', '96');
+  await expect(sizeRanges.nth(1)).toHaveAttribute('min', '12');
+  await expect(sizeRanges.nth(1)).toHaveAttribute('max', '96');
+  await sizeRanges.nth(0).fill('72');
+  await expect(sizeRanges.nth(1)).toHaveValue('72');
+  await sizeRanges.nth(1).fill('36');
+  await expect(sizeRanges.nth(0)).toHaveValue('36');
+  const samplingHelp = page.getByRole('button', {
+    name: 'About observation radii',
+  });
+  await samplingHelp.scrollIntoViewIfNeeded();
+  await samplingHelp.click();
+  const samplingTooltip = page.getByRole('tooltip');
+  await expect(samplingTooltip).toBeVisible();
+  const tooltipBox = await samplingTooltip.boundingBox();
+  const viewport = page.viewportSize();
+  expect(tooltipBox).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  expect(tooltipBox!.x).toBeGreaterThanOrEqual(0);
+  expect(tooltipBox!.y).toBeGreaterThanOrEqual(0);
+  expect(tooltipBox!.x + tooltipBox!.width).toBeLessThanOrEqual(
+    viewport!.width,
+  );
+  expect(tooltipBox!.y + tooltipBox!.height).toBeLessThanOrEqual(
+    viewport!.height,
+  );
+  await page.keyboard.press('Escape');
+  await page
+    .getByLabel('Observation radius color', { exact: true })
+    .fill('#44ccaa');
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
 
-  await expect(page).toHaveURL(/palette=plasma/);
+  await expect(page).toHaveURL(/palette=golden/);
+  await expect(page).toHaveURL(/basemapOpacity=0.82/);
+  await expect(page).toHaveURL(/basemapBrightness=0.7/);
+  await expect(page).toHaveURL(/oceanColor=%23225588/);
+  await expect(page).toHaveURL(/dayNight=false/);
   await expect(page).toHaveURL(/opacity=0.65/);
+  await expect(page).toHaveURL(/earthOpacity=0.76/);
+  await expect(page).toHaveURL(/geometry=honmoon-fill/);
   await expect(page).toHaveURL(/edges=true/);
+  await expect(page).toHaveURL(/edgeColor=fixed/);
+  await expect(page).toHaveURL(/edgeFixed=%23ff3366/);
   await expect(page).toHaveURL(/view=map/);
   await expect(page).toHaveURL(/obsShape=pin/);
-  await expect(page).toHaveURL(/obsColor=frequency/);
+  await expect(page).toHaveURL(/obsColor=gradient/);
+  await expect(page).toHaveURL(/obsLow=%23112233/);
+  await expect(page).toHaveURL(/obsOpacity=0.62/);
   await expect(page).toHaveURL(/obsSize=an/);
   await expect(page).toHaveURL(/samplingAreas=false/);
+  await expect(page).toHaveURL(/samplingColor=%2344ccaa/);
 
   await page.getByText('Keys', { exact: true }).click();
   await expect(page.getByText(/arrows or WASD to pan/)).toBeVisible();
+});
+
+test('explorer groups and explains maps before selection', async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  await page.getByRole('button', { name: /Select dataset/i }).click();
+  const picker = page.getByRole('dialog', { name: 'Select dataset' });
+  await expect(picker).toBeVisible();
+  await expect(
+    picker.getByRole('heading', { name: 'Red blood cell disorders' }),
+  ).toBeVisible();
+  await expect(
+    picker.getByRole('heading', { name: 'Natural killer-cell receptors' }),
+  ).toBeVisible();
+  await expect(picker).toContainText('Hemoglobin S');
+  await expect(picker).toContainText('This map shows');
+
+  const search = picker.getByRole('searchbox', { name: 'Search maps' });
+  await search.press('Tab');
+  await expect(picker.getByRole('option').first()).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(picker.getByRole('option').nth(1)).toBeFocused();
+  await search.focus();
+  await search.fill('allopurinol');
+  await expect(
+    picker.getByRole('option', { name: /HLA-B\*58:01/ }),
+  ).toBeVisible();
+  await picker.getByRole('option', { name: /HLA-B\*58:01/ }).click();
+
+  await expect(picker).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: /Select dataset/i }),
+  ).toContainText('HLA class I');
+  await expect(page).toHaveURL(/entity=hla-b-58-01/);
+});
+
+test('explorer offers the full basemap and terrain gallery', async ({
+  page,
+}) => {
+  test.setTimeout(60_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .getByRole('button', { name: 'Choose basemap and terrain' })
+    .click();
+  const picker = page.getByRole('dialog', { name: 'Basemap and terrain' });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole('radio', { name: /basemap/i })).toHaveCount(22);
+  await expect(picker.getByRole('radio', { name: /terrain/i })).toHaveCount(2);
+  const basemapTile = await picker
+    .getByRole('radio', { name: 'ArcGIS World Imagery basemap' })
+    .boundingBox();
+  const terrainTile = await picker
+    .getByRole('radio', { name: 'Smooth Globe terrain' })
+    .boundingBox();
+  expect(basemapTile).not.toBeNull();
+  expect(terrainTile).not.toBeNull();
+  expect(Math.abs(terrainTile!.width - basemapTile!.width)).toBeLessThanOrEqual(
+    1,
+  );
+  expect(
+    Math.abs(terrainTile!.height - basemapTile!.height),
+  ).toBeLessThanOrEqual(1);
+  await expect(
+    picker.getByRole('radio', { name: 'Bing Maps Roads basemap' }),
+  ).toHaveAttribute('aria-disabled', 'true');
+
+  await picker.getByRole('radio', { name: 'Blue Marble basemap' }).hover();
+  await expect(
+    picker.getByRole('tooltip').filter({ hasText: 'NASA' }),
+  ).toBeVisible();
+  await picker.getByRole('radio', { name: 'OpenStreetMap basemap' }).click();
+  await expect(picker).toHaveCount(0);
+  await expect(page).toHaveURL(/basemap=openstreetmap/);
+});
+
+test('left control sections expand and collapse with motion', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  const sheet = page
+    .locator('details.atlas-control-sheet')
+    .filter({ has: page.locator('summary', { hasText: /^Map$/ }) });
+  const transition = await sheet.evaluate((element) => {
+    const style = getComputedStyle(element, '::details-content');
+    return {
+      duration: style.transitionDuration,
+      property: style.transitionProperty,
+    };
+  });
+
+  expect(transition.property).toContain('block-size');
+  expect(transition.duration).not.toBe('0s');
+  await sheet.locator('summary').click();
+  await expect(sheet).toHaveAttribute('open', '');
+  await sheet.locator('summary').click();
+  await expect(sheet).not.toHaveAttribute('open', '');
 });
 
 test('explorer provides versioned downloads and gated external lookups', async ({
@@ -562,31 +888,51 @@ test('explorer provides versioned downloads and gated external lookups', async (
     page.getByRole('link', { name: 'Inferred surface' }),
   ).toHaveAttribute('href', '/data/atlas/hbs-rs334.surface.json');
 
-  await page.locator('.atlas-external-info > summary').click();
-  const external = page.locator('.atlas-external-info select');
-  await external.selectOption('gnomad');
+  await page.getByRole('button', { name: 'More info' }).click();
+  const externalPanel = page.getByRole('complementary', {
+    name: 'External variant information',
+  });
+  await expect(externalPanel).toBeVisible();
+  await expect(
+    page.locator('.atlas-right-rail').filter({ has: externalPanel }),
+  ).toBeVisible();
+  await externalPanel.getByRole('button', { name: 'gnomAD' }).click();
   await expect(
     page.getByText('chr11-5227002-T-A', { exact: true }),
   ).toBeVisible();
+  await expect(externalPanel).toContainText('Allele frequency');
+  await expect(externalPanel).toContainText('Homozygous alternate');
+  await expect(externalPanel).toContainText('Canonical transcript');
   await expect(
     page.getByRole('link', { name: /Open this variant in gnomAD/ }),
   ).toHaveAttribute('target', '_blank');
-  await external.selectOption('dbsnp');
-  await expect(page.getByText('rs334', { exact: true })).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await externalPanel
+    .getByRole('button', { name: 'Download displayed data' })
+    .click();
+  expect((await downloadPromise).suggestedFilename()).toBe(
+    'chr11-5227002-T-A.gnomad.gnomad_r4.json',
+  );
+  await externalPanel.getByRole('button', { name: 'dbSNP' }).click();
+  await expect(
+    externalPanel.getByRole('heading', { name: 'rs334', exact: true }),
+  ).toBeVisible();
+  await expect(externalPanel).toContainText('SPDI representation');
   await expect(
     page.getByRole('link', { name: /Open this record in dbSNP/ }),
   ).toHaveAttribute('target', '_blank');
+  await page.keyboard.press('Escape');
+  await expect(externalPanel).toHaveCount(0);
 
-  await page
-    .getByLabel('Variant or phenotype', { exact: true })
-    .selectOption('g6pd-deficiency');
+  await chooseAtlasMap(page, 'g6pd-deficiency');
   await expect(
-    page.getByText(/does not resolve to a reviewed normalized variant/),
-  ).toBeVisible();
-  await expect(page.locator('.atlas-external-info select')).toHaveCount(0);
+    page.locator('[data-atlas-active="g6pd-deficiency"]'),
+  ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect(page.getByRole('button', { name: 'More info' })).toBeDisabled();
+  await expect(externalPanel).toHaveCount(0);
 });
 
-test('explorer opens separate surface and observation inspectors', async ({
+test('explorer previews and opens separate surface and observation inspectors', async ({
   page,
   isMobile,
 }) => {
@@ -608,6 +954,28 @@ test('explorer opens separate surface and observation inspectors', async ({
     timeout: 45_000,
   });
   const canvas = page.locator('.atlas-scene canvas').first();
+  const hoverPreview = page.locator('.atlas-hover-preview');
+  const hoverNearCenter = async () => {
+    const box = await canvas.boundingBox();
+    expect(box).not.toBeNull();
+    for (const [offsetX, offsetY] of [
+      [0, 0],
+      [-18, 0],
+      [18, 0],
+      [0, -18],
+      [0, 18],
+      [-18, -18],
+      [18, -18],
+      [-18, 18],
+      [18, 18],
+    ]) {
+      await page.mouse.move(
+        box!.x + box!.width / 2 + offsetX,
+        box!.y + box!.height / 2 + offsetY,
+      );
+      if (await hoverPreview.isVisible()) return;
+    }
+  };
   const clickNearCenter = async (inspector: Locator) => {
     const box = await canvas.boundingBox();
     expect(box).not.toBeNull();
@@ -630,25 +998,100 @@ test('explorer opens separate surface and observation inspectors', async ({
     }
   };
 
-  await page.getByLabel('Measured observations').uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
   await expect
     .poll(() => new URL(page.url()).searchParams.get('layers'))
     .not.toContain('observations');
   const surfaceInspector = page.getByRole('complementary', {
     name: 'Selected map cell',
   });
+  await hoverNearCenter();
+  await expect(hoverPreview).toContainText('Modeled estimate');
+  await expect(hoverPreview).toContainText('Posterior');
+  await expect(hoverPreview).toContainText('95% credible range');
+  await expect(hoverPreview).toContainText('Uncertainty');
   await clickNearCenter(surfaceInspector);
   await expect(surfaceInspector).toBeVisible();
-  await page.getByRole('button', { name: 'Close inspector' }).click();
+  await expect(hoverPreview).toBeVisible();
+  await expect(surfaceInspector.getByText('Cell ID')).toBeVisible();
+  const mapOptions = surfaceInspector.getByRole('button', {
+    name: 'Choose how to open this cell in Google Maps',
+  });
+  await mapOptions.click();
+  const centroidLink = surfaceInspector.getByRole('link', {
+    name: 'Centroid',
+  });
+  await expect(centroidLink).toHaveAttribute('target', '_blank');
+  await expect(centroidLink).toHaveAttribute(
+    'href',
+    /^https:\/\/www\.google\.com\/maps\/search\/\?api=1&query=/,
+  );
+  await expect(
+    centroidLink.locator('.atlas-centroid-link__coordinates span'),
+  ).toHaveCount(2);
+  const polygonLink = surfaceInspector.getByRole('link', {
+    name: 'Polygon',
+  });
+  await expect(polygonLink).toHaveAttribute('target', '_blank');
+  await expect(polygonLink).toHaveAttribute(
+    'href',
+    /\/app\/polygon\/\?cell=[0-9a-f]{15}$/,
+  );
+  await expect(mapOptions.locator('[data-google-maps-icon]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(surfaceInspector).toHaveCount(0);
+  await expect(hoverPreview).toHaveCount(0);
 
-  await page.getByLabel('Measured observations').check();
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .check();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .check();
+  await page.locator('summary', { hasText: 'Measured points' }).click();
+  await page.getByLabel('Marker color', { exact: true }).selectOption('ac');
+  await page
+    .getByRole('checkbox', { name: 'Inferred surface', exact: true })
+    .uncheck();
   await expect(page).toHaveURL(/layers=[^&]*observations/);
   await page.waitForTimeout(650);
   const observationInspector = page.getByRole('complementary', {
     name: 'Selected observation',
   });
+  await hoverNearCenter();
+  await expect(hoverPreview).toBeVisible();
+  await expect(hoverPreview).toContainText('Allele count (AC)');
+  await expect(
+    hoverPreview.locator('[data-observation-color]'),
+  ).toHaveAttribute('data-observation-color', /^#[0-9a-f]{6}$/);
   await clickNearCenter(observationInspector);
   await expect(observationInspector).toBeVisible();
+  await expect(observationInspector).toContainText('Allele count (AC)');
+  await expect(
+    observationInspector.locator('[data-observation-color]'),
+  ).toHaveAttribute('data-observation-color', /^#[0-9a-f]{6}$/);
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox).not.toBeNull();
+  await page.mouse.move(
+    canvasBox!.x + canvasBox!.width / 2,
+    canvasBox!.y + canvasBox!.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    canvasBox!.x + canvasBox!.width / 2 + 90,
+    canvasBox!.y + canvasBox!.height / 2 + 40,
+    { steps: 4 },
+  );
+  await page.mouse.up();
+  await expect(hoverPreview).toHaveCount(0);
+  await expect(observationInspector).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(observationInspector).toHaveCount(0);
 });
 
 test('explorer reports unavailable WebGL with a retry action', async ({
@@ -660,4 +1103,13 @@ test('explorer reports unavailable WebGL with a retry action', async ({
   await page.goto('/app/');
   await expect(page.getByText('This globe needs WebGL')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry globe' })).toBeVisible();
+});
+
+test('polygon map validates a selected model cell before loading Google Maps', async ({
+  page,
+}) => {
+  await page.goto('/app/polygon/?cell=83754efffffffff');
+  await expect(page.getByRole('status')).toContainText(
+    'domain-restricted Google Maps browser key',
+  );
 });

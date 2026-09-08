@@ -72,6 +72,7 @@ jobs:
         working-directory: website
         env:
           CESIUM_TOKEN: ${{ secrets.CESIUM_TOKEN }}
+          GOOGLE_MAPS_TOKEN: ${{ secrets.GOOGLE_MAPS_TOKEN }}
       - name: Refuse broken production links
         run: npm run check:links -- dist /
         working-directory: website

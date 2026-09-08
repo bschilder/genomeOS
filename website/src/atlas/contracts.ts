@@ -103,9 +103,32 @@ const externalResourceSchema = z.discriminatedUnion('source', [
   }),
 ]);
 
+const discoveryReferenceSchema = z.strictObject({
+  label: nonEmpty,
+  url: z.url(),
+});
+
+export const discoveryGroupSchema = z.strictObject({
+  biology: nonEmpty,
+  id: nonEmpty,
+  label: nonEmpty,
+  references: z.array(discoveryReferenceSchema).min(1),
+  summary: nonEmpty,
+});
+
+export const artifactDiscoverySchema = z.strictObject({
+  aliases: z.array(nonEmpty).min(1),
+  group_id: nonEmpty,
+  map_measures: nonEmpty,
+  references: z.array(discoveryReferenceSchema).min(1),
+  relevance: nonEmpty,
+  symbol_expansion: nonEmpty,
+});
+
 const artifactRefBaseFields = {
   assumptions: z.array(nonEmpty),
   correlation_range_km: finiteNumber.positive(),
+  discovery: artifactDiscoverySchema,
   downloads: z.strictObject({
     manifest: downloadRefSchema,
     observations: downloadRefSchema.nullable(),
@@ -171,17 +194,38 @@ export const contextSourceSchema = z.strictObject({
   url: nonEmpty,
 });
 
-export const atlasCatalogSchema = z.strictObject({
-  artifact_version: nonEmpty,
-  artifacts: z.array(artifactRefSchema).min(1),
-  assumptions: z.array(nonEmpty),
-  context_sources: z.array(contextSourceSchema),
-  created_at: nonEmpty,
-  hf_dataset: nonEmpty,
-  hf_revision: nonEmpty,
-  registry_versions: z.array(nonEmpty).min(1),
-  schema_version: z.literal(1),
-});
+export const atlasCatalogSchema = z
+  .strictObject({
+    artifact_version: nonEmpty,
+    artifacts: z.array(artifactRefSchema).min(1),
+    assumptions: z.array(nonEmpty),
+    context_sources: z.array(contextSourceSchema),
+    created_at: nonEmpty,
+    discovery_groups: z.array(discoveryGroupSchema).min(1),
+    hf_dataset: nonEmpty,
+    hf_revision: nonEmpty,
+    registry_versions: z.array(nonEmpty).min(1),
+    schema_version: z.literal(1),
+  })
+  .superRefine(({ artifacts, discovery_groups }, context) => {
+    const groupIds = new Set(discovery_groups.map(({ id }) => id));
+    if (groupIds.size !== discovery_groups.length) {
+      context.addIssue({
+        code: 'custom',
+        message: 'discovery group ids must be unique',
+        path: ['discovery_groups'],
+      });
+    }
+    for (const [index, artifact] of artifacts.entries()) {
+      if (!groupIds.has(artifact.discovery.group_id)) {
+        context.addIssue({
+          code: 'custom',
+          message: 'artifact must reference a known discovery group',
+          path: ['artifacts', index, 'discovery', 'group_id'],
+        });
+      }
+    }
+  });
 
 export const surfaceCellSchema = z
   .strictObject({
@@ -189,7 +233,9 @@ export const surfaceCellSchema = z
     h3_index: z.string().regex(/^[0-9a-f]{15}$/),
     post_mean: probability,
     post_sd: finiteNumber.nonnegative(),
-    posterior_contraction: probability,
+    // This is posterior SD / prior SD, not a probability. Ratios above one
+    // legitimately report a posterior that is less certain than its prior.
+    posterior_contraction: finiteNumber.nonnegative(),
     q025: probability,
     q975: probability,
     support: supportSchema,
@@ -306,6 +352,7 @@ export type Support = z.infer<typeof supportSchema>;
 export type ArtifactIdentity = z.infer<typeof artifactIdentitySchema>;
 export type ArtifactRef = z.infer<typeof artifactRefSchema>;
 export type AtlasCatalog = z.infer<typeof atlasCatalogSchema>;
+export type DiscoveryGroup = z.infer<typeof discoveryGroupSchema>;
 export type SurfaceCell = z.infer<typeof surfaceCellSchema>;
 export type SurfaceArtifact = z.infer<typeof surfaceArtifactSchema>;
 export type Observation = z.infer<typeof observationSchema>;

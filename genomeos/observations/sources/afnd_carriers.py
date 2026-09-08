@@ -33,11 +33,13 @@ from pathlib import Path
 import pandas as pd
 
 from genomeos.observations.schema import CARRIER_OBSERVATIONS_SCHEMA
+from genomeos.observations.source_ids import stable_source_record_id
 from genomeos.registry.sources import afnd as afnd_registry
 
 #: `indivs_over_n` is a percentage. Anything above this means the units changed and the release
 #: needs looking at, not rescaling (§12).
 MAX_PERCENT = 100.0
+
 
 #: Presence is a property of the gene, not of an allele, so the id names the gene alone:
 #: `kir:2dl1`. There is no allele field to slug.
@@ -116,12 +118,15 @@ def load(
     )
     ascertainment = {
         row["population"]: afnd_registry.sampling_design_for(row["sample_source"])
-        for row in pd.read_csv(populations, sep="\t", dtype=str,
-                               keep_default_na=False).to_dict("records")
+        for row in pd.read_csv(populations, sep="\t", dtype=str, keep_default_na=False).to_dict("records")
     }
     refuse(
         presence["population"].map(lambda p: ascertainment.get(p) is None),
         "ascertainment_not_stated",
+    )
+    refuse(
+        presence.duplicated(subset=["group", "gene", "allele", "population", "carrier_fraction", "n_indiv"]),
+        "duplicate_source_record",
     )
 
     rows = presence[keep].copy()
@@ -145,6 +150,16 @@ def load(
             "radius_km": geo["uncertainty_radius_km"].to_numpy(),
             "carriers": (rows["carrier_fraction"] * n_individuals).round().astype(int).to_numpy(),
             "n_individuals": n_individuals.to_numpy(),
+            "source_record_id": [
+                stable_source_record_id("afnd-carriers", gene, population, fraction, int(n))
+                for gene, population, fraction, n in zip(
+                    rows["gene"],
+                    rows["population"],
+                    rows["carrier_fraction"],
+                    rows["n_indiv"],
+                    strict=True,
+                )
+            ],
             "source": "afnd",
             "assay": "gene_presence_reconstructed",
             "date_lower": 0,
@@ -152,9 +167,7 @@ def load(
             # `sampling_design_for` returns (design, disease_excluded); both are required with
             # no default (§7.1), so neither is invented here.
             "sampling_design": [d[0] for d in designs],
-            "disease_ascertainment_excluded": pd.array(
-                [d[1] for d in designs], dtype="boolean"
-            ),
+            "disease_ascertainment_excluded": pd.array([d[1] for d in designs], dtype="boolean"),
             # AFND publishes no study accession, so the population is the cohort — the same
             # convention `afnd_frequencies` uses, and the same caveat applies (#121).
             "cohort_id": ids.to_numpy(),

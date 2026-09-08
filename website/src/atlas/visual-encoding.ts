@@ -4,24 +4,25 @@ import type { SurfaceCell } from './contracts';
 
 export type Metric = 'post_mean' | 'post_sd';
 export type MetricDomain = readonly [number, number];
-export type PaletteId = 'genome' | 'signal' | 'viridis' | 'cividis' | 'plasma';
+export type PaletteId =
+  'genome' | 'signal' | 'viridis' | 'cividis' | 'plasma' | 'rainbow' | 'golden';
 
 const MAX_HEIGHT_METRES = 180_000;
-const PALETTES: Record<PaletteId, readonly [string, string, string]> = {
+const PALETTES: Record<PaletteId, readonly string[]> = {
   cividis: ['#00204c', '#7d7c78', '#fee838'],
   genome: ['#10213e', '#27a9d0', '#72e7c1'],
+  golden: ['#241133', '#7a3f18', '#d49425', '#f4c86a', '#fff3bd'],
   plasma: ['#0d0887', '#cc4778', '#f0f921'],
+  rainbow: ['#6e40aa', '#417de0', '#1ac7c2', '#7bd34d', '#f2cf44', '#ff5e63'],
   signal: ['#24144b', '#ad8bff', '#f4c86a'],
   viridis: ['#440154', '#21918c', '#fde725'],
 };
 
 export function defaultPalette(metric: Metric): PaletteId {
-  return metric === 'post_mean' ? 'genome' : 'signal';
+  return metric === 'post_mean' ? 'rainbow' : 'plasma';
 }
 
-export function paletteStops(
-  palette: PaletteId,
-): readonly [string, string, string] {
+export function paletteStops(palette: PaletteId): readonly string[] {
   return PALETTES[palette];
 }
 
@@ -76,11 +77,19 @@ export function colorAtPosition(
   paletteId: PaletteId,
   position: number,
 ): string {
-  const palette = PALETTES[paletteId];
+  return colorAtStops(PALETTES[paletteId], position);
+}
+
+export function colorAtStops(
+  palette: readonly string[],
+  position: number,
+): string {
+  if (palette.length < 2)
+    throw new Error('a color scale needs at least two stops');
   const bounded = clamp(position);
-  if (bounded <= 0.5)
-    return interpolateColor(palette[0], palette[1], bounded * 2);
-  return interpolateColor(palette[1], palette[2], (bounded - 0.5) * 2);
+  const scaled = bounded * (palette.length - 1);
+  const lower = Math.min(Math.floor(scaled), palette.length - 2);
+  return interpolateColor(palette[lower], palette[lower + 1], scaled - lower);
 }
 
 export function heightForCell(

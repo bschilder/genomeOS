@@ -18,9 +18,12 @@ function percent(value: number): string {
 export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   const domain = artifact.metric_domains[state.metric];
   const isEstimate = state.metric === 'post_mean';
-  const [low, middle, high] = paletteStops(state.surfacePalette);
+  const colors = paletteStops(state.surfacePalette);
   const scaleStyle = {
-    '--atlas-scale': `linear-gradient(90deg, ${low}, ${middle}, ${high})`,
+    '--atlas-scale': `linear-gradient(90deg, ${colors.join(', ')})`,
+  } as CSSProperties;
+  const priorStyle = {
+    '--atlas-prior-scale': `linear-gradient(90deg, ${colors.join(', ')})`,
   } as CSSProperties;
   return (
     <aside className="atlas-legend" aria-label="Map legend">
@@ -45,8 +48,10 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
           <div>
             <h2>{artifact.label}</h2>
             <p>
-              Measurements and modeled estimates are separate layers. Unknown
-              and prior-dominated cells are never included as numeric values.
+              Color shows the modeled value. Dots mark estimates still driven
+              mostly by the model’s starting assumptions because local evidence
+              is limited; those cells are excluded from summaries. Neutral
+              hatching means the value is unknown.
             </p>
             <div className="atlas-legend__keys">
               <span>
@@ -59,7 +64,8 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
                 <i className="atlas-key atlas-key--unknown" /> Unknown
               </span>
               <span>
-                <i className="atlas-key atlas-key--prior" /> Prior-dominated
+                <i className="atlas-key atlas-key--prior" style={priorStyle} />{' '}
+                Dots: mostly model assumptions
               </span>
             </div>
             <p className="atlas-legend__version">

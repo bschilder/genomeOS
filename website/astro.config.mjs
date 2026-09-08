@@ -83,6 +83,7 @@ export default defineConfig({
     sitemap(),
   ],
   vite: {
+    envDir: '..',
     define: {
       CESIUM_BASE_URL: JSON.stringify(`${normalizedBase}cesium/`),
     },

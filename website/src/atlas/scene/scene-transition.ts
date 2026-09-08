@@ -9,6 +9,7 @@ export type FadeableGroup =
   ScientificPrimitiveGroup | ObservationPrimitiveGroup;
 
 const HEATMAP_TRANSITION_MS = 720;
+const HEATMAP_SWAP_MS = 300;
 const GEOMETRY_IDLE_TIMEOUT_MS = 30_000;
 
 export function transitionProgress(
@@ -77,7 +78,7 @@ export function animateSwap(
   return new Promise((resolve) => {
     const started = performance.now();
     const frame = (now: number) => {
-      const progress = transitionProgress(now - started);
+      const progress = transitionProgress(now - started, HEATMAP_SWAP_MS);
       incoming.setOpacity(progress);
       outgoing?.setOpacity(1 - progress);
       viewer.scene.requestRender();
@@ -86,6 +87,38 @@ export function animateSwap(
         retireOutgoing();
         resolve();
       }
+    };
+    requestAnimationFrame(frame);
+  });
+}
+
+export function animateValue(
+  viewer: Viewer,
+  from: number,
+  to: number,
+  reducedMotion: boolean,
+  update: (value: number) => void,
+  shouldContinue: () => boolean = () => true,
+): Promise<void> {
+  if (reducedMotion || from === to) {
+    if (shouldContinue()) {
+      update(to);
+      viewer.scene.requestRender();
+    }
+    return Promise.resolve();
+  }
+  return new Promise((resolve) => {
+    const started = performance.now();
+    const frame = (now: number) => {
+      if (!shouldContinue()) {
+        resolve();
+        return;
+      }
+      const progress = transitionProgress(now - started);
+      update(from + (to - from) * progress);
+      viewer.scene.requestRender();
+      if (progress < 1) requestAnimationFrame(frame);
+      else resolve();
     };
     requestAnimationFrame(frame);
   });

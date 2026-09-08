@@ -68,7 +68,7 @@ function createEntry(
   });
   const point = points.add({
     color: baseColor.withAlpha(0.12),
-    disableDepthTestDistance: Number.POSITIVE_INFINITY,
+    disableDepthTestDistance: 0,
     outlineColor: baseColor.withAlpha(0),
     outlineWidth: kind === 'hover' ? 5 : 6,
     pixelSize: style.pointSize,
@@ -78,11 +78,15 @@ function createEntry(
   return { baseColor, line, lineMaterial, point };
 }
 
-function setEntryOpacity(entry: HighlightEntry, opacity: number): void {
+function setEntryOpacity(
+  entry: HighlightEntry,
+  opacity: number,
+  earthOpacity = 1,
+): void {
   const lineColor = entry.lineMaterial.uniforms.color;
-  if (lineColor instanceof Color) lineColor.alpha = opacity;
-  entry.point.color.alpha = 0.12 * opacity;
-  entry.point.outlineColor.alpha = opacity;
+  if (lineColor instanceof Color) lineColor.alpha = opacity * earthOpacity;
+  entry.point.color.alpha = 0.12 * opacity * earthOpacity;
+  entry.point.outlineColor.alpha = opacity * earthOpacity;
 }
 
 export class HighlightLayer {
@@ -96,6 +100,7 @@ export class HighlightLayer {
   #metric: Metric = 'post_mean';
   #elevation = false;
   #exaggeration = 1;
+  #earthOpacity = 1;
   #hoverPick: AtlasPick | null = null;
   #selectionPick: AtlasPick | null = null;
   #hoverSequence = 0;
@@ -134,13 +139,20 @@ export class HighlightLayer {
     this.#show(this.#selection, this.#selectionPick);
   }
 
+  setElevationStyle(enabled: boolean, exaggeration: number): void {
+    this.#elevation = enabled;
+    this.#exaggeration = exaggeration;
+    this.#show(this.#hover, this.#hoverPick);
+    this.#show(this.#selection, this.#selectionPick);
+  }
+
   setHover(pick: AtlasPick | null, reducedMotion: boolean): void {
     this.#hoverPick = pick;
     const sequence = ++this.#hoverSequence;
     if (pick) this.#show(this.#hover, pick);
     const target = pick ? 1 : 0;
     if (reducedMotion) {
-      setEntryOpacity(this.#hover, target);
+      setEntryOpacity(this.#hover, target, this.#earthOpacity);
       if (!pick) this.#hide(this.#hover);
       this.#scene.requestRender();
       return;
@@ -150,7 +162,11 @@ export class HighlightLayer {
       if (sequence !== this.#hoverSequence) return;
       const linear = Math.min(1, (now - started) / HOVER_DURATION_MS);
       const eased = linear * linear * (3 - 2 * linear);
-      setEntryOpacity(this.#hover, pick ? eased : 1 - eased);
+      setEntryOpacity(
+        this.#hover,
+        pick ? eased : 1 - eased,
+        this.#earthOpacity,
+      );
       this.#scene.requestRender();
       if (linear < 1) requestAnimationFrame(frame);
       else if (!pick) this.#hide(this.#hover);
@@ -161,7 +177,18 @@ export class HighlightLayer {
   setSelection(pick: AtlasPick | null): void {
     this.#selectionPick = pick;
     this.#show(this.#selection, pick);
-    setEntryOpacity(this.#selection, pick ? 1 : 0);
+    setEntryOpacity(this.#selection, pick ? 1 : 0, this.#earthOpacity);
+    this.#scene.requestRender();
+  }
+
+  setEarthOpacity(opacity: number): void {
+    this.#earthOpacity = Math.min(1, Math.max(0.15, opacity));
+    setEntryOpacity(this.#hover, this.#hoverPick ? 1 : 0, this.#earthOpacity);
+    setEntryOpacity(
+      this.#selection,
+      this.#selectionPick ? 1 : 0,
+      this.#earthOpacity,
+    );
     this.#scene.requestRender();
   }
 

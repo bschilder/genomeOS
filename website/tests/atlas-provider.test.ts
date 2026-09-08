@@ -28,6 +28,19 @@ const ref: ArtifactRef = {
     },
   },
   data_version: 'map-2026-08',
+  discovery: {
+    aliases: ['sickle hemoglobin', 'HBB'],
+    group_id: 'red-blood-cell-disorders',
+    map_measures: 'Frequency of the HbS allele in sampled populations.',
+    references: [
+      {
+        label: 'MedlinePlus Genetics: sickle cell disease',
+        url: 'https://medlineplus.gov/genetics/condition/sickle-cell-disease/',
+      },
+    ],
+    relevance: 'HbS is the causal hemoglobin variant in sickle cell disease.',
+    symbol_expansion: 'Hemoglobin S, HBB rs334',
+  },
   entity_type: 'variant',
   external_resources: [],
   hf_dataset: 'bschilder/genomeos-data',

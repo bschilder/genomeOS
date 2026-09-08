@@ -1,6 +1,7 @@
 /** Keyboard, pointer, and touch-accessible help text for Atlas design §11. */
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface InfoTipProps {
   children: React.ReactNode;
@@ -10,13 +11,18 @@ interface InfoTipProps {
 export function InfoTip({ children, label }: InfoTipProps) {
   const id = useId();
   const container = useRef<HTMLSpanElement>(null);
+  const content = useRef<HTMLSpanElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [position, setPosition] = useState({ left: 12, top: 12, width: 288 });
 
   useEffect(() => {
     const closeFromOutside = (event: PointerEvent) => {
-      if (!container.current?.contains(event.target as Node)) {
+      if (
+        !container.current?.contains(event.target as Node) &&
+        !content.current?.contains(event.target as Node)
+      ) {
         setOpen(false);
         setPinned(false);
       }
@@ -34,6 +40,35 @@ export function InfoTip({ children, label }: InfoTipProps) {
       document.removeEventListener('atlas-info-open', closeForPeer);
     };
   }, [id]);
+
+  useLayoutEffect(() => {
+    if (!open || !trigger.current || !content.current) return;
+    const place = () => {
+      if (!trigger.current || !content.current) return;
+      const margin = 12;
+      const gap = 8;
+      const anchor = trigger.current.getBoundingClientRect();
+      const width = Math.min(288, window.innerWidth - margin * 2);
+      const height = content.current.offsetHeight;
+      const left = Math.min(
+        Math.max(margin, anchor.left),
+        window.innerWidth - width - margin,
+      );
+      const below = anchor.bottom + gap;
+      const top =
+        below + height <= window.innerHeight - margin
+          ? below
+          : Math.max(margin, anchor.top - gap - height);
+      setPosition({ left, top, width });
+    };
+    place();
+    window.addEventListener('resize', place);
+    document.addEventListener('scroll', place, true);
+    return () => {
+      window.removeEventListener('resize', place);
+      document.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
 
   const show = () => {
     setOpen(true);
@@ -85,14 +120,19 @@ export function InfoTip({ children, label }: InfoTipProps) {
       >
         i
       </button>
-      <span
-        className="atlas-info-tip__content"
-        hidden={!open}
-        id={id}
-        role="tooltip"
-      >
-        {children}
-      </span>
+      {open &&
+        createPortal(
+          <span
+            className="atlas-info-tip__content"
+            id={id}
+            ref={content}
+            role="tooltip"
+            style={position}
+          >
+            {children}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }

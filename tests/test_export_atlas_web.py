@@ -62,6 +62,35 @@ def _write_source_tree(root: Path) -> Path:
                 "registry_version": "map-test-registry",
                 "created_at": "2026-09-06T00:00:00Z",
                 "assumptions": ["test catalog"],
+                "discovery_groups": [
+                    {
+                        "id": "red-blood-cell-disorders",
+                        "label": "Red blood cell disorders",
+                        "summary": "Hemoglobin and red-cell enzyme traits.",
+                        "biology": "These maps describe variation affecting red blood cells.",
+                        "references": [
+                            {
+                                "label": "NIH overview",
+                                "url": "https://www.nhlbi.nih.gov/health/anemia",
+                            }
+                        ],
+                    }
+                ],
+                "discovery": {
+                    VARIANT_ID: {
+                        "group_id": "red-blood-cell-disorders",
+                        "map_measures": "Frequency of the HbS allele in sampled populations.",
+                        "symbol_expansion": "Hemoglobin S, HBB rs334",
+                        "relevance": "HbS is the causal hemoglobin variant in sickle cell disease.",
+                        "aliases": ["sickle hemoglobin", "HBB"],
+                        "references": [
+                            {
+                                "label": "MedlinePlus Genetics: sickle cell disease",
+                                "url": "https://medlineplus.gov/genetics/condition/sickle-cell-disease/",
+                            }
+                        ],
+                    }
+                },
                 "variants": {
                     VARIANT_ID: {
                         "label": "HbS (rs334)",
@@ -100,7 +129,7 @@ def test_public_catalog_inventory_has_two_map_and_twenty_eight_afnd_entries() ->
     assert len(entries) == 30
     assert len({entry["id"] for entry in entries}) == 30
     assert len({entry["artifact_dir"] for entry in entries}) == 30
-    assert sum(entry["observation_source"] is not None for entry in entries) == 2
+    assert sum(entry["observation_source"] is not None for entry in entries) == 30
     families = {entry["variant_id"].split(":", 1)[0] for entry in entries}
     assert families == {"chr11-5227002-T-A", "phenotype", "cyt", "hla", "kir"}
     assert sum(entry["variant_id"].startswith("cyt:") for entry in entries) == 4
@@ -202,9 +231,7 @@ def test_export_preserves_support_versions_and_observation_evidence(
     }
 
     surface = json.loads((export_inputs["out"] / "hbs-rs334.surface.json").read_text())
-    observations = json.loads(
-        (export_inputs["out"] / "hbs-rs334.observations.json").read_text()
-    )
+    observations = json.loads((export_inputs["out"] / "hbs-rs334.observations.json").read_text())
     catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())
 
     assert {cell["support"] for cell in surface["cells"]} == {"observed", "unknown"}
@@ -218,11 +245,23 @@ def test_export_preserves_support_versions_and_observation_evidence(
     assert catalog["artifacts"][0]["surface_sha256"]
     assert catalog["artifacts"][0]["observations_sha256"]
     assert catalog["artifacts"][0]["downloads"]["manifest"]["sha256"]
+    assert catalog["discovery_groups"][0]["label"] == "Red blood cell disorders"
+    assert catalog["artifacts"][0]["discovery"] == {
+        "group_id": "red-blood-cell-disorders",
+        "map_measures": "Frequency of the HbS allele in sampled populations.",
+        "symbol_expansion": "Hemoglobin S, HBB rs334",
+        "relevance": "HbS is the causal hemoglobin variant in sickle cell disease.",
+        "aliases": ["sickle hemoglobin", "HBB"],
+        "references": [
+            {
+                "label": "MedlinePlus Genetics: sickle cell disease",
+                "url": "https://medlineplus.gov/genetics/condition/sickle-cell-disease/",
+            }
+        ],
+    }
     assert catalog["artifacts"][0]["external_resources"] == [
         {
-            "cache_sha256": catalog["artifacts"][0]["external_resources"][0][
-                "cache_sha256"
-            ],
+            "cache_sha256": catalog["artifacts"][0]["external_resources"][0]["cache_sha256"],
             "cache_url": "external/gnomad/chr11-5227002-t-a.json",
             "dataset": "gnomad_r4",
             "normalized_variant_id": VARIANT_ID,
@@ -268,6 +307,16 @@ def test_export_refuses_missing_observation_radius(
         _export(export_inputs)
 
 
+def test_export_refuses_missing_discovery_metadata(export_inputs: dict[str, Path]) -> None:
+    metadata_path = export_inputs["store"] / "catalog-metadata.json"
+    metadata = json.loads(metadata_path.read_text())
+    del metadata["discovery"][VARIANT_ID]
+    metadata_path.write_text(json.dumps(metadata))
+
+    with pytest.raises(ValueError, match="discovery"):
+        _export(export_inputs)
+
+
 def test_export_refuses_missing_source_native_study_label(
     export_inputs: dict[str, Path],
 ) -> None:
@@ -287,10 +336,25 @@ def test_export_refuses_non_finite_surface_values(export_inputs: dict[str, Path]
         _export(export_inputs)
 
 
+def test_export_accepts_contraction_ratio_above_one_and_refuses_negative(
+    export_inputs: dict[str, Path],
+) -> None:
+    artifact = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test"
+    cells_path = artifact / "cells.parquet"
+    cells = pd.read_parquet(cells_path)
+    cells.loc[0, "posterior_contraction"] = 1.37
+    cells.to_parquet(cells_path, index=False)
+
+    _export(export_inputs)
+
+    cells.loc[0, "posterior_contraction"] = -0.01
+    cells.to_parquet(cells_path, index=False)
+    with pytest.raises(ValueError, match="posterior_contraction must be non-negative"):
+        _export(export_inputs)
+
+
 def test_export_refuses_missing_manifest_version(export_inputs: dict[str, Path]) -> None:
-    manifest_path = (
-        export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test" / "manifest.json"
-    )
+    manifest_path = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test" / "manifest.json"
     manifest = json.loads(manifest_path.read_text())
     del manifest["model_version"]
     manifest_path.write_text(json.dumps(manifest))

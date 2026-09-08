@@ -1,117 +1,408 @@
-/** Eligible-variant gnomAD and dbSNP cache explorer for Atlas design §11. */
+/** Reviewed gnomAD and dbSNP evidence panel for Atlas design §11. */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { ArtifactRef, ExternalInfo } from '../../atlas/contracts';
-import { InfoTip } from './InfoTip';
+import { downloadExternalInfo } from '../../atlas/external-info';
+
+type ExternalSource = 'gnomad' | 'dbsnp';
 
 interface ExternalInfoPanelProps {
   artifact: ArtifactRef;
-  load: (
-    source: 'gnomad' | 'dbsnp',
-    signal: AbortSignal,
-  ) => Promise<ExternalInfo>;
+  load: (source: ExternalSource, signal: AbortSignal) => Promise<ExternalInfo>;
+}
+
+interface FrequencyValue {
+  ac: number;
+  ac_hemi?: number;
+  ac_hom?: number;
+  af: number;
+  an: number;
 }
 
 function percent(value: number): string {
   return `${(value * 100).toLocaleString(undefined, { maximumFractionDigits: 4 })}%`;
 }
 
-function Frequency({
+function sourceLabel(source: ExternalSource): string {
+  return source === 'gnomad' ? 'gnomAD' : 'dbSNP';
+}
+
+function BooleanValue({ value }: { value: boolean | null }) {
+  return <>{value === null ? 'Not reported' : value ? 'Yes' : 'No'}</>;
+}
+
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
+  );
+}
+
+function FrequencyCard({
   label,
   value,
 }: {
   label: string;
-  value: { ac: number; af: number; an: number } | null;
+  value: FrequencyValue | null;
 }) {
-  if (!value) return null;
   return (
-    <div>
-      <dt>{label}</dt>
-      <dd>
-        {percent(value.af)} · AC {value.ac.toLocaleString()} / AN{' '}
-        {value.an.toLocaleString()}
-      </dd>
-    </div>
+    <article className="atlas-external-frequency">
+      <p>{label}</p>
+      {value ? (
+        <>
+          <strong>{percent(value.af)}</strong>
+          <dl>
+            <Field label="Allele count" value={value.ac.toLocaleString()} />
+            <Field label="Allele number" value={value.an.toLocaleString()} />
+            {value.ac_hom !== undefined && (
+              <Field
+                label="Homozygous alternate"
+                value={value.ac_hom.toLocaleString()}
+              />
+            )}
+            {value.ac_hemi !== undefined && (
+              <Field
+                label="Hemizygous alternate"
+                value={value.ac_hemi.toLocaleString()}
+              />
+            )}
+          </dl>
+        </>
+      ) : (
+        <span>No frequency record returned</span>
+      )}
+    </article>
   );
 }
 
-function ExternalRecord({ info }: { info: ExternalInfo }) {
-  if (info.source === 'gnomad') {
-    const consequence = info.record.canonical_consequence;
-    return (
-      <div className="atlas-external-info__result">
-        <dl>
-          <div>
-            <dt>Variant</dt>
-            <dd>{info.query.normalized_variant_id}</dd>
-          </div>
-          {consequence && (
-            <div>
-              <dt>Consequence</dt>
-              <dd>
-                {consequence.gene_symbol ?? 'Unknown gene'} ·{' '}
-                {consequence.major_consequence?.replaceAll('_', ' ') ??
-                  'Not reported'}
-                {consequence.hgvsp ? ` · ${consequence.hgvsp}` : ''}
-              </dd>
-            </div>
-          )}
-          <Frequency label="Joint" value={info.record.joint} />
-          <Frequency label="Exomes" value={info.record.exome} />
-          <Frequency label="Genomes" value={info.record.genome} />
-        </dl>
-        <a href={info.record.source_url} target="_blank" rel="noreferrer">
-          Open this variant in gnomAD ↗
-        </a>
-      </div>
-    );
-  }
+function GnomadRecord({
+  info,
+}: {
+  info: Extract<ExternalInfo, { source: 'gnomad' }>;
+}) {
+  const consequence = info.record.canonical_consequence;
   return (
-    <div className="atlas-external-info__result">
-      <dl>
-        <div>
-          <dt>RefSNP</dt>
-          <dd>{info.record.rsid}</dd>
+    <>
+      <section className="atlas-external-hero">
+        <span>Normalized GRCh38 variant</span>
+        <h3>{info.query.normalized_variant_id}</h3>
+        <div className="atlas-external-badges">
+          {info.record.rsids.map((rsid) => (
+            <span key={rsid}>{rsid}</span>
+          ))}
+          <span>{info.query.dataset}</span>
         </div>
-        <div>
-          <dt>GRCh38 allele</dt>
-          <dd>{info.record.hgvs}</dd>
+      </section>
+
+      <section className="atlas-external-section">
+        <h3>Allele frequency</h3>
+        <div className="atlas-external-frequency-grid">
+          <FrequencyCard label="Combined" value={info.record.joint} />
+          <FrequencyCard label="Exomes" value={info.record.exome} />
+          <FrequencyCard label="Genomes" value={info.record.genome} />
         </div>
-        <div>
-          <dt>dbSNP citations</dt>
-          <dd>{info.record.citation_count.toLocaleString()}</dd>
-        </div>
-        <div>
-          <dt>Record updated</dt>
-          <dd>{info.record.last_update_date}</dd>
-        </div>
-      </dl>
-      <a href={info.record.source_url} target="_blank" rel="noreferrer">
-        Open this record in dbSNP ↗
+      </section>
+
+      <section className="atlas-external-section">
+        <h3>Variant identity</h3>
+        <dl className="atlas-external-fields">
+          <Field label="Chromosome" value={info.record.chrom} />
+          <Field label="Position" value={info.record.pos.toLocaleString()} />
+          <Field label="Reference allele" value={info.record.ref} />
+          <Field label="Alternate allele" value={info.record.alt} />
+          <Field
+            label="rsID(s)"
+            value={
+              info.record.rsids.length
+                ? info.record.rsids.join(', ')
+                : 'None returned'
+            }
+          />
+        </dl>
+      </section>
+
+      <section className="atlas-external-section">
+        <h3>Canonical consequence</h3>
+        {consequence ? (
+          <dl className="atlas-external-fields">
+            <Field
+              label="Gene"
+              value={consequence.gene_symbol ?? 'Not reported'}
+            />
+            <Field
+              label="Gene ID"
+              value={consequence.gene_id ?? 'Not reported'}
+            />
+            <Field
+              label="Consequence"
+              value={
+                consequence.major_consequence?.replaceAll('_', ' ') ??
+                'Not reported'
+              }
+            />
+            <Field
+              label="Coding change"
+              value={consequence.hgvsc ?? 'Not reported'}
+            />
+            <Field
+              label="Protein change"
+              value={consequence.hgvsp ?? 'Not reported'}
+            />
+            <Field
+              label="Canonical transcript"
+              value={consequence.transcript_id ?? 'Not reported'}
+            />
+            <Field
+              label="Canonical"
+              value={<BooleanValue value={consequence.is_canonical} />}
+            />
+            <Field
+              label="MANE Select"
+              value={<BooleanValue value={consequence.is_mane_select} />}
+            />
+          </dl>
+        ) : (
+          <p>No canonical consequence was returned by this source.</p>
+        )}
+      </section>
+
+      <a
+        className="atlas-external-source-link"
+        href={info.record.source_url}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Open this variant in gnomAD <span aria-hidden="true">↗</span>
       </a>
-    </div>
+    </>
+  );
+}
+
+function DbsnpRecord({
+  info,
+}: {
+  info: Extract<ExternalInfo, { source: 'dbsnp' }>;
+}) {
+  return (
+    <>
+      <section className="atlas-external-hero">
+        <span>Reference SNP record</span>
+        <h3>{info.record.rsid}</h3>
+        <div className="atlas-external-badges">
+          <span>{info.query.normalized_variant_id}</span>
+          <span>{info.source_release}</span>
+        </div>
+      </section>
+
+      <section className="atlas-external-section">
+        <h3>Record summary</h3>
+        <dl className="atlas-external-fields">
+          <Field label="GRCh38 allele" value={info.record.hgvs} />
+          <Field
+            label="Citations"
+            value={info.record.citation_count.toLocaleString()}
+          />
+          <Field label="Record updated" value={info.record.last_update_date} />
+          <Field label="Queried rsID" value={info.query.rsid} />
+        </dl>
+      </section>
+
+      <section className="atlas-external-section">
+        <h3>SPDI representation</h3>
+        <p className="atlas-external-section__intro">
+          NCBI’s sequence-position-deletion-insertion representation uses a
+          zero-based interbase position.
+        </p>
+        <dl className="atlas-external-fields">
+          <Field label="Sequence accession" value={info.record.spdi.seq_id} />
+          <Field
+            label="Position (0-based)"
+            value={info.record.spdi.position.toLocaleString()}
+          />
+          <Field
+            label="Deleted sequence"
+            value={info.record.spdi.deleted_sequence}
+          />
+          <Field
+            label="Inserted sequence"
+            value={info.record.spdi.inserted_sequence}
+          />
+        </dl>
+      </section>
+
+      <a
+        className="atlas-external-source-link"
+        href={info.record.source_url}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Open this record in dbSNP <span aria-hidden="true">↗</span>
+      </a>
+    </>
+  );
+}
+
+function SourceIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3Zm0 0v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" />
+    </svg>
+  );
+}
+
+function ExternalDetails({
+  artifact,
+  close,
+  error,
+  info,
+  loading,
+  lookup,
+  source,
+}: {
+  artifact: ArtifactRef;
+  close: () => void;
+  error: string | null;
+  info: ExternalInfo | null;
+  loading: boolean;
+  lookup: (source: ExternalSource) => void;
+  source: ExternalSource;
+}) {
+  return (
+    <aside
+      className="atlas-external-details"
+      aria-label="External variant information"
+    >
+      <header className="atlas-external-details__header">
+        <span className="atlas-external-details__icon">
+          <SourceIcon />
+        </span>
+        <div>
+          <p className="atlas-kicker">External reference</p>
+          <h2>Variant information</h2>
+        </div>
+        <button
+          type="button"
+          className="atlas-inspector__close"
+          onClick={close}
+          aria-label="Close external information"
+        >
+          ×
+        </button>
+      </header>
+
+      <div
+        className="atlas-external-tabs"
+        role="group"
+        aria-label="External data source"
+      >
+        {artifact.external_resources.map((resource) => (
+          <button
+            type="button"
+            key={resource.source}
+            aria-pressed={source === resource.source}
+            onClick={() => lookup(resource.source)}
+          >
+            {sourceLabel(resource.source)}
+          </button>
+        ))}
+      </div>
+
+      <div className="atlas-external-details__scroll">
+        {loading && (
+          <p className="atlas-external-loading" role="status">
+            Loading {sourceLabel(source)} information…
+          </p>
+        )}
+        {error && (
+          <p className="atlas-external-error" role="alert">
+            {error}
+          </p>
+        )}
+        {info?.source === 'gnomad' && <GnomadRecord info={info} />}
+        {info?.source === 'dbsnp' && <DbsnpRecord info={info} />}
+
+        {info && (
+          <section className="atlas-external-provenance">
+            <h3>Data provenance</h3>
+            <dl className="atlas-external-fields">
+              <Field label="Source release" value={info.source_release} />
+              <Field
+                label="Retrieved from API"
+                value={new Date(info.retrieved_at).toLocaleString(undefined, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                })}
+              />
+              <Field
+                label="Cache schema"
+                value={`Version ${info.schema_version}`}
+              />
+            </dl>
+            <p>
+              This reviewed response is cached so the Atlas remains reproducible
+              and does not change silently when an external API changes.
+            </p>
+          </section>
+        )}
+      </div>
+
+      {info && (
+        <footer className="atlas-external-actions">
+          <button type="button" onClick={() => downloadExternalInfo(info)}>
+            Download displayed data
+          </button>
+        </footer>
+      )}
+    </aside>
   );
 }
 
 export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
-  const [source, setSource] = useState<'gnomad' | 'dbsnp' | ''>('');
+  const [source, setSource] = useState<ExternalSource | null>(null);
   const [info, setInfo] = useState<ExternalInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [portalTarget, setPortalTarget] = useState<Element | null>(null);
+  const panelId = useId();
   const activeRequest = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    setPortalTarget(document.querySelector('[data-atlas-external-slot]'));
+  }, []);
 
   useEffect(() => {
     activeRequest.current?.abort();
     activeRequest.current = null;
-    setSource('');
+    setSource(null);
     setInfo(null);
     setError(null);
     setLoading(false);
+    setOpen(false);
     return () => activeRequest.current?.abort();
   }, [artifact.id, artifact.model_version, artifact.data_version]);
 
-  const lookup = (next: 'gnomad' | 'dbsnp') => {
+  const close = () => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    setLoading(false);
+    setOpen(false);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', dismiss);
+    return () => window.removeEventListener('keydown', dismiss);
+  }, [open]);
+
+  const lookup = (next: ExternalSource) => {
     activeRequest.current?.abort();
     setSource(next);
     setInfo(null);
@@ -125,14 +416,15 @@ export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
       })
       .catch((caught) => {
         if (
-          activeRequest.current === controller &&
-          (caught as Error).name !== 'AbortError'
+          activeRequest.current !== controller ||
+          (caught as Error).name === 'AbortError'
         )
-          setError(
-            caught instanceof Error
-              ? caught.message
-              : `${next} information could not be loaded.`,
-          );
+          return;
+        setError(
+          caught instanceof Error
+            ? caught.message
+            : `${sourceLabel(next)} information could not be loaded.`,
+        );
       })
       .finally(() => {
         if (activeRequest.current === controller) {
@@ -142,53 +434,48 @@ export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
       });
   };
 
+  const available = artifact.external_resources.length > 0;
+  const toggle = () => {
+    if (open) {
+      close();
+      return;
+    }
+    const next = source ?? artifact.external_resources[0]?.source;
+    if (!next) return;
+    setOpen(true);
+    if (!info || info.source !== next) lookup(next);
+  };
+
   return (
-    <details className="atlas-external-info">
-      <summary>
+    <section className="atlas-external-info">
+      <button
+        type="button"
+        className="atlas-external-info__button"
+        aria-controls={panelId}
+        aria-expanded={open}
+        disabled={!available}
+        onClick={toggle}
+      >
         More info
-        <InfoTip label="external variant information">
-          Opens a reviewed, API-derived gnomAD or dbSNP cache. These sources are
-          offered only when this map has an exact normalized variant identifier.
-        </InfoTip>
-      </summary>
-      <div>
-        {artifact.external_resources.length > 0 ? (
-          <label className="atlas-field">
-            <span>External resource</span>
-            <select
-              value={source}
-              onChange={(event) =>
-                lookup(event.target.value as 'gnomad' | 'dbsnp')
-              }
-            >
-              <option value="" disabled>
-                Choose a source…
-              </option>
-              {artifact.external_resources.map((resource) => (
-                <option value={resource.source} key={resource.source}>
-                  {resource.source === 'gnomad' ? 'gnomAD' : 'dbSNP'}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <p>
-            gnomAD and dbSNP lookup is unavailable because this map does not
-            resolve to a reviewed normalized variant or rsID.
-          </p>
+      </button>
+      {open &&
+        available &&
+        portalTarget &&
+        source &&
+        createPortal(
+          <div id={panelId}>
+            <ExternalDetails
+              artifact={artifact}
+              close={close}
+              error={error}
+              info={info}
+              loading={loading}
+              lookup={lookup}
+              source={source}
+            />
+          </div>,
+          portalTarget,
         )}
-        {loading && <p role="status">Loading {source} information…</p>}
-        {error && <p role="alert">{error}</p>}
-        {info && (
-          <>
-            <ExternalRecord info={info} />
-            <p className="atlas-external-info__provenance">
-              {info.source_release} · cached from the source API{' '}
-              {new Date(info.retrieved_at).toLocaleDateString()}
-            </p>
-          </>
-        )}
-      </div>
-    </details>
+    </section>
   );
 }

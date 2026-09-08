@@ -39,19 +39,19 @@ describe('atlas visual encoding', () => {
   });
 
   it('uses distinct, deterministic palette endpoints', () => {
-    expect(defaultPalette('post_mean')).toBe('genome');
-    expect(defaultPalette('post_sd')).toBe('signal');
+    expect(defaultPalette('post_mean')).toBe('rainbow');
+    expect(defaultPalette('post_sd')).toBe('plasma');
     expect(colorForCell(cell({ post_mean: 0 }), 'post_mean', [0, 1])).toBe(
-      '#10213e',
+      '#6e40aa',
     );
     expect(colorForCell(cell({ post_mean: 1 }), 'post_mean', [0, 1])).toBe(
-      '#72e7c1',
+      '#ff5e63',
     );
     expect(colorForCell(cell({ post_sd: 0 }), 'post_sd', [0, 1])).toBe(
-      '#24144b',
+      '#0d0887',
     );
     expect(colorForCell(cell({ post_sd: 1 }), 'post_sd', [0, 1])).toBe(
-      '#f4c86a',
+      '#f0f921',
     );
   });
 
@@ -61,6 +61,8 @@ describe('atlas visual encoding', () => {
     ['viridis', '#440154', '#fde725'],
     ['cividis', '#00204c', '#fee838'],
     ['plasma', '#0d0887', '#f0f921'],
+    ['rainbow', '#6e40aa', '#ff5e63'],
+    ['golden', '#241133', '#fff3bd'],
   ] as const)('exposes fixed %s endpoints', (palette, low, high) => {
     expect(paletteStops(palette)[0]).toBe(low);
     expect(paletteStops(palette).at(-1)).toBe(high);
@@ -70,5 +72,19 @@ describe('atlas visual encoding', () => {
     expect(
       colorForCell(cell({ post_mean: 1 }), 'post_mean', [0, 1], palette),
     ).toBe(high);
+  });
+
+  it('uses every rainbow stop rather than reducing it to three colors', () => {
+    expect(paletteStops('rainbow')).toEqual([
+      '#6e40aa',
+      '#417de0',
+      '#1ac7c2',
+      '#7bd34d',
+      '#f2cf44',
+      '#ff5e63',
+    ]);
+    expect(
+      colorForCell(cell({ post_mean: 0.4 }), 'post_mean', [0, 1], 'rainbow'),
+    ).toBe('#1ac7c2');
   });
 });

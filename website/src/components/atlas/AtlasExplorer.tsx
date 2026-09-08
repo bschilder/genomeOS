@@ -12,13 +12,28 @@ import type {
   SurfaceCell,
 } from '../../atlas/contracts';
 import {
+  observationColorEncoding,
+  observationDomains,
+  type ObservationColorEncoding,
+} from '../../atlas/observation-encoding';
+import {
+  nearestPlaceContext,
+  populatedPlaceCatalogSchema,
+  type ObservationPlaceContext,
+  type PopulatedPlaceCatalog,
+} from '../../atlas/place-context';
+import {
   createAtlasScene,
   resolveElevationView,
   type AtlasSceneController,
   type ContextStatus,
   type SceneCapabilities,
 } from '../../atlas/scene/atlas-scene';
-import type { ContextWarning } from '../../atlas/scene/context-controller';
+import {
+  availableBasemaps,
+  availableTerrains,
+  type ContextWarning,
+} from '../../atlas/scene/context-controller';
 import { StaticAtlasDataProvider } from '../../atlas/static-provider';
 import {
   parseExplorerState,
@@ -32,6 +47,7 @@ import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus, type ExplorerLoadStatus } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
+import { HoverPreview } from './HoverPreview';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 
 interface AtlasExplorerProps {
@@ -61,13 +77,8 @@ function supportsWebGL(): boolean {
 }
 
 const PUBLIC_CAPABILITIES: SceneCapabilities = {
-  basemaps: {
-    'aerial-labels': false,
-    aerial: false,
-    'dark-streets': true,
-    roads: false,
-  },
-  terrains: { 'smooth-globe': true, 'world-terrain': false },
+  basemaps: availableBasemaps(''),
+  terrains: availableTerrains(''),
 };
 
 export default function AtlasExplorer({
@@ -82,6 +93,9 @@ export default function AtlasExplorer({
   const scene = useRef<AtlasSceneController | null>(null);
   const surfaceCells = useRef<Map<string, SurfaceCell>>(new Map());
   const observations = useRef<Map<string, Observation>>(new Map());
+  const placeCatalogRequest = useRef<Promise<PopulatedPlaceCatalog> | null>(
+    null,
+  );
   const requestSequence = useRef(0);
   const cameraApplied = useRef(false);
   const appliedDisplay = useRef<string | null>(null);
@@ -93,6 +107,10 @@ export default function AtlasExplorer({
     null,
   );
   const [selection, setSelection] = useState<InspectorSelection | null>(null);
+  const [hover, setHover] = useState<{
+    position: { x: number; y: number };
+    selection: InspectorSelection;
+  } | null>(null);
   const [status, setStatus] = useState<ExplorerLoadStatus>('loading catalog');
   const [contextStatus, setContextStatus] = useState<ContextStatus>('loading');
   const [sceneWarnings, setSceneWarnings] = useState<readonly ContextWarning[]>(
@@ -104,7 +122,73 @@ export default function AtlasExplorer({
   const [error, setError] = useState<string | null>(null);
   const [webglFailed, setWebglFailed] = useState(false);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
+  const [placeCatalog, setPlaceCatalog] =
+    useState<PopulatedPlaceCatalog | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const activeObservationDomains = useMemo(() => {
+    if (!activeArtifact || observations.current.size === 0) return null;
+    return observationDomains([...observations.current.values()]);
+  }, [activeArtifact]);
+  const colorEncodingFor = (
+    candidate: InspectorSelection | null,
+  ): ObservationColorEncoding | null => {
+    if (!candidate || candidate.kind !== 'observation' || !state) return null;
+    const colorDomain =
+      state.observationColor === 'gradient'
+        ? activeObservationDomains?.frequency
+        : state.observationColor === 'ac'
+          ? activeObservationDomains?.ac
+          : ([0, 1] as const);
+    if (!colorDomain) return null;
+    return observationColorEncoding(
+      candidate.value,
+      state.observationColor,
+      colorDomain,
+      state.observationSolidColor,
+      state.observationGradient,
+    );
+  };
+  const placeContextFor = (
+    candidate: InspectorSelection | null,
+  ): ObservationPlaceContext | null => {
+    if (!placeCatalog || !candidate || candidate.kind !== 'observation')
+      return null;
+    return nearestPlaceContext(candidate.value, placeCatalog);
+  };
+  const wantsPlaceContext =
+    hover?.selection.kind === 'observation' ||
+    selection?.kind === 'observation';
+
+  useEffect(() => {
+    if (!wantsPlaceContext || placeCatalog) return;
+    let active = true;
+    const request =
+      placeCatalogRequest.current ??
+      fetch(`${dataBaseUrl}ne-50m-populated-places.json`)
+        .then((response) => {
+          if (!response.ok)
+            throw new Error(
+              `Place context request failed (${response.status}).`,
+            );
+          return response.json();
+        })
+        .then((value) => populatedPlaceCatalogSchema.parse(value));
+    placeCatalogRequest.current = request;
+    void request
+      .then((value) => {
+        if (active) setPlaceCatalog(value);
+      })
+      .catch((caught) => {
+        placeCatalogRequest.current = null;
+        console.warn(
+          'Optional observation place context is unavailable.',
+          caught,
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [dataBaseUrl, placeCatalog, wantsPlaceContext]);
 
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -127,7 +211,7 @@ export default function AtlasExplorer({
     try {
       const controller = createAtlasScene(element, {
         cesiumToken,
-        naturalEarthUrl: `${dataBaseUrl}ne-110m-admin-0.geojson`,
+        naturalEarthUrl: `${dataBaseUrl}ne-50m-admin-0.geojson`,
         reducedMotion,
       });
       scene.current = controller;
@@ -141,6 +225,29 @@ export default function AtlasExplorer({
           setSelection(value ? { kind: 'observation', value } : null);
         } else setSelection(null);
       });
+      const removeHover = controller.onHover((hovered) => {
+        if (hovered?.pick.kind === 'surface') {
+          const value = surfaceCells.current.get(hovered.pick.h3Index);
+          setHover(
+            value
+              ? {
+                  position: hovered.screenPosition,
+                  selection: { kind: 'surface', value },
+                }
+              : null,
+          );
+        } else if (hovered?.pick.kind === 'observation') {
+          const value = observations.current.get(hovered.pick.sourceRecordId);
+          setHover(
+            value
+              ? {
+                  position: hovered.screenPosition,
+                  selection: { kind: 'observation', value },
+                }
+              : null,
+          );
+        } else setHover(null);
+      });
       const removeCamera = controller.onCameraSettled((camera) => {
         if (!cameraApplied.current) return;
         setState((current) => (current ? { ...current, camera } : current));
@@ -149,6 +256,7 @@ export default function AtlasExplorer({
       const removeWarnings = controller.onWarning(setSceneWarnings);
       return () => {
         removePick();
+        removeHover();
         removeCamera();
         removeContext();
         removeWarnings();
@@ -247,6 +355,7 @@ export default function AtlasExplorer({
           cameraApplied.current = true;
         }
         setSelection(null);
+        setHover(null);
         setActiveArtifact(ref);
         setStatus('ready');
       })
@@ -290,25 +399,41 @@ export default function AtlasExplorer({
         state.surfacePalette,
         state.surfaceOpacity,
         state.cellEdges,
+        state.edgeColorMode,
+        state.edgeFixedColor,
+        state.surfaceGeometry,
       );
-  }, [state?.surfacePalette, state?.surfaceOpacity, state?.cellEdges]);
+  }, [
+    state?.surfacePalette,
+    state?.surfaceOpacity,
+    state?.cellEdges,
+    state?.edgeColorMode,
+    state?.edgeFixedColor,
+    state?.surfaceGeometry,
+  ]);
 
   useEffect(() => {
     if (state)
       void scene.current?.setObservationStyle({
         colorVariable: state.observationColor,
-        hemisphereRange: state.observationHemisphereRange,
-        pointRange: state.observationPointRange,
+        gradient: state.observationGradient,
+        opacity: state.observationOpacity,
+        samplingAreaColor: state.samplingAreaColor,
+        sizeRange: state.observationSizeRange,
         samplingAreas: state.samplingAreas,
         shape: state.observationShape,
         sizeVariable: state.observationSize,
+        solidColor: state.observationSolidColor,
       });
   }, [
     state?.observationColor,
-    state?.observationHemisphereRange,
-    state?.observationPointRange,
+    state?.observationGradient,
+    state?.observationOpacity,
+    state?.samplingAreaColor,
+    state?.observationSizeRange,
     state?.observationShape,
     state?.observationSize,
+    state?.observationSolidColor,
     state?.samplingAreas,
   ]);
 
@@ -317,12 +442,42 @@ export default function AtlasExplorer({
   }, [state?.basemap, sceneAttempt]);
 
   useEffect(() => {
+    if (state)
+      scene.current?.setMapPresentation(
+        state.basemapOpacity,
+        state.basemapBrightness,
+        state.dayNightLighting,
+      );
+  }, [
+    state?.basemapOpacity,
+    state?.basemapBrightness,
+    state?.dayNightLighting,
+    sceneAttempt,
+  ]);
+
+  useEffect(() => {
     if (state) void scene.current?.setTerrain(state.terrain);
   }, [state?.terrain, sceneAttempt]);
 
   useEffect(() => {
     if (state) scene.current?.setLayerVisibility(state.layers);
   }, [state?.layers]);
+
+  useEffect(() => {
+    if (state) scene.current?.setEarthOpacity(state.earthOpacity);
+  }, [state?.earthOpacity, sceneAttempt]);
+
+  useEffect(() => {
+    if (state) scene.current?.setOceanColor(state.oceanColor);
+  }, [state?.oceanColor, sceneAttempt]);
+
+  useEffect(() => {
+    if (state)
+      scene.current?.setCountryBorderStyle(
+        state.countryBorderColor,
+        state.countryBorderOpacity,
+      );
+  }, [state?.countryBorderColor, state?.countryBorderOpacity, sceneAttempt]);
 
   useEffect(() => {
     if (!state || !activeArtifact || !scene.current) return;
@@ -385,6 +540,17 @@ export default function AtlasExplorer({
     });
   };
 
+  useEffect(() => {
+    if (!selection) return;
+    const dismissInspector = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      scene.current?.setSelection(null);
+      setSelection(null);
+    };
+    window.addEventListener('keydown', dismissInspector);
+    return () => window.removeEventListener('keydown', dismissInspector);
+  }, [selection]);
+
   return (
     <div
       className="atlas-explorer"
@@ -400,9 +566,6 @@ export default function AtlasExplorer({
         role="region"
         aria-label="Interactive globe canvas"
       />
-      <div className="atlas-brand" aria-hidden="true">
-        <span className="brand-name">genomeOS</span> atlas
-      </div>
 
       {catalog && state ? (
         <ExplorerControls
@@ -428,35 +591,60 @@ export default function AtlasExplorer({
                 ? {
                     ...current,
                     metric,
-                    surfacePalette:
-                      current.paletteMode === 'metric-default'
-                        ? defaultPalette(metric)
-                        : current.surfacePalette,
+                    paletteMode: 'metric-default',
+                    surfacePalette: defaultPalette(metric),
                   }
                 : current,
             )
           }
           onBasemap={(basemap) => update({ basemap })}
+          onBasemapBrightness={(basemapBrightness) =>
+            update({ basemapBrightness })
+          }
+          onBasemapOpacity={(basemapOpacity) => update({ basemapOpacity })}
+          onCountryBorderColor={(countryBorderColor) =>
+            update({ countryBorderColor })
+          }
+          onCountryBorderOpacity={(countryBorderOpacity) =>
+            update({ countryBorderOpacity })
+          }
+          onDayNightLighting={(dayNightLighting) =>
+            update({ dayNightLighting })
+          }
           onTerrain={(terrain) => update({ terrain })}
           onSurfacePalette={(surfacePalette) =>
             update({ paletteMode: 'custom', surfacePalette })
           }
           onSurfaceOpacity={(surfaceOpacity) => update({ surfaceOpacity })}
+          onEarthOpacity={(earthOpacity) => update({ earthOpacity })}
+          onOceanColor={(oceanColor) => update({ oceanColor })}
+          onSurfaceGeometry={(surfaceGeometry) => update({ surfaceGeometry })}
           onCellEdges={(cellEdges) => update({ cellEdges })}
+          onEdgeColorMode={(edgeColorMode) => update({ edgeColorMode })}
+          onEdgeFixedColor={(edgeFixedColor) => update({ edgeFixedColor })}
           onObservationShape={(observationShape) =>
             update({ observationShape })
           }
           onObservationColor={(observationColor) =>
             update({ observationColor })
           }
-          onObservationSize={(observationSize) => update({ observationSize })}
-          onObservationPointRange={(observationPointRange) =>
-            update({ observationPointRange })
+          onObservationGradient={(observationGradient) =>
+            update({ observationGradient })
           }
-          onObservationHemisphereRange={(observationHemisphereRange) =>
-            update({ observationHemisphereRange })
+          onObservationOpacity={(observationOpacity) =>
+            update({ observationOpacity })
+          }
+          onObservationSize={(observationSize) => update({ observationSize })}
+          onObservationRange={(observationSizeRange) =>
+            update({ observationSizeRange })
+          }
+          onObservationSolidColor={(observationSolidColor) =>
+            update({ observationSolidColor })
           }
           onSamplingAreas={(samplingAreas) => update({ samplingAreas })}
+          onSamplingAreaColor={(samplingAreaColor) =>
+            update({ samplingAreaColor })
+          }
           onLayer={chooseLayer}
           onView={(view: ExplorerSceneMode) => update({ view })}
           onElevation={chooseElevation}
@@ -466,7 +654,9 @@ export default function AtlasExplorer({
         />
       ) : (
         <aside className="atlas-controls atlas-controls--loading">
-          <p className="atlas-kicker">Interactive atlas</p>
+          <p className="atlas-kicker atlas-kicker--brand">
+            <span className="brand-name">genomeOS</span> Atlas
+          </p>
           <h1>Explore human genetic variation</h1>
           <p>Loading the public catalog…</p>
         </aside>
@@ -492,16 +682,29 @@ export default function AtlasExplorer({
       {activeArtifact && state && (
         <AtlasLegend artifact={activeArtifact} state={state} />
       )}
-      {activeArtifact && selection && (
-        <InspectorPanel
-          artifact={activeArtifact}
-          selection={selection}
-          onClose={() => {
-            scene.current?.setSelection(null);
-            setSelection(null);
-          }}
+      {state && hover && (
+        <HoverPreview
+          colorEncoding={colorEncodingFor(hover.selection)}
+          placeContext={placeContextFor(hover.selection)}
+          position={hover.position}
+          selection={hover.selection}
         />
       )}
+      <div className="atlas-right-rail">
+        {activeArtifact && selection && (
+          <InspectorPanel
+            artifact={activeArtifact}
+            colorEncoding={colorEncodingFor(selection)}
+            placeContext={placeContextFor(selection)}
+            selection={selection}
+            onClose={() => {
+              scene.current?.setSelection(null);
+              setSelection(null);
+            }}
+          />
+        )}
+        <div data-atlas-external-slot />
+      </div>
       <p className="atlas-data-credit">
         Scientific data and provenance:{' '}
         <a
