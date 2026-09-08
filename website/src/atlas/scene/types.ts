@@ -28,6 +28,13 @@ export interface AtlasHover {
 }
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
 
+export interface SceneProgress {
+  detail: string;
+  progress: number | null;
+}
+
+export type SceneProgressListener = (progress: SceneProgress) => void;
+
 export interface SceneCapabilities {
   basemaps: Record<BasemapId, boolean>;
   terrains: Record<TerrainId, boolean>;
@@ -56,8 +63,9 @@ export interface AtlasSceneController {
   setArtifact(
     surface: SurfaceArtifact,
     observations: ObservationArtifact | null,
+    progress?: SceneProgressListener,
   ): Promise<void>;
-  setMetric(metric: Metric): Promise<void>;
+  setMetric(metric: Metric, progress?: SceneProgressListener): Promise<void>;
   setSurfaceStyle(
     palette: PaletteId,
     opacity: number,
@@ -65,8 +73,12 @@ export interface AtlasSceneController {
     edgeColorMode: EdgeColorMode,
     edgeFixedColor: string,
     geometry: SurfaceGeometry,
+    progress?: SceneProgressListener,
   ): Promise<void>;
-  setObservationStyle(style: ObservationPresentation): Promise<void>;
+  setObservationStyle(
+    style: ObservationPresentation,
+    progress?: SceneProgressListener,
+  ): Promise<void>;
   setBasemap(basemap: BasemapId): Promise<boolean>;
   setTerrain(terrain: TerrainId): Promise<boolean>;
   capabilities(): SceneCapabilities;

@@ -117,6 +117,35 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   ).toBeVisible();
 });
 
+test('Atlas status shows progress while a replacement dataset stays pending', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.route('**/g6pd-deficiency.surface.json', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1_800));
+    await route.fallback();
+  });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  const status = page.locator('[data-atlas-status-slot]');
+  await expect(status).toContainText('Loading G6PD deficiency');
+  const progress = status.locator('.atlas-status__meter');
+  await expect(progress).toHaveAttribute('role', 'progressbar');
+  await expect(progress).toHaveAttribute(
+    'aria-label',
+    'Atlas operation progress',
+  );
+  await expect(progress).toBeVisible();
+  await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  await expect(
+    page.locator('[data-atlas-active="g6pd-deficiency"]'),
+  ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+});
+
 test('navigation stays visible and condenses after scrolling', async ({
   page,
   isMobile,

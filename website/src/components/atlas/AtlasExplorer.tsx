@@ -12,28 +12,34 @@ import type {
   SurfaceCell,
 } from '../../atlas/contracts';
 import {
+  artifactVersion,
+  displayKey,
+  errorMessage,
+  PUBLIC_SCENE_CAPABILITIES,
+  supportsWebGL,
+} from '../../atlas/explorer-runtime';
+import {
   observationColorEncoding,
   observationDomains,
   type ObservationColorEncoding,
 } from '../../atlas/observation-encoding';
 import {
   nearestPlaceContext,
-  populatedPlaceCatalogSchema,
   type ObservationPlaceContext,
-  type PopulatedPlaceCatalog,
 } from '../../atlas/place-context';
+import {
+  aggregateTransferProgress,
+  createTransferProgressTracker,
+} from '../../atlas/progress';
 import {
   createAtlasScene,
   resolveElevationView,
   type AtlasSceneController,
   type ContextStatus,
   type SceneCapabilities,
+  type SceneProgressListener,
 } from '../../atlas/scene/atlas-scene';
-import {
-  availableBasemaps,
-  availableTerrains,
-  type ContextWarning,
-} from '../../atlas/scene/context-controller';
+import type { ContextWarning } from '../../atlas/scene/context-controller';
 import { StaticAtlasDataProvider } from '../../atlas/static-provider';
 import {
   parseExplorerState,
@@ -45,41 +51,17 @@ import {
 } from '../../atlas/url-state';
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
 import { AtlasLegend } from './AtlasLegend';
-import { AtlasStatus, type ExplorerLoadStatus } from './AtlasStatus';
+import { AtlasStatus } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
 import { HoverPreview } from './HoverPreview';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
+import { nextPaint, useAtlasActivity } from './useAtlasActivity';
+import { useObservationPlaces } from './useObservationPlaces';
 
 interface AtlasExplorerProps {
   cesiumToken?: string;
   dataBaseUrl: string;
 }
-
-function artifactVersion(ref: ArtifactRef): string {
-  return `${ref.model_version}/${ref.data_version}`;
-}
-
-function message(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : 'An unexpected atlas error occurred.';
-}
-
-function displayKey(state: ExplorerState, reducedMotion: boolean): string {
-  return [state.view, state.elevation, state.exaggeration, reducedMotion].join(
-    ':',
-  );
-}
-
-function supportsWebGL(): boolean {
-  const canvas = document.createElement('canvas');
-  return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
-}
-
-const PUBLIC_CAPABILITIES: SceneCapabilities = {
-  basemaps: availableBasemaps(''),
-  terrains: availableTerrains(''),
-};
 
 export default function AtlasExplorer({
   cesiumToken = '',
@@ -93,9 +75,6 @@ export default function AtlasExplorer({
   const scene = useRef<AtlasSceneController | null>(null);
   const surfaceCells = useRef<Map<string, SurfaceCell>>(new Map());
   const observations = useRef<Map<string, Observation>>(new Map());
-  const placeCatalogRequest = useRef<Promise<PopulatedPlaceCatalog> | null>(
-    null,
-  );
   const requestSequence = useRef(0);
   const cameraApplied = useRef(false);
   const appliedDisplay = useRef<string | null>(null);
@@ -111,20 +90,27 @@ export default function AtlasExplorer({
     position: { x: number; y: number };
     selection: InspectorSelection;
   } | null>(null);
-  const [status, setStatus] = useState<ExplorerLoadStatus>('loading catalog');
   const [contextStatus, setContextStatus] = useState<ContextStatus>('loading');
   const [sceneWarnings, setSceneWarnings] = useState<readonly ContextWarning[]>(
     [],
   );
-  const [capabilities, setCapabilities] =
-    useState<SceneCapabilities>(PUBLIC_CAPABILITIES);
+  const [capabilities, setCapabilities] = useState<SceneCapabilities>(
+    PUBLIC_SCENE_CAPABILITIES,
+  );
   const [corrections, setCorrections] = useState<StateCorrection[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [webglFailed, setWebglFailed] = useState(false);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
-  const [placeCatalog, setPlaceCatalog] =
-    useState<PopulatedPlaceCatalog | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const {
+    activity,
+    begin: beginActivity,
+    fail: failActivity,
+    finish: finishActivity,
+    runScene: runSceneActivity,
+    status,
+    update: updateActivity,
+  } = useAtlasActivity(scene, (caught) => setError(errorMessage(caught)));
   const activeObservationDomains = useMemo(() => {
     if (!activeArtifact || observations.current.size === 0) return null;
     return observationDomains([...observations.current.values()]);
@@ -148,6 +134,10 @@ export default function AtlasExplorer({
       state.observationGradient,
     );
   };
+  const wantsPlaceContext =
+    hover?.selection.kind === 'observation' ||
+    selection?.kind === 'observation';
+  const placeCatalog = useObservationPlaces(dataBaseUrl, wantsPlaceContext);
   const placeContextFor = (
     candidate: InspectorSelection | null,
   ): ObservationPlaceContext | null => {
@@ -155,41 +145,6 @@ export default function AtlasExplorer({
       return null;
     return nearestPlaceContext(candidate.value, placeCatalog);
   };
-  const wantsPlaceContext =
-    hover?.selection.kind === 'observation' ||
-    selection?.kind === 'observation';
-
-  useEffect(() => {
-    if (!wantsPlaceContext || placeCatalog) return;
-    let active = true;
-    const request =
-      placeCatalogRequest.current ??
-      fetch(`${dataBaseUrl}ne-50m-populated-places.json`)
-        .then((response) => {
-          if (!response.ok)
-            throw new Error(
-              `Place context request failed (${response.status}).`,
-            );
-          return response.json();
-        })
-        .then((value) => populatedPlaceCatalogSchema.parse(value));
-    placeCatalogRequest.current = request;
-    void request
-      .then((value) => {
-        if (active) setPlaceCatalog(value);
-      })
-      .catch((caught) => {
-        placeCatalogRequest.current = null;
-        console.warn(
-          'Optional observation place context is unavailable.',
-          caught,
-        );
-      });
-    return () => {
-      active = false;
-    };
-  }, [dataBaseUrl, placeCatalog, wantsPlaceContext]);
-
   useEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)');
     const updatePreference = () => setReducedMotion(media.matches);
@@ -270,10 +225,20 @@ export default function AtlasExplorer({
 
   useEffect(() => {
     const controller = new AbortController();
-    setStatus('loading catalog');
+    const sequence = beginActivity('loading catalog', {
+      detail: 'Waiting for the catalog response',
+      label: 'Loading catalog',
+      progress: null,
+    });
     setError(null);
     provider
-      .getCatalog(controller.signal)
+      .getCatalog(controller.signal, (transfer) => {
+        updateActivity(sequence, {
+          detail: 'Downloading the public map catalog',
+          label: 'Loading catalog',
+          progress: aggregateTransferProgress([transfer]),
+        });
+      })
       .then((loaded) => {
         const parsed = parseExplorerState(window.location.search, loaded);
         setCatalog(loaded);
@@ -291,7 +256,10 @@ export default function AtlasExplorer({
         }
       })
       .catch((caught) => {
-        if ((caught as Error).name !== 'AbortError') setError(message(caught));
+        if ((caught as Error).name !== 'AbortError') {
+          failActivity(sequence);
+          setError(errorMessage(caught));
+        }
       });
     return () => controller.abort();
   }, [provider, dataAttempt]);
@@ -310,15 +278,35 @@ export default function AtlasExplorer({
 
     const controller = new AbortController();
     const sequence = ++requestSequence.current;
-    setStatus('loading artifact');
+    const activityId = beginActivity('loading artifact', {
+      detail: 'Waiting for scientific artifact responses',
+      label: `Loading ${ref.label}`,
+      progress: null,
+    });
+    const transferKeys: readonly ('observations' | 'surface')[] =
+      ref.observations_available ? ['surface', 'observations'] : ['surface'];
+    const reportTransfer = createTransferProgressTracker(
+      transferKeys,
+      (progress) => {
+        if (sequence !== requestSequence.current) return;
+        updateActivity(activityId, {
+          detail: 'Downloading surface and measured observations',
+          label: `Loading ${ref.label}`,
+          progress,
+        });
+      },
+    );
     setError(null);
     Promise.all([
-      provider.getSurface(ref, controller.signal),
-      provider.getObservations(ref, controller.signal),
+      provider.getSurface(ref, controller.signal, reportTransfer('surface')),
+      provider.getObservations(
+        ref,
+        controller.signal,
+        reportTransfer('observations'),
+      ),
     ])
       .then(async ([surface, measured]) => {
         if (sequence !== requestSequence.current) return;
-        setStatus('validating');
         surfaceCells.current = new Map(
           surface.cells.map((cell) => [cell.h3_index, cell]),
         );
@@ -328,9 +316,17 @@ export default function AtlasExplorer({
             observation,
           ]),
         );
-        setStatus('rendering');
+        updateActivity(activityId, {
+          detail: 'Preparing the scene renderer',
+          label: `Rendering ${ref.label}`,
+          progress: null,
+        });
         const controller = scene.current;
-        if (!controller) return;
+        if (!controller) {
+          failActivity(activityId);
+          return;
+        }
+        await nextPaint();
         await controller.setSceneMode(state.view, reducedMotion);
         if (
           sequence !== requestSequence.current ||
@@ -344,7 +340,14 @@ export default function AtlasExplorer({
         )
           return;
         appliedDisplay.current = displayKey(state, reducedMotion);
-        await controller.setArtifact(surface, measured);
+        await controller.setArtifact(surface, measured, (renderProgress) => {
+          if (sequence !== requestSequence.current) return;
+          updateActivity(activityId, {
+            detail: renderProgress.detail,
+            label: `Rendering ${ref.label}`,
+            progress: renderProgress.progress,
+          });
+        });
         if (
           sequence !== requestSequence.current ||
           controller !== scene.current
@@ -357,14 +360,15 @@ export default function AtlasExplorer({
         setSelection(null);
         setHover(null);
         setActiveArtifact(ref);
-        setStatus('ready');
+        finishActivity(activityId);
       })
       .catch((caught) => {
         if (
           (caught as Error).name !== 'AbortError' &&
           sequence === requestSequence.current
         ) {
-          setError(`${state.entityId}: ${message(caught)}`);
+          failActivity(activityId);
+          setError(`${state.entityId}: ${errorMessage(caught)}`);
         }
       });
     return () => controller.abort();
@@ -390,19 +394,42 @@ export default function AtlasExplorer({
   }, [state]);
 
   useEffect(() => {
-    if (state) void scene.current?.setMetric(state.metric);
+    if (!state) return;
+    if (!activeArtifact) {
+      void scene.current?.setMetric(state.metric);
+      return;
+    }
+    return runSceneActivity(
+      'Updating inferred surface',
+      'Changing the displayed metric',
+      (controller, progress) => controller.setMetric(state.metric, progress),
+    );
   }, [state?.metric]);
 
   useEffect(() => {
-    if (state)
-      void scene.current?.setSurfaceStyle(
+    if (!state) return;
+    const apply = (
+      controller: AtlasSceneController,
+      progress?: SceneProgressListener,
+    ) =>
+      controller.setSurfaceStyle(
         state.surfacePalette,
         state.surfaceOpacity,
         state.cellEdges,
         state.edgeColorMode,
         state.edgeFixedColor,
         state.surfaceGeometry,
+        progress,
       );
+    if (!activeArtifact) {
+      void (scene.current && apply(scene.current));
+      return;
+    }
+    return runSceneActivity(
+      'Updating inferred surface',
+      'Applying the selected surface geometry',
+      (controller, progress) => apply(controller, progress),
+    );
   }, [
     state?.surfacePalette,
     state?.surfaceOpacity,
@@ -413,18 +440,27 @@ export default function AtlasExplorer({
   ]);
 
   useEffect(() => {
-    if (state)
-      void scene.current?.setObservationStyle({
-        colorVariable: state.observationColor,
-        gradient: state.observationGradient,
-        opacity: state.observationOpacity,
-        samplingAreaColor: state.samplingAreaColor,
-        sizeRange: state.observationSizeRange,
-        samplingAreas: state.samplingAreas,
-        shape: state.observationShape,
-        sizeVariable: state.observationSize,
-        solidColor: state.observationSolidColor,
-      });
+    if (!state) return;
+    const style = {
+      colorVariable: state.observationColor,
+      gradient: state.observationGradient,
+      opacity: state.observationOpacity,
+      samplingAreaColor: state.samplingAreaColor,
+      sizeRange: state.observationSizeRange,
+      samplingAreas: state.samplingAreas,
+      shape: state.observationShape,
+      sizeVariable: state.observationSize,
+      solidColor: state.observationSolidColor,
+    };
+    if (!activeArtifact) {
+      void scene.current?.setObservationStyle(style);
+      return;
+    }
+    return runSceneActivity(
+      'Updating measured points',
+      'Applying the selected marker encoding',
+      (controller, progress) => controller.setObservationStyle(style, progress),
+    );
   }, [
     state?.observationColor,
     state?.observationGradient,
@@ -438,7 +474,16 @@ export default function AtlasExplorer({
   ]);
 
   useEffect(() => {
-    if (state) void scene.current?.setBasemap(state.basemap);
+    if (!state) return;
+    if (!activeArtifact) {
+      void scene.current?.setBasemap(state.basemap);
+      return;
+    }
+    return runSceneActivity(
+      'Changing basemap',
+      'Waiting for imagery services',
+      (controller) => controller.setBasemap(state.basemap),
+    );
   }, [state?.basemap, sceneAttempt]);
 
   useEffect(() => {
@@ -456,7 +501,16 @@ export default function AtlasExplorer({
   ]);
 
   useEffect(() => {
-    if (state) void scene.current?.setTerrain(state.terrain);
+    if (!state) return;
+    if (!activeArtifact) {
+      void scene.current?.setTerrain(state.terrain);
+      return;
+    }
+    return runSceneActivity(
+      'Changing terrain',
+      'Waiting for terrain services',
+      (controller) => controller.setTerrain(state.terrain),
+    );
   }, [state?.terrain, sceneAttempt]);
 
   useEffect(() => {
@@ -485,17 +539,26 @@ export default function AtlasExplorer({
     if (appliedDisplay.current === key) return;
     const controller = scene.current;
     let canceled = false;
-    setStatus('rendering');
+    const activityId = beginActivity('rendering', {
+      detail: 'Reprojecting scientific layers',
+      label: 'Updating map view',
+      progress: null,
+    });
     void (async () => {
       try {
+        await nextPaint();
+        if (canceled || controller !== scene.current) return;
         await controller.setSceneMode(state.view, reducedMotion);
         if (canceled || controller !== scene.current) return;
         await controller.setElevation(state.elevation, state.exaggeration);
         if (canceled || controller !== scene.current) return;
         appliedDisplay.current = key;
-        setStatus('ready');
+        finishActivity(activityId);
       } catch (caught) {
-        if (!canceled) setError(message(caught));
+        if (!canceled) {
+          failActivity(activityId);
+          setError(errorMessage(caught));
+        }
       }
     })();
     return () => {
@@ -664,6 +727,7 @@ export default function AtlasExplorer({
 
       <AtlasStatus
         status={status}
+        activity={activity}
         contextStatus={contextStatus}
         sceneWarnings={sceneWarnings}
         corrections={corrections}

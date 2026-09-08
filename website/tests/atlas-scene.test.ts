@@ -962,6 +962,40 @@ describe('Cesium scene policy', () => {
     }
   });
 
+  it('reports measurable Cesium primitive readiness', async () => {
+    let postRender = () => {};
+    let readyCount = 0;
+    const progress = vi.fn();
+    const group = {
+      collection: { show: true },
+      isReady: () => readyCount === 2,
+      readyCount: () => readyCount,
+      totalCount: () => 2,
+    };
+    const viewer = {
+      scene: {
+        postRender: {
+          addEventListener(listener: () => void) {
+            postRender = listener;
+            return () => {};
+          },
+        },
+        requestRender: vi.fn(),
+      },
+    };
+    const outcome = waitForReady(viewer as never, group as never, progress);
+
+    expect(progress).toHaveBeenLastCalledWith(0);
+    readyCount = 1;
+    postRender();
+    expect(progress).toHaveBeenLastCalledWith(0.5);
+    readyCount = 2;
+    postRender();
+
+    await outcome;
+    expect(progress).toHaveBeenLastCalledWith(1);
+  });
+
   it('hides geometry that stops making readiness progress', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('window', { setTimeout: globalThis.setTimeout });

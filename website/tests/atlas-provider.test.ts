@@ -204,6 +204,62 @@ describe('StaticAtlasDataProvider', () => {
     );
   });
 
+  it('reports streamed response bytes when the server declares a size', async () => {
+    const response = {
+      artifact: {
+        artifact_format: ref.artifact_format,
+        data_version: ref.data_version,
+        entity_type: ref.entity_type,
+        hf_dataset: ref.hf_dataset,
+        hf_revision: ref.hf_revision,
+        id: ref.id,
+        label: ref.label,
+        measurement: ref.measurement,
+        metric_domains: ref.metric_domains,
+        model_version: ref.model_version,
+        registry_version: ref.registry_version,
+        resolution: ref.resolution,
+        variant_id: ref.variant_id,
+      },
+      cells: [
+        {
+          dist_nearest_obs_km: 10,
+          h3_index: '83754efffffffff',
+          post_mean: 0.1,
+          post_sd: 0.02,
+          posterior_contraction: 0.8,
+          q025: 0.06,
+          q975: 0.14,
+          support: 'observed',
+        },
+      ],
+      schema_version: 1,
+    };
+    const body = JSON.stringify(response);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(body, {
+          headers: {
+            'Content-Length': String(new TextEncoder().encode(body).length),
+            'Content-Type': 'application/json',
+          },
+        }),
+      ),
+    );
+    const progress = vi.fn();
+    const provider = new StaticAtlasDataProvider('/data/atlas/');
+
+    await provider.getSurface(ref, undefined, progress);
+
+    const totalBytes = new TextEncoder().encode(body).length;
+    expect(progress).toHaveBeenCalledWith({ loadedBytes: 0, totalBytes });
+    expect(progress).toHaveBeenLastCalledWith({
+      loadedBytes: totalBytes,
+      totalBytes,
+    });
+  });
+
   it('reports HTTP failures instead of falling back', async () => {
     vi.stubGlobal(
       'fetch',
