@@ -674,7 +674,9 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await page
     .getByLabel('Surface geometry', { exact: true })
     .selectOption('honmoon-fill');
-  await page.getByRole('checkbox', { name: 'Cell edges', exact: true }).check();
+  await page
+    .getByRole('checkbox', { name: 'Cell outlines', exact: true })
+    .check();
   await page
     .getByRole('combobox', { name: 'Edge color', exact: true })
     .selectOption('fixed');
