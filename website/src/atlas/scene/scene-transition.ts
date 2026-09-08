@@ -48,10 +48,7 @@ export function waitForReady(
     };
     const extendDeadline = () => {
       clearTimeout(timeout);
-      timeout = globalThis.setTimeout(
-        failIfStalled,
-        GEOMETRY_IDLE_TIMEOUT_MS,
-      );
+      timeout = globalThis.setTimeout(failIfStalled, GEOMETRY_IDLE_TIMEOUT_MS);
     };
     const remove = viewer.scene.postRender.addEventListener(() => {
       const nextReadyCount = group.readyCount();
