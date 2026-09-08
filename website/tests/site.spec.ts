@@ -715,7 +715,8 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await page.locator('summary', { hasText: 'Measured points' }).click();
   await page
     .getByLabel('Marker shape', { exact: true })
-    .selectOption('hemisphere');
+    .selectOption({ label: 'Studs' });
+  await expect(page).toHaveURL(/obsShape=hemisphere/);
   await page.getByLabel('Marker shape', { exact: true }).selectOption('pin');
   await page
     .getByLabel('Marker color', { exact: true })
