@@ -118,6 +118,47 @@ Issues labelled `wants-expert-review` are the highest-leverage contribution a sp
 make — you don't have to write the code to make the difference. Corrections to the design, the
 dataset scores, and the statistics are actively wanted.
 
+## Run the published container
+
+The public [genomeOS package on GitHub Container Registry](https://github.com/users/bschilder/packages/container/package/genomeos)
+provides native `linux/amd64` and `linux/arm64` images and does not require a GitHub login. To run
+the latest image whose `main` commit passed CI:
+
+```bash
+docker pull ghcr.io/bschilder/genomeos:latest
+docker run --rm --read-only --tmpfs /tmp \
+  -e DATABASE_URL=sqlite:////tmp/genomeos.db \
+  -e ATLAS_ARTIFACT_ROOT=/app/demo/artifacts \
+  -p 127.0.0.1:8000:8080 \
+  ghcr.io/bschilder/genomeos:latest
+```
+
+In another terminal, check readiness and open the diagnostic preview:
+
+```bash
+curl http://127.0.0.1:8000/ready
+open http://127.0.0.1:8000/preview  # macOS; use xdg-open on Linux
+```
+
+For a reproducible run, pin the image to the seven-character commit tag instead of `latest`:
+
+```bash
+docker pull ghcr.io/bschilder/genomeos:sha-813edd0
+docker run --rm --read-only --tmpfs /tmp \
+  -e DATABASE_URL=sqlite:////tmp/genomeos.db \
+  -e ATLAS_ARTIFACT_ROOT=/app/demo/artifacts \
+  -p 127.0.0.1:8000:8080 \
+  ghcr.io/bschilder/genomeos:sha-813edd0
+```
+
+`latest` advances only after the required CI workflow succeeds on `main`; `sha-...` tags do not
+move. Each multi-architecture manifest includes OCI revision metadata, an SBOM, and provenance
+attestations. The container runs as an unprivileged user with a read-only filesystem; `/tmp` is
+the only writable location and holds the disposable diagnostic database. The bundled artifacts
+are tiny synthetic fixtures for checking the read path—they are not scientific results. See the
+[deployment guide](docs/deployment-gcp.md) for production data, database, and Cloud Run
+requirements.
+
 ## Local development
 
 ```bash
