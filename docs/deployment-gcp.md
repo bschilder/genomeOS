@@ -51,6 +51,23 @@ never present those fixtures as scientific results. Production requires an
 explicit immutable artifact root and completion of the GCS work tracked in #33
 and #49.
 
+## GitHub Container Registry
+
+After the `ci` workflow succeeds for a commit on `main`, the `container`
+workflow publishes the API/read-path image for both `linux/amd64` and
+`linux/arm64`:
+
+```bash
+docker pull ghcr.io/bschilder/genomeos:latest
+docker pull ghcr.io/bschilder/genomeos:sha-<seven-character-commit>
+```
+
+`latest` is the convenient discovery tag. Deployments must use the immutable
+`sha-...` tag so a cited service revision cannot change underneath them. Each
+manifest includes OCI source and revision labels, an SBOM, and provenance
+attestations. The image is only published after the same root Dockerfile has
+passed the container HTTP smoke in `ci`.
+
 Cloud Run mounts the artifact bucket read-only at `/mnt/atlas` in the second-generation
 execution environment. Publish every version below `catalogs/<artifact-version>/`, upload
 data objects before `manifest.json`, and set `ATLAS_ARTIFACT_ROOT` to that exact versioned
