@@ -35,7 +35,8 @@ from genomeos.surfaces.mask import MaskConfig, classify_support
 
 #: Bumped when the columns change. Written into the manifest so a reader can refuse an artifact it
 #: does not understand rather than silently misreading one.
-ARTIFACT_FORMAT = 1
+ARTIFACT_FORMAT = 2
+READABLE_ARTIFACT_FORMATS = frozenset({1, ARTIFACT_FORMAT})
 
 #: The quantity a cell value carries. `allele_frequency` counts chromosomes; `carrier_frequency`
 #: counts individuals and comes from copy-number-variable genes such as KIR, where there is no
@@ -87,6 +88,10 @@ class ArtifactManifest:
     lengthscale_sigma: float
     n_observations: int
     support_counts: dict[str, int]
+    #: Population-supported cell selection is part of what the artifact means. It is required for
+    #: new writes so a small-island cell cannot appear without a named denominator grid.
+    target_grid_source: str
+    target_grid_version: str
     #: What the per-cell numbers mean. Required, with no default: an artifact holding carrier
     #: frequencies over individuals and one holding allele frequencies over chromosomes are
     #: indistinguishable by inspection, and a consumer that averages across both is wrong in a way
@@ -100,6 +105,10 @@ class ArtifactManifest:
             raise ValueError(
                 f"unknown measurement {self.measurement!r}; expected one of {MEASUREMENTS}"
             )
+        if not self.target_grid_source.strip():
+            raise ValueError("target_grid_source must be non-empty")
+        if not self.target_grid_version.strip():
+            raise ValueError("target_grid_version must be non-empty")
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
@@ -188,9 +197,15 @@ def read(directory: Path) -> tuple[pd.DataFrame, dict]:
     """Read a published artifact and its manifest, refusing an unknown format."""
     directory = Path(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
-    if manifest.get("artifact_format") != ARTIFACT_FORMAT:
+    artifact_format = manifest.get("artifact_format")
+    if artifact_format not in READABLE_ARTIFACT_FORMATS:
         raise ValueError(
-            f"{directory} is artifact_format {manifest.get('artifact_format')!r}; "
-            f"this build reads {ARTIFACT_FORMAT}"
+            f"{directory} is artifact_format {artifact_format!r}; "
+            f"this build reads {sorted(READABLE_ARTIFACT_FORMATS)}"
         )
+    if artifact_format == ARTIFACT_FORMAT:
+        for field in ("target_grid_source", "target_grid_version"):
+            value = manifest.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"{directory}: artifact_format 2 requires non-empty {field}")
     return pd.read_parquet(directory / "cells.parquet"), manifest

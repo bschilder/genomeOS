@@ -193,9 +193,7 @@ def load(
     # frequencies and this adapter's output column is an allele count (#134, #133).
     # Ahead of every other refusal: a registry stratum that also lacks a frequency should be
     # reported as what it is, not as missing data. Same reasoning as the family refusals below.
-    registry = freq["population"].str.contains(
-        "|".join(DONOR_REGISTRIES), case=False, regex=True, na=False
-    )
+    registry = freq["population"].str.contains("|".join(DONOR_REGISTRIES), case=False, regex=True, na=False)
     refuse(registry, "donor_registry_ancestry_stratum")
 
     group_key = freq["group"].str.strip().str.lower()
@@ -255,6 +253,13 @@ def load(
         "ascertainment_not_stated",
     )
 
+    # Exact repeats carry no distinguishable evidence, but must be counted as
+    # refusals rather than disappearing through an unreported drop.
+    refuse(
+        freq.duplicated(subset=["group", "gene", "allele", "population", "af", "n_indiv"]),
+        "duplicate_source_record",
+    )
+
     rows = freq[keep].copy()
     if min_populations > 1:
         counts = rows.groupby(["gene", "allele"])["population"].transform("nunique")
@@ -281,9 +286,15 @@ def load(
             "ac": (rows["af"] * an).round().astype(int),
             "an": an,
             "source_record_id": [
-                stable_source_record_id("afnd-frequencies", group, gene, allele, population)
-                for group, gene, allele, population in zip(
-                    rows["group"], rows["gene"], rows["allele"], rows["population"], strict=True
+                stable_source_record_id("afnd-frequencies", group, gene, allele, population, af, int(n))
+                for group, gene, allele, population, af, n in zip(
+                    rows["group"],
+                    rows["gene"],
+                    rows["allele"],
+                    rows["population"],
+                    rows["af"],
+                    rows["n_indiv"],
+                    strict=True,
                 )
             ],
             "source": SOURCE,

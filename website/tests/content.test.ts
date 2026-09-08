@@ -98,18 +98,14 @@ describe('public site content', () => {
     expect(project).toContain('ancient-DNA time slider');
   });
 
-  it('frames the live application as a sample-data WIP diagnostic', () => {
-    expect(preview).toContain('Work-in-progress preview');
-    expect(preview).toContain('Sample data for testing');
-    expect(preview).toContain(
+  it('renders the native globe explorer instead of the diagnostic iframe', () => {
+    expect(preview).toContain('AtlasExplorer');
+    expect(preview).not.toContain('<iframe');
+    expect(preview).not.toContain(
       'https://genomeos-api-357876699511.us-east1.run.app/preview',
     );
-    expect(preview).toContain(
-      'title="genomeOS diagnostic application preview"',
-    );
     expect(preview).not.toMatch(/\bP[0-9]+\b/);
-    expect(preview).toContain('sample data created for software testing');
-    expect(preview).toContain('/images/preview-atlas.webp');
+    expect(preview).toContain('Explore human genetic variation');
   });
 
   it('does not expose unexplained internal project codes on introduction pages', () => {

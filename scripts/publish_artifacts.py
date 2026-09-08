@@ -1,11 +1,19 @@
 """Publish per-cell surface artifacts from saved fits (design §5, §6).
 
     python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
-        --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv
+        --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv \
+        --population-cells data/store/worldpop-res4-2020.parquet \
+        --population-source worldpop-1km-unconstrained \
+        --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif \
+        --h3-res 4
 
     python scripts/publish_artifacts.py --fits data/store/screen --out data/store/artifacts \
         --afnd data/raw/afnd_frequencies.tsv --afnd-populations data/raw/afnd_populations.tsv \
-        --data-version afnd-2026-08
+        --data-version afnd-2026-08 \
+        --population-cells data/store/worldpop-res4-2020.parquet \
+        --population-source worldpop-1km-unconstrained \
+        --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif \
+        --h3-res 4
 
 Reads the fits `build_surfaces.py` saved and writes the immutable parquet each variant is meant to
 be cited as. Separated from fitting on purpose: fitting is expensive and environment-coupled,
@@ -21,6 +29,7 @@ from pathlib import Path
 import h3
 import numpy as np
 
+from genomeos.geo.population import PopulationGrid, publication_target_cells
 from genomeos.observations.sources import (
     afnd_carriers,
     afnd_cytokines,
@@ -30,9 +39,33 @@ from genomeos.observations.sources import (
 )
 from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish
 from genomeos.surfaces.fit import load_fit
-from genomeos.viz.basemap import h3_land_cells
+
+try:
+    from scripts.build_population_grid import read_population_grid
+except ModuleNotFoundError:  # Direct `python scripts/publish_artifacts.py` entry.
+    from build_population_grid import read_population_grid
 
 LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}
+
+
+def publication_coordinates(
+    population_grid: PopulationGrid,
+    observations,
+) -> tuple[list[str], np.ndarray, np.ndarray]:
+    """Resolve population-backed surface targets without a visual-geography fallback (§7, §9)."""
+    required = {"lat", "lon"}
+    missing = required - set(observations.columns)
+    if missing:
+        raise ValueError(f"observations require lat and lon; missing {sorted(missing)}")
+    lat = observations["lat"].to_numpy(dtype=float)
+    lon = observations["lon"].to_numpy(dtype=float)
+    if not np.isfinite(lat).all() or not np.isfinite(lon).all():
+        raise ValueError("observation lat and lon must be finite")
+    if ((lat < -90) | (lat > 90)).any() or ((lon < -180) | (lon > 180)).any():
+        raise ValueError("observation lat and lon are outside geographic bounds")
+    cells = publication_target_cells(population_grid)
+    centres = np.asarray([h3.cell_to_latlng(cell) for cell in cells], dtype=float)
+    return cells, centres[:, 0], centres[:, 1]
 
 
 def main() -> None:
@@ -51,15 +84,30 @@ def main() -> None:
                     help="also publish KIR gene presence as CARRIER frequency (needs --afnd)")
     ap.add_argument("--min-populations", type=int, default=30)
     ap.add_argument("--h3-res", type=int, default=3)
+    ap.add_argument("--population-cells", type=Path, required=True)
+    ap.add_argument("--population-source", required=True)
+    ap.add_argument("--population-version", required=True)
     ap.add_argument("--model-version", default="v1")
     ap.add_argument("--data-version", default="map-2026-08")
     ap.add_argument("--overwrite", action="store_true")
     args = ap.parse_args()
 
-    cells = h3_land_cells(args.h3_res)
-    centres = np.array([h3.cell_to_latlng(c) for c in cells], dtype=float)
-    lat, lon = centres[:, 0], centres[:, 1]
-    print(f"H3 res {args.h3_res}: {len(cells)} land cells")
+    population_grid = read_population_grid(args.population_cells)
+    if population_grid.resolution != args.h3_res:
+        raise SystemExit(
+            f"population grid resolution {population_grid.resolution} != --h3-res {args.h3_res}"
+        )
+    if population_grid.source != args.population_source:
+        raise SystemExit(
+            f"population grid source {population_grid.source!r} != "
+            f"--population-source {args.population_source!r}"
+        )
+    if population_grid.source_version != args.population_version:
+        raise SystemExit(
+            f"population grid version {population_grid.source_version!r} != "
+            f"--population-version {args.population_version!r}"
+        )
+    print(population_grid)
 
     jobs: list[tuple[str, object]] = []
     for layer, loader in LAYERS.items():
@@ -121,6 +169,7 @@ def main() -> None:
             continue
 
         fit = load_fit(fit_path)
+        cells, lat, lon = publication_coordinates(population_grid, observations)
         frame = cell_table(
             fit,
             h3_index=cells,
@@ -144,6 +193,8 @@ def main() -> None:
             lengthscale_sigma=float(fit.config.lengthscale_sigma),
             n_observations=len(observations),
             support_counts=counts,
+            target_grid_source=population_grid.source,
+            target_grid_version=population_grid.source_version,
             measurement=(
                 "carrier_frequency" if variant_id.startswith("kir:") else "allele_frequency"
             ),

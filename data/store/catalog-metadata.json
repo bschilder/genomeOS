@@ -3,18 +3,729 @@
   "registry_version": "map-survey-coordinates-v1",
   "created_at": "2026-08-27T00:00:00Z",
   "assumptions": [
-    "surface-only catalog; observation and burden serving artifacts are not yet published",
-    "MAP survey coordinates do not use the P0 population registry"
+    "MAP and AFND artifacts include validated browser observation payloads from the same reviewed adapters used for fitting",
+    "MAP survey coordinates do not use the P0 population registry",
+    "AFND fitted surfaces are publishable under the completed Issue #66 decision with attribution, Biocultural Notices, and explicit source restrictions preserved"
   ],
+  "discovery_groups": [
+    {
+      "id": "red-blood-cell-disorders",
+      "label": "Red blood cell disorders",
+      "summary": "Hemoglobin and red-cell enzyme traits tied to oxygen transport and cell survival.",
+      "biology": "Hemoglobin carries oxygen, while the G6PD enzyme protects red blood cells from oxidative damage. Variation in either system can affect red-cell survival and has been shaped partly by malaria-related selection.",
+      "references": [
+        {
+          "label": "NIH — Sickle cell disease",
+          "url": "https://medlineplus.gov/genetics/condition/sickle-cell-disease/"
+        },
+        {
+          "label": "NIH — G6PD deficiency",
+          "url": "https://medlineplus.gov/genetics/condition/glucose-6-phosphate-dehydrogenase-deficiency/"
+        }
+      ]
+    },
+    {
+      "id": "cytokine-regulation",
+      "label": "Cytokine regulation",
+      "summary": "Regulatory variants in signaling proteins that coordinate immune responses.",
+      "biology": "IL-10, IL-6, and TNF are immune signaling proteins. IL-10 has major immunoregulatory effects, while IL-6 and TNF have prominent roles in inflammatory responses.",
+      "references": [
+        {
+          "label": "NCBI Gene — IL10",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3586"
+        },
+        {
+          "label": "NCBI Gene — IL6",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3569"
+        },
+        {
+          "label": "NCBI Gene — TNF",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/7124"
+        }
+      ]
+    },
+    {
+      "id": "hla-class-i",
+      "label": "HLA class I",
+      "summary": "HLA-A, HLA-B, and HLA-C alleles involved in intracellular antigen display.",
+      "biology": "HLA-A, HLA-B, and HLA-C molecules display mostly intracellularly derived peptides to CD8 T cells and can also interact with KIR receptors on natural killer cells. Different alleles bind different peptide repertoires.",
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        },
+        {
+          "label": "WHO HLA nomenclature",
+          "url": "https://hla.alleles.org/pages/nomenclature/naming_alleles/"
+        }
+      ]
+    },
+    {
+      "id": "hla-class-ii",
+      "label": "HLA class II",
+      "summary": "HLA-DP, HLA-DQ, and HLA-DR alleles involved in extracellular antigen display.",
+      "biology": "HLA-DP, HLA-DQ, and HLA-DR molecules display mostly extracellularly derived peptides to CD4 T cells. Their high diversity affects immune recognition and histocompatibility.",
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        },
+        {
+          "label": "WHO HLA nomenclature",
+          "url": "https://hla.alleles.org/pages/nomenclature/naming_alleles/"
+        }
+      ]
+    },
+    {
+      "id": "natural-killer-cell-receptors",
+      "label": "Natural killer-cell receptors",
+      "summary": "KIR genes that tune natural-killer-cell activation through HLA signals.",
+      "biology": "KIR receptors on natural killer cells interpret HLA class I signals. In a KIR name, 2D or 3D denotes two or three extracellular domains; L denotes a long, usually inhibitory tail, while S denotes a short, activating architecture.",
+      "references": [
+        {
+          "label": "NCBI Bookshelf — The KIR gene cluster",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK10135/"
+        }
+      ]
+    }
+  ],
+  "discovery": {
+    "chr11-5227002-T-A": {
+      "group_id": "red-blood-cell-disorders",
+      "symbol_expansion": "Hemoglobin S; an HBB beta-globin variant (rs334)",
+      "map_measures": "Frequency of the HbS allele in sampled populations.",
+      "relevance": "HbS changes beta-globin and can produce sickling hemoglobin. Two disease-causing copies or compound genotypes can cause sickle cell disease; one copy produces sickle cell trait, which is associated with protection from severe malaria. This map is not a diagnosis.",
+      "aliases": [
+        "HbS",
+        "hemoglobin S",
+        "sickle hemoglobin",
+        "sickle cell",
+        "HBB",
+        "rs334",
+        "beta globin"
+      ],
+      "references": [
+        {
+          "label": "NIH — Sickle cell disease",
+          "url": "https://medlineplus.gov/genetics/condition/sickle-cell-disease/"
+        },
+        {
+          "label": "NIH — Gene variants and evolution",
+          "url": "https://medlineplus.gov/genetics/understanding/mutationsanddisorders/evolution/"
+        }
+      ]
+    },
+    "phenotype:g6pd-deficiency": {
+      "group_id": "red-blood-cell-disorders",
+      "symbol_expansion": "Glucose-6-phosphate dehydrogenase deficiency",
+      "map_measures": "Frequency of measured G6PD deficiency among sampled hemizygous males.",
+      "relevance": "G6PD supplies reducing power that protects red blood cells from oxidative damage. Deficiency can cause hemolysis after certain infections, medicines, or foods. This phenotype combines effects from many possible G6PD variants and is not a map of one allele.",
+      "aliases": [
+        "G6PD",
+        "glucose-6-phosphate dehydrogenase",
+        "enzyme deficiency",
+        "hemolysis",
+        "hemolytic anemia",
+        "favism",
+        "X-linked"
+      ],
+      "references": [
+        {
+          "label": "NIH — G6PD deficiency",
+          "url": "https://medlineplus.gov/genetics/condition/glucose-6-phosphate-dehydrogenase-deficiency/"
+        }
+      ]
+    },
+    "cyt:il-10-1082-g": {
+      "group_id": "cytokine-regulation",
+      "symbol_expansion": "Interleukin-10 promoter −1082 G allele",
+      "map_measures": "Frequency of the G allele at the traditionally named IL10 −1082 promoter variant.",
+      "relevance": "IL-10 helps regulate immune activation and inflammation. This promoter variant has been studied in many association settings, but results vary across diseases and populations; no clinical interpretation is asserted here.",
+      "aliases": [
+        "IL-10",
+        "IL10",
+        "interleukin 10",
+        "-1082 G",
+        "1082G",
+        "rs1800896",
+        "cytokine"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — IL10",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3586"
+        }
+      ]
+    },
+    "cyt:il-10-819-t": {
+      "group_id": "cytokine-regulation",
+      "symbol_expansion": "Interleukin-10 promoter −819 T allele",
+      "map_measures": "Frequency of the T allele at the traditionally named IL10 −819 promoter variant.",
+      "relevance": "IL-10 helps regulate immune activation and inflammation. This promoter variant is useful for population and haplotype research, but its frequency does not measure IL-10 production or establish disease risk.",
+      "aliases": [
+        "IL-10",
+        "IL10",
+        "interleukin 10",
+        "-819 T",
+        "819T",
+        "rs1800871",
+        "cytokine"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — IL10",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3586"
+        }
+      ]
+    },
+    "cyt:il-6-174-c": {
+      "group_id": "cytokine-regulation",
+      "symbol_expansion": "Interleukin-6 promoter −174 C allele",
+      "map_measures": "Frequency of the C allele at the traditionally named IL6 −174 promoter variant.",
+      "relevance": "IL-6 participates in inflammation and B-cell maturation. Reported genotype–phenotype associations vary by context and ancestry, so this map should be read as population variation rather than an inflammatory or clinical marker.",
+      "aliases": [
+        "IL-6",
+        "IL6",
+        "interleukin 6",
+        "-174 C",
+        "174C",
+        "rs1800795",
+        "cytokine"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — IL6",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3569"
+        }
+      ]
+    },
+    "cyt:tnfalpha-308-a": {
+      "group_id": "cytokine-regulation",
+      "symbol_expansion": "Tumor necrosis factor promoter −308 A allele",
+      "map_measures": "Frequency of the A allele at the traditionally named TNF −308 promoter variant.",
+      "relevance": "TNF is a multifunctional pro-inflammatory cytokine. This promoter variant has been widely studied, often with inconsistent disease associations; the map does not represent TNF concentration or individual disease susceptibility.",
+      "aliases": [
+        "TNF-alpha",
+        "TNFα",
+        "TNF",
+        "tumor necrosis factor",
+        "-308 A",
+        "308A",
+        "rs1800629",
+        "cytokine"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — TNF",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/7124"
+        }
+      ]
+    },
+    "hla:a-02-01": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen A, allele 02:01",
+      "map_measures": "Population frequency of the two-field HLA-A*02:01 allele.",
+      "relevance": "This HLA-A allotype shapes which intracellular peptides can be shown to CD8 T cells. Its distribution is relevant to population immunogenetics and histocompatibility; no allele-specific disease claim is made here.",
+      "aliases": [
+        "HLA-A*02:01",
+        "A*02:01",
+        "A0201",
+        "HLA A2",
+        "human leukocyte antigen A",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:a-26-01": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen A, allele 26:01",
+      "map_measures": "Population frequency of the two-field HLA-A*26:01 allele.",
+      "relevance": "This HLA-A allotype contributes to diversity in peptide presentation to CD8 T cells. The map supports population and histocompatibility research, not a specific disease prediction.",
+      "aliases": [
+        "HLA-A*26:01",
+        "A*26:01",
+        "A2601",
+        "HLA A26",
+        "human leukocyte antigen A",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:a-32-01": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen A, allele 32:01",
+      "map_measures": "Population frequency of the two-field HLA-A*32:01 allele.",
+      "relevance": "HLA-A*32:01 has a strong reported association with vancomycin-induced DRESS, initially demonstrated largely in people of European ancestry. Population frequency provides context only; prescribing decisions require validated patient testing and clinical review.",
+      "aliases": [
+        "HLA-A*32:01",
+        "A*32:01",
+        "A3201",
+        "vancomycin",
+        "DRESS",
+        "drug hypersensitivity",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "Konvinse et al. — HLA-A*32:01 and vancomycin DRESS",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/30776417/"
+        }
+      ]
+    },
+    "hla:b-40-01": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen B, allele 40:01",
+      "map_measures": "Population frequency of the two-field HLA-B*40:01 allele.",
+      "relevance": "This HLA-B allotype helps determine the intracellular peptides presented to CD8 T cells. Its frequency is relevant to immune diversity and histocompatibility; no specific disease association is asserted.",
+      "aliases": [
+        "HLA-B*40:01",
+        "B*40:01",
+        "B4001",
+        "HLA B40",
+        "human leukocyte antigen B",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:b-40-02": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen B, allele 40:02",
+      "map_measures": "Population frequency of the two-field HLA-B*40:02 allele.",
+      "relevance": "This HLA-B allotype helps determine the intracellular peptides presented to CD8 T cells. Its frequency is relevant to immune diversity and histocompatibility; no specific disease association is asserted.",
+      "aliases": [
+        "HLA-B*40:02",
+        "B*40:02",
+        "B4002",
+        "HLA B40",
+        "human leukocyte antigen B",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:b-58-01": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen B, allele 58:01",
+      "map_measures": "Population frequency of the two-field HLA-B*58:01 allele.",
+      "relevance": "HLA-B*58:01 is an established pharmacogenetic risk marker for allopurinol-induced severe cutaneous adverse reactions. CPIC recommends an alternative when a validated clinical genotype is positive. Map values are not patient genotypes.",
+      "aliases": [
+        "HLA-B*58:01",
+        "B*58:01",
+        "B5801",
+        "allopurinol",
+        "SCAR",
+        "Stevens-Johnson syndrome",
+        "toxic epidermal necrolysis",
+        "pharmacogenomics"
+      ],
+      "references": [
+        {
+          "label": "CPIC — HLA-B*58:01 and allopurinol",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/26094938/"
+        }
+      ]
+    },
+    "hla:c-03-03": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen C, allele 03:03",
+      "map_measures": "Population frequency of the two-field HLA-C*03:03 allele.",
+      "relevance": "HLA-C allotypes present peptides to CD8 T cells and can act as ligands for KIR receptors on natural killer cells. This map describes immune-system diversity without asserting a disease effect.",
+      "aliases": [
+        "HLA-C*03:03",
+        "C*03:03",
+        "C0303",
+        "HLA C3",
+        "KIR ligand",
+        "human leukocyte antigen C",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:c-06-02": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen C, allele 06:02",
+      "map_measures": "Population frequency of the two-field HLA-C*06:02 allele.",
+      "relevance": "HLA-C*06:02 is the principal HLA risk allele for psoriasis, especially early-onset forms. It is neither necessary nor sufficient for psoriasis, and population frequency cannot predict an individual's disease or treatment response.",
+      "aliases": [
+        "HLA-C*06:02",
+        "C*06:02",
+        "C0602",
+        "HLA-Cw6",
+        "Cw6",
+        "psoriasis",
+        "PSORS1",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "Prinz — HLA-C*06:02 in psoriasis pathogenesis",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/29760713/"
+        }
+      ]
+    },
+    "hla:c-07-02": {
+      "group_id": "hla-class-i",
+      "symbol_expansion": "Human leukocyte antigen C, allele 07:02",
+      "map_measures": "Population frequency of the two-field HLA-C*07:02 allele.",
+      "relevance": "HLA-C allotypes present peptides to CD8 T cells and can act as ligands for KIR receptors on natural killer cells. This map describes immune-system diversity without asserting a disease effect.",
+      "aliases": [
+        "HLA-C*07:02",
+        "C*07:02",
+        "C0702",
+        "HLA C7",
+        "KIR ligand",
+        "human leukocyte antigen C",
+        "MHC class I"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:dpb1-04-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DP beta 1, allele 04:01",
+      "map_measures": "Population frequency of the two-field HLA-DPB1*04:01 allele.",
+      "relevance": "HLA-DP beta-chain variation changes the peptide-binding groove used in CD4 T-cell recognition. The map is relevant to population immunogenetics and histocompatibility, without implying a specific disease risk.",
+      "aliases": [
+        "HLA-DPB1*04:01",
+        "DPB1*04:01",
+        "DPB10401",
+        "HLA DP",
+        "human leukocyte antigen DP beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:dpb1-04-02": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DP beta 1, allele 04:02",
+      "map_measures": "Population frequency of the two-field HLA-DPB1*04:02 allele.",
+      "relevance": "HLA-DP beta-chain variation changes the peptide-binding groove used in CD4 T-cell recognition. The map is relevant to population immunogenetics and histocompatibility, without implying a specific disease risk.",
+      "aliases": [
+        "HLA-DPB1*04:02",
+        "DPB1*04:02",
+        "DPB10402",
+        "HLA DP",
+        "human leukocyte antigen DP beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:dpb1-13-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DP beta 1, allele 13:01",
+      "map_measures": "Population frequency of the two-field HLA-DPB1*13:01 allele.",
+      "relevance": "HLA-DP beta-chain variation changes the peptide-binding groove used in CD4 T-cell recognition. The map is relevant to population immunogenetics and histocompatibility, without implying a specific disease risk.",
+      "aliases": [
+        "HLA-DPB1*13:01",
+        "DPB1*13:01",
+        "DPB11301",
+        "HLA DP",
+        "human leukocyte antigen DP beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:dqb1-03-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DQ beta 1, allele 03:01",
+      "map_measures": "Population frequency of the two-field HLA-DQB1*03:01 allele.",
+      "relevance": "HLA-DQ beta-chain variation helps determine which extracellularly derived peptides are shown to CD4 T cells. This frequency map supports immune-diversity research, not individual disease prediction.",
+      "aliases": [
+        "HLA-DQB1*03:01",
+        "DQB1*03:01",
+        "DQB10301",
+        "HLA DQ",
+        "human leukocyte antigen DQ beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:dqb1-06-02": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DQ beta 1, allele 06:02",
+      "map_measures": "Population frequency of the two-field HLA-DQB1*06:02 allele.",
+      "relevance": "HLA-DQ beta-chain variation helps determine which extracellularly derived peptides are shown to CD4 T cells. This frequency map supports immune-diversity research, not individual disease prediction.",
+      "aliases": [
+        "HLA-DQB1*06:02",
+        "DQB1*06:02",
+        "DQB10602",
+        "HLA DQ",
+        "human leukocyte antigen DQ beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:drb1-01-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DR beta 1, allele 01:01",
+      "map_measures": "Population frequency of the two-field HLA-DRB1*01:01 allele.",
+      "relevance": "HLA-DRB1 variation shapes peptide presentation to CD4 T cells. Its distribution is relevant to population immunogenetics and histocompatibility; no allele-specific disease interpretation is asserted.",
+      "aliases": [
+        "HLA-DRB1*01:01",
+        "DRB1*01:01",
+        "DRB10101",
+        "HLA DR",
+        "human leukocyte antigen DR beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:drb1-04-03": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DR beta 1, allele 04:03",
+      "map_measures": "Population frequency of the two-field HLA-DRB1*04:03 allele.",
+      "relevance": "HLA-DRB1 variation shapes peptide presentation to CD4 T cells. Its distribution is relevant to population immunogenetics and histocompatibility; no allele-specific disease interpretation is asserted.",
+      "aliases": [
+        "HLA-DRB1*04:03",
+        "DRB1*04:03",
+        "DRB10403",
+        "HLA DR",
+        "human leukocyte antigen DR beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:drb1-07-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DR beta 1, allele 07:01",
+      "map_measures": "Population frequency of the two-field HLA-DRB1*07:01 allele.",
+      "relevance": "HLA-DRB1 variation shapes peptide presentation to CD4 T cells. Its distribution is relevant to population immunogenetics and histocompatibility; no allele-specific disease interpretation is asserted.",
+      "aliases": [
+        "HLA-DRB1*07:01",
+        "DRB1*07:01",
+        "DRB10701",
+        "HLA DR",
+        "human leukocyte antigen DR beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:drb1-11-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DR beta 1, allele 11:01",
+      "map_measures": "Population frequency of the two-field HLA-DRB1*11:01 allele.",
+      "relevance": "HLA-DRB1 variation shapes peptide presentation to CD4 T cells. Its distribution is relevant to population immunogenetics and histocompatibility; no allele-specific disease interpretation is asserted.",
+      "aliases": [
+        "HLA-DRB1*11:01",
+        "DRB1*11:01",
+        "DRB11101",
+        "HLA DR",
+        "human leukocyte antigen DR beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:drb1-14-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DR beta 1, allele 14:01",
+      "map_measures": "Population frequency of the two-field HLA-DRB1*14:01 allele.",
+      "relevance": "HLA-DRB1 variation shapes peptide presentation to CD4 T cells. Its distribution is relevant to population immunogenetics and histocompatibility; no allele-specific disease interpretation is asserted.",
+      "aliases": [
+        "HLA-DRB1*14:01",
+        "DRB1*14:01",
+        "DRB11401",
+        "HLA DR",
+        "human leukocyte antigen DR beta 1",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "NCBI Bookshelf — Histocompatibility",
+          "url": "https://www.ncbi.nlm.nih.gov/books/NBK608307/"
+        }
+      ]
+    },
+    "hla:drb1-15-01": {
+      "group_id": "hla-class-ii",
+      "symbol_expansion": "Human leukocyte antigen DR beta 1, allele 15:01",
+      "map_measures": "Population frequency of the two-field HLA-DRB1*15:01 allele.",
+      "relevance": "HLA-DRB1*15:01 has a strong, repeatedly replicated association with susceptibility to multiple sclerosis. It is not deterministic—most carriers do not develop MS—and a population map cannot estimate an individual's risk.",
+      "aliases": [
+        "HLA-DRB1*15:01",
+        "DRB1*15:01",
+        "DRB11501",
+        "HLA-DR15",
+        "DR15",
+        "multiple sclerosis",
+        "MS susceptibility",
+        "MHC class II"
+      ],
+      "references": [
+        {
+          "label": "Moutsianas et al. — HLA associations in multiple sclerosis",
+          "url": "https://pubmed.ncbi.nlm.nih.gov/24278027/"
+        }
+      ]
+    },
+    "kir:2dl1": {
+      "group_id": "natural-killer-cell-receptors",
+      "symbol_expansion": "Killer-cell immunoglobulin-like receptor, two Ig domains, long cytoplasmic tail, 1",
+      "map_measures": "Proportion of sampled people carrying the KIR2DL1 gene.",
+      "relevance": "KIR2DL1 has an inhibitory signaling architecture and recognizes subsets of HLA class I. Its carrier frequency helps describe population differences in natural-killer-cell regulation; no disease risk is inferred.",
+      "aliases": [
+        "KIR2DL1",
+        "killer immunoglobulin receptor",
+        "natural killer cell",
+        "NK receptor",
+        "inhibitory KIR",
+        "two domains",
+        "long tail",
+        "CD158A"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — KIR2DL1",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3802"
+        }
+      ]
+    },
+    "kir:2dl2": {
+      "group_id": "natural-killer-cell-receptors",
+      "symbol_expansion": "Killer-cell immunoglobulin-like receptor, two Ig domains, long cytoplasmic tail, 2",
+      "map_measures": "Proportion of sampled people carrying the KIR2DL2 gene.",
+      "relevance": "KIR2DL2 has an inhibitory signaling architecture and recognizes subsets of HLA class I. Its carrier frequency helps describe population differences in natural-killer-cell regulation; no disease risk is inferred.",
+      "aliases": [
+        "KIR2DL2",
+        "killer immunoglobulin receptor",
+        "natural killer cell",
+        "NK receptor",
+        "inhibitory KIR",
+        "two domains",
+        "long tail",
+        "CD158B1"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — KIR2DL2",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3803"
+        }
+      ]
+    },
+    "kir:2ds1": {
+      "group_id": "natural-killer-cell-receptors",
+      "symbol_expansion": "Killer-cell immunoglobulin-like receptor, two Ig domains, short cytoplasmic tail, 1",
+      "map_measures": "Proportion of sampled people carrying the KIR2DS1 gene.",
+      "relevance": "KIR2DS1 has an activating signaling architecture and responds in an HLA-dependent context. Its carrier frequency describes NK-receptor gene-content diversity, not receptor activity or disease status.",
+      "aliases": [
+        "KIR2DS1",
+        "killer immunoglobulin receptor",
+        "natural killer cell",
+        "NK receptor",
+        "activating KIR",
+        "two domains",
+        "short tail",
+        "CD158H"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — KIR2DS1",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3806"
+        }
+      ]
+    },
+    "kir:3ds1": {
+      "group_id": "natural-killer-cell-receptors",
+      "symbol_expansion": "Killer-cell immunoglobulin-like receptor, three Ig domains, short cytoplasmic tail, 1",
+      "map_measures": "Proportion of sampled people carrying the KIR3DS1 gene.",
+      "relevance": "KIR3DS1 has an activating signaling architecture. Its carrier frequency helps characterize population variation in NK-cell receptor gene content, but does not measure receptor expression or establish disease risk.",
+      "aliases": [
+        "KIR3DS1",
+        "killer immunoglobulin receptor",
+        "natural killer cell",
+        "NK receptor",
+        "activating KIR",
+        "three domains",
+        "short tail",
+        "CD158E2"
+      ],
+      "references": [
+        {
+          "label": "NCBI Gene — KIR3DS1",
+          "url": "https://www.ncbi.nlm.nih.gov/gene/3813"
+        }
+      ]
+    }
+  },
   "variants": {
     "chr11-5227002-T-A": {
       "label": "HbS (rs334)",
       "entity_type": "variant",
       "measurement": "allele_frequency",
       "surface_eligible": true,
-      "assumptions": [
-        "beta-binomial spatial surface over MAP HbS surveys"
-      ]
+      "assumptions": ["beta-binomial spatial surface over MAP HbS surveys"]
     },
     "phenotype:g6pd-deficiency": {
       "label": "G6PD deficiency in hemizygous males",
@@ -24,6 +735,342 @@
       "assumptions": [
         "enzyme-deficiency phenotype pools multiple causal G6PD alleles",
         "frequency is measured in hemizygous males"
+      ]
+    },
+    "cyt:il-10-1082-g": {
+      "label": "IL-10 −1082 G",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "cyt:il-10-819-t": {
+      "label": "IL-10 −819 T",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "cyt:il-6-174-c": {
+      "label": "IL-6 −174 C",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "cyt:tnfalpha-308-a": {
+      "label": "TNF-α −308 A",
+      "entity_type": "variant",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND diploid genotype frequencies converted to allele frequency by direct allele counting; incomplete genotype-class sets were refused",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:a-02-01": {
+      "label": "HLA-A*02:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:a-26-01": {
+      "label": "HLA-A*26:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:a-32-01": {
+      "label": "HLA-A*32:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:b-40-01": {
+      "label": "HLA-B*40:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:b-40-02": {
+      "label": "HLA-B*40:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:b-58-01": {
+      "label": "HLA-B*58:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:c-03-03": {
+      "label": "HLA-C*03:03",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:c-06-02": {
+      "label": "HLA-C*06:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:c-07-02": {
+      "label": "HLA-C*07:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:dpb1-04-01": {
+      "label": "HLA-DPB1*04:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:dpb1-04-02": {
+      "label": "HLA-DPB1*04:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:dpb1-13-01": {
+      "label": "HLA-DPB1*13:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:dqb1-03-01": {
+      "label": "HLA-DQB1*03:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:dqb1-06-02": {
+      "label": "HLA-DQB1*06:02",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:drb1-01-01": {
+      "label": "HLA-DRB1*01:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:drb1-04-03": {
+      "label": "HLA-DRB1*04:03",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:drb1-07-01": {
+      "label": "HLA-DRB1*07:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:drb1-11-01": {
+      "label": "HLA-DRB1*11:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:drb1-14-01": {
+      "label": "HLA-DRB1*14:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "hla:drb1-15-01": {
+      "label": "HLA-DRB1*15:01",
+      "entity_type": "allele",
+      "measurement": "allele_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "AFND allele counts reconstructed from printed allele frequency and sample size",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "kir:2dl1": {
+      "label": "KIR2DL1 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "kir:2dl2": {
+      "label": "KIR2DL2 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "kir:2ds1": {
+      "label": "KIR2DS1 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
+      ]
+    },
+    "kir:3ds1": {
+      "label": "KIR3DS1 carrier frequency",
+      "entity_type": "gene",
+      "measurement": "carrier_frequency",
+      "registry_version": "afnd-2026-08",
+      "surface_eligible": true,
+      "assumptions": [
+        "carrier frequency is the proportion of sampled individuals in whom the KIR gene was reported present; it is not an allele frequency",
+        "bone-marrow donor-registry ancestry strata were excluded from spatial fitting",
+        "measured observations are published from the same reviewed AFND adapter used for fitting"
       ]
     }
   }

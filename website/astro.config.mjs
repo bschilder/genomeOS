@@ -1,6 +1,8 @@
+import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const site = process.env.SITE_URL ?? 'https://genome-os.org';
 const base = process.env.BASE_PATH ?? '/';
@@ -15,6 +17,7 @@ export default defineConfig({
   devToolbar: { enabled: false },
   trailingSlash: 'always',
   integrations: [
+    react(),
     starlight({
       title: 'genomeOS',
       description: 'An open atlas of human genetic variation across geography.',
@@ -79,4 +82,19 @@ export default defineConfig({
     }),
     sitemap(),
   ],
+  vite: {
+    envDir: '..',
+    define: {
+      CESIUM_BASE_URL: JSON.stringify(`${normalizedBase}cesium/`),
+    },
+    plugins: [
+      viteStaticCopy({
+        targets: ['Assets', 'ThirdParty', 'Widgets', 'Workers'].map((name) => ({
+          src: `node_modules/cesium/Build/Cesium/${name}`,
+          dest: 'cesium',
+          rename: { stripBase: 4 },
+        })),
+      }),
+    ],
+  },
 });

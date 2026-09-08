@@ -58,6 +58,8 @@ def _manifest(variant_id: str = "chr11-5227002-T-A", model_version: str = "v1") 
         lengthscale_sigma=0.7,
         n_observations=1071,
         support_counts={"observed": 2},
+        target_grid_source="worldpop-1km-unconstrained",
+        target_grid_version="fixture-2020",
         measurement="allele_frequency",
     )
 
@@ -105,7 +107,26 @@ def test_the_manifest_records_what_would_otherwise_be_unrecoverable(tmp_path):
     assert manifest["lengthscale_sigma"] == 0.7
     assert manifest["correlation_range_km"] == 680.0
     assert manifest["n_observations"] == 1071
+    assert manifest["target_grid_source"] == "worldpop-1km-unconstrained"
+    assert manifest["target_grid_version"] == "fixture-2020"
     assert manifest["artifact_format"] == ARTIFACT_FORMAT
+
+
+def test_a_frozen_format_one_artifact_remains_readable_without_invented_grid_provenance(
+    tmp_path,
+):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "manifest.json"
+    payload = json.loads(path.read_text())
+    payload["artifact_format"] = 1
+    del payload["target_grid_source"]
+    del payload["target_grid_version"]
+    path.write_text(json.dumps(payload))
+
+    _, manifest = read(directory)
+    assert manifest["artifact_format"] == 1
+    assert "target_grid_source" not in manifest
+    assert "target_grid_version" not in manifest
 
 
 def test_an_artifact_from_an_unknown_format_is_refused_not_misread(tmp_path):
@@ -148,5 +169,30 @@ def test_a_manifest_must_say_which_quantity_it_holds():
             lengthscale_sigma=0.7,
             n_observations=1,
             support_counts={},
+            target_grid_source="worldpop-1km-unconstrained",
+            target_grid_version="fixture-2020",
             measurement="whatever",
         )
+
+
+@pytest.mark.parametrize("field", ["target_grid_source", "target_grid_version"])
+def test_a_new_manifest_refuses_blank_target_grid_provenance(field):
+    values = {
+        "variant_id": "chr11-5227002-T-A",
+        "model_version": "v2",
+        "data_version": "map-2026-08",
+        "resolution": 3,
+        "n_cells": 1,
+        "correlation_range_km": 680.0,
+        "prior_frequency_sd": 0.119,
+        "likelihood": "beta_binomial",
+        "lengthscale_sigma": 0.7,
+        "n_observations": 1,
+        "support_counts": {"observed": 1},
+        "target_grid_source": "worldpop-1km-unconstrained",
+        "target_grid_version": "fixture-2020",
+        "measurement": "allele_frequency",
+    }
+    values[field] = ""
+    with pytest.raises(ValueError, match=field):
+        ArtifactManifest(**values)

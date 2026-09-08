@@ -51,9 +51,7 @@ def test_counts_are_reconstructed_from_the_frequency_and_sample_size(frequencies
     """AFND publishes a frequency, not a count, so `ac = round(af * 2n)`. Getting this wrong
     scales every allele frequency in the corpus without ever raising."""
     obs, _ = af.load(frequencies, POPULATIONS, "test")
-    row = obs[
-        (obs["variant_id"] == "hla:dqb1-03-01") & (obs["population_id"] == "afnd-1986")
-    ].iloc[0]
+    row = obs[(obs["variant_id"] == "hla:dqb1-03-01") & (obs["population_id"] == "afnd-1986")].iloc[0]
     assert row["an"] == 200, "two alleles per individual"
     assert row["ac"] == 25, "0.1250 * 200"
 
@@ -105,13 +103,29 @@ def test_output_satisfies_the_observations_contract(frequencies):
 
 
 def test_source_record_ids_hash_the_complete_source_native_key(frequencies):
-    """Catches ambiguous concatenation or dataframe positions in an AFND row identity."""
+    """The identity includes the measurement, not a dataframe position."""
     obs, _ = af.load(frequencies, POPULATIONS, "test")
     assert obs["source_record_id"].is_unique
-    assert (
-        "afnd-frequencies:33071229d43f1a9bb00b0739c22a613f01761812b4a118d9cd96bbbd27c879b8"
-        in set(obs["source_record_id"])
+    assert "afnd-frequencies:7cd70a92357a376ce61c9c87f357e90a06006f920698a5dcf867d8b75e4776f0" in set(
+        obs["source_record_id"]
     )
+
+
+def test_two_measurements_of_one_allele_and_population_remain_distinct(tmp_path):
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla", "hla"],
+            "gene": ["DQB1", "DQB1"],
+            "allele": ["DQB1*03:01", "DQB1*03:01"],
+            "population": ["Peru Lamas City Lama", "Peru Lamas City Lama"],
+            "indivs_over_n": ["", ""],
+            "alleles_over_2n": ["0.1250", "0.2000"],
+            "n": ["100", "250"],
+        },
+    )
+    obs, _ = af.load(path, POPULATIONS, "test")
+    assert len(obs) == obs["source_record_id"].nunique() == 2
 
 
 def test_min_populations_is_a_modelling_filter_and_is_reported(frequencies):
@@ -152,15 +166,18 @@ def test_cytokine_genotypes_are_refused_not_converted_to_allele_counts(tmp_path)
     Deriving one would need Hardy-Weinberg, which is an assumption about the population and
     exactly the kind of silent substitution the invariants forbid.
     """
-    path = _table(tmp_path, {
-        "group": ["cyt", "hla"],
-        "gene": ["IL-6-", "DQB1"],
-        "allele": ["IL-6/ - 174 CC", "DQB1*03:01"],
-        "population": ["Peru Lamas City Lama"] * 2,
-        "indivs_over_n": ["", ""],
-        "alleles_over_2n": ["0.4000", "0.1250"],
-        "n": ["100", "100"],
-    })
+    path = _table(
+        tmp_path,
+        {
+            "group": ["cyt", "hla"],
+            "gene": ["IL-6-", "DQB1"],
+            "allele": ["IL-6/ - 174 CC", "DQB1*03:01"],
+            "population": ["Peru Lamas City Lama"] * 2,
+            "indivs_over_n": ["", ""],
+            "alleles_over_2n": ["0.4000", "0.1250"],
+            "n": ["100", "100"],
+        },
+    )
     obs, report = af.load(path, POPULATIONS, "test")
     assert set(obs["variant_id"]) == {"hla:dqb1-03-01"}
     assert "cytokine_genotype_not_allele_frequency" in report.refusals
@@ -169,15 +186,18 @@ def test_cytokine_genotypes_are_refused_not_converted_to_allele_counts(tmp_path)
 def test_kir_gene_presence_is_refused_but_kir_alleles_are_kept(tmp_path):
     """`allele == gene` on a copy-number-variable KIR gene is a carrier frequency, not an
     allele frequency, so it cannot share a column with one (#133)."""
-    path = _table(tmp_path, {
-        "group": ["kir", "kir"],
-        "gene": ["2DL1", "3DL1"],
-        "allele": ["2DL1", "3DL1*007"],
-        "population": ["Peru Lamas City Lama"] * 2,
-        "indivs_over_n": ["", ""],
-        "alleles_over_2n": ["0.9000", "0.1000"],
-        "n": ["100", "100"],
-    })
+    path = _table(
+        tmp_path,
+        {
+            "group": ["kir", "kir"],
+            "gene": ["2DL1", "3DL1"],
+            "allele": ["2DL1", "3DL1*007"],
+            "population": ["Peru Lamas City Lama"] * 2,
+            "indivs_over_n": ["", ""],
+            "alleles_over_2n": ["0.9000", "0.1000"],
+            "n": ["100", "100"],
+        },
+    )
     obs, report = af.load(path, POPULATIONS, "test")
     assert set(obs["variant_id"]) == {"kir:3dl1-007"}
     assert report.refusals["kir_gene_presence_not_allele_frequency"] == 1
@@ -192,19 +212,22 @@ def test_donor_registry_strata_are_refused(tmp_path):
     so they are refused rather than relocated: "NMDP European Caucasian" is a blend of European
     source populations that exists at no location in Europe.
     """
-    path = _table(tmp_path, {
-        "group": ["hla"] * 3,
-        "gene": ["DQB1"] * 3,
-        "allele": ["DQB1*03:01"] * 3,
-        "population": [
-            "USA NMDP Chinese",
-            "Germany DKMS - German donors",
-            "Peru Lamas City Lama",
-        ],
-        "indivs_over_n": ["", "", ""],
-        "alleles_over_2n": ["0.2000", "0.1500", "0.1250"],
-        "n": ["199344", "3456066", "100"],
-    })
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla"] * 3,
+            "gene": ["DQB1"] * 3,
+            "allele": ["DQB1*03:01"] * 3,
+            "population": [
+                "USA NMDP Chinese",
+                "Germany DKMS - German donors",
+                "Peru Lamas City Lama",
+            ],
+            "indivs_over_n": ["", "", ""],
+            "alleles_over_2n": ["0.2000", "0.1500", "0.1250"],
+            "n": ["199344", "3456066", "100"],
+        },
+    )
     obs, report = af.load(path, POPULATIONS, "test")
     # only the real population survives, and with it the weight that was drowning it
     assert len(obs) == 1
@@ -217,15 +240,18 @@ def test_the_registry_refusal_is_reported_before_missing_data(tmp_path):
     Same reasoning as the gene-family refusals: a refusal list that misattributes rows to
     "missing data" sends the reader looking for a scraping bug that does not exist.
     """
-    path = _table(tmp_path, {
-        "group": ["hla", "hla"],
-        "gene": ["DQB1", "DQB1"],
-        "allele": ["DQB1*03:01", "DQB1*03:01"],
-        "population": ["USA NMDP Korean", "Peru Lamas City Lama"],
-        "indivs_over_n": ["", ""],
-        "alleles_over_2n": ["", "0.1250"],   # the registry row has no frequency either
-        "n": ["155168", "100"],
-    })
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla", "hla"],
+            "gene": ["DQB1", "DQB1"],
+            "allele": ["DQB1*03:01", "DQB1*03:01"],
+            "population": ["USA NMDP Korean", "Peru Lamas City Lama"],
+            "indivs_over_n": ["", ""],
+            "alleles_over_2n": ["", "0.1250"],  # the registry row has no frequency either
+            "n": ["155168", "100"],
+        },
+    )
     _, report = af.load(path, POPULATIONS, "test")
     assert report.refusals["donor_registry_ancestry_stratum"] == 1
     assert "no_frequency_reported" not in report.refusals

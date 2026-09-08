@@ -3,9 +3,9 @@ import GitHubLink from './GitHubLink.astro';
 import { sitePath } from '../lib/paths';
 
 const path = Astro.url.pathname;
+const isAtlasPage = path === sitePath('/app/');
 const links = [
   { label: 'Project', href: '/project/' },
-  { label: 'Preview', href: '/app/' },
   { label: 'Working groups', href: '/working-groups/' },
   { label: 'Contribute', href: '/contribute/' },
   { label: 'Technical docs', href: '/docs/' },
@@ -37,6 +37,30 @@ const isCurrent = (href: string) =>
     </nav>
 
     <div class="site-header__actions">
+      {
+        isAtlasPage && (
+          <div
+            class="atlas-navbar-status-slot"
+            data-atlas-status-slot
+            aria-label="Atlas status"
+          />
+        )
+      }
+      {
+        !isAtlasPage && (
+          <a class="launch-atlas-cta" href={sitePath('/app/')}>
+            <span>Launch Atlas</span>
+            <svg
+              class="launch-atlas-cta__rocket"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path d="M14.7 5.3c2.6-2.6 5.7-2.5 5.7-2.5s.1 3.1-2.5 5.7l-4.6 4.6-4.1-4.1 4.6-4.6.9.9Z" />
+              <path d="m9.2 9-3.9.5-2.5 2.5 5.1.8M13.3 13.1l-.5 3.9-2.5 2.5-.8-5.1M15.8 7.4h.01M6.7 16.3l-3.1 3.1M7.8 18.7l-1.7 1.7" />
+            </svg>
+          </a>
+        )
+      }
       <div class="desktop-nav"><GitHubLink /></div>
       <details class="mobile-nav">
         <summary>Menu</summary>

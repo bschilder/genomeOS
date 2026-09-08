@@ -1,0 +1,21 @@
+{
+  "artifact_format": 2,
+  "correlation_range_km": 2149.4,
+  "data_version": "afnd-2026-08",
+  "lengthscale_sigma": 0.7,
+  "likelihood": "beta_binomial",
+  "measurement": "allele_frequency",
+  "model_version": "v3",
+  "n_cells": 77844,
+  "n_observations": 86,
+  "prior_frequency_sd": 0.12518,
+  "resolution": 4,
+  "support_counts": {
+    "interpolated": 74093,
+    "observed": 274,
+    "unknown": 3477
+  },
+  "target_grid_source": "worldpop-1km-unconstrained",
+  "target_grid_version": "Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif+Global_2000_2020/2020/COK/cok_ppp_2020_UNadj.tif",
+  "variant_id": "cyt:il-10-1082-g"
+}
