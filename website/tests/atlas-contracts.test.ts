@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   atlasCatalogSchema,
+  externalInfoSchema,
   observationArtifactSchema,
   surfaceArtifactSchema,
 } from '../src/atlas/contracts';
@@ -179,6 +180,107 @@ describe('atlas browser contracts', () => {
         artifact,
         cells: [{ ...cell, posterior_contraction: -0.01 }],
         schema_version: 1,
+      }),
+    ).toThrow();
+  });
+
+  it('validates versioned gnomAD ancestry, constraint, and ClinVar evidence', () => {
+    const evidence = {
+      query: {
+        dataset: 'gnomad_r4',
+        normalized_variant_id: 'chr11-5227002-T-A',
+      },
+      record: {
+        alt: 'A',
+        canonical_consequence: null,
+        chrom: '11',
+        clinvar: {
+          clinical_significance: 'Pathogenic',
+          conditions: [
+            {
+              classifications: ['Pathogenic'],
+              medgen_id: 'C0002895',
+              name: 'Hb SS disease',
+              submission_count: 2,
+            },
+          ],
+          gold_stars: 2,
+          last_evaluated: '2026-02-26',
+          release_date: '2026-06-06',
+          review_status: 'criteria provided, multiple submitters, no conflicts',
+          submission_count: 3,
+          variation_id: '15333',
+        },
+        exome: null,
+        genetic_ancestry_group_frequencies: [
+          {
+            ac: 3707,
+            af: 3707 / 74908,
+            an: 74908,
+            hemizygote_count: 0,
+            homozygote_count: 36,
+            id: 'afr',
+            label: 'African/African American',
+          },
+        ],
+        genome: null,
+        genomic_constraint: {
+          chrom: 'chr11',
+          dataset_release: 'gnomAD v3.1.2',
+          expected: 144.25935104346829,
+          observed: 151,
+          oe: 1.0467259065549284,
+          possible: 1722,
+          start: 5227000,
+          stop: 5228000,
+          z: -0.5612155853702537,
+        },
+        joint: { ac: 4272, af: 4272 / 1610650, an: 1610650 },
+        pos: 5227002,
+        ref: 'T',
+        rsids: ['rs334'],
+        source_url:
+          'https://gnomad.broadinstitute.org/variant/11-5227002-T-A?dataset=gnomad_r4',
+      },
+      retrieved_at: '2026-09-08T14:00:00Z',
+      schema_version: 2,
+      source: 'gnomad',
+      source_release: 'gnomad_r4',
+    } as const;
+
+    expect(externalInfoSchema.parse(evidence).record).toMatchObject({
+      clinvar: { variation_id: '15333' },
+      genetic_ancestry_group_frequencies: [{ id: 'afr' }],
+      genomic_constraint: { start: 5227000, stop: 5228000 },
+    });
+    expect(() =>
+      externalInfoSchema.parse({ ...evidence, schema_version: 1 }),
+    ).toThrow();
+    expect(() =>
+      externalInfoSchema.parse({
+        ...evidence,
+        record: {
+          ...evidence.record,
+          genetic_ancestry_group_frequencies: [
+            {
+              ...evidence.record.genetic_ancestry_group_frequencies[0],
+              ac: 101,
+              an: 100,
+            },
+          ],
+        },
+      }),
+    ).toThrow(/ac must not exceed an/);
+    expect(() =>
+      externalInfoSchema.parse({
+        ...evidence,
+        record: {
+          ...evidence.record,
+          genomic_constraint: {
+            ...evidence.record.genomic_constraint,
+            z: 10.1,
+          },
+        },
       }),
     ).toThrow();
   });

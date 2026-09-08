@@ -460,7 +460,11 @@ def _external_resources(
             {"schema_version", "source", "source_release", "retrieved_at", "query", "record"},
             str(source_root / cache_file),
         )
-        if cache_payload["source"] != source or cache_payload["schema_version"] != 1:
+        expected_schema_version = {"dbsnp": 1, "gnomad": 2}[source]
+        if (
+            cache_payload["source"] != source
+            or cache_payload["schema_version"] != expected_schema_version
+        ):
             raise ValueError(f"{source_root / cache_file}: cache source/schema mismatch")
         query = cache_payload["query"]
         if not isinstance(query, Mapping) or query.get("normalized_variant_id") != normalized:
