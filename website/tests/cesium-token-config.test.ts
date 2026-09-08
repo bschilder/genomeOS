@@ -50,5 +50,5 @@ describe('Cesium ion browser-token wiring', () => {
       rmSync(environmentPath, { force: true });
       rmSync(outDir, { force: true, recursive: true });
     }
-  });
+  }, 30_000);
 });

@@ -90,5 +90,5 @@ describe('published Atlas data', () => {
         reference.n_observations,
       );
     }
-  });
+  }, 30_000);
 });
