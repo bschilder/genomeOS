@@ -732,10 +732,21 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await page.getByRole('radio', { name: 'Map' }).check();
 
   await page.locator('summary', { hasText: 'Measured points' }).click();
+  await expect(
+    page
+      .getByLabel('Marker shape', { exact: true })
+      .locator('option[value="sphere"]'),
+  ).toHaveText('Spheres');
+  await page
+    .getByLabel('Marker shape', { exact: true })
+    .selectOption({ label: 'Spheres' });
+  await expect(page).toHaveURL(/obsShape=sphere/);
+  await expect(page.getByText('Min · 12 km radius')).toBeVisible();
   await page
     .getByLabel('Marker shape', { exact: true })
     .selectOption({ label: 'Domes' });
   await expect(page).toHaveURL(/obsShape=hemisphere/);
+  await expect(page.getByText('Min · 12 px')).toBeVisible();
   await page.getByLabel('Marker shape', { exact: true }).selectOption('pin');
   await page
     .getByLabel('Marker color', { exact: true })

@@ -186,6 +186,20 @@ describe('explorer URL state', () => {
     expect(state.observationShape).toBe('hemisphere');
   });
 
+  it('round-trips spheres without changing the dome default', () => {
+    const parsed = parseExplorerState(
+      '?entity=hbs-rs334&obsShape=sphere',
+      catalog,
+    );
+
+    expect(parsed.corrections).toEqual([]);
+    expect(parsed.state.observationShape).toBe('sphere');
+    expect(
+      parseExplorerState(serializeExplorerState(parsed.state), catalog).state
+        .observationShape,
+    ).toBe('sphere');
+  });
+
   it('defaults and validates the sampling-area outline color', () => {
     expect(
       parseExplorerState('?entity=hbs-rs334', catalog).state.samplingAreaColor,

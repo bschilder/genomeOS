@@ -20,6 +20,7 @@ import type {
   SurfaceArtifact,
   SurfaceCell,
 } from '../src/atlas/contracts';
+import type { ObservationShape } from '../src/atlas/observation-encoding';
 import type { AtlasHover, AtlasPick } from '../src/atlas/scene/types';
 import { cameraState, keyboardCommandFor } from '../src/atlas/scene/camera';
 import {
@@ -167,9 +168,7 @@ function stubCesiumBrowserImageTypes(): void {
   });
 }
 
-function buildObservationLayerForTest(
-  shape: 'circle' | 'hemisphere' | 'pin' = 'circle',
-) {
+function buildObservationLayerForTest(shape: ObservationShape = 'circle') {
   const surface = {
     artifact: {
       metric_domains: { post_mean: [0, 1], post_sd: [0, 1] },
@@ -796,6 +795,48 @@ describe('Cesium scene policy', () => {
       expect(hemisphere.image).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('builds a full sphere whose lower edge stays above its sampling ring', () => {
+    stubCesiumBrowserImageTypes();
+    try {
+      const layer = buildObservationLayerForTest('sphere');
+      const ringPosition = layer.collection.get(0).get(0).positions[0];
+      const sphere = layer.collection.get(4).get(0);
+      const ringHeight =
+        Ellipsoid.WGS84.cartesianToCartographic(ringPosition).height;
+      const centerHeight = Ellipsoid.WGS84.cartesianToCartographic(
+        sphere.center,
+      ).height;
+
+      expect(sphere.id).toEqual(observationPickId('map-surveys:1'));
+      expect(sphere.radii.x).toBe(sphere.radii.y);
+      expect(sphere.radii.y).toBe(sphere.radii.z);
+      expect(centerHeight - sphere.radii.z - ringHeight).toBeGreaterThanOrEqual(
+        2_500,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('resizes and fades an existing sphere without rebuilding it', () => {
+    stubCesiumBrowserImageTypes();
+    try {
+      const layer = buildObservationLayerForTest('sphere');
+      const spheres = layer.collection.get(4);
+      const sphere = spheres.get(0);
+
+      layer.setSizeRange([24, 48]);
+      expect(spheres.get(0)).toBe(sphere);
+      expect(sphere.radii).toEqual(new Cartesian3(36_000, 36_000, 36_000));
+
+      layer.setStyleOpacity(0.8);
+      layer.setOpacity(0.5);
+      expect(sphere.material.uniforms.color.alpha).toBeCloseTo(0.4);
     } finally {
       vi.unstubAllGlobals();
     }

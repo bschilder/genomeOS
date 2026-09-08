@@ -1,6 +1,7 @@
 /** Measured-observation symbols and source-supported footprints for Atlas design §11. */
 
 import { latLngToCell } from 'h3-js';
+import * as Cesium from 'cesium';
 import {
   BillboardCollection,
   Cartesian3,
@@ -35,6 +36,7 @@ import {
   observationSurfaceAnchor,
   observationSurfaceContext,
   observationSurfacePlacement,
+  sphereSurfacePlacement,
   STUD_ASPECT_RATIO,
   type ObservationSurfaceAnchor,
 } from './observation-symbols';
@@ -91,9 +93,30 @@ interface RingSample {
   lonRadians: number;
 }
 
+interface SpherePrimitive {
+  center: Cartesian3;
+  id: ObservationPick;
+  material: Material;
+  radii: Cartesian3;
+  show: boolean;
+}
+
+interface SpherePrimitiveConstructor {
+  new (options: {
+    center: Cartesian3;
+    id: ObservationPick;
+    material: Material;
+    radii: Cartesian3;
+  }): SpherePrimitive;
+}
+
 const EARTH_RADIUS_KM = 6_371.0088;
 const RING_CLEARANCE_METRES = 4_000;
 const PIN_ASPECT_RATIO = 1.45;
+// Cesium 1.145 exports this mutable ray-cast primitive but omits its private API from the types.
+const RaycastSpherePrimitive = (
+  Cesium as unknown as { EllipsoidPrimitive: SpherePrimitiveConstructor }
+).EllipsoidPrimitive;
 const LIT_PIN_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128">
     <defs>
@@ -288,6 +311,7 @@ export function buildObservationLayer(
   const points = new PointPrimitiveCollection();
   const pins = new BillboardCollection();
   const hemispheres = new BillboardCollection();
+  const spheres = new PrimitiveCollection();
   const symbols = encodings(artifact, options);
   const cells = surfaceCellMap(options.surface);
   const baseHeightAt = (point: GeographicPoint) =>
@@ -390,7 +414,29 @@ export function buildObservationLayer(
   collection.add(points);
   collection.add(pins);
 
-  const symbolCollections = [hemispheres, points, pins];
+  const sphereBaseColors: Color[] = [];
+  if (options.shape === 'sphere') {
+    for (const symbol of symbols) {
+      const { anchor, color, observation, size } = symbol;
+      const cesiumColor = Color.fromCssColorString(color).withAlpha(1);
+      const sphere = sphereSurfacePlacement(
+        observationSurfacePlacement(anchor, observation, elevationFactor),
+        size,
+      );
+      sphereBaseColors.push(cesiumColor.clone());
+      spheres.add(
+        new RaycastSpherePrimitive({
+          center: sphere.center,
+          id: observationPickId(observation.source_record_id),
+          material: Material.fromType('Color', { color: cesiumColor }),
+          radii: sphere.radii,
+        }),
+      );
+    }
+  }
+  collection.add(spheres);
+
+  const symbolCollections = [hemispheres, points, pins, spheres];
   return {
     collection,
     isReady: () => true,
@@ -420,8 +466,13 @@ export function buildObservationLayer(
         else if (options.shape === 'pin') {
           pins.get(index).position = placement.position;
           pins.get(index).alignedAxis = placement.normal;
-        } else {
+        } else if (options.shape === 'hemisphere') {
           hemispheres.get(index).position = placement.position;
+        } else {
+          spheres.get(index).center = sphereSurfacePlacement(
+            placement,
+            symbol.size,
+          ).center;
         }
       }
     },
@@ -464,6 +515,17 @@ export function buildObservationLayer(
           earthOpacity;
         hemispheres.get(index).color = uploadColor;
       }
+      for (let index = 0; index < spheres.length; index += 1) {
+        const color = spheres.get(index).material.uniforms.color;
+        if (color instanceof Color) {
+          Color.clone(sphereBaseColors[index], color);
+          color.alpha =
+            sphereBaseColors[index].alpha *
+            opacity *
+            styleOpacity *
+            earthOpacity;
+        }
+      }
     },
     setEarthOpacity(opacity: number) {
       earthOpacity = Math.min(1, Math.max(0.15, opacity));
@@ -479,9 +541,20 @@ export function buildObservationLayer(
         else if (options.shape === 'hemisphere') {
           hemispheres.get(index).width = size;
           hemispheres.get(index).height = size * STUD_ASPECT_RATIO;
-        } else {
+        } else if (options.shape === 'pin') {
           pins.get(index).width = size;
           pins.get(index).height = size * PIN_ASPECT_RATIO;
+        } else {
+          const sphere = sphereSurfacePlacement(
+            observationSurfacePlacement(
+              symbol.anchor,
+              symbol.observation,
+              elevationFactor,
+            ),
+            size,
+          );
+          spheres.get(index).center = sphere.center;
+          spheres.get(index).radii = sphere.radii;
         }
       }
     },

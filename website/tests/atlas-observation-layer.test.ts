@@ -6,6 +6,7 @@ import type { SurfaceArtifact, SurfaceCell } from '../src/atlas/contracts';
 import {
   observationSurfaceAnchor,
   observationSurfacePlacement,
+  sphereSurfacePlacement,
   STUD_ASPECT_RATIO,
   SYMBOL_CLEARANCE_METRES,
 } from '../src/atlas/scene/observation-symbols';
@@ -141,5 +142,33 @@ describe('observation surface anchors', () => {
   it('defines a low dome rather than a full circular sphere silhouette', () => {
     expect(STUD_ASPECT_RATIO).toBeGreaterThan(0.5);
     expect(STUD_ASPECT_RATIO).toBeLessThan(1);
+  });
+
+  it('raises a full sphere by its radius along the rendered surface normal', () => {
+    const { point, surface } = slopedSurface();
+    const anchor = observationSurfaceAnchor(
+      point,
+      surface,
+      'post_mean',
+      'triangles',
+    );
+    const surfacePlacement = observationSurfacePlacement(anchor, point, 1);
+
+    const sphere = sphereSurfacePlacement(surfacePlacement, 12);
+    const displacement = Cartesian3.subtract(
+      sphere.center,
+      surfacePlacement.position,
+      new Cartesian3(),
+    );
+
+    expect(sphere.radiusMetres).toBe(12_000);
+    expect(sphere.radii).toEqual(new Cartesian3(12_000, 12_000, 12_000));
+    expect(Cartesian3.magnitude(displacement)).toBeCloseTo(12_000, 5);
+    expect(
+      Cartesian3.dot(
+        Cartesian3.normalize(displacement, new Cartesian3()),
+        surfacePlacement.normal,
+      ),
+    ).toBeCloseTo(1, 8);
   });
 });

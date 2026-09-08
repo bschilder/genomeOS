@@ -28,6 +28,7 @@ interface ObservationControlsProps {
 
 const SHAPES: readonly [ObservationShape, string][] = [
   ['circle', 'Circles'],
+  ['sphere', 'Spheres'],
   ['hemisphere', 'Domes'],
   ['pin', 'Pins'],
 ];
@@ -57,6 +58,7 @@ export function ObservationControls({
   onSolidColor,
 }: ObservationControlsProps) {
   const range = state.observationSizeRange;
+  const sizeUnit = state.observationShape === 'sphere' ? 'km radius' : 'px';
   const setGradientStop = (index: 0 | 1 | 2, color: string) => {
     const next = [...state.observationGradient] as [string, string, string];
     next[index] = color;
@@ -69,8 +71,9 @@ export function ObservationControls({
         <span className="atlas-field__title">
           <label htmlFor="atlas-marker-shape">Marker shape</label>
           <InfoTip label="marker shape">
-            Three presentations of the same measured location. Circles and
-            surface-mounted domes keep the same apparent footprint.
+            Four presentations of the same measured location. Spheres are
+            world-sized 3D landmarks; circles, surface-mounted domes, and pins
+            keep a screen-space footprint.
           </InfoTip>
         </span>
         <select
@@ -186,7 +189,8 @@ export function ObservationControls({
           <label htmlFor="atlas-marker-size">Marker size</label>
           <InfoTip label="marker size">
             Size can be fixed or calculated from source-reported AC, AN, or
-            observed frequency. Sampling radius is never used as a substitute.
+            observed frequency. Spheres use a physical kilometre radius; other
+            shapes use pixels. Sampling radius is never used as a substitute.
           </InfoTip>
         </span>
         <select
@@ -211,7 +215,9 @@ export function ObservationControls({
         aria-label="Marker size range"
       >
         <label>
-          <span>Min · {Math.round(range[0])} px</span>
+          <span>
+            Min · {Math.round(range[0])} {sizeUnit}
+          </span>
           <input
             type="range"
             min={MIN_OBSERVATION_MARKER_SIZE}
@@ -228,7 +234,9 @@ export function ObservationControls({
           />
         </label>
         <label>
-          <span>Max · {Math.round(range[1])} px</span>
+          <span>
+            Max · {Math.round(range[1])} {sizeUnit}
+          </span>
           <input
             type="range"
             min={MIN_OBSERVATION_MARKER_SIZE}

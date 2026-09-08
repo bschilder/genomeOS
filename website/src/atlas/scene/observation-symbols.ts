@@ -35,6 +35,12 @@ export interface ObservationSurfacePlacement {
   position: Cartesian3;
 }
 
+export interface SphereSurfacePlacement {
+  center: Cartesian3;
+  radii: Cartesian3;
+  radiusMetres: number;
+}
+
 export interface ObservationSurfaceContext {
   cells: ReadonlyMap<string, SurfaceCell>;
   vertexHeights: ReadonlyMap<string, number>;
@@ -48,6 +54,7 @@ interface TriangleSample {
 export const STUD_ASPECT_RATIO = 0.72;
 export const SYMBOL_CLEARANCE_METRES = 7_000;
 export const SYMBOL_EYE_OFFSET_METRES = 1_200;
+export const SPHERE_METRES_PER_SIZE_UNIT = 1_000;
 
 const SMOOTH_GEOMETRIES: ReadonlySet<SurfaceGeometry> = new Set([
   'triangles',
@@ -256,6 +263,26 @@ export function observationSurfacePlacement(
       ? triangleNormal(anchor.triangle, safeFactor, radial)
       : radial,
     position,
+  };
+}
+
+export function sphereSurfacePlacement(
+  placement: ObservationSurfacePlacement,
+  size: number,
+): SphereSurfacePlacement {
+  const radiusMetres = size * SPHERE_METRES_PER_SIZE_UNIT;
+  return {
+    center: Cartesian3.add(
+      placement.position,
+      Cartesian3.multiplyByScalar(
+        placement.normal,
+        radiusMetres,
+        new Cartesian3(),
+      ),
+      new Cartesian3(),
+    ),
+    radii: new Cartesian3(radiusMetres, radiusMetres, radiusMetres),
+    radiusMetres,
   };
 }
 

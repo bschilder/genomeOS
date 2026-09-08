@@ -437,7 +437,7 @@ export function parseExplorerState(
       observationShape: parseEnum(
         params,
         'obsShape',
-        ['circle', 'hemisphere', 'pin'],
+        ['circle', 'hemisphere', 'sphere', 'pin'],
         'hemisphere',
         corrections,
       ),
