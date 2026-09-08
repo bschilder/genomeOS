@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { cellToLatLng } from 'h3-js';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 
@@ -1020,10 +1021,25 @@ test('explorer previews and opens separate surface and observation inspectors', 
   await clickNearCenter(surfaceInspector);
   await expect(surfaceInspector).toBeVisible();
   await expect(hoverPreview).toBeVisible();
-  await expect(surfaceInspector.getByText('Cell ID')).toBeVisible();
+  const cellId = await surfaceInspector
+    .locator('dt', { hasText: 'Cell ID' })
+    .locator('..')
+    .locator('dd')
+    .innerText();
+  const [centroidLat, centroidLon] = cellToLatLng(cellId);
   const mapOptions = surfaceInspector.getByRole('button', {
     name: 'Choose how to open this cell in Google Maps',
   });
+  const triggerCoordinates = mapOptions.locator(
+    '.atlas-centroid-link__coordinates span',
+  );
+  await expect(triggerCoordinates).toHaveCount(2);
+  await expect(triggerCoordinates.nth(0)).toHaveText(
+    `${centroidLon.toFixed(4)}° lon`,
+  );
+  await expect(triggerCoordinates.nth(1)).toHaveText(
+    `${centroidLat.toFixed(4)}° lat`,
+  );
   await mapOptions.click();
   const centroidLink = surfaceInspector.getByRole('link', {
     name: 'Centroid',
