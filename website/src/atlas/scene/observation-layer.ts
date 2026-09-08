@@ -53,6 +53,7 @@ export interface ObservationPrimitiveGroup {
   collection: PrimitiveCollection;
   isReady(): boolean;
   readyCount(): number;
+  totalCount(): number;
   setElevationFactor(factor: number, force?: boolean): void;
   setEarthOpacity(opacity: number): void;
   setOpacity(opacity: number): void;
@@ -432,6 +433,7 @@ export function buildObservationLayer(
     collection,
     isReady: () => true,
     readyCount: () => 0,
+    totalCount: () => 0,
     setElevationFactor(factor: number, force = false) {
       const safeFactor = Math.max(0, factor);
       if (safeFactor === elevationFactor) return;

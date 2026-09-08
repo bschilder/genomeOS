@@ -48,6 +48,7 @@ import type {
   ContextStatus,
   ObservationPresentation,
   SceneCapabilities,
+  SceneProgressListener,
 } from './types';
 
 export { preferredAtlasPick } from './picking';
@@ -63,6 +64,8 @@ export type {
   ContextStatus,
   ObservationPresentation,
   SceneCapabilities,
+  SceneProgress,
+  SceneProgressListener,
 } from './types';
 
 interface PreparedSurfaceSwap {
@@ -187,8 +190,11 @@ class CesiumAtlasScene implements AtlasSceneController {
     return this.#elevation && this.#mode !== 'map' ? this.#exaggeration : 0;
   }
 
-  async #prepareSurface(): Promise<PreparedSurfaceSwap | null> {
+  async #prepareSurface(
+    progress?: SceneProgressListener,
+  ): Promise<PreparedSurfaceSwap | null> {
     if (this.#surfaceArtifact === null) return null;
+    progress?.({ detail: 'Building surface geometry', progress: null });
     const sequence = ++this.#buildSequence;
     const elevationFactor = this.#targetElevationFactor();
     const identity = this.#surfaceArtifact.artifact;
@@ -224,7 +230,12 @@ class CesiumAtlasScene implements AtlasSceneController {
     await incoming.setCellEdges(this.#cellEdges);
     incoming.setSurfaceOpacity(this.#surfaceOpacity);
     incoming.setOpacity(0);
-    await waitForReady(this.#viewer, incoming);
+    await waitForReady(this.#viewer, incoming, (value) =>
+      progress?.({
+        detail: 'Preparing surface geometry',
+        progress: value,
+      }),
+    );
     incoming.setElevationFactor(elevationFactor);
     if (sequence !== this.#buildSequence || this.#destroyed) {
       if (incoming !== this.#surfaceGroup) incoming.collection.show = false;
@@ -233,7 +244,10 @@ class CesiumAtlasScene implements AtlasSceneController {
     return { incoming, outgoing: this.#surfaceGroup, sequence };
   }
 
-  async #activateSurface(swap: PreparedSurfaceSwap): Promise<void> {
+  async #activateSurface(
+    swap: PreparedSurfaceSwap,
+    progress?: SceneProgressListener,
+  ): Promise<void> {
     const { incoming, outgoing, sequence } = swap;
     if (sequence !== this.#buildSequence || this.#destroyed) {
       if (incoming !== this.#surfaceGroup) incoming.collection.show = false;
@@ -252,25 +266,34 @@ class CesiumAtlasScene implements AtlasSceneController {
       outgoing,
       this.#reducedMotion,
       true,
+      (value) =>
+        progress?.({ detail: 'Blending the new surface', progress: value }),
     );
     this.#surfaceCache.prune(incoming, (group) => {
       this.#viewer.scene.primitives.remove(group.collection);
     });
   }
 
-  async #replaceSurface(): Promise<void> {
-    const swap = await this.#prepareSurface();
-    if (swap) await this.#activateSurface(swap);
+  async #replaceSurface(progress?: SceneProgressListener): Promise<void> {
+    const swap = await this.#prepareSurface(progress);
+    if (swap) await this.#activateSurface(swap, progress);
   }
 
-  async #replaceScientificLayers(): Promise<void> {
+  async #replaceScientificLayers(
+    progress?: SceneProgressListener,
+  ): Promise<void> {
     if (this.#surfaceArtifact)
-      await this.setArtifact(this.#surfaceArtifact, this.#observationArtifact);
+      await this.setArtifact(
+        this.#surfaceArtifact,
+        this.#observationArtifact,
+        progress,
+      );
   }
 
   async setArtifact(
     surface: SurfaceArtifact,
     observations: ObservationArtifact | null,
+    progress?: SceneProgressListener,
   ): Promise<void> {
     const sequence = ++this.#artifactSequence;
     const artifactIdentity = [
@@ -286,6 +309,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#geographicOverlay.setSurface(surface, this.#metric);
     let incomingObservations: ObservationPrimitiveGroup | null = null;
     if (observations) {
+      progress?.({ detail: 'Building measured points', progress: null });
       const identity = observations.artifact;
       const observationKey = [
         identity.id,
@@ -330,7 +354,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     }
     const oldObservations = this.#observationGroup;
     const [surfaceSwap] = await Promise.all([
-      this.#prepareSurface(),
+      this.#prepareSurface(progress),
       incomingObservations
         ? waitForReady(this.#viewer, incomingObservations)
         : Promise.resolve(),
@@ -377,7 +401,7 @@ class CesiumAtlasScene implements AtlasSceneController {
       this.#observationStyle.samplingAreas,
     );
     await Promise.all([
-      this.#activateSurface(surfaceSwap),
+      this.#activateSurface(surfaceSwap, progress),
       observationTransition,
     ]);
     if (incomingObservations) {
@@ -395,12 +419,15 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#viewer.scene.primitives.raiseToTop(this.#highlightLayer.collection);
   }
 
-  async setMetric(metric: Metric): Promise<void> {
+  async setMetric(
+    metric: Metric,
+    progress?: SceneProgressListener,
+  ): Promise<void> {
     if (this.#metric === metric) return;
     this.#metric = metric;
     if (this.#surfaceArtifact)
       this.#geographicOverlay.setSurface(this.#surfaceArtifact, metric);
-    await this.#replaceScientificLayers();
+    await this.#replaceScientificLayers(progress);
   }
 
   async setSurfaceStyle(
@@ -410,6 +437,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     edgeColorMode: EdgeColorMode,
     edgeFixedColor: string,
     geometry: SurfaceGeometry,
+    progress?: SceneProgressListener,
   ): Promise<void> {
     const paletteChanged = this.#palette !== palette;
     const edgeStyleChanged =
@@ -424,14 +452,17 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#surfaceGeometry = geometry;
     this.#surfaceGroup?.setSurfaceOpacity(opacity);
     if (paletteChanged || edgeStyleChanged || geometryChanged) {
-      await this.#replaceSurface();
+      await this.#replaceSurface(progress);
     } else {
       await this.#surfaceGroup?.setCellEdges(cellEdges);
     }
     this.#viewer.scene.requestRender();
   }
 
-  async setObservationStyle(style: ObservationPresentation): Promise<void> {
+  async setObservationStyle(
+    style: ObservationPresentation,
+    progress?: SceneProgressListener,
+  ): Promise<void> {
     const opacityChanged = this.#observationStyle.opacity !== style.opacity;
     const sizeRangeChanged =
       this.#observationStyle.sizeRange.join(':') !== style.sizeRange.join(':');
@@ -447,7 +478,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     if (opacityChanged) this.#observationGroup?.setStyleOpacity(style.opacity);
     if (samplingAreaColorChanged)
       this.#observationGroup?.setSamplingAreaColor(style.samplingAreaColor);
-    if (renderingChanged) await this.#replaceScientificLayers();
+    if (renderingChanged) await this.#replaceScientificLayers(progress);
     else {
       if (sizeRangeChanged)
         this.#observationGroup?.setSizeRange(style.sizeRange);

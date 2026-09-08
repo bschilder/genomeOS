@@ -23,11 +23,20 @@ export function transitionProgress(
 export function waitForReady(
   viewer: Viewer,
   group: FadeableGroup,
+  onProgress?: (progress: number) => void,
 ): Promise<void> {
+  const totalCount = group.totalCount?.() ?? Math.max(group.readyCount(), 1);
+  const report = () =>
+    onProgress?.(
+      totalCount === 0
+        ? 1
+        : Math.min(1, Math.max(0, group.readyCount() / totalCount)),
+    );
+  report();
   if (group.isReady()) return Promise.resolve();
   return new Promise((resolve, reject) => {
     let readyCount = group.readyCount();
-    let timeout = 0;
+    let timeout: ReturnType<typeof globalThis.setTimeout> | undefined;
     const stopWaiting = () => {
       clearTimeout(timeout);
       remove();
@@ -39,12 +48,16 @@ export function waitForReady(
     };
     const extendDeadline = () => {
       clearTimeout(timeout);
-      timeout = window.setTimeout(failIfStalled, GEOMETRY_IDLE_TIMEOUT_MS);
+      timeout = globalThis.setTimeout(
+        failIfStalled,
+        GEOMETRY_IDLE_TIMEOUT_MS,
+      );
     };
     const remove = viewer.scene.postRender.addEventListener(() => {
       const nextReadyCount = group.readyCount();
       if (nextReadyCount > readyCount) {
         readyCount = nextReadyCount;
+        report();
         extendDeadline();
       }
       if (!group.isReady()) return;
@@ -62,6 +75,7 @@ export function animateSwap(
   outgoing: FadeableGroup | null,
   reducedMotion: boolean,
   retainOutgoing = false,
+  onProgress?: (progress: number) => void,
 ): Promise<void> {
   const retireOutgoing = () => {
     if (!outgoing) return;
@@ -73,12 +87,15 @@ export function animateSwap(
   if (reducedMotion) {
     incoming.setOpacity(1);
     retireOutgoing();
+    onProgress?.(1);
     return Promise.resolve();
   }
   return new Promise((resolve) => {
     const started = performance.now();
+    onProgress?.(0);
     const frame = (now: number) => {
       const progress = transitionProgress(now - started, HEATMAP_SWAP_MS);
+      onProgress?.(progress);
       incoming.setOpacity(progress);
       outgoing?.setOpacity(1 - progress);
       viewer.scene.requestRender();

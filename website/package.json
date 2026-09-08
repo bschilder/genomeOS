@@ -20,7 +20,8 @@
     "serve:test": "serve dist -l tcp://127.0.0.1:4322 --no-clipboard",
     "check:links": "node scripts/check-links.mjs",
     "capture": "node scripts/capture-homepage.mjs",
-    "capture:atlas": "npm run build && node scripts/capture-atlas.mjs"
+    "capture:atlas": "npm run build && node scripts/capture-atlas.mjs",
+    "capture:progress": "npm run build && node scripts/capture-atlas-progress.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.5",

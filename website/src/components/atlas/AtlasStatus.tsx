@@ -5,13 +5,17 @@ import { createPortal } from 'react-dom';
 
 import type { ContextStatus } from '../../atlas/scene/atlas-scene';
 import type { ContextWarning } from '../../atlas/scene/context-controller';
+import type {
+  ExplorerActivity,
+  ExplorerLoadStatus,
+} from '../../atlas/progress';
 import type { StateCorrection } from '../../atlas/url-state';
 
-export type ExplorerLoadStatus =
-  'loading catalog' | 'loading artifact' | 'validating' | 'rendering' | 'ready';
+export type { ExplorerLoadStatus } from '../../atlas/progress';
 
 interface AtlasStatusProps {
   status: ExplorerLoadStatus;
+  activity: ExplorerActivity | null;
   contextStatus: ContextStatus;
   sceneWarnings: readonly ContextWarning[];
   corrections: StateCorrection[];
@@ -20,7 +24,13 @@ interface AtlasStatusProps {
   onRetry: () => void;
 }
 
-function NavbarAtlasStatus({ status }: { status: ExplorerLoadStatus }) {
+function NavbarAtlasStatus({
+  activity,
+  status,
+}: {
+  activity: ExplorerActivity | null;
+  status: ExplorerLoadStatus;
+}) {
   const [target, setTarget] = useState<Element | null>(null);
 
   useEffect(() => {
@@ -28,19 +38,48 @@ function NavbarAtlasStatus({ status }: { status: ExplorerLoadStatus }) {
   }, []);
 
   if (!target) return null;
+  const ready = status === 'ready';
+  const value =
+    activity?.progress === null || activity?.progress === undefined
+      ? null
+      : Math.min(1, Math.max(0, activity.progress));
+  const label = ready ? 'Atlas ready' : (activity?.label ?? status);
   return createPortal(
-    <p className="atlas-status" aria-live="polite">
+    <div className="atlas-status" role="status" aria-live="polite">
       <span
         className={`atlas-status__light atlas-status__light--${status.replace(' ', '-')}`}
       />
-      {status === 'ready' ? 'Atlas ready' : status}
-    </p>,
+      <span className="atlas-status__copy">
+        <strong>{label}</strong>
+        {!ready && activity?.detail && <small>{activity.detail}</small>}
+      </span>
+      {!ready && activity && (
+        <span
+          className={`atlas-status__meter${value === null ? ' atlas-status__meter--indeterminate' : ''}`}
+          role="progressbar"
+          aria-label="Atlas operation progress"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={value === null ? undefined : Math.round(value * 100)}
+          aria-valuetext={
+            value === null
+              ? 'Working'
+              : `${Math.round(value * 100)} percent complete`
+          }
+        >
+          <span
+            style={value === null ? undefined : { width: `${value * 100}%` }}
+          />
+        </span>
+      )}
+    </div>,
     target,
   );
 }
 
 export function AtlasStatus({
   status,
+  activity,
   contextStatus,
   sceneWarnings,
   corrections,
@@ -90,7 +129,7 @@ export function AtlasStatus({
 
   return (
     <>
-      <NavbarAtlasStatus status={status} />
+      <NavbarAtlasStatus activity={activity} status={status} />
       {notices.length > 0 && (
         <p className="atlas-warning-banner" role="status">
           <strong>Notice:</strong> {notices.join(' · ')}

@@ -13,6 +13,7 @@ import {
   type ExternalInfo,
 } from './contracts';
 import type { AtlasDataProvider } from './provider';
+import type { TransferProgressListener } from './progress';
 
 const IDENTITY_FIELDS = [
   'artifact_format',
@@ -62,7 +63,11 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     this.#requestTimeoutMs = requestTimeoutMs;
   }
 
-  async #getJson(path: string, signal?: AbortSignal): Promise<unknown> {
+  async #getJson(
+    path: string,
+    signal?: AbortSignal,
+    progress?: TransferProgressListener,
+  ): Promise<unknown> {
     const controller = new AbortController();
     let timedOut = false;
     const forwardAbort = () => controller.abort(signal?.reason);
@@ -83,7 +88,36 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
           `Atlas request failed with HTTP ${response.status}: ${path}`,
         );
       }
-      return response.json();
+      if (!progress) return response.json();
+      const declaredSize = Number(response.headers.get('Content-Length'));
+      const contentEncoding = response.headers.get('Content-Encoding');
+      const totalBytes =
+        (!contentEncoding || contentEncoding === 'identity') &&
+        Number.isFinite(declaredSize) &&
+        declaredSize > 0
+          ? declaredSize
+          : null;
+      progress({ loadedBytes: 0, totalBytes });
+      if (!response.body) {
+        const body = await response.text();
+        const loadedBytes = new TextEncoder().encode(body).length;
+        progress({ loadedBytes, totalBytes });
+        return JSON.parse(body);
+      }
+      const chunks: string[] = [];
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let loadedBytes = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(decoder.decode(value, { stream: true }));
+        loadedBytes += value.byteLength;
+        progress({ loadedBytes, totalBytes });
+      }
+      chunks.push(decoder.decode());
+      progress({ loadedBytes, totalBytes });
+      return JSON.parse(chunks.join(''));
     } catch (error) {
       if (timedOut) {
         throw new Error(
@@ -97,10 +131,16 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     }
   }
 
-  async getCatalog(signal?: AbortSignal): Promise<AtlasCatalog> {
-    if (this.#catalog) return this.#catalog;
+  async getCatalog(
+    signal?: AbortSignal,
+    progress?: TransferProgressListener,
+  ): Promise<AtlasCatalog> {
+    if (this.#catalog) {
+      progress?.({ loadedBytes: 1, totalBytes: 1 });
+      return this.#catalog;
+    }
     const catalog = atlasCatalogSchema.parse(
-      await this.#getJson('catalog.json', signal),
+      await this.#getJson('catalog.json', signal, progress),
     );
     this.#catalog = catalog;
     return catalog;
@@ -109,12 +149,16 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   async getSurface(
     ref: ArtifactRef,
     signal?: AbortSignal,
+    progress?: TransferProgressListener,
   ): Promise<SurfaceArtifact> {
     const key = `${ref.id}:${ref.model_version}:${ref.data_version}:${ref.surface_url}`;
     const cached = this.#surfaces.get(key);
-    if (cached) return cached;
+    if (cached) {
+      progress?.({ loadedBytes: 1, totalBytes: 1 });
+      return cached;
+    }
     const artifact = surfaceArtifactSchema.parse(
-      await this.#getJson(ref.surface_url, signal),
+      await this.#getJson(ref.surface_url, signal, progress),
     );
     assertIdentity(ref, artifact.artifact);
     if (artifact.cells.length !== ref.n_cells) {
@@ -130,13 +174,17 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   async getObservations(
     ref: ArtifactRef,
     signal?: AbortSignal,
+    progress?: TransferProgressListener,
   ): Promise<ObservationArtifact | null> {
     if (!ref.observations_available) return null;
     const key = `${ref.id}:${ref.model_version}:${ref.data_version}:${ref.observations_url}`;
     const cached = this.#observations.get(key);
-    if (cached) return cached;
+    if (cached) {
+      progress?.({ loadedBytes: 1, totalBytes: 1 });
+      return cached;
+    }
     const artifact = observationArtifactSchema.parse(
-      await this.#getJson(ref.observations_url, signal),
+      await this.#getJson(ref.observations_url, signal, progress),
     );
     assertIdentity(ref, artifact.artifact);
     if (artifact.observations.length !== ref.n_observations) {
@@ -153,6 +201,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     ref: ArtifactRef,
     source: 'gnomad' | 'dbsnp',
     signal?: AbortSignal,
+    progress?: TransferProgressListener,
   ): Promise<ExternalInfo> {
     const resource = ref.external_resources.find(
       (candidate) => candidate.source === source,
@@ -164,9 +213,12 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     }
     const key = `${source}:${resource.cache_sha256}`;
     const cached = this.#external.get(key);
-    if (cached) return cached;
+    if (cached) {
+      progress?.({ loadedBytes: 1, totalBytes: 1 });
+      return cached;
+    }
     const info = externalInfoSchema.parse(
-      await this.#getJson(resource.cache_url, signal),
+      await this.#getJson(resource.cache_url, signal, progress),
     );
     if (
       info.source !== source ||
