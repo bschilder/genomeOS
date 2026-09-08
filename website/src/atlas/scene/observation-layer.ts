@@ -5,7 +5,6 @@ import {
   BillboardCollection,
   Cartesian3,
   Color,
-  Ellipsoid,
   Material,
   PointPrimitiveCollection,
   PolylineCollection,
@@ -29,7 +28,16 @@ import {
   type ObservationSizeRange,
   type ObservationSizeVariable,
 } from '../observation-encoding';
+import type { SurfaceGeometry } from '../url-state';
 import { heightForCell, type Metric } from '../visual-encoding';
+import {
+  litStudImage,
+  observationSurfaceAnchor,
+  observationSurfaceContext,
+  observationSurfacePlacement,
+  STUD_ASPECT_RATIO,
+  type ObservationSurfaceAnchor,
+} from './observation-symbols';
 
 export type ObservationPick = { kind: 'observation'; sourceRecordId: string };
 
@@ -47,6 +55,7 @@ export interface ObservationLayerOptions {
   sizeVariable: ObservationSizeVariable;
   solidColor: string;
   surface: SurfaceArtifact;
+  surfaceGeometry: SurfaceGeometry;
 }
 
 export interface ObservationPrimitiveGroup {
@@ -69,7 +78,7 @@ interface GeographicPoint {
 }
 
 interface SymbolEncoding {
-  baseHeight: number;
+  anchor: ObservationSurfaceAnchor;
   color: string;
   observation: Observation;
   size: number;
@@ -84,55 +93,7 @@ interface RingSample {
 
 const EARTH_RADIUS_KM = 6_371.0088;
 const RING_CLEARANCE_METRES = 4_000;
-const SYMBOL_CLEARANCE_METRES = 7_000;
 const PIN_ASPECT_RATIO = 1.45;
-const LIT_DOME_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
-  <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-    <defs>
-      <radialGradient id="dome" cx="32%" cy="24%" r="72%">
-        <stop offset="0" stop-color="white" stop-opacity="1"/>
-        <stop offset="0.34" stop-color="#edf7ff" stop-opacity="0.94"/>
-        <stop offset="0.76" stop-color="#7d91a8" stop-opacity="0.84"/>
-        <stop offset="1" stop-color="#101b2b" stop-opacity="0.98"/>
-      </radialGradient>
-    </defs>
-    <circle cx="64" cy="62" r="54" fill="url(#dome)"/>
-    <ellipse cx="64" cy="110" rx="48" ry="8" fill="#020712" fill-opacity="0.38"/>
-    <ellipse cx="48" cy="40" rx="16" ry="11" fill="white" fill-opacity="0.25"/>
-  </svg>
-`)}`;
-
-function litDomeImage(): HTMLCanvasElement | string {
-  if (typeof document === 'undefined') return LIT_DOME_IMAGE;
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const context = canvas.getContext('2d');
-  if (!context)
-    throw new Error('Canvas rendering is required for hemispheres.');
-
-  context.fillStyle = 'rgba(2, 7, 18, 0.38)';
-  context.beginPath();
-  context.ellipse(64, 110, 48, 8, 0, 0, Math.PI * 2);
-  context.fill();
-
-  const dome = context.createRadialGradient(41, 31, 2, 64, 64, 57);
-  dome.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  dome.addColorStop(0.34, 'rgba(237, 247, 255, 0.94)');
-  dome.addColorStop(0.76, 'rgba(125, 145, 168, 0.84)');
-  dome.addColorStop(1, 'rgba(16, 27, 43, 0.98)');
-  context.fillStyle = dome;
-  context.beginPath();
-  context.arc(64, 62, 54, 0, Math.PI * 2);
-  context.fill();
-
-  context.fillStyle = 'rgba(255, 255, 255, 0.25)';
-  context.beginPath();
-  context.ellipse(48, 40, 16, 11, -0.25, 0, Math.PI * 2);
-  context.fill();
-  return canvas;
-}
-
 const LIT_PIN_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128">
     <defs>
@@ -267,10 +228,6 @@ function ringPositions(
   );
 }
 
-function localSurfaceNormal(position: Cartesian3): Cartesian3 {
-  return Ellipsoid.WGS84.geodeticSurfaceNormal(position, new Cartesian3());
-}
-
 function encodings(
   artifact: ObservationArtifact,
   options: ObservationLayerOptions,
@@ -288,7 +245,11 @@ function encodings(
       : options.colorVariable === 'ac'
         ? domains.ac
         : ([0, 1] as const);
-  const cells = surfaceCellMap(options.surface);
+  const context = observationSurfaceContext(
+    options.surface,
+    options.metric,
+    options.surfaceGeometry,
+  );
   return artifact.observations.map((observation) => {
     const sizePosition = observationSize(
       observation,
@@ -297,13 +258,12 @@ function encodings(
       sizeDomain,
     );
     return {
-      baseHeight: surfaceHeightAt(
+      anchor: observationSurfaceAnchor(
         observation,
         options.surface,
         options.metric,
-        true,
-        1,
-        cells,
+        options.surfaceGeometry,
+        context,
       ),
       color: observationColor(
         observation,
@@ -359,23 +319,24 @@ export function buildObservationLayer(
 
   const hemisphereBaseColors: Color[] = [];
   if (options.shape === 'hemisphere') {
-    const hemisphereImage = litDomeImage();
-    for (const { baseHeight, color, observation, size } of symbols) {
+    const hemisphereImage = litStudImage();
+    for (const { anchor, color, observation, size } of symbols) {
       const cesiumColor = Color.fromCssColorString(color).withAlpha(0.98);
-      const position = Cartesian3.fromDegrees(
-        observation.lon,
-        observation.lat,
-        baseHeight * elevationFactor + SYMBOL_CLEARANCE_METRES,
+      const placement = observationSurfacePlacement(
+        anchor,
+        observation,
+        elevationFactor,
       );
       hemisphereBaseColors.push(cesiumColor.clone());
       hemispheres.add({
-        alignedAxis: localSurfaceNormal(position),
+        alignedAxis: placement.normal,
         color: cesiumColor,
         disableDepthTestDistance: 0,
-        height: size,
+        eyeOffset: placement.eyeOffset,
+        height: size * STUD_ASPECT_RATIO,
         id: observationPickId(observation.source_record_id),
         image: hemisphereImage,
-        position,
+        position: placement.position,
         sizeInMeters: false,
         verticalOrigin: VerticalOrigin.BOTTOM,
         width: size,
@@ -389,12 +350,12 @@ export function buildObservationLayer(
   const pointOutlineBaseColors: Color[] = [];
   const pinBaseColors: Color[] = [];
   for (const symbol of symbols) {
-    const { baseHeight, color, observation, size } = symbol;
+    const { anchor, color, observation, size } = symbol;
     const cesiumColor = Color.fromCssColorString(color).withAlpha(0.97);
-    const position = Cartesian3.fromDegrees(
-      observation.lon,
-      observation.lat,
-      baseHeight * elevationFactor + SYMBOL_CLEARANCE_METRES,
+    const placement = observationSurfacePlacement(
+      anchor,
+      observation,
+      elevationFactor,
     );
     if (options.shape === 'circle') {
       const outlineColor = Color.fromCssColorString('#071426').withAlpha(0.92);
@@ -407,18 +368,19 @@ export function buildObservationLayer(
         outlineColor,
         outlineWidth: 2,
         pixelSize: size,
-        position,
+        position: placement.position,
       });
     } else if (options.shape === 'pin') {
       pinBaseColors.push(cesiumColor.clone());
       pins.add({
-        alignedAxis: localSurfaceNormal(position),
+        alignedAxis: placement.normal,
         color: cesiumColor,
         disableDepthTestDistance: 0,
+        eyeOffset: placement.eyeOffset,
         id: observationPickId(observation.source_record_id),
         height: size * PIN_ASPECT_RATIO,
         image: pinImage!,
-        position,
+        position: placement.position,
         sizeInMeters: false,
         verticalOrigin: VerticalOrigin.BOTTOM,
         width: size,
@@ -448,14 +410,20 @@ export function buildObservationLayer(
         );
       for (let index = 0; index < symbols.length; index += 1) {
         const symbol = symbols[index];
-        const position = Cartesian3.fromDegrees(
-          symbol.observation.lon,
-          symbol.observation.lat,
-          symbol.baseHeight * elevationFactor + SYMBOL_CLEARANCE_METRES,
+        const placement = observationSurfacePlacement(
+          symbol.anchor,
+          symbol.observation,
+          elevationFactor,
         );
-        if (options.shape === 'circle') points.get(index).position = position;
-        else if (options.shape === 'pin') pins.get(index).position = position;
-        else hemispheres.get(index).position = position;
+        if (options.shape === 'circle')
+          points.get(index).position = placement.position;
+        else if (options.shape === 'pin') {
+          pins.get(index).position = placement.position;
+          pins.get(index).alignedAxis = placement.normal;
+        } else {
+          hemispheres.get(index).position = placement.position;
+          hemispheres.get(index).alignedAxis = placement.normal;
+        }
       }
     },
     setOpacity(opacity: number) {
@@ -511,7 +479,7 @@ export function buildObservationLayer(
         if (options.shape === 'circle') points.get(index).pixelSize = size;
         else if (options.shape === 'hemisphere') {
           hemispheres.get(index).width = size;
-          hemispheres.get(index).height = size;
+          hemispheres.get(index).height = size * STUD_ASPECT_RATIO;
         } else {
           pins.get(index).width = size;
           pins.get(index).height = size * PIN_ASPECT_RATIO;

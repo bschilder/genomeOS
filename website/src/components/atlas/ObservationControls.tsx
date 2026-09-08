@@ -28,7 +28,7 @@ interface ObservationControlsProps {
 
 const SHAPES: readonly [ObservationShape, string][] = [
   ['circle', 'Circles'],
-  ['hemisphere', 'Hemispheres'],
+  ['hemisphere', 'Studs'],
   ['pin', 'Pins'],
 ];
 const COLORS: readonly [ObservationColorVariable, string][] = [
@@ -69,8 +69,8 @@ export function ObservationControls({
         <span className="atlas-field__title">
           <label htmlFor="atlas-marker-shape">Marker shape</label>
           <InfoTip label="marker shape">
-            Three presentations of the same measured location. Circles and lit
-            hemispheres keep the same apparent footprint.
+            Three presentations of the same measured location. Circles and
+            surface-mounted studs keep the same apparent footprint.
           </InfoTip>
         </span>
         <select

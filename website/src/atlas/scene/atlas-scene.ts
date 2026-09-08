@@ -316,6 +316,7 @@ class CesiumAtlasScene implements AtlasSceneController {
         identity.model_version,
         identity.data_version,
         this.#metric,
+        this.#surfaceGeometry,
         this.#observationStyle.shape,
         this.#observationStyle.colorVariable,
         this.#observationStyle.solidColor,
@@ -338,6 +339,7 @@ class CesiumAtlasScene implements AtlasSceneController {
           sizeVariable: this.#observationStyle.sizeVariable,
           solidColor: this.#observationStyle.solidColor,
           surface,
+          surfaceGeometry: this.#surfaceGeometry,
         });
         this.#observationCache.set(observationKey, incomingObservations);
         this.#viewer.scene.primitives.add(incomingObservations.collection);
@@ -451,7 +453,9 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#edgeFixedColor = edgeFixedColor;
     this.#surfaceGeometry = geometry;
     this.#surfaceGroup?.setSurfaceOpacity(opacity);
-    if (paletteChanged || edgeStyleChanged || geometryChanged) {
+    if (geometryChanged) {
+      await this.#replaceScientificLayers(progress);
+    } else if (paletteChanged || edgeStyleChanged) {
       await this.#replaceSurface(progress);
     } else {
       await this.#surfaceGroup?.setCellEdges(cellEdges);

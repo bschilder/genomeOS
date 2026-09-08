@@ -22,7 +22,8 @@
     "capture": "node scripts/capture-homepage.mjs",
     "capture:atlas": "npm run build && node scripts/capture-atlas.mjs",
     "capture:gnomad": "npm run build && node scripts/capture-gnomad-evidence.mjs",
-    "capture:progress": "npm run build && node scripts/capture-atlas-progress.mjs"
+    "capture:progress": "npm run build && node scripts/capture-atlas-progress.mjs",
+    "capture:studs": "npm run build && node scripts/capture-observation-studs.mjs"
   },
   "dependencies": {
     "@astrojs/react": "6.0.5",

@@ -213,6 +213,7 @@ function buildObservationLayerForTest(
     sizeVariable: 'fixed',
     solidColor: '#f4fbff',
     surface,
+    surfaceGeometry: 'triangles',
   });
 }
 
@@ -748,7 +749,7 @@ describe('Cesium scene policy', () => {
     },
   );
 
-  it('gives lit hemispheres the same footprint as circle markers', () => {
+  it('gives surface-mounted studs a low dome with the circle footprint', () => {
     stubCesiumBrowserImageTypes();
     try {
       const circleLayer = buildObservationLayerForTest('circle');
@@ -757,8 +758,9 @@ describe('Cesium scene policy', () => {
       const hemisphere = hemisphereLayer.collection.get(1).get(0);
 
       expect(hemisphere.width).toBe(circle.pixelSize);
-      expect(hemisphere.height).toBe(circle.pixelSize);
+      expect(hemisphere.height).toBeLessThan(hemisphere.width);
       expect(hemisphere.verticalOrigin).toBe(VerticalOrigin.BOTTOM);
+      expect(hemisphere.eyeOffset.z).toBeLessThan(0);
       const surfaceNormal = Ellipsoid.WGS84.geodeticSurfaceNormal(
         hemisphere.position,
         new Cartesian3(),
@@ -811,7 +813,7 @@ describe('Cesium scene policy', () => {
 
         expect(symbols.get(0)).toBe(symbol);
         expect(symbol[sizeField]).toBe(36);
-        if (shape === 'hemisphere') expect(symbol.height).toBe(36);
+        if (shape === 'hemisphere') expect(symbol.height).toBeLessThan(36);
       } finally {
         vi.unstubAllGlobals();
       }
