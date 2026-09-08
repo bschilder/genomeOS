@@ -909,6 +909,55 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expect(externalPanel).toContainText('Homozygous alternate');
   await expect(externalPanel).toContainText('Canonical transcript');
   await expect(
+    externalPanel.getByRole('button', { name: /Genetic ancestry.*10 groups/ }),
+  ).toBeVisible();
+  await externalPanel
+    .getByRole('button', { name: /Genetic ancestry.*10 groups/ })
+    .click();
+  await expect(
+    externalPanel.getByRole('heading', {
+      name: 'Genetic ancestry group frequencies',
+    }),
+  ).toBeVisible();
+  await expect(
+    externalPanel.getByRole('row', { name: /African\/African American/ }),
+  ).toContainText('4.9487%');
+  await expect(externalPanel).toContainText('not geographic populations');
+  await externalPanel
+    .getByRole('button', { name: 'Back to variant overview' })
+    .click();
+
+  await externalPanel
+    .getByRole('button', { name: /Genomic constraint.*1 kb/ })
+    .click();
+  await expect(
+    externalPanel.getByRole('heading', {
+      name: 'Genomic constraint of surrounding 1 kb region',
+    }),
+  ).toBeVisible();
+  await expect(
+    externalPanel.getByRole('img', {
+      name: /Z score -0\.56.*-10.*10/,
+    }),
+  ).toBeVisible();
+  await expect(externalPanel).toContainText('144.26');
+  await expect(externalPanel).toContainText('gnomAD v3.1.2');
+  await externalPanel
+    .getByRole('button', { name: 'Back to variant overview' })
+    .click();
+
+  await externalPanel
+    .getByRole('button', { name: /ClinVar.*18 conditions/ })
+    .click();
+  await expect(
+    externalPanel.getByRole('heading', { name: 'ClinVar conditions' }),
+  ).toBeVisible();
+  await expect(externalPanel).toContainText('71 submissions');
+  await expect(
+    externalPanel.getByRole('link', { name: 'Hb SS disease' }),
+  ).toHaveAttribute('href', 'https://www.ncbi.nlm.nih.gov/medgen/C0002895/');
+  await expect(externalPanel).toContainText('not a diagnosis');
+  await expect(
     page.getByRole('link', { name: /Open this variant in gnomAD/ }),
   ).toHaveAttribute('target', '_blank');
   const downloadPromise = page.waitForEvent('download');
