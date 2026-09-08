@@ -436,6 +436,25 @@ test('explorer changes entity, metric, context, and elevation', async ({
       .getByRole('complementary', { name: 'Explorer controls' })
       .locator('.atlas-kicker'),
   ).toHaveText('genomeOS Atlas');
+  const controls = page.getByRole('complementary', {
+    name: 'Explorer controls',
+  });
+  await expect(
+    controls.locator('.atlas-controls__intro > p').last(),
+  ).toHaveText(
+    'Visualize measured and predicted allele frequencies across the world',
+  );
+  const controlType = await controls.evaluate((element) => ({
+    field: Number.parseFloat(
+      getComputedStyle(element.querySelector('.atlas-field')!).fontSize,
+    ),
+    section: Number.parseFloat(
+      getComputedStyle(element.querySelector('.atlas-control-sheet > summary')!)
+        .fontSize,
+    ),
+  }));
+  expect(controlType.field).toBeCloseTo(13.25, 1);
+  expect(controlType.section).toBeCloseTo(14.4, 1);
   await chooseAtlasMap(page, 'g6pd-deficiency');
   await page.getByRole('radio', { name: 'Uncertainty' }).check();
   await page
@@ -1102,6 +1121,20 @@ test('explorer previews and opens separate surface and observation inspectors', 
   await clickNearCenter(surfaceInspector);
   await expect(surfaceInspector).toBeVisible();
   await expect(hoverPreview).toBeVisible();
+  const inspectorMetrics = await surfaceInspector.evaluate((element) => ({
+    heading: Number.parseFloat(
+      getComputedStyle(element.querySelector('h2')!).fontSize,
+    ),
+    label: Number.parseFloat(
+      getComputedStyle(element.querySelector('dt')!).fontSize,
+    ),
+    padding: Number.parseFloat(getComputedStyle(element).paddingLeft),
+    width: element.getBoundingClientRect().width,
+  }));
+  expect(inspectorMetrics.heading).toBeCloseTo(22.32, 1);
+  expect(inspectorMetrics.label).toBeCloseTo(14.4, 1);
+  expect(inspectorMetrics.padding).toBeCloseTo(17.28, 1);
+  expect(inspectorMetrics.width).toBeLessThanOrEqual(418);
   const cellId = await surfaceInspector
     .locator('dt', { hasText: 'Cell ID' })
     .locator('..')
