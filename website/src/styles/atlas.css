@@ -520,6 +520,13 @@
   cursor: pointer;
 }
 
+.atlas-earth-picker__option > span:last-child {
+  min-height: 2.3em;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
 .atlas-earth-picker__option:hover,
 .atlas-earth-picker__option:focus-visible {
   border-color: rgb(112 230 255 / 52%);

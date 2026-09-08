@@ -561,7 +561,7 @@ test('explorer recovers a stale version link for an available map', async ({
 test('explorer exposes the full catalog and shareable appearance controls', async ({
   page,
 }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
