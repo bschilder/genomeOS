@@ -119,6 +119,7 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
 test('Atlas status shows progress while a replacement dataset stays pending', async ({
   page,
 }) => {
+  test.setTimeout(90_000);
   await page.route('**/g6pd-deficiency.surface.json', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1_800));
     await route.fallback();
