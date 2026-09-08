@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { cellToLatLng } from 'h3-js';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 
@@ -411,8 +412,8 @@ test('explorer changes entity, metric, context, and elevation', async ({
     layers.getByRole('checkbox', { name: 'Observation radii', exact: true }),
   ).toBeVisible();
   await expect(
-    layers.getByRole('checkbox', { name: 'Cell edges', exact: true }),
-  ).toBeVisible();
+    layers.getByRole('checkbox', { name: 'Cell outlines', exact: true }),
+  ).toBeChecked();
   await expect(
     layers.locator('.atlas-layer-row .atlas-info-tip__trigger'),
   ).toHaveCount(7);
@@ -702,7 +703,9 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await page
     .getByLabel('Surface geometry', { exact: true })
     .selectOption('honmoon-fill');
-  await page.getByRole('checkbox', { name: 'Cell edges', exact: true }).check();
+  await page
+    .getByRole('checkbox', { name: 'Cell outlines', exact: true })
+    .check();
   await page
     .getByRole('combobox', { name: 'Edge color', exact: true })
     .selectOption('fixed');
@@ -935,6 +938,55 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expect(externalPanel).toContainText('Homozygous alternate');
   await expect(externalPanel).toContainText('Canonical transcript');
   await expect(
+    externalPanel.getByRole('button', { name: /Genetic ancestry.*10 groups/ }),
+  ).toBeVisible();
+  await externalPanel
+    .getByRole('button', { name: /Genetic ancestry.*10 groups/ })
+    .click();
+  await expect(
+    externalPanel.getByRole('heading', {
+      name: 'Genetic ancestry group frequencies',
+    }),
+  ).toBeVisible();
+  await expect(
+    externalPanel.getByRole('row', { name: /African\/African American/ }),
+  ).toContainText('4.9487%');
+  await expect(externalPanel).toContainText('not geographic populations');
+  await externalPanel
+    .getByRole('button', { name: 'Back to variant overview' })
+    .click();
+
+  await externalPanel
+    .getByRole('button', { name: /Genomic constraint.*1 kb/ })
+    .click();
+  await expect(
+    externalPanel.getByRole('heading', {
+      name: 'Genomic constraint of surrounding 1 kb region',
+    }),
+  ).toBeVisible();
+  await expect(
+    externalPanel.getByRole('img', {
+      name: /Z score -0\.56.*-10.*10/,
+    }),
+  ).toBeVisible();
+  await expect(externalPanel).toContainText('144.26');
+  await expect(externalPanel).toContainText('gnomAD v3.1.2');
+  await externalPanel
+    .getByRole('button', { name: 'Back to variant overview' })
+    .click();
+
+  await externalPanel
+    .getByRole('button', { name: /ClinVar.*18 conditions/ })
+    .click();
+  await expect(
+    externalPanel.getByRole('heading', { name: 'ClinVar conditions' }),
+  ).toBeVisible();
+  await expect(externalPanel).toContainText('71 submissions');
+  await expect(
+    externalPanel.getByRole('link', { name: 'Hb SS disease' }),
+  ).toHaveAttribute('href', 'https://www.ncbi.nlm.nih.gov/medgen/C0002895/');
+  await expect(externalPanel).toContainText('not a diagnosis');
+  await expect(
     page.getByRole('link', { name: /Open this variant in gnomAD/ }),
   ).toHaveAttribute('target', '_blank');
   const downloadPromise = page.waitForEvent('download');
@@ -1049,10 +1101,25 @@ test('explorer previews and opens separate surface and observation inspectors', 
   await clickNearCenter(surfaceInspector);
   await expect(surfaceInspector).toBeVisible();
   await expect(hoverPreview).toBeVisible();
-  await expect(surfaceInspector.getByText('Cell ID')).toBeVisible();
+  const cellId = await surfaceInspector
+    .locator('dt', { hasText: 'Cell ID' })
+    .locator('..')
+    .locator('dd')
+    .innerText();
+  const [centroidLat, centroidLon] = cellToLatLng(cellId);
   const mapOptions = surfaceInspector.getByRole('button', {
     name: 'Choose how to open this cell in Google Maps',
   });
+  const triggerCoordinates = mapOptions.locator(
+    '.atlas-centroid-link__coordinates span',
+  );
+  await expect(triggerCoordinates).toHaveCount(2);
+  await expect(triggerCoordinates.nth(0)).toHaveText(
+    `${centroidLon.toFixed(4)}° lon`,
+  );
+  await expect(triggerCoordinates.nth(1)).toHaveText(
+    `${centroidLat.toFixed(4)}° lat`,
+  );
   await mapOptions.click();
   const centroidLink = surfaceInspector.getByRole('link', {
     name: 'Centroid',

@@ -119,7 +119,10 @@ export function InspectorPanel({
                   role="button"
                 >
                   <GoogleMapsIcon />
-                  <span>Choose map view</span>
+                  <span className="atlas-centroid-link__coordinates">
+                    <span>{centroidLon.toFixed(4)}° lon</span>
+                    <span>{centroidLat.toFixed(4)}° lat</span>
+                  </span>
                 </summary>
                 <div className="atlas-map-options__menu">
                   <a

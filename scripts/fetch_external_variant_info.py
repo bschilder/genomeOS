@@ -15,7 +15,8 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 1
+GNOMAD_SCHEMA_VERSION = 2
+DBSNP_SCHEMA_VERSION = 1
 GNOMAD_API = "https://gnomad.broadinstitute.org/api"
 DBSNP_API = "https://api.ncbi.nlm.nih.gov/variation/v0/refsnp/{numeric_rsid}"
 VARIANT_PATTERN = re.compile(
@@ -24,18 +25,44 @@ VARIANT_PATTERN = re.compile(
 )
 RSID_PATTERN = re.compile(r"^rs(?P<number>[1-9][0-9]*)$")
 
+GNOMAD_ANCESTRY_LABELS = {
+    "afr": "African/African American",
+    "ami": "Amish",
+    "amr": "Admixed American",
+    "asj": "Ashkenazi Jewish",
+    "eas": "East Asian",
+    "fin": "Finnish",
+    "mid": "Middle Eastern",
+    "nfe": "European (non-Finnish)",
+    "remaining": "Remaining individuals",
+    "sas": "South Asian",
+}
+GENERIC_CLINVAR_CONDITIONS = {"not provided", "not specified", "see cases"}
+
 GNOMAD_QUERY = """
 query Variant($variantId: String!, $datasetId: DatasetId!) {
   variant(variantId: $variantId, dataset: $datasetId) {
     variant_id chrom pos ref alt rsids
     exome { ac an ac_hom ac_hemi }
     genome { ac an ac_hom ac_hemi }
-    joint { ac an }
+    joint {
+      ac an
+      populations { id ac an homozygote_count hemizygote_count }
+    }
+    non_coding_constraint { chrom start stop possible observed expected oe z }
     transcript_consequences {
       gene_id gene_symbol transcript_id major_consequence hgvsc hgvsp
       is_canonical is_mane_select
     }
   }
+  clinvar_variant(variant_id: $variantId, reference_genome: GRCh38) {
+    clinical_significance clinvar_variation_id gold_stars last_evaluated review_status
+    submissions {
+      clinical_significance
+      conditions { name medgen_id }
+    }
+  }
+  meta { clinvar_release_date }
 }
 """.strip()
 
@@ -68,6 +95,167 @@ def _frequency_section(value: Any) -> dict[str, int | float] | None:
                 raise ValueError(f"gnomAD {field} must be a non-negative integer")
             result[field] = field_value
     return result
+
+
+def _ancestry_frequencies(value: Any) -> list[dict[str, Any]]:
+    if value is None:
+        return []
+    populations = value.get("populations")
+    if not isinstance(populations, list):
+        raise ValueError("gnomAD joint populations must be a list")
+    result: list[dict[str, Any]] = []
+    for population in populations:
+        if not isinstance(population, dict):
+            raise ValueError("gnomAD ancestry group must be an object")
+        group_id = population.get("id")
+        if not isinstance(group_id, str):
+            raise ValueError("gnomAD ancestry group id must be a string")
+        if group_id in {"", "XX", "XY"} or group_id.endswith(("_XX", "_XY")):
+            continue
+        label = GNOMAD_ANCESTRY_LABELS.get(group_id)
+        if label is None:
+            raise ValueError(f"unknown gnomAD ancestry group: {group_id!r}")
+        frequency = _frequency_section(population)
+        if frequency is None:  # pragma: no cover - population is already an object
+            raise ValueError("gnomAD ancestry group must contain frequency counts")
+        homozygotes = population.get("homozygote_count")
+        hemizygotes = population.get("hemizygote_count")
+        if not isinstance(homozygotes, int) or homozygotes < 0:
+            raise ValueError("gnomAD ancestry group requires homozygote_count >= 0")
+        if not isinstance(hemizygotes, int) or hemizygotes < 0:
+            raise ValueError("gnomAD ancestry group requires hemizygote_count >= 0")
+        result.append(
+            {
+                **frequency,
+                "hemizygote_count": hemizygotes,
+                "homozygote_count": homozygotes,
+                "id": group_id,
+                "label": label,
+            }
+        )
+    return sorted(result, key=lambda row: GNOMAD_ANCESTRY_LABELS[row["id"]])
+
+
+def _constraint_section(value: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("gnomAD genomic constraint must be an object or null")
+    chrom = value.get("chrom")
+    start, stop = value.get("start"), value.get("stop")
+    possible, observed = value.get("possible"), value.get("observed")
+    expected, oe, z = value.get("expected"), value.get("oe"), value.get("z")
+    if not isinstance(chrom, str) or not chrom:
+        raise ValueError("gnomAD genomic constraint requires a chromosome")
+    if not isinstance(start, int) or not isinstance(stop, int) or start < 0 or stop <= start:
+        raise ValueError("gnomAD genomic constraint requires 0 <= start < stop")
+    if not isinstance(possible, int) or possible <= 0:
+        raise ValueError("gnomAD genomic constraint requires possible > 0")
+    if not isinstance(observed, int) or observed < 0 or observed > possible:
+        raise ValueError("gnomAD genomic constraint requires 0 <= observed <= possible")
+    if not isinstance(expected, (int, float)) or expected <= 0:
+        raise ValueError("gnomAD genomic constraint requires expected > 0")
+    if not isinstance(oe, (int, float)) or oe < 0:
+        raise ValueError("gnomAD genomic constraint requires oe >= 0")
+    if not isinstance(z, (int, float)) or not -10 <= z <= 10:
+        raise ValueError("gnomAD genomic constraint requires -10 <= z <= 10")
+    return {
+        "chrom": chrom,
+        "dataset_release": "gnomAD v3.1.2",
+        "expected": expected,
+        "observed": observed,
+        "oe": oe,
+        "possible": possible,
+        "start": start,
+        "stop": stop,
+        "z": z,
+    }
+
+
+def _clinvar_section(value: Any, release_date: Any) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("gnomAD ClinVar section must be an object or null")
+    submissions = value.get("submissions")
+    if not isinstance(submissions, list):
+        raise ValueError("gnomAD ClinVar submissions must be a list")
+    if not isinstance(release_date, str) or not release_date:
+        raise ValueError("gnomAD ClinVar section requires a release date")
+    conditions: dict[str, dict[str, Any]] = {}
+    for submission in submissions:
+        if not isinstance(submission, dict):
+            raise ValueError("gnomAD ClinVar submission must be an object")
+        classification = submission.get("clinical_significance")
+        submitted_conditions = submission.get("conditions")
+        if not isinstance(classification, str) or not classification:
+            raise ValueError("gnomAD ClinVar submission requires clinical significance")
+        if not isinstance(submitted_conditions, list):
+            raise ValueError("gnomAD ClinVar submission conditions must be a list")
+        seen: set[str] = set()
+        for condition in submitted_conditions:
+            if not isinstance(condition, dict):
+                raise ValueError("gnomAD ClinVar condition must be an object")
+            name = condition.get("name")
+            medgen_id = condition.get("medgen_id")
+            if not isinstance(name, str) or not name:
+                raise ValueError("gnomAD ClinVar condition requires a name")
+            if medgen_id in {"", "None"}:
+                medgen_id = None
+            if medgen_id is not None and not isinstance(medgen_id, str):
+                raise ValueError("gnomAD ClinVar MedGen id must be a string or null")
+            key = medgen_id or name.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            current = conditions.setdefault(
+                key,
+                {
+                    "classifications": set(),
+                    "medgen_id": medgen_id,
+                    "name": name,
+                    "submission_count": 0,
+                },
+            )
+            if current["name"] != name:
+                raise ValueError(f"gnomAD ClinVar condition {key!r} has conflicting names")
+            current["classifications"].add(classification)
+            current["submission_count"] += 1
+    normalized_conditions = [
+        {
+            **condition,
+            "classifications": sorted(condition["classifications"], key=str.casefold),
+        }
+        for condition in conditions.values()
+    ]
+    normalized_conditions.sort(
+        key=lambda condition: (
+            condition["name"].casefold() in GENERIC_CLINVAR_CONDITIONS,
+            -condition["submission_count"],
+            condition["name"].casefold(),
+        )
+    )
+    required_strings = {
+        "clinical_significance": value.get("clinical_significance"),
+        "review_status": value.get("review_status"),
+        "variation_id": value.get("clinvar_variation_id"),
+    }
+    if any(not isinstance(field, str) or not field for field in required_strings.values()):
+        raise ValueError("gnomAD ClinVar summary requires significance, review status, and id")
+    gold_stars = value.get("gold_stars")
+    last_evaluated = value.get("last_evaluated")
+    if not isinstance(gold_stars, int) or not 0 <= gold_stars <= 4:
+        raise ValueError("gnomAD ClinVar gold_stars must be between 0 and 4")
+    if last_evaluated is not None and not isinstance(last_evaluated, str):
+        raise ValueError("gnomAD ClinVar last_evaluated must be a string or null")
+    return {
+        **required_strings,
+        "conditions": normalized_conditions,
+        "gold_stars": gold_stars,
+        "last_evaluated": last_evaluated,
+        "release_date": release_date,
+        "submission_count": len(submissions),
+    }
 
 
 def normalize_gnomad(
@@ -119,14 +307,22 @@ def normalize_gnomad(
         "record": {
             **expected,
             "canonical_consequence": consequence,
+            "clinvar": _clinvar_section(
+                payload.get("data", {}).get("clinvar_variant"),
+                payload.get("data", {}).get("meta", {}).get("clinvar_release_date"),
+            ),
             "exome": _frequency_section(record.get("exome")),
+            "genetic_ancestry_group_frequencies": _ancestry_frequencies(
+                record.get("joint")
+            ),
             "genome": _frequency_section(record.get("genome")),
+            "genomic_constraint": _constraint_section(record.get("non_coding_constraint")),
             "joint": _frequency_section(record.get("joint")),
             "rsids": [str(value) for value in (record.get("rsids") or [])],
             "source_url": f"https://gnomad.broadinstitute.org/variant/{record['variant_id']}?dataset={dataset}",
         },
         "retrieved_at": retrieved_at,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": GNOMAD_SCHEMA_VERSION,
         "source": "gnomad",
         "source_release": dataset,
     }
@@ -193,7 +389,7 @@ def normalize_dbsnp(
             "spdi": match["spdi"],
         },
         "retrieved_at": retrieved_at,
-        "schema_version": SCHEMA_VERSION,
+        "schema_version": DBSNP_SCHEMA_VERSION,
         "source": "dbsnp",
         "source_release": f"dbSNP build {build}",
     }

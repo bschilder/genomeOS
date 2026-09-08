@@ -287,15 +287,77 @@ const externalFrequencySchema = z.strictObject({
   an: z.int().positive(),
 });
 
+const ancestryGroupFrequencySchema = z
+  .strictObject({
+    ac: z.int().nonnegative(),
+    af: probability,
+    an: z.int().positive(),
+    hemizygote_count: z.int().nonnegative(),
+    homozygote_count: z.int().nonnegative(),
+    id: z.enum([
+      'afr',
+      'ami',
+      'amr',
+      'asj',
+      'eas',
+      'fin',
+      'mid',
+      'nfe',
+      'remaining',
+      'sas',
+    ]),
+    label: nonEmpty,
+  })
+  .refine(({ ac, an }) => ac <= an, 'ac must not exceed an');
+
+const genomicConstraintSchema = z
+  .strictObject({
+    chrom: nonEmpty,
+    dataset_release: z.literal('gnomAD v3.1.2'),
+    expected: z.number().positive(),
+    observed: z.int().nonnegative(),
+    oe: z.number().nonnegative(),
+    possible: z.int().positive(),
+    start: z.int().nonnegative(),
+    stop: z.int().positive(),
+    z: z.number().min(-10).max(10),
+  })
+  .refine(({ observed, possible }) => observed <= possible, {
+    message: 'observed must not exceed possible',
+    path: ['observed'],
+  })
+  .refine(({ start, stop }) => start < stop, {
+    message: 'start must be before stop',
+    path: ['stop'],
+  });
+
+const clinvarEvidenceSchema = z.strictObject({
+  clinical_significance: nonEmpty,
+  conditions: z.array(
+    z.strictObject({
+      classifications: z.array(nonEmpty).min(1),
+      medgen_id: nonEmpty.nullable(),
+      name: nonEmpty,
+      submission_count: z.int().positive(),
+    }),
+  ),
+  gold_stars: z.int().min(0).max(4),
+  last_evaluated: nonEmpty.nullable(),
+  release_date: nonEmpty,
+  review_status: nonEmpty,
+  submission_count: z.int().nonnegative(),
+  variation_id: nonEmpty,
+});
+
 const externalBaseSchema = {
   retrieved_at: nonEmpty,
-  schema_version: z.literal(1),
   source_release: nonEmpty,
 };
 
 export const externalInfoSchema = z.discriminatedUnion('source', [
   z.strictObject({
     ...externalBaseSchema,
+    schema_version: z.literal(2),
     query: z.strictObject({
       dataset: nonEmpty,
       normalized_variant_id: nonEmpty,
@@ -314,9 +376,12 @@ export const externalInfoSchema = z.discriminatedUnion('source', [
           transcript_id: nonEmpty.nullable(),
         })
         .nullable(),
+      clinvar: clinvarEvidenceSchema.nullable(),
       chrom: nonEmpty,
       exome: externalFrequencySchema.nullable(),
+      genetic_ancestry_group_frequencies: z.array(ancestryGroupFrequencySchema),
       genome: externalFrequencySchema.nullable(),
+      genomic_constraint: genomicConstraintSchema.nullable(),
       joint: externalFrequencySchema.nullable(),
       pos: z.int().positive(),
       ref: nonEmpty,
@@ -327,6 +392,7 @@ export const externalInfoSchema = z.discriminatedUnion('source', [
   }),
   z.strictObject({
     ...externalBaseSchema,
+    schema_version: z.literal(1),
     query: z.strictObject({
       normalized_variant_id: nonEmpty,
       rsid: z.string().regex(/^rs[1-9][0-9]*$/),

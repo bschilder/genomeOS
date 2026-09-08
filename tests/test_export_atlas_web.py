@@ -114,7 +114,7 @@ def _write_source_tree(root: Path) -> Path:
                 },
                 "record": {"fixture": True},
                 "retrieved_at": "2026-09-07T00:00:00Z",
-                "schema_version": 1,
+                "schema_version": 2,
                 "source": "gnomad",
                 "source_release": "gnomad_r4",
             }

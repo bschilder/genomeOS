@@ -5,6 +5,8 @@ import path from 'node:path';
 
 import { chromium } from 'playwright';
 
+import { installAtlasBrowserFixture } from '../tests/atlas-browser-fixture.ts';
+
 const websiteRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -18,10 +20,6 @@ const outputPath = path.resolve(
 );
 const suppliedBaseUrl = process.env.ATLAS_CAPTURE_BASE_URL;
 const baseUrl = suppliedBaseUrl ?? 'http://127.0.0.1:4323';
-const neutralTile = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M/wHwAFAgIAvPp7WQAAAABJRU5ErkJggg==',
-  'base64',
-);
 
 async function waitForServer(url) {
   const deadline = Date.now() + 15_000;
@@ -64,24 +62,21 @@ try {
   page.on('console', (entry) => {
     if (entry.type() === 'error') consoleErrors.push(entry.text());
   });
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.fulfill({
-      body: neutralTile,
-      contentType: 'image/png',
-      status: 200,
-    }),
-  );
+  await installAtlasBrowserFixture(page, {
+    focus: { lat: 8, lon: 0 },
+    surfaceScope: 'regional',
+  });
   const query = new URLSearchParams({
     elevation: process.env.ATLAS_CAPTURE_ELEVATION ?? 'true',
     entity: process.env.ATLAS_CAPTURE_ENTITY ?? 'hbs-rs334',
     exaggeration: '2',
     heading: '0',
-    height: '14500000',
-    lat: '10',
+    height: '1400000',
+    lat: '8',
     layers:
       process.env.ATLAS_CAPTURE_LAYERS ??
       'surface,observations,support,context',
-    lon: '20',
+    lon: '0',
     metric: process.env.ATLAS_CAPTURE_METRIC ?? 'post_mean',
     pitch: '-90',
     version: process.env.ATLAS_CAPTURE_VERSION ?? 'v3/map-2026-08',
