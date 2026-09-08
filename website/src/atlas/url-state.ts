@@ -360,7 +360,7 @@ export function parseExplorerState(
         ),
       },
       elevation,
-      cellEdges: parseBoolean(params, 'edges', false, corrections),
+      cellEdges: parseBoolean(params, 'edges', true, corrections),
       earthOpacity: parseNumber(
         params,
         'earthOpacity',
