@@ -731,6 +731,29 @@ describe('Cesium scene policy', () => {
     ['hemisphere', 1],
     ['pin', 3],
   ] as const)(
+    'uses the selected opacity as the full %s marker body alpha',
+    (shape, index) => {
+      stubCesiumBrowserImageTypes();
+      try {
+        const layer = buildObservationLayerForTest(shape);
+        const symbol = layer.collection.get(index).get(0);
+
+        layer.setStyleOpacity(1);
+        layer.setOpacity(1);
+
+        expect(symbol.color.alpha).toBe(1);
+      } finally {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it.each([
+    ['circle', 2],
+    ['hemisphere', 1],
+    ['pin', 3],
+  ] as const)(
     'places %s observations above their sampling rings',
     (shape, index) => {
       stubCesiumBrowserImageTypes();
@@ -936,7 +959,7 @@ describe('Cesium scene policy', () => {
       expect((ring.material.uniforms.color as Color).alpha).toBeCloseTo(
         0.9 * 0.95 * 0.4,
       );
-      expect(point.color.alpha).toBeCloseTo(0.97 * 0.95 * 0.4);
+      expect(point.color.alpha).toBeCloseTo(0.95 * 0.4);
       expect(point.outlineColor.alpha).toBeCloseTo(0.92 * 0.95 * 0.4);
     } finally {
       vi.unstubAllGlobals();

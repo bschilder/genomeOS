@@ -351,7 +351,7 @@ export function buildObservationLayer(
   const pinBaseColors: Color[] = [];
   for (const symbol of symbols) {
     const { anchor, color, observation, size } = symbol;
-    const cesiumColor = Color.fromCssColorString(color).withAlpha(0.97);
+    const cesiumColor = Color.fromCssColorString(color).withAlpha(1);
     const placement = observationSurfacePlacement(
       anchor,
       observation,
