@@ -509,6 +509,7 @@
   min-width: 0;
   padding: 0.28rem;
   display: grid;
+  grid-template-rows: auto 3.45em;
   align-content: start;
   gap: 0.28rem;
   border: 1px solid transparent;
@@ -521,10 +522,11 @@
 }
 
 .atlas-earth-picker__option > span:last-child {
-  min-height: 2.3em;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
+  height: 3.45em;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .atlas-earth-picker__option:hover,

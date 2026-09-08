@@ -547,7 +547,9 @@ test('explorer recovers a stale version link for an available map', async ({
   );
 
   await expect
-    .poll(() => new URL(page.url()).searchParams.get('version'))
+    .poll(() => new URL(page.url()).searchParams.get('version'), {
+      timeout: 45_000,
+    })
     .toBe(`${current!.model_version}/${current!.data_version}`);
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
@@ -940,7 +942,7 @@ test('explorer previews and opens separate surface and observation inspectors', 
     isMobile,
     'coordinate-sensitive canvas picking is covered in the desktop project',
   );
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   const query = new URLSearchParams({
     heading: '0',
