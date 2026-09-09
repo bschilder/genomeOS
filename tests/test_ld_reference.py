@@ -309,7 +309,13 @@ def test_validate_ld_variants_rejects_invalid_block_semantics(mutation: str) -> 
 
 @pytest.mark.parametrize(
     ("genome_build", "ploidy"),
-    [("GRCh37", "autosomal_diploid"), ("GRCh38", "haploid"), (None, "autosomal_diploid")],
+    [
+        ("GRCh37", "autosomal_diploid"),
+        ("GRCh38", "haploid"),
+        (None, "autosomal_diploid"),
+        (np.array(["GRCh38"]), "autosomal_diploid"),
+        ("GRCh38", np.array(["autosomal_diploid"])),
+    ],
 )
 def test_validate_ld_variants_refuses_inferred_build_or_ploidy(
     genome_build: object, ploidy: object
@@ -365,6 +371,26 @@ def test_validate_hard_calls_rejects_invalid_types_shapes_and_values(calls: obje
     contract, _ = _api()
     with pytest.raises((TypeError, ValueError)):
         contract.validate_hard_calls(calls)
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [object, bool, np.float64, np.complex128],
+)
+def test_validate_hard_calls_rejects_nested_numpy_rows_before_dtype_normalization(
+    dtype: object,
+) -> None:
+    """Catch nested NumPy row dtypes being normalized into accepted integer hard calls."""
+    contract, _ = _api()
+    with pytest.raises(TypeError):
+        contract.validate_hard_calls([np.array([0, 1], dtype=dtype)])
+
+
+def test_validate_hard_calls_rejects_sequence_values_before_array_normalization() -> None:
+    """Catch out-of-domain Python integers reaching NumPy normalization before refusal."""
+    contract, _ = _api()
+    with pytest.raises(ValueError, match="ALT dosages"):
+        contract.validate_hard_calls([[0, 10**100]])
 
 
 @pytest.mark.parametrize("shape", [(4097, 1), (1, 65)])

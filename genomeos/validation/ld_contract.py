@@ -118,9 +118,9 @@ def validate_ld_variants(
     variants: object, *, genome_build: object, ploidy: object
 ) -> tuple[LDVariant, ...]:
     """Validate and snapshot one bounded, ordered autosomal variant block."""
-    if genome_build != "GRCh38":
+    if not isinstance(genome_build, str) or genome_build != "GRCh38":
         raise ValueError("genome_build must be exactly 'GRCh38'")
-    if ploidy != "autosomal_diploid":
+    if not isinstance(ploidy, str) or ploidy != "autosomal_diploid":
         raise ValueError("ploidy must be exactly 'autosomal_diploid'")
     raw = _in_memory_1d(
         variants, "variants", allow_empty=False, maximum_length=MAX_LD_VARIANTS
@@ -182,7 +182,11 @@ def validate_hard_calls(calls: object) -> np.ndarray:
                     raise ValueError(
                         f"calls variant count must be between 1 and {MAX_LD_VARIANTS}"
                     )
-                values = tuple(row.tolist())
+                if not np.issubdtype(row.dtype, np.integer) or np.issubdtype(
+                    row.dtype, np.bool_
+                ):
+                    raise TypeError("calls must contain exact integer hard calls")
+                values = tuple(row)
             elif isinstance(row, Sequence):
                 if not 1 <= len(row) <= MAX_LD_VARIANTS:
                     raise ValueError(
@@ -194,6 +198,8 @@ def validate_hard_calls(calls: object) -> np.ndarray:
             for value in values:
                 if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
                     raise TypeError("calls must contain exact integer hard calls")
+                if value < 0 or value > 3:
+                    raise ValueError("calls values must be ALT dosages 0/1/2 or missing value 3")
             rows.append(values)
         try:
             array = np.asarray(rows)
