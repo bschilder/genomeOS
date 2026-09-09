@@ -20,7 +20,8 @@ averages diagnostics within each declared cohort/region/variant-group, then give
 weight within each region/group cell, and finally gives represented cells equal weight. The
 declared cohort label is an operational weighting unit, not a certified independent study. A
 genuine zero predictive probability is represented as the JSON string ``"-Infinity"`` at every
-affected aggregation level and counted explicitly.
+affected aggregation level. Its raw observation count is reported in every cohort and cell record
+and at the global level; this audit count is summed, never averaged.
 """
 
 from __future__ import annotations
@@ -296,6 +297,11 @@ def _aggregate_rows(frame: pd.DataFrame, group_columns: tuple[str, ...], count_n
         key_tuple = keys if isinstance(keys, tuple) else (keys,)
         record = dict(zip(group_columns, key_tuple, strict=True))
         record[count_name] = int(len(group))
+        if "zero_probability_count" in group:
+            record["zero_probability_count"] = int(group["zero_probability_count"].sum())
+        else:
+            log_scores = group["log_score"].astype(float).to_numpy()
+            record["zero_probability_count"] = int(np.isneginf(log_scores).sum())
         for source, target in _OUTPUT_INGREDIENTS.items():
             record[target] = _mean(group[source])
         records.append(record)

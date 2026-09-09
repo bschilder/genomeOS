@@ -274,6 +274,42 @@ def test_negative_infinite_log_score_remains_visible_through_every_level():
     assert result["metrics"]["mean_log_score"] == "-Infinity"
 
 
+def test_zero_probability_observation_counts_are_summed_at_each_audit_level():
+    """Averaging impossible-outcome counts would hide how many raw scores were catastrophic."""
+    predictions = pd.DataFrame(
+        [
+            _prediction("a1", cohort_id="cohort-a", log_score=-np.inf),
+            _prediction("a2", cohort_id="cohort-a", log_score=-np.inf),
+            _prediction("a3", cohort_id="cohort-a", log_score=-1.0),
+            _prediction("a4", cohort_id="cohort-b", log_score=-np.inf),
+            _prediction("a5", cohort_id="cohort-b", log_score=-1.0),
+            _prediction(
+                "b1", region_id="region-b", cohort_id="cohort-c", log_score=-1.0
+            ),
+            _prediction(
+                "b2", region_id="region-b", cohort_id="cohort-d", log_score=-np.inf
+            ),
+        ]
+    )
+    expected_ids = tuple(predictions["source_record_id"])
+
+    result = summarize_benchmark(
+        predictions,
+        (_completed(expected_test_ids=expected_ids),),
+        ("split-a",),
+    )
+
+    assert [
+        row["zero_probability_count"]
+        for row in result["declared_cohort_cell_metrics"]
+    ] == [2, 1, 0, 1]
+    assert [row["zero_probability_count"] for row in result["cell_metrics"]] == [
+        3,
+        1,
+    ]
+    assert result["zero_probability_count"] == 4
+
+
 @pytest.mark.parametrize(
     ("statuses", "expected", "message"),
     [
