@@ -128,6 +128,116 @@ def test_two_measurements_of_one_allele_and_population_remain_distinct(tmp_path)
     assert len(obs) == obs["source_record_id"].nunique() == 2
 
 
+def test_a_row_repeated_in_every_published_field_is_refused_not_silently_dropped(tmp_path):
+    """Two rows carrying identical evidence are the same measurement listed twice.
+
+    Nothing the source published tells them apart, so one cannot be kept as a separate study —
+    but dropping it unreported would break the property §12 insists on. It is refused by name.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla", "hla"],
+            "gene": ["DQB1", "DQB1"],
+            "allele": ["DQB1*03:01", "DQB1*03:01"],
+            "population": ["Peru Lamas City Lama", "Peru Lamas City Lama"],
+            "indivs_over_n": ["", ""],
+            "alleles_over_2n": ["0.1250", "0.1250"],
+            "n": ["100", "100"],
+        },
+    )
+    obs, report = af.load(path, POPULATIONS, "test")
+    assert len(obs) == 1
+    assert report.refusals["duplicate_source_record"] == 1
+
+
+def test_the_refusal_report_still_adds_up_when_rows_are_deduplicated(tmp_path):
+    """retained + sum(refusals) == total, the one property a refusal report must have (§12)."""
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla"] * 3,
+            "gene": ["DQB1"] * 3,
+            "allele": ["DQB1*03:01"] * 3,
+            "population": ["Peru Lamas City Lama"] * 3,
+            "indivs_over_n": ["", "", ""],
+            "alleles_over_2n": ["0.1250", "0.1250", "0.2000"],
+            "n": ["100", "100", "250"],
+        },
+    )
+    obs, report = af.load(path, POPULATIONS, "test")
+    assert len(obs) + sum(report.refusals.values()) == report.total
+
+
+def test_deduplicated_output_satisfies_the_unique_source_record_constraint(tmp_path):
+    """The `unique=True` constraint in the schema is what #154 tripped; validate against it."""
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla"] * 3,
+            "gene": ["DQB1"] * 3,
+            "allele": ["DQB1*03:01"] * 3,
+            "population": ["Peru Lamas City Lama"] * 3,
+            "indivs_over_n": ["", "", ""],
+            "alleles_over_2n": ["0.1250", "0.1250", "0.2000"],
+            "n": ["100", "100", "250"],
+        },
+    )
+    obs, _ = af.load(path, POPULATIONS, "test")
+    OBSERVATIONS_SCHEMA.validate(obs)
+
+
+def test_a_fractional_sample_size_is_refused_rather_than_truncated(tmp_path):
+    """A fraction of an individual is not a sample size, and truncating invents a measurement.
+
+    Refusing it by name is what keeps the row's real defect visible: silently taking `int()`
+    would report 100 individuals for a row that claims 100.5, and say nothing about it.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla"],
+            "gene": ["DQB1"],
+            "allele": ["DQB1*03:01"],
+            "population": ["Peru Lamas City Lama"],
+            "indivs_over_n": [""],
+            "alleles_over_2n": ["0.2500"],
+            "n": ["100.5"],
+        },
+    )
+    obs, report = af.load(path, POPULATIONS, "test")
+    assert len(obs) == 0
+    assert report.refusals["fractional_sample_size"] == 1
+    assert len(obs) + sum(report.refusals.values()) == report.total
+
+
+def test_sample_sizes_differing_only_by_a_fraction_cannot_collide_into_one_identity(tmp_path):
+    """The reported reproduction: `af=0.25` with `n=100` and `n=100.5` (#160 review).
+
+    The two differ as floats, so a duplicate check reading the raw value keeps both; an identity
+    reading `int()` then truncates them onto one id, and the schema's `unique=True` rejects the
+    pair. One canonical integer sample size is what makes those two rules agree — here by
+    refusing the fractional row outright, so no id is ever minted for a count nobody measured.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["hla", "hla"],
+            "gene": ["DQB1", "DQB1"],
+            "allele": ["DQB1*03:01", "DQB1*03:01"],
+            "population": ["Peru Lamas City Lama", "Peru Lamas City Lama"],
+            "indivs_over_n": ["", ""],
+            "alleles_over_2n": ["0.2500", "0.2500"],
+            "n": ["100", "100.5"],
+        },
+    )
+    obs, report = af.load(path, POPULATIONS, "test")
+    assert len(obs) == obs["source_record_id"].nunique()
+    OBSERVATIONS_SCHEMA.validate(obs)
+    assert report.refusals["fractional_sample_size"] == 1
+    assert len(obs) + sum(report.refusals.values()) == report.total
+
+
 def test_min_populations_is_a_modelling_filter_and_is_reported(frequencies):
     """A spatial field cannot be identified from a handful of points, but that is a modelling
     judgement rather than a data defect — so it defaults off and is counted when used."""
