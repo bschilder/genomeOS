@@ -463,8 +463,8 @@ def _external_resources(
             f"allowlist artifact {artifact_id} external resource",
         )
         source = str(resource["source"])
-        if source not in {"gnomad", "dbsnp"} or source in seen:
-            raise ValueError(f"allowlist artifact {artifact_id}: external source must be unique gnomad/dbsnp")
+        if source not in {"gnomad", "dbsnp", "alphagenome"} or source in seen:
+            raise ValueError(f"allowlist artifact {artifact_id}: external source must be unique gnomad/dbsnp/alphagenome")
         seen.add(source)
         normalized = str(resource["normalized_variant_id"])
         if normalized != variant_id:
@@ -480,7 +480,7 @@ def _external_resources(
             {"schema_version", "source", "source_release", "retrieved_at", "query", "record"},
             str(source_root / cache_file),
         )
-        expected_schema_version = {"dbsnp": 1, "gnomad": 2}[source]
+        expected_schema_version = {"dbsnp": 1, "gnomad": 2, "alphagenome": 1}[source]
         if (
             cache_payload["source"] != source
             or cache_payload["schema_version"] != expected_schema_version
@@ -503,12 +503,19 @@ def _external_resources(
             if query.get("dataset") != dataset:
                 raise ValueError(f"{source_root / cache_file}: gnomAD dataset mismatch")
             published["dataset"] = dataset
-        else:
+        elif source == "dbsnp":
             _require_fields(resource, {"rsid"}, f"{artifact_id} dbsnp resource")
             rsid = str(resource["rsid"])
             if query.get("rsid") != rsid:
                 raise ValueError(f"{source_root / cache_file}: dbSNP rsID mismatch")
             published["rsid"] = rsid
+        elif source == "alphagenome":
+            _require_fields(resource, {"model_version"}, f"{artifact_id} alphagenome resource")
+            model_version = str(resource["model_version"])
+            record = cache_payload.get("record")
+            if not isinstance(record, dict) or record.get("model_version") != model_version:
+                raise ValueError(f"{source_root / cache_file}: AlphaGenome model_version mismatch")
+            published["model_version"] = model_version
         resources.append(published)
         written.append(published_path)
     return resources, written

@@ -446,4 +446,108 @@ describe('atlas browser contracts', () => {
       }),
     ).toThrow(/known discovery group/);
   });
+
+  it('validates AlphaGenome AVI predicted-impact evidence as labeled, never measured', () => {
+    const evidence = {
+      query: { normalized_variant_id: 'chr11-5227002-T-A' },
+      record: {
+        avi_phred: 11.77,
+        avi_raw_score: 0.2093,
+        avi_tail_quantile: 0.0665,
+        deep_link:
+          'https://deepmind.google.com/science/alphagenome/atlas?q=chr11:5227002:T%3EA&m=variant',
+        dominant_modality: 'ALPHAMISSENSE',
+        model_version:
+          'AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09',
+        prediction_class: 'predicted_impact',
+        top_attributions: [
+          { feature: 'ALPHAMISSENSE', value: 0.1662 },
+          { feature: 'CACTUS_241_WAY', value: 0.0318 },
+          { feature: 'MERGED_SPLICING', value: 0.0281 },
+        ],
+      },
+      retrieved_at: '2026-09-09T06:39:18.081934Z',
+      schema_version: 1,
+      source: 'alphagenome',
+      source_release: 'AlphaGenome Atlas AVI (2026-09)',
+    } as const;
+
+    const parsed = externalInfoSchema.parse(evidence);
+    expect(parsed.record).toMatchObject({
+      avi_phred: 11.77,
+      avi_tail_quantile: 0.0665,
+      dominant_modality: 'ALPHAMISSENSE',
+      prediction_class: 'predicted_impact',
+    });
+    expect(() =>
+      externalInfoSchema.parse({ ...evidence, schema_version: 2 }),
+    ).toThrow();
+    expect(() =>
+      externalInfoSchema.parse({
+        ...evidence,
+        record: {
+          ...evidence.record,
+          prediction_class: 'measured',
+        },
+      }),
+    ).toThrow();
+  });
+
+  it('accepts an alphagenome external resource only with its pinned model version', () => {
+    const resource = {
+      cache_sha256:
+        '3ad46f3d90676a5cf675e48228192e78b00ac914cea4bad03900ebdaa0c931b3',
+      cache_url: 'external/alphagenome/chr11-5227002-t-a.json',
+      model_version:
+        'AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09',
+      normalized_variant_id: artifact.variant_id,
+      source: 'alphagenome',
+    };
+    const catalogArtifact = {
+      ...artifact,
+      assumptions: ['fixture'],
+      correlation_range_km: 400,
+      discovery,
+      downloads,
+      external_resources: [resource],
+      likelihood: 'beta_binomial',
+      n_cells: 1,
+      n_observations: 1,
+      observations_available: true,
+      observations_sha256: 'b'.repeat(64),
+      observations_url: 'hbs-rs334.observations.json',
+      support_counts: { observed: 1 },
+      surface_sha256: 'a'.repeat(64),
+      surface_url: 'hbs-rs334.surface.json',
+    };
+    const catalog = {
+      artifact_version: 'v1',
+      artifacts: [catalogArtifact],
+      assumptions: ['fixture'],
+      context_sources: [],
+      created_at: '2026-09-06T00:00:00Z',
+      discovery_groups: discoveryGroups,
+      hf_dataset: 'bschilder/genomeos-data',
+      hf_revision: artifact.hf_revision,
+      registry_versions: [artifact.registry_version],
+      schema_version: 1,
+    };
+
+    expect(
+      atlasCatalogSchema.parse(catalog).artifacts[0].external_resources,
+    ).toMatchObject([
+      { source: 'alphagenome', model_version: resource.model_version },
+    ]);
+    expect(() =>
+      atlasCatalogSchema.parse({
+        ...catalog,
+        artifacts: [
+          {
+            ...catalogArtifact,
+            external_resources: [{ ...resource, model_version: undefined }],
+          },
+        ],
+      }),
+    ).toThrow();
+  });
 });

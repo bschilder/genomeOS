@@ -1,0 +1,34 @@
+/* AlphaGenome AVI predicted-impact card — Atlas design §11 external reference. */
+
+.atlas-alphagenome-tag {
+  display: inline-block;
+  background: rgba(139, 30, 0, 0.12);
+  border: 1px solid rgba(139, 30, 0, 0.45);
+  color: var(--atlas-accent, #8b1e00);
+  font-family: var(
+    --atlas-mono,
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    monospace
+  );
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+
+.atlas-alphagenome-note {
+  margin-top: 0.9rem;
+  border-left: 3px solid rgba(139, 30, 0, 0.55);
+  background: rgba(139, 30, 0, 0.05);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.atlas-alphagenome-note p {
+  margin: 0;
+}

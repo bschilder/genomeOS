@@ -95,6 +95,15 @@ const externalResourceSchema = z.discriminatedUnion('source', [
   z.strictObject({
     cache_sha256: sha256,
     cache_url: nonEmpty,
+    model_version: nonEmpty,
+    normalized_variant_id: z
+      .string()
+      .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
+    source: z.literal('alphagenome'),
+  }),
+  z.strictObject({
+    cache_sha256: sha256,
+    cache_url: nonEmpty,
     normalized_variant_id: z
       .string()
       .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
@@ -411,6 +420,35 @@ export const externalInfoSchema = z.discriminatedUnion('source', [
       }),
     }),
     source: z.literal('dbsnp'),
+  }),
+  z.strictObject({
+    ...externalBaseSchema,
+    schema_version: z.literal(1),
+    query: z.strictObject({
+      normalized_variant_id: z
+        .string()
+        .regex(
+          /^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/,
+        ),
+    }),
+    record: z.strictObject({
+      avi_phred: finiteNumber.nonnegative(),
+      avi_raw_score: finiteNumber,
+      avi_tail_quantile: probability,
+      deep_link: z.url(),
+      dominant_modality: nonEmpty,
+      model_version: nonEmpty,
+      prediction_class: z.literal('predicted_impact'),
+      top_attributions: z
+        .array(
+          z.strictObject({
+            feature: nonEmpty,
+            value: finiteNumber,
+          }),
+        )
+        .min(1),
+    }),
+    source: z.literal('alphagenome'),
   }),
 ]);
 

@@ -137,6 +137,12 @@ def test_public_catalog_inventory_has_two_map_and_twenty_eight_afnd_entries() ->
     assert sum(entry["variant_id"].startswith("cyt:") for entry in entries) == 4
     assert sum(entry["variant_id"].startswith("hla:") for entry in entries) == 20
     assert sum(entry["variant_id"].startswith("kir:") for entry in entries) == 4
+    rs334 = next(entry for entry in entries if entry["id"] == "hbs-rs334")
+    assert {r["source"] for r in rs334["external_resources"]} == {
+        "gnomad",
+        "dbsnp",
+        "alphagenome",
+    }
 
 
 def test_every_declared_external_resource_resolves_against_the_real_registry() -> None:
@@ -305,6 +311,87 @@ def test_export_is_byte_deterministic(export_inputs: dict[str, Path]) -> None:
         if path.is_file()
     }
     assert after == before
+
+
+def test_export_publishes_alphagenome_cache_with_pinned_model_version(
+    tmp_path: Path,
+) -> None:
+    model_version = "AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09"
+    store = tmp_path / "store"
+    out = tmp_path / "web"
+    cache_dir = store / "external" / "alphagenome"
+    cache_dir.mkdir(parents=True)
+    cache_path = cache_dir / "chr11-5227002-t-a.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "query": {"normalized_variant_id": VARIANT_ID},
+                "record": {
+                    "avi_phred": 11.77,
+                    "avi_raw_score": 0.2093,
+                    "avi_tail_quantile": 0.0665,
+                    "deep_link": "https://deepmind.google.com/science/alphagenome/atlas?q=chr11:5227002:T%3EA&m=variant",
+                    "dominant_modality": "ALPHAMISSENSE",
+                    "model_version": model_version,
+                    "prediction_class": "predicted_impact",
+                    "top_attributions": [
+                        {"feature": "ALPHAMISSENSE", "value": 0.1662},
+                        {"feature": "CACTUS_241_WAY", "value": 0.0318},
+                        {"feature": "MERGED_SPLICING", "value": 0.0281},
+                    ],
+                },
+                "retrieved_at": "2026-09-09T06:39:18.081934Z",
+                "schema_version": 1,
+                "source": "alphagenome",
+                "source_release": "AlphaGenome Atlas AVI (2026-09)",
+            }
+        )
+    )
+    entry = {
+        "external_resources": [
+            {
+                "source": "alphagenome",
+                "normalized_variant_id": VARIANT_ID,
+                "model_version": model_version,
+                "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+            }
+        ]
+    }
+    resources, written = export_atlas_web._external_resources(
+        entry,
+        artifact_id="hbs-test",
+        variant_id=VARIANT_ID,
+        entity_type="variant",
+        source_root=store,
+        out_dir=out,
+    )
+    assert len(resources) == 1
+    assert resources[0]["source"] == "alphagenome"
+    assert resources[0]["model_version"] == model_version
+    assert resources[0]["cache_sha256"]
+    assert written[0].exists()
+
+    # a model-version mismatch must fail loudly
+    import pytest
+
+    with pytest.raises(ValueError, match="model_version mismatch"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "normalized_variant_id": VARIANT_ID,
+                        "model_version": "stale-model",
+                        "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+                    }
+                ]
+            },
+            artifact_id="hbs-test",
+            variant_id=VARIANT_ID,
+            entity_type="variant",
+            source_root=store,
+            out_dir=out,
+        )
 
 
 def test_export_refuses_an_artifact_outside_the_allowlist(

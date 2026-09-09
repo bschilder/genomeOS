@@ -45,7 +45,7 @@ interface ExplorerControlsProps {
   onSurfaceGeometry: (value: SurfaceGeometry) => void;
   onEntity: (id: string) => void;
   onExternalInfo: (
-    source: 'gnomad' | 'dbsnp',
+    source: 'gnomad' | 'dbsnp' | 'alphagenome',
     signal: AbortSignal,
   ) => Promise<ExternalInfo>;
   onMetric: (metric: Metric) => void;

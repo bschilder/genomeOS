@@ -26,7 +26,7 @@ export type AtlasDataProvider = {
   ): Promise<ObservationArtifact | null>;
   getExternalInfo(
     ref: ArtifactRef,
-    source: 'gnomad' | 'dbsnp',
+    source: 'gnomad' | 'dbsnp' | 'alphagenome',
     signal?: AbortSignal,
     progress?: TransferProgressListener,
   ): Promise<ExternalInfo>;
