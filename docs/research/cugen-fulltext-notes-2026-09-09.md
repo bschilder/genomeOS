@@ -24,7 +24,7 @@ These are **author-reported results**, not genomeOS replications. Runtime compar
 | Array conversion: 21 minutes across 22 CPU jobs | One-time preparation, outside the headline downstream runtime; genotype conversion is not free | S4 |
 | Common-variant null calibration across 200 simulations | Simulation evidence for their association procedure, not calibration of AF count prediction | S5; S21 |
 
-Utility timings for LD/subsetting and other tools are demonstrations rather than controlled cross-tool comparisons (S10). The authors explicitly identify non-European, admixed and founder-cohort validation, probabilistic/dosage genotypes, and smaller-device operation as remaining work (S11). The current analysis uses hard-called imputed genotypes (S14); uncertainty discarded during hard-calling cannot be recovered by treating the output as exact dosage.
+Utility timings for sample subsetting, QC, PRS scoring and plotting are demonstrations rather than controlled cross-tool comparisons (S10, S24); these sections do not establish a standalone LD utility timing. The authors explicitly identify non-European, admixed and founder-cohort validation, probabilistic/dosage genotypes, and smaller-device operation as remaining work (S11). The current analysis uses hard-called imputed genotypes (S14); uncertainty discarded during hard-calling cannot be recovered by treating the output as exact dosage.
 
 ## Methods that inform the next experiments
 
@@ -47,3 +47,7 @@ The article's Results describe utility capabilities that its code-availability t
 For the initial LD pilot, request unphased `r` and `r2` explicitly. The selected LD API accepts encoding 0 hard calls; CuGen's separate phased encoding 4 exists elsewhere and is refused by this path. Estimated D/D-prime remain a separate admission decision. Marginal AF tables do not identify LD, pairwise missingness does not guarantee a positive-semidefinite joint matrix, and LD-assisted imputation with local genotypes does not demonstrate extrapolation into an unsampled region.
 
 Next evidence remains unchanged: validate exact sample-subset identity and recomputed metadata, compare independent CPU counts/correlations against CuGen CPU/GPU on bounded synthetic blocks, measure the complete workflow, and only then use source-qualified real blocks in frozen predictive comparisons. No worldwide AF accuracy claim follows from this methods review or the twelve existing CPU preflight tests.
+
+**Later hardware evidence:** the [synthetic GPU diagnostic](cugen-ld-hardware-probe-2026-09-09.md)
+executed sample subsetting and LD successfully on the hand fixture, but found reproducible
+precision-budget failures on near-fixed alleles. It does not qualify general GPU LD admission.
