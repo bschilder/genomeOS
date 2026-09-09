@@ -311,6 +311,19 @@ commit, and an executed altered-training-cohort control fails at the new complet
 comparison. Independent scoped re-review finds the Important item addressed with no new
 breakage. Existing warning-noise Minors remain for whole-slice review.
 
+**Final implementation acceptance:** whole-slice review found two strict-validation defects,
+tracked in #202: original posterior dtypes were cast before checking, and no-effect predictions
+did not anchor generated draw IDs to the actual posterior. `ddcb106` fixes both and narrowly
+captures expected inducing warnings. The single scoped re-review is clean with no residual
+findings. At that exact source, an isolated Python3.12.13 environment matching all71 active
+`requirements.lock` pins passes **838 tests**, with11GPU-only skips and15existing rasterio
+PendingDeprecationWarnings in303.67seconds. Smoke40, Ruff, contract, module-size, privacy,
+whitespace and clean-source gates pass. JUnit SHA256:
+`274c66822041e9dddb31d8f3fb81dd4ff078d87cb9bacaa5d43da5581ad69cd6`.
+These close #191's implementation acceptance, not its subsequent empirical validation target;
+the branch/PR handoff above is tracked separately until the PR exists. No AF accuracy gain or
+new scientific surface is claimed.
+
 Genuine fresh-parent/fresh-new and old-cache/parent-loaded comparisons are bitwise exact for
 all four retained arrays. Corrected clean-process new-cache means, concentrations and draw
 identities are bitwise exact; the original failed dtype-demotion control is preserved.
