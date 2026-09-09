@@ -80,7 +80,9 @@ Ablate local/global branches, shared/variant components, covariates, pretraining
 
 Separate cross-variant sharing, complete multinomial allele observations, and haplotype dependence. Incomplete allele lists do not become zeros. Begin with short blocks and compatible individual-level data; marginal frequencies alone do not identify LD. Preserve valid joint probabilities/covariance.
 
-Validate CuGen counts and declared LD definitions against a CPU reference, including missingness, orientation, rare/monomorphic sites, subsets, ploidy and supported dosage formats. Cache offline by data/sample/block/statistic/version. Separate conditional imputation gains from geographic extrapolation without local genotypes.
+Use the user's **local CuGen implementation at `/Users/bschilder/code/cugen`**, not pg_gpu. The checkout inspected on September 9 is `03df1688abf52d295bd85d47f1aca6130440b553` (package version `0.1.7`); pin and record the exact revision actually used by each experiment. Its `cugen.ld.ld_matrix` interface already provides unphased `r`/`r2`, so inspect and reuse it rather than substitute another library. Related-work audits do not change this implementation choice.
+
+Validate CuGen counts and declared LD definitions against an independent CPU reference, including missingness, orientation, rare/monomorphic sites, subsets, ploidy and supported dosage formats. Start with explicitly requested unphased `r`/`r2`; CuGen's two-bit representation does not retain observed haplotype phase. Treat estimated `D`/`D'` as a separate, later admission decision. Cache offline by data/sample/block/statistic/version. Separate conditional imputation gains from geographic extrapolation without local genotypes.
 
 **Exit:** numeric equivalence, complete-workflow speedup, and task-specific predictive gain.
 

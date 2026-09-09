@@ -1,6 +1,8 @@
 # pg_gpu candidate audit — 2026-09-09
 
-Status: primary code/documentation inspection, **not** a validated genomeOS dependency, full-paper review or hardware benchmark. This extends the candidate inventory for [#189](https://github.com/bschilder/genomeOS/issues/189), WP6 and the later temporal/connectivity work; it does not change the active count-scoring experiment.
+Status: related-work code/documentation inspection, **not** a selected genomeOS dependency, full-paper review or hardware benchmark. It does not change the active count-scoring experiment.
+
+**Implementation decision, corrected September 9 at the user's direction:** WP6 uses **CuGen from `/Users/bschilder/code/cugen`**, not pg_gpu. The earlier proposal to compare pg_gpu/CuGen as implementation candidates drifted from the user's specified tool. Retain the pg_gpu inspection below only as related-work evidence; it is not authorization to install, integrate or benchmark pg_gpu. The local CuGen checkout inspected for this correction is clean at `03df1688abf52d295bd85d47f1aca6130440b553` (package version `0.1.7`), with an implemented `cugen.ld.ld_matrix` API and CPU/GPU, missingness, tiling and PLINK-reference tests. Those tests have been located, not independently rerun during this correction.
 
 ## Evidence inspected
 
@@ -18,14 +20,14 @@ The LD-block example computes a full regional pairwise matrix, then detects low 
 
 The audited revision merges a correction making public `pi2` symmetrization consistent across population-index patterns. The upstream issue explicitly distinguishes this public-API inconsistency from its then-existing pipelines, which it reports already agreed with their reference. We have not independently reproduced that claim. This is a concrete reason to pin definitions and revisions rather than assume identically named statistics are interchangeable. [Issue #279](https://github.com/kr-colab/pg_gpu/issues/279), [fix revision](https://github.com/kr-colab/pg_gpu/commit/d2643eac9e187b56a8d814fb2658b49f3d6a4421).
 
-## Proposed admission experiment, not yet executed
+## CuGen admission requirements, not yet executed
 
 **Scientific objective:** determine whether compatible training-only genomic data provide valid, useful cross-variant or connectivity information. **Measurable output:** exact count/defined-status parity, declared LD-estimator agreement, bounded complete-workflow cost, then improvement on the unchanged geographic or conditional-imputation target. **Component/interface:** an offline adapter returning versioned block statistics with source/sample/variant orientation, ploidy, missingness and definition provenance. **Assumptions/refusals:** no LD inference from marginal frequencies alone; no unauthorised data export; no silent phase, denominator, ancestry or missingness conversion.
 
 Admission should proceed in this order:
 
-1. Tiny hand-calculated phased blocks: independent, positively/negatively associated, rare and monomorphic pairs, explicit missing calls and sample subsets. Compare exact pair counts before comparing statistics. Flipping one allele changes signed r, not r-squared.
-2. Independently implemented CPU references and pinned pg_gpu/CuGen candidates on compatible input representations. Keep phased haplotype LD, unphased genotype correlation and imputed-dosage correlation distinct; explicitly refuse unsupported ploidy instead of converting ancient pseudohaploidy to diploidy.
+1. Tiny hand-calculated blocks compatible with CuGen's unphased two-bit genotype representation: independent, positively/negatively associated, rare and monomorphic pairs, explicit missing calls and sample subsets. Compare exact pair counts before comparing statistics. Flipping one allele changes signed r, not r-squared. Preserve the distinction between undefined and filtered-out pairs.
+2. Independently implemented CPU references and the pinned local CuGen revision on identical inputs. Start with explicitly requested unphased `r`/`r2`. CuGen's module documentation distinguishes those from estimated haplotype `D`/`D'`, since conversion discards phase, and records an unresolved `D`/`D'` discrepancy against PLINK on some multi-root likelihood cases. Do not silently substitute estimated haplotypes for observed phase or imputed dosages for hard calls; explicitly refuse unsupported ploidy instead of converting ancient pseudohaploidy to diploidy. These are inspected implementation constraints, not a completed validation result.
 3. Boundary-sensitive regional/streaming parity, including pairs crossing chunk edges, sample-axis chunks, absent calls, inaccessible sites and allele orientation. Check host as well as device memory and include conversion, decompression, transfers, setup and artifact writing in end-to-end costs.
 4. If the output becomes a covariance/correlation model, test positive semidefiniteness and valid joint probabilities. Pairwise deletion or independently predicted pair statistics need not yield a valid joint matrix; do not silently project, truncate or fill missing entries.
 5. Admit statistics only after training-partition derivation and matched-access ablations establish incremental predictive value. Local held-out genotypes helping imputation are not evidence of geographic extrapolation into an unsampled population.
