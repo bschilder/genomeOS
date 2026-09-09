@@ -6,7 +6,7 @@ import importlib
 import importlib.util
 import math
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -40,6 +40,14 @@ class _OversizedSequence(Sequence[object]):
 
     def __getitem__(self, index: int) -> object:
         raise AssertionError("oversized input must be refused before materialization")
+
+
+class _GuardedOversizedMoments(list[object]):
+    def __len__(self) -> int:
+        return 10**9
+
+    def __iter__(self) -> Iterator[object]:
+        raise AssertionError("wrong-length moments must be refused before copying or scanning")
 
 
 def _api() -> tuple[object, object]:
@@ -271,6 +279,20 @@ def test_comparator_refuses_malformed_independent_reference_before_reconciliatio
 
     with pytest.raises((TypeError, ValueError)):
         _comparison().reconcile_ld_output((pair,), variants, tuple(moment_list), output)
+
+
+def test_validate_ld_evidence_refuses_wrong_moment_count_before_materialization() -> None:
+    """Catch copying or scanning an unbounded moments list before its dimension check."""
+    _, reference = _api()
+
+    with pytest.raises(ValueError, match="moments must exactly match variants"):
+        reference.validate_ld_evidence(
+            (),
+            _variants()[:2],
+            _GuardedOversizedMoments(),
+            genome_build="GRCh38",
+            ploidy="autosomal_diploid",
+        )
 
 
 def test_requested_pairs_applies_both_windows_inclusively_and_keeps_equal_positions() -> None:

@@ -203,11 +203,11 @@ def validate_ld_evidence(
         raise TypeError("reference must contain LDPair records")
     if not isinstance(moments, (tuple, list)):
         raise TypeError("moments must contain VariantMoments records")
+    if len(moments) != len(block):
+        raise ValueError("moments must exactly match variants in file-row order")
     raw_moments = tuple(moments)
     if any(not isinstance(moment, VariantMoments) for moment in raw_moments):
         raise TypeError("moments must contain VariantMoments records")
-    if len(raw_moments) != len(block):
-        raise ValueError("moments must exactly match variants in file-row order")
     validated_moments = tuple(_validate_moment(moment) for moment in raw_moments)
     moment_block = tuple(item[0] for item in validated_moments)
     genotype_counts = tuple(item[1] for item in validated_moments)
