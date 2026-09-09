@@ -181,13 +181,17 @@ def test_outputs_are_byte_reproducible_across_new_output_directories(tmp_path):
 
 
 def test_runner_bootstraps_its_checkout_under_conflicting_pythonpath(tmp_path):
-    conflicting_checkout = ROOT.parents[2]
-    assert conflicting_checkout != ROOT
-    assert (conflicting_checkout / "genomeos").is_dir()
+    conflicting_checkout = tmp_path / "conflicting-checkout"
+    conflicting_package = conflicting_checkout / "genomeos"
+    conflicting_package.mkdir(parents=True)
+    conflicting_package.joinpath("__init__.py").write_text(
+        'raise RuntimeError("synthetic wrong-checkout genomeos imported")\n'
+    )
 
     completed = _run(_command(tmp_path / "run"), pythonpath=conflicting_checkout)
 
     assert completed.returncode == 0, completed.stderr
+    assert "synthetic wrong-checkout genomeos imported" not in completed.stderr
     manifest = _json(tmp_path / "run" / "manifest.json")
     expected = hashlib.sha256(
         (ROOT / "genomeos" / "validation" / "baseline.py").read_bytes()
