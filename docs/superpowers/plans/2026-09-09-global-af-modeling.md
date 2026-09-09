@@ -14,7 +14,7 @@
 
 - Primary target: present-day residents. Origins and historical populations are distinct later outputs.
 - Balanced region/variant-group performance, not cohort-size-weighted headline accuracy.
-- Accuracy-first scaling does not authorize unapproved compute spending or data access/export.
+- The owner authorized needed RunPod resources and GPU-supported alternatives (September 9). Profile measured bottlenecks, validate GPU results against a CPU reference, include transfer/setup costs, prefer US/Canada datacenters, and stop task-owned resources after use. Compute authorization does not grant new data access/export rights.
 - Public reproducible benchmarks and controlled-access tracks remain separately governed.
 - Observations and surfaces are never conflated. No inference on the serving path.
 - Artifacts are immutable, keyed by `(variant_id, model_version, data_version)`.
@@ -72,7 +72,7 @@ B0 pooled uncertain count model; B1 local smoother and regularized covariate reg
 
 N0 sparse-context graph/conditional-process comparator; N1 irregular encoder, spherical global operator, local branch, stochastic decoder; N2 blockwise CoDA-NO-style variable-field attention. Use explicit count likelihoods and coherent stochastic fields, without claiming ensembles are exact posteriors. No dense interpolated whole-dataset training truth and no whole-genome all-pairs attention.
 
-Ablate local/global branches, shared/variant components, covariates, pretraining, and joint/marginal uncertainty. Match pretraining access and tuning; report information-budget experiments separately. Single-GPU pilots precede approved multi-GPU scaling, with end-to-end costs and US/Canada deployment preferences.
+Ablate local/global branches, shared/variant components, covariates, pretraining, and joint/marginal uncertainty. Match pretraining access and tuning; report information-budget experiments separately. Single-GPU pilots precede multi-GPU scaling when measurements justify it, with end-to-end costs and US/Canada deployment preferences.
 
 **Exit:** beat equally informed B3/B4 on count prediction, calibration, local contrasts and joint-field checks; otherwise retain the statistical winner.
 
@@ -156,11 +156,17 @@ The following tasks implement reusable WP0/WP1 engineering prerequisites. They d
 
 **CLI:** require observations TSV, reviewed assignment TSV (record ID, block ID, region ID, variant group), dependencies TSV, data-version, explicit positive Beta prior alpha/beta, explicit buffer-km, and new output directory. Optional seed defaults 42 and posterior draws defaults 2048; report all values. Only the observations schema may coerce according to its existing frozen contract. Validate every auxiliary ID/assignment and group consistency. Per fold and variant, fit Beta(alpha+sum AC, beta+sum AN-AC) from training rows only; sampled latent p is shared across test observations of that variant. A test variant absent from training is marked infeasible, not silently pooled across variants or given fabricated training. Use Task 1 scores, Task 2 splits and Task 3 summaries. A failed/infeasible fold stays in the manifest and yields nonzero exit code after writing its report.
 
-Output inventory, frozen split/config/input hashes, per-observation predictions, fold statuses, and summary as plain JSON/TSV (no pickle). Include seed, code revision, package versions, evidence kind supplied explicitly as `synthetic_fixture` or `observational_research`, and `publication_eligible=false`. Refuse pre-existing output directories rather than overwriting. Deterministic scientific outputs exclude timestamps; runtime logs may record timing separately. No genotype/raster downloads, cost-incurring jobs, fitted surfaces, or serving changes.
+Output inventory, frozen split/config/input hashes, per-observation predictions, fold statuses, and summary as plain JSON/TSV (no pickle). Include seed, code revision, package versions, evidence kind supplied explicitly as `synthetic_fixture` or `observational_research`, and `publication_eligible=false`. The first runner is modern-only allele-count research: reject phenotype-prefixed IDs and nonzero date bounds rather than pooling phenotype/ancient observations into an AF result. Legacy zero dates remain date-unspecified; do not claim current-year resident validation. Refuse pre-existing output directories rather than overwriting. Deterministic scientific outputs exclude timestamps; runtime logs may record timing separately. No genotype/raster downloads, cost-incurring jobs, fitted surfaces, or serving changes.
 
 - [ ] RED: CLI subprocess against hand-readable fixtures, reproducible hashes/bytes, explicit B0 identity and nonpublication label, missing arguments/metadata, changing held-out AC cannot alter training posterior, zero/missing distinction, invalid source IDs, pre-existing outputs, and failed-fold nonzero exit.
 - [ ] GREEN: implement thin I/O adapter with pure fitting helper in validation/benchmark module or a focused baseline module; no science in argument parsing/storage.
 - [ ] Run complete CI, smoke, privacy/staged-path review and existing golden/regression suites; record environmental or baseline failures honestly. Commit referencing #189; open a PR that advances, not closes, the umbrella program. The PR must enumerate unimplemented WP0/WP1 empirical gates and WP2–WP7.
+
+## Authorized scaling follow-up: measured count-scoring acceleration
+
+The September 9 CPU probe at Task 1 commit `a166b41` used seeded synthetic probabilities on the local Python 3.12/SciPy 1.18.1 environment. Full diagnostics for 2,048 draws, one observation, AN=1,000 took 0.018 seconds (binomial) versus 4.74 seconds (beta-binomial concentration 20). Ten observations, 256 draws and AN=10,000 took 21.54 seconds for beta-binomial diagnostics. These single-run timings identify a bottleneck; they are not controlled GPU comparisons or model-performance evidence.
+
+After the initial four tasks, test batched CuPy special-function/reduction kernels on a task-owned RunPod GPU against the CPU oracle. Use synthetic inputs only, float64, identical inputs, explicit cold/warm timing, synchronization, host/device transfers, memory usage and all requested failure/parity cases. CuPy does not list a drop-in beta-binomial CDF; do not assume API equivalence. Retain exact finite-count semantics and bounded memory. Record algorithmic improvements separately from device speedups. Any production acceleration is optional, explicitly selected, independently reviewed, and must fail clearly if unavailable; CPU-only installations and benchmark results remain supported. Stop task-owned resources after retrieving the report. A failed parity or speed test is a valid result, not a reason to weaken the scorer.
 
 ## Stop and redirect
 
