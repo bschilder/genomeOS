@@ -109,6 +109,11 @@ def test_corpus_derived_counts_recompute_from_genotypes() -> None:
     }
     assert not validated["record_locator"].str.contains("table:2").any()
     assert validated["record_locator"].str.contains("table:3,row:").all()
+    # field-evidence payloads must never drift back to the stale locator text:
+    # raw_value is auditable evidence, not a comment (2026-09-09 review).
+    field_text = (CORPUS / "field_evidence.tsv").read_text(encoding="utf-8")
+    assert "table:2" not in field_text
+    assert "Table 2" not in field_text
     for _, row in validated.iterrows():
         assert int(row["ac_lower"]) == expected[row["population_label"]]
         assert int(row["ac_upper"]) == expected[row["population_label"]]
