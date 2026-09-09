@@ -26,6 +26,14 @@ from genomeos.validation.predictive import CountPredictive
 SEED = 42
 
 
+class B0InfeasibleError(ValueError):
+    """The declared holdout cannot be evaluated by the B0 scientific model."""
+
+    def __init__(self, absent_variants: tuple[str, ...]) -> None:
+        self.absent_variants = absent_variants
+        super().__init__(f"test variants absent from training: {list(absent_variants)}")
+
+
 @dataclass(frozen=True)
 class B0VariantPosterior:
     """Auditable pooled posterior parameters for one training variant."""
@@ -93,9 +101,9 @@ def fit_pooled_b0(
 
     test_variants = tuple(sorted(testing["variant_id"].unique()))
     training_variants = set(training["variant_id"])
-    absent = sorted(set(test_variants) - training_variants)
+    absent = tuple(sorted(set(test_variants) - training_variants))
     if absent:
-        raise ValueError(f"test variants absent from training: {absent}")
+        raise B0InfeasibleError(absent)
 
     rng = np.random.default_rng(normalized_seed)
     draws_by_variant: dict[str, np.ndarray] = {}

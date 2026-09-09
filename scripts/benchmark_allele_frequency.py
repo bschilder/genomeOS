@@ -21,17 +21,26 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from genomeos.validation.baseline import fit_pooled_b0
-from genomeos.validation.benchmark import (
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) in sys.path:
+    sys.path.remove(str(ROOT))
+sys.path.insert(0, str(ROOT))
+
+import genomeos.observations.schema as observations_schema_module  # noqa: E402
+import genomeos.validation.baseline as baseline_module  # noqa: E402
+import genomeos.validation.benchmark as benchmark_module  # noqa: E402
+import genomeos.validation.predictive as predictive_module  # noqa: E402
+import genomeos.validation.splits as splits_module  # noqa: E402
+from genomeos.validation.baseline import B0InfeasibleError, fit_pooled_b0  # noqa: E402
+from genomeos.validation.benchmark import (  # noqa: E402
     BenchmarkFoldStatus,
     inventory_observations,
     summarize_benchmark,
     validate_allele_observations,
 )
-from genomeos.validation.predictive import predictive_diagnostics
-from genomeos.validation.splits import build_buffered_splits
+from genomeos.validation.predictive import predictive_diagnostics  # noqa: E402
+from genomeos.validation.splits import build_buffered_splits  # noqa: E402
 
-ROOT = Path(__file__).resolve().parents[1]
 MODEL_ID = "B0"
 MODEL_NAME = "per_variant_pooled_beta_posterior_binomial_count_model"
 ASSIGNMENT_COLUMNS = ("source_record_id", "block_id", "region_id", "variant_group")
@@ -88,14 +97,15 @@ OBSERVATION_LITERAL_COLUMNS = (
     "cohort_id",
     "ingest_version",
 )
-SCIENCE_SOURCE_PATHS = (
-    "genomeos/observations/schema.py",
-    "genomeos/validation/baseline.py",
-    "genomeos/validation/benchmark.py",
-    "genomeos/validation/predictive.py",
-    "genomeos/validation/splits.py",
-    "scripts/benchmark_allele_frequency.py",
-)
+SCIENCE_SOURCE_FILES = {
+    "genomeos/observations/schema.py": Path(observations_schema_module.__file__).resolve(),
+    "genomeos/validation/baseline.py": Path(baseline_module.__file__).resolve(),
+    "genomeos/validation/benchmark.py": Path(benchmark_module.__file__).resolve(),
+    "genomeos/validation/predictive.py": Path(predictive_module.__file__).resolve(),
+    "genomeos/validation/splits.py": Path(splits_module.__file__).resolve(),
+    "scripts/benchmark_allele_frequency.py": Path(__file__).resolve(),
+}
+OUTPUT_FILENAMES = ("fold_status.tsv", "inventory.json", "predictions.tsv", "summary.json")
 
 
 def _positive_float(value: str) -> float:
@@ -169,6 +179,16 @@ def _canonical_hash(value: object) -> str:
 def _file_record(path: Path) -> dict[str, object]:
     data = path.read_bytes()
     return {"sha256": _sha256_bytes(data), "size_bytes": len(data)}
+
+
+def _resolved_science_sources() -> dict[str, Path]:
+    for relative, actual in SCIENCE_SOURCE_FILES.items():
+        expected = (ROOT / relative).resolve()
+        if actual != expected:
+            raise ValueError(
+                f"imported science source {relative!r} resolved outside this checkout: {actual}"
+            )
+    return dict(SCIENCE_SOURCE_FILES)
 
 
 def _read_observations(path: Path) -> pd.DataFrame:
@@ -337,6 +357,7 @@ def run(args: argparse.Namespace) -> int:
         raise ValueError(f"output directory already exists: {args.out}")
     if not isinstance(args.data_version, str) or not args.data_version.strip():
         raise ValueError("data_version must be a nonempty string")
+    science_sources = _resolved_science_sources()
 
     input_paths = {
         "assignments": args.assignments,
@@ -364,39 +385,30 @@ def run(args: argparse.Namespace) -> int:
     status_rows: list[dict[str, object]] = []
     prediction_frames: list[pd.DataFrame] = []
     split_records: list[dict[str, object]] = []
-    by_id = observations.set_index("source_record_id")
     for split in splits:
         posterior_seed = _fold_seed(args.seed, split.split_id, "posterior")
         predictive_seed = _fold_seed(args.seed, split.split_id, "predictive")
-        status = "completed"
-        failure_reason = None
-        if not split.train_ids:
-            status = "infeasible"
-            failure_reason = "no training observations remain after exclusions"
-        else:
-            train_variants = set(by_id.loc[list(split.train_ids), "variant_id"])
-            test_variants = set(by_id.loc[list(split.test_ids), "variant_id"])
-            absent = sorted(test_variants - train_variants)
-            if absent:
-                status = "infeasible"
-                failure_reason = f"test variants absent from training: {absent}"
-        if status == "completed":
-            try:
-                prediction_frames.append(
-                    _fold_predictions(
-                        observations,
-                        assignments,
-                        split,
-                        prior_alpha=args.prior_alpha,
-                        prior_beta=args.prior_beta,
-                        posterior_draws=args.posterior_draws,
-                        posterior_seed=posterior_seed,
-                        predictive_seed=predictive_seed,
-                    )
+        try:
+            prediction_frames.append(
+                _fold_predictions(
+                    observations,
+                    assignments,
+                    split,
+                    prior_alpha=args.prior_alpha,
+                    prior_beta=args.prior_beta,
+                    posterior_draws=args.posterior_draws,
+                    posterior_seed=posterior_seed,
+                    predictive_seed=predictive_seed,
                 )
-            except Exception as error:  # Preserve a failed planned fold instead of dropping it.
-                status = "failed"
-                failure_reason = f"{type(error).__name__}: {error}"
+            )
+            status = "completed"
+            failure_reason = None
+        except B0InfeasibleError as error:
+            status = "infeasible"
+            failure_reason = str(error)
+        except Exception as error:  # Preserve a failed planned fold instead of dropping it.
+            status = "failed"
+            failure_reason = f"{type(error).__name__}: {error}"
         fold_status = BenchmarkFoldStatus(
             split.split_id,
             status,
@@ -446,7 +458,7 @@ def run(args: argparse.Namespace) -> int:
         "seed": args.seed,
     }
     science_hashes = {
-        relative: _file_record(ROOT / relative)["sha256"] for relative in SCIENCE_SOURCE_PATHS
+        relative: _file_record(path)["sha256"] for relative, path in science_sources.items()
     }
     manifest = {
         "schema_version": 1,
@@ -482,13 +494,16 @@ def run(args: argparse.Namespace) -> int:
 
     args.out.mkdir(parents=True, exist_ok=False)
     _json_write(args.out / "inventory.json", inventory)
-    _json_write(args.out / "manifest.json", manifest)
     _write_tsv(predictions, args.out / "predictions.tsv")
     _write_tsv(
         pd.DataFrame.from_records(status_rows, columns=FOLD_STATUS_COLUMNS),
         args.out / "fold_status.tsv",
     )
     _json_write(args.out / "summary.json", summary_document)
+    manifest["output_files"] = {
+        name: _file_record(args.out / name) for name in OUTPUT_FILENAMES
+    }
+    _json_write(args.out / "manifest.json", manifest)
     return 0 if summary["comparison_complete"] else 1
 
 

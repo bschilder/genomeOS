@@ -76,7 +76,7 @@ content:
 | File | Contents |
 |---|---|
 | `inventory.json` | Public P1 inventory counts and unresolved qualification limitations. |
-| `manifest.json` | B0 identity, nonpublication label, exact configuration and hash, raw input hashes/sizes and combined hash, source counts, Git revision, package versions, relevant source-file hashes, immutable splits, fold statuses, and distinct posterior/PIT seeds. |
+| `manifest.json` | B0 identity, nonpublication label, exact configuration and hash, raw input and generated-output hashes/sizes, source counts, Git revision, package versions, hashes of the actual imported science files, immutable splits, fold statuses, and distinct posterior/PIT seeds. It is written last. |
 | `predictions.tsv` | One completed-fold row per held-out observation: identities and grouping labels, observed AC/AN, posterior parameters/mean, seeds, and all ten public predictive diagnostics. A true zero probability is written as `-Infinity`. |
 | `fold_status.tsv` | Every planned split with expected test IDs, `completed`/`failed`/`infeasible`, reason, and its two deterministic seeds. |
 | `summary.json` | Explicit B0/evidence/nonpublication metadata plus the public hierarchical benchmark summary. |
@@ -85,7 +85,9 @@ The configuration hash covers the model inputs, the combined input hash covers a
 (including columns unused for split membership), each split retains the public validated-input
 fingerprint, and the split-manifest hash covers membership, exclusions, status, reasons, and fold
 seeds. Relevant source-file hashes prevent an uncommitted fitter or runner change from masquerading
-as the recorded Git revision.
+as the recorded Git revision. The runner puts its own checkout first on the import path, verifies
+that every imported science module resolves to the expected file under that root, and hashes those
+resolved files; a conflicting editable installation cannot silently change executed science.
 
 For each completed fold and variant, the posterior is
 `Beta(prior_alpha + sum(AC), prior_beta + sum(AN - AC))` using training rows only. A held-out

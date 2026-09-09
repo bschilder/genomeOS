@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -11,7 +12,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from genomeos.validation.baseline import fit_pooled_b0
+from genomeos.validation.baseline import B0InfeasibleError, fit_pooled_b0
 from genomeos.validation.benchmark import validate_allele_observations
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -48,9 +49,11 @@ def _command(out: Path, *, observations: Path | None = None, assignments: Path |
     ]
 
 
-def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+def _run(
+    command: list[str], *, pythonpath: Path = ROOT
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
-    environment["PYTHONPATH"] = str(ROOT)
+    environment["PYTHONPATH"] = str(pythonpath)
     return subprocess.run(command, capture_output=True, text=True, env=environment, check=False)
 
 
@@ -116,6 +119,18 @@ def test_successful_runner_writes_explicit_b0_nonpublication_record(tmp_path):
     assert len(manifest["configuration_sha256"]) == 64
     assert len(manifest["inputs_sha256"]) == 64
     assert len(manifest["split_manifest_sha256"]) == 64
+    assert set(manifest["output_files"]) == {
+        "fold_status.tsv",
+        "inventory.json",
+        "predictions.tsv",
+        "summary.json",
+    }
+    for name, record in manifest["output_files"].items():
+        contents = (output / name).read_bytes()
+        assert record == {
+            "sha256": hashlib.sha256(contents).hexdigest(),
+            "size_bytes": len(contents),
+        }
     assert set(manifest["science_source_sha256"]) == {
         "genomeos/observations/schema.py",
         "genomeos/validation/baseline.py",
@@ -144,6 +159,13 @@ def test_successful_runner_writes_explicit_b0_nonpublication_record(tmp_path):
     assert summary["publication_eligible"] is False
     assert summary["benchmark"]["comparison_complete"] is True
 
+    predictions_path = output / "predictions.tsv"
+    predictions_path.write_bytes(predictions_path.read_bytes() + b"tampered\n")
+    assert (
+        hashlib.sha256(predictions_path.read_bytes()).hexdigest()
+        != manifest["output_files"]["predictions.tsv"]["sha256"]
+    )
+
 
 def test_outputs_are_byte_reproducible_across_new_output_directories(tmp_path):
     first = tmp_path / "first"
@@ -156,6 +178,21 @@ def test_outputs_are_byte_reproducible_across_new_output_directories(tmp_path):
     assert {path.name: path.read_bytes() for path in first.iterdir()} == {
         path.name: path.read_bytes() for path in second.iterdir()
     }
+
+
+def test_runner_bootstraps_its_checkout_under_conflicting_pythonpath(tmp_path):
+    conflicting_checkout = ROOT.parents[2]
+    assert conflicting_checkout != ROOT
+    assert (conflicting_checkout / "genomeos").is_dir()
+
+    completed = _run(_command(tmp_path / "run"), pythonpath=conflicting_checkout)
+
+    assert completed.returncode == 0, completed.stderr
+    manifest = _json(tmp_path / "run" / "manifest.json")
+    expected = hashlib.sha256(
+        (ROOT / "genomeos" / "validation" / "baseline.py").read_bytes()
+    ).hexdigest()
+    assert manifest["science_source_sha256"]["genomeos/validation/baseline.py"] == expected
 
 
 def test_pooled_fit_uses_training_counts_only_and_shares_variant_draws():
@@ -207,6 +244,24 @@ def test_pooled_fit_uses_training_counts_only_and_shares_variant_draws():
         if positions.sum() > 1:
             variant_draws = original.predictive.mean_draws[:, positions]
             assert (variant_draws == variant_draws[:, :1]).all()
+
+
+def test_missing_training_variant_uses_typed_scientific_infeasibility():
+    observations = _read_observations(FIXTURES / "observations.tsv")
+    training = observations.loc[observations["variant_id"] == "chr1-100-A-G"]
+    testing = observations.loc[observations["variant_id"] == "chr2-200-C-T"]
+
+    with pytest.raises(B0InfeasibleError) as caught:
+        fit_pooled_b0(
+            training,
+            testing,
+            prior_alpha=1.0,
+            prior_beta=1.0,
+            posterior_draws=16,
+            seed=42,
+        )
+
+    assert caught.value.absent_variants == ("chr2-200-C-T",)
 
 
 def test_optional_seed_and_draw_defaults_are_reported(tmp_path):
