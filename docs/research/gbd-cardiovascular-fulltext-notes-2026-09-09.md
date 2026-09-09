@@ -43,26 +43,22 @@ next consumers are source qualification, benchmark design, and separately govern
   territories, organized across geographic levels and stratified by age and sex. Mortality
   inputs include vital registration and household surveys; disease incidence/prevalence use
   clinical definitions; risk exposures use population-representative surveys and surveillance.
-  The article reports uncertainty intervals and cites GATHER. Estimates everywhere are not
-  evidence of equally dense independent measurements everywhere.
+  The article reports uncertainty intervals and cites GATHER.
 - **Different quantities (p 2362; Central Illustration; Tables 1–2):** DALYs combine years of
   life lost and years lived with disability. Attributable fractions combine exposure, relative
   risk and a theoretical minimum-risk comparison. The illustration uses age-standardized
   DALY rates; the text says DALY rates are otherwise all-ages unless specified. Tables report
-  deaths and DALY counts. These quantities and their denominators are not interchangeable.
+  deaths and DALY counts.
 - **Candidate context (pp 2362, 2365–2368):** ambient particulate pollution, household solid-fuel
   exposure, lead and temperature accompany metabolic and behavioral risks. The article discusses
   exposure duration, cumulative LDL exposure, and moderate nonoptimal temperatures as well as
   extremes. It does not demonstrate that any of these improves allele-frequency prediction.
 - **Measurement can move without the same movement in disease (pp 2367–2369):** incomplete
   detection, unequal treatment access, and disrupted care during COVID-19 complicate the
-  interpretation of recorded diagnoses and hospitalizations. These sections motivate explicit
-  observation-process hypotheses, not automatic corrections to genomeOS counts.
+  interpretation of recorded diagnoses and hospitalizations.
 - **Uncertainty must stay visible (Table 2, p 2364; lead section, p 2368):** the printed lead-related
-  attributable-death/DALY uncertainty intervals include negative lower limits. Preserve that
-  source fact and investigate its upstream statistical meaning before use; do not silently
-  clip it or reinterpret it as a possible negative observed count. The prose uses CI and the
-  tables UI; retain the author's labels instead of inventing a statistical equivalence.
+  attributable-death/DALY uncertainty intervals include negative lower limits. The prose uses CI
+  and the tables UI.
 
 This is a high-level methods overview plus prevention review, not a reproducible operator
 architecture, genetic model, or independently validated fine-resolution AF dataset. It refers
@@ -75,17 +71,27 @@ the benchmark we need.
    denominators. CVD burden depends on exposures, age structure, care, ascertainment and other
    factors; resemblance to a CVD map cannot validate genetic geography. An eventual disease
    model needs independently supported effect/penetrance, exposure and denominator components.
-   Preserve the existing clinical golden tests and server-side trait restrictions.
+   The paper's deaths, DALYs, attributable fractions, counts, rates and denominators are not
+   interchangeable for this purpose. Preserve the existing clinical golden tests and server-side
+   trait restrictions.
 2. **Separate three ancillary layer roles.** Environmental exposures are candidate covariates;
    care/screening variables are candidate observation-process descriptors; disease/metabolic
    estimates initially remain downstream/contextual outcomes. Any proposed use of the latter
    as AF predictors requires an explicit dependency/circularity analysis and separate ablation.
-   This is not a blanket claim that predictive use is impossible, or a claim of causality.
+   genomeOS interprets the article's detection, treatment-access and COVID-disruption sections as
+   reasons to test explicit observation-process hypotheses, not to apply automatic corrections to
+   allele counts. This is not a blanket claim that predictive use is impossible, or a claim of
+   causality.
 3. **Record support, time and lineage before pixels.** Preserve native spatial/temporal units,
    observed versus modeled status, vintage, input lineage, uncertainty and missingness. Sampling
    or interpolating a country estimate onto fine H3 cells does not add local information. A
    model using upstream pooled data may already contain the evaluation evidence; audit that
-   dependence before classifying an external resource as independent.
+   dependence before classifying an external resource as independent. The paper's estimates for
+   every geography are not evidence of equally dense independent measurements everywhere. For the
+   reported lead intervals, preserve the negative lower-limit source fact and investigate its
+   upstream statistical meaning before use; do not silently clip it or reinterpret it as a
+   possible negative observed count. Retain the author's CI and UI labels rather than inventing a
+   statistical equivalence.
 4. **Respect population composition.** Qualify age/sex coverage where supplied, and distinguish
    the actual resident target from an age-standardized comparison. Any reweighting requires
    documented sampling and population denominators, with prespecified sensitivity analyses.
