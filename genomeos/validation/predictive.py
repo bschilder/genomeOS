@@ -9,9 +9,11 @@ Their endpoints lie on the ``1 / AN`` frequency grid and coverage can therefore 
 nominal level, especially for small denominators or boundary-heavy predictions. Width and
 coverage must be interpreted together rather than treating nominal coverage as exactly attainable.
 
-Beta-binomial CDFs are summed exactly in fixed-size chunks, using the shorter support tail. This
-keeps memory bounded independently of ``AN`` but does not hide the computational cost: an exact
-interior CDF or quantile can still require time proportional to the shorter tail length.
+Beta-binomial CDFs are summed exactly in fixed-size chunks, normally using the shorter support
+tail. If its log sum rounds to zero, the small complementary tail is summed directly rather than
+erased by subtraction. This keeps memory bounded independently of ``AN`` but does not hide the
+computational cost: an exact interior CDF or quantile can still require time proportional to a
+support-tail length.
 
 The supported count domain is ``-1 <= AC <= AN <= 2**31 - 1`` (with ``AC=-1`` reserved for the
 CDF boundary). The upper bound keeps integer successor and floating log-mass arithmetic inside a
@@ -130,10 +132,16 @@ def _beta_binomial_cdf(k: int, n: int, mean: float, concentration: float) -> flo
     lower_terms = k + 1
     upper_terms = n - k
     if lower_terms <= upper_terms:
-        return float(np.exp(_beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)))
+        log_cdf = _beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)
+        if log_cdf < 0.0:
+            return float(np.exp(log_cdf))
+        log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
+        return float(-np.expm1(log_survival))
 
     log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
-    return float(-np.expm1(log_survival))
+    if log_survival < 0.0:
+        return float(-np.expm1(log_survival))
+    return float(np.exp(_beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)))
 
 
 def _validate_beta_shapes(mean: np.ndarray, concentration: np.ndarray) -> None:

@@ -90,6 +90,22 @@ def test_beta_binomial_cdf_handles_huge_denominators_with_a_short_exact_tail():
     )
 
 
+def test_beta_binomial_cdf_preserves_tiny_lower_tail_near_mean_one():
+    """Subtracting a rounded-to-one survival tail erases valid lower-tail mass."""
+    predictive = CountPredictive(
+        np.array([[np.nextafter(1.0, 0.0)]]),
+        concentration=np.array([[1.0 / np.sqrt(np.finfo(float).eps)]]),
+    )
+
+    # For n=2, P(Y<=1) = b(b + 1 + 2a) / (c(c + 1)), with
+    # a=p*c and b=(1-p)*c. The hand-evaluated double-precision result is nonzero.
+    result = predictive.cdf(ac=np.array([1]), an=np.array([2]))
+
+    assert result == pytest.approx(
+        np.array([2.220446032706701e-16]), rel=1e-12, abs=0.0
+    )
+
+
 def test_count_support_boundary_is_finite_and_larger_denominators_are_refused():
     """Allowing int64.max overflows AN+1; the declared supported boundary must be real."""
     predictive = CountPredictive(np.array([[0.5]]))
