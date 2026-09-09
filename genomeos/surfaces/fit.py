@@ -57,6 +57,11 @@ from genomeos.surfaces.config import NUTS_SAMPLERS as NUTS_SAMPLERS
 from genomeos.surfaces.config import REFERENCE_DESIGN as REFERENCE_DESIGN
 from genomeos.surfaces.config import SEED as SEED
 from genomeos.surfaces.config import FitConfig as FitConfig
+from genomeos.surfaces.observation import (
+    ObservationModelMetadata,
+    ObservationParameters,
+    SurveyQueries,
+)
 
 
 class ConvergenceError(RuntimeError):
@@ -176,6 +181,15 @@ class SurfaceFit:
     _model: Any = field(repr=False)
     _centre: np.ndarray = field(repr=False)
     _scale: np.ndarray = field(repr=False)
+    prediction_metadata: ObservationModelMetadata | None = None
+
+    def predict_new_cohort_parameters(
+        self, queries: SurveyQueries, *, seed: int = SEED
+    ) -> ObservationParameters:
+        """Return draw-aligned parameters for explicit genuinely unseen survey cohorts."""
+        from genomeos.surfaces.observation_prediction import predict_new_cohort_parameters
+
+        return predict_new_cohort_parameters(self, queries, seed=seed)
 
     def design_effects(self) -> pd.DataFrame:
         """Posterior summary of β_design per non-reference sampling design.
@@ -623,6 +637,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         # survey would have measured at that location (§7.1a).
         if f_pred_expr is None:
             f_pred_expr = gp.conditional("f_pred", Xnew=x_pred)
+        pm.Deterministic("latent_logit_pred", f_pred_expr)
         pm.Deterministic("freq_pred", pm.math.invlogit(f_pred_expr))
 
         prior = pm.sample_prior_predictive(
@@ -697,6 +712,14 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         _model=model,
         _centre=centre,
         _scale=scale,
+        prediction_metadata=ObservationModelMetadata(
+            convention="new_cohort_count_v1",
+            fitted_designs=design_levels,
+            training_cohort_ids=tuple(cohorts),
+            cohort_effect_applied=beta_cohort_applied,
+            nugget_applied=config.nugget,
+            likelihood=config.likelihood,
+        ),
     )
 
 
