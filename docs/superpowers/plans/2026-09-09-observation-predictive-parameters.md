@@ -31,7 +31,7 @@
 | `genomeos/surfaces/observation.py` | Pure immutable contracts and new-effect composition; no PyMC dependency |
 | `genomeos/surfaces/observation_prediction.py` | PyMC query canonicalization, named-dimension extraction and public-parameter adaptation |
 | `genomeos/surfaces/fit.py` | Existing fitting/legacy methods; configuration re-exports, actual metadata, named latent node and small new wrapper |
-| `genomeos/surfaces/persistence.py` | Existing trusted-cache I/O; document capability distinction without guessing missing metadata |
+| `genomeos/surfaces/persistence.py` | Trusted-cache I/O; preserve dtype on new saves and document capability distinction without guessing missing metadata |
 | `tests/test_surface_config.py` | Configuration extraction and legacy import compatibility |
 | `tests/test_observation_parameters.py` | Analytical contracts, effect composition, determinism and numerical refusals |
 | `tests/test_observation_prediction.py` | Adapter alignment/refusal/canonicalization with controlled posterior arrays |
@@ -256,7 +256,7 @@ checks remain Task 3 acceptance items, not completed claims from this pure compo
 
 **Interfaces:** consume Task 2's four public contracts. Add `SurfaceFit.prediction_metadata: ObservationModelMetadata | None = None` and `SurfaceFit.predict_new_cohort_parameters(queries: SurveyQueries, *, seed: int = SEED) -> ObservationParameters`. The focused adapter exports `predict_new_cohort_parameters(fit: SurfaceFit, queries: SurveyQueries, *, seed: int = SEED) -> ObservationParameters`; use `TYPE_CHECKING` for the class import to avoid a circular runtime dependency. No benchmark consumer imports its private helpers.
 
-- [ ] **RED — actual fit capability:** extend the existing module-scoped `fit` fixture tests, without lowering its convergence thresholds:
+- [x] **RED — actual fit capability:** extend the existing module-scoped `fit` fixture tests, without lowering its convergence thresholds:
 
   ```python
   def test_fit_records_actual_prediction_metadata(fit):
@@ -270,8 +270,8 @@ checks remain Task 3 acceptance items, not completed claims from this pure compo
   ```
 
   Run this test first and record missing-attribute RED. In the existing single-design test also assert its actual reference, including a case where the configured reference is absent; do not assume the configured reference was fitted.
-- [ ] **RED — adapter alignment:** controlled xarray posteriors have chain coordinates `[1,0]`, draw coordinates `[3,2]`, deliberately transposed variable dimensions, explicit design positional coordinates, and distinguishable scalar values per draw. Require output draw IDs `((0,2),(0,3),(1,2),(1,3))` and hand-computed aligned means/concentrations. Patch only the PyMC draw boundary to return known latent logit arrays; assert sampled query coordinates are canonically ordered and deduplicated. Add missing-variable/node, wrong event-axis, repeated/different coordinate labels, unsupported design and seen-cohort refusals; assert refusal happens before calling the expensive draw boundary.
-- [ ] **GREEN — fitted provenance and graph:** populate actual metadata at the existing sole `SurfaceFit` construction, using the fit's `design_levels` before dropping its reference, sorted training cohorts and actual fitted flags. Add the named latent expression alongside the existing frequency expression:
+- [x] **RED — adapter alignment:** controlled xarray posteriors have chain coordinates `[1,0]`, draw coordinates `[3,2]`, deliberately transposed variable dimensions, explicit design positional coordinates, and distinguishable scalar values per draw. Require output draw IDs `((0,2),(0,3),(1,2),(1,3))` and hand-computed aligned means/concentrations. Patch only the PyMC draw boundary to return known latent logit arrays; assert sampled query coordinates are canonically ordered and deduplicated. Add missing-variable/node, wrong event-axis, repeated/different coordinate labels, unsupported design and seen-cohort refusals; assert refusal happens before calling the expensive draw boundary.
+- [x] **GREEN — fitted provenance and graph:** populate actual metadata at the existing sole `SurfaceFit` construction, using the fit's `design_levels` before dropping its reference, sorted training cohorts and actual fitted flags. Add the named latent expression alongside the existing frequency expression:
 
   ```python
   pm.Deterministic("latent_logit_pred", f_pred_expr)
@@ -279,7 +279,7 @@ checks remain Task 3 acceptance items, not completed claims from this pure compo
   ```
 
   Leave the old frequency expression, prior sampling, likelihood, `_frequency_samples` and legacy methods otherwise unchanged. Add only the small delegating public wrapper in fit.py; the adapter owns extraction/canonicalization.
-- [ ] **GREEN — canonical draw extraction:** validate capabilities/queries before sampling, canonicalize exact coordinate pairs (including the spec's antimeridian/pole equivalences), evaluate unique points once and expand to submitted query order. Extract posterior variables using named dimensions and canonical coordinate selection, with explicit checks before the following operation:
+- [x] **GREEN — canonical draw extraction:** validate capabilities/queries before sampling, canonicalize exact coordinate pairs (including the spec's antimeridian/pole equivalences), evaluate unique points once and expand to submitted query order. Extract posterior variables using named dimensions and canonical coordinate selection, with explicit checks before the following operation:
 
   ```python
   ordered = variable.sel(chain=sorted_chains, draw=sorted_draws)
@@ -288,9 +288,10 @@ checks remain Task 3 acceptance items, not completed claims from this pure compo
   ```
 
   `sorted_chains`, `sorted_draws`, event dimensions and event shapes come from validated actual coordinates, not presumed lengths. Compare latent/effect coordinate sets and labels, require exactly one positional axis for design contrasts and none for scalar effects. Missing cohort/nugget draws are errors when metadata says fitted; when omitted pass `None`. Call `compose_unseen_observations` with matched draw IDs and the original queries.
-- [ ] **Verify — real integration and scorer:** on the existing real fitter, request two unseen-cohort sites and compare recorded draw IDs to canonical posterior chain/draw coordinates. Compare repeated/permuted query outputs after ID alignment. Include duplicate coordinates, antimeridian equivalence and exact poles with controlled adapter fixtures. Feed real-fit synthetic query parameters into `CountPredictive`; use small denominators and a few points for finite diagnostics rather than a huge CPU CDF workload. Analytical tests, not marginal coverage, establish shared-cohort mechanics.
-- [ ] **Verify — genuine legacy and cache compatibility:** first load the pre-Task-1 trusted cache and prove its legacy outputs and prior-frequency SD remain exactly equal to `cache-baseline.npz`; the new method must refuse its absent metadata/node. Separately repeat the same-seed fresh-fit calculation and compare against every captured `legacy-before.npz` array. A mismatch blocks the claim of unchanged behavior and is investigated. On the real new fit, save/load and compare metadata and new-interface predictions exactly; assess unchanged legacy predictions in the separate fresh and cached comparison arms above. Preserve any fresh-versus-cache discrepancy explicitly rather than calling it equality. Retain cache format 1 only if these old/new readability checks pass; document capability refusal rather than inventing metadata.
-- [ ] **Document:** add the exact public consumer example and limitations to `docs/global-af-benchmark.md`:
+- [x] **Verify — real integration and scorer:** on the existing real fitter, request two unseen-cohort sites and compare recorded draw IDs to canonical posterior chain/draw coordinates. Compare repeated/permuted query outputs after ID alignment. Include duplicate coordinates, antimeridian equivalence and exact poles with controlled adapter fixtures. Feed real-fit synthetic query parameters into `CountPredictive`; use small denominators and a few points for finite diagnostics rather than a huge CPU CDF workload. Analytical tests, not marginal coverage, establish shared-cohort mechanics.
+- [x] **Verify — genuine legacy and cache compatibility:** first load the pre-Task-1 trusted cache and prove its legacy outputs and prior-frequency SD remain exactly equal to `cache-baseline.npz`; the new method must refuse its absent metadata/node. Separately repeat the same-seed fresh-fit calculation and compare against every captured `legacy-before.npz` array. A mismatch blocks the claim of unchanged behavior and is investigated. On the real new fit, save/load and compare metadata and new-interface predictions exactly; assess unchanged legacy predictions in the separate fresh and cached comparison arms above. Preserve any fresh-versus-cache discrepancy explicitly rather than calling it equality. Retain cache format 1 only if these old/new readability checks pass; document capability refusal rather than inventing metadata.
+- [x] **Verify — clean-process dtype preservation:** the stronger subprocess regression exposed sampler-backed posterior dtype demotion that same-process equality missed. Materialize a copy of inference data to NumPy when saving, preserving groups/variables/coordinates/attributes and leaving the live fit, existing load path and format-1 envelope unchanged. Cover supported container forms, decisive dtype/value evidence and exact clean-process mean/concentration/draw-ID equality. Retain the failing control and report host-memory/copying cost; do not claim old caches are repaired. This is the spec's explicit save-path clarification, not a relaxed tolerance or a fix for the separate #199 import cycle.
+- [x] **Document:** add the exact public consumer example and limitations to `docs/global-af-benchmark.md`:
 
   ```python
   parameters = fitted.predict_new_cohort_parameters(queries, seed=42)
@@ -300,6 +301,24 @@ checks remain Task 3 acceptance items, not completed claims from this pure compo
 
   Define `fitted` as a newly fitted `SurfaceFit`, `queries` as required `SurveyQueries`, and AC/AN as separately validated matching-order observation counts. Explain actual reference vs configured reference, seen-cohort refusal, named posterior identity, legacy cache capability and unchanged resident/footprint/approximation/publication gates. Do not advertise this as observed accuracy improvement.
 - [ ] **Gate/review/commit:** run focused config/composition/adapter/fitter/scorer tests and every global gate. After independent review and any verified fixes, run full `"$AF_PYTHON" -m pytest` and all CI commands on the final code. Commit `feat: expose observation-aware GP parameters closes #191` only when every #191 acceptance item is met; otherwise use `refs #191` and describe the remaining item. Open a coherent PR advancing #189, with expert-review questions about the target, effect identifiability and joint semantics. No production surface has changed, so do not manufacture a map solely for this interface PR.
+
+**Implementation and task-review evidence:** `8373c2d` adds the adapter and precision-preserving
+cache save; `6b921a8` closes the task review's missing complete-metadata regression assertion.
+The 243 focused config/composition/adapter/fitter/scorer tests pass, with one existing
+inducing-spacing advisory; 40 smoke tests and lint/contract/module/privacy/whitespace gates
+pass. The test-only fix separately passes its clean-process covering test before and after
+commit, and an executed altered-training-cohort control fails at the new complete metadata
+comparison. Independent scoped re-review finds the Important item addressed with no new
+breakage. Existing warning-noise Minors remain for whole-slice review.
+
+Genuine fresh-parent/fresh-new and old-cache/parent-loaded comparisons are bitwise exact for
+all four retained arrays. Corrected clean-process new-cache means, concentrations and draw
+identities are bitwise exact; the original failed dtype-demotion control is preserved.
+The [#198 mechanism report](https://github.com/bschilder/genomeOS/issues/198#issuecomment-5606556750)
+distinguishes this new-save fix from unmodified historical caches. Historical ArviZ container
+support is covered by an API-faithful fixture and primary-source signature inspection, not
+an executed full historical environment. Final locked full CI, broad whole-slice review and
+the stacked PR remain outstanding; this paragraph is not their completion claim.
 
 ## Completion and next work
 

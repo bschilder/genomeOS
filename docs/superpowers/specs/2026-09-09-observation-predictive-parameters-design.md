@@ -122,6 +122,16 @@ pre-existing execution-mode discrepancy and investigate its cause separately in
 [#198](https://github.com/bschilder/genomeOS/issues/198), without claiming that this refactor
 fixes it. New-interface save/load equality remains its own Task 3 requirement.
 
+**Save-path clarification, September 9:** Task 3's stronger clean-process test exposed a
+separate-process dtype change in sampler-backed posterior arrays; same-process equality did
+not detect it. Permit explicit save-time NumPy materialization of a copied inference-data
+container to preserve stored numerical precision. Preserve all groups, variables, coordinates,
+attributes and the live fit, keep the existing format-1 envelope readable, and leave the load
+path unchanged. Verify supported container forms and exact clean-process predictions, not
+merely array shapes. Record the dtype evidence and retain the failed control. This adds host
+materialization/copying cost during cache creation; it is not a change to the fitted model or
+a retrospective repair of old caches. Issue #198 remains open for its unresolved scope.
+
 ## Module budget and compatibility seam
 
 `fit.py` is near the repository's 800-line/50-KiB hard limit. Before adding integration, extract `FitConfig` and its configuration/geometry constants into `genomeos/surfaces/config.py`, preserving values, validation behavior and scientific documentation. Re-export existing public names from `fit.py` so callers and older pickle references resolve. Keep `SurfaceFit` in its current module; do not move its identity or change repository layout. Keep geometry/fitting algorithms in place. This is a narrow compatibility-preserving prerequisite, not a general refactor.
