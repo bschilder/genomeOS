@@ -2,6 +2,10 @@
 
 September 9, 2026; [research program #189](https://github.com/bschilder/genomeOS/issues/189).
 
+These reports describe their original source snapshots. The later reviewed numerical correction
+has separate [boundary-refresh hardware evidence](count-scoring-boundary-refresh-2026-09-09.md)
+at `0a2459b`; the old raw reports below remain unchanged.
+
 ## Question and limits
 
 This experiment asks whether an explicitly selected CuPy backend can accelerate the exact

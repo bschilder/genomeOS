@@ -127,7 +127,9 @@ The existing beta shape/concentration checks also remain in force.
 The accepted quantile levels remain `0 < q <= 1`; the 100% endpoint is the exact mixture support
 maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Earlier
 GPU timing reports identify their original source snapshots and require fresh hardware evidence
-for these revised scoring and endpoint paths.
+for these revised scoring and endpoint paths. That refresh is now recorded in the
+[boundary-fix hardware evidence](research/count-scoring-boundary-refresh-2026-09-09.md), with
+116 actual-device tests and both synthetic workloads passing; it does not establish AF accuracy.
 
 ## Optional GPU count-CDF profiling
 
