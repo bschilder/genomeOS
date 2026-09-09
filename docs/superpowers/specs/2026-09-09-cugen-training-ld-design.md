@@ -196,6 +196,32 @@ independent CPU reference, library CPU/GPU LD, verification and serialization pl
 time, with synchronization. Report LD-only and whole-workflow times separately, not a fake
 GPU-only workflow speedup obtained by excluding shared preparation/verification.
 
+The CLI and adapter share a public verified CuGen source-loader boundary; the CLI must not
+import private adapter helpers to obtain the writer. It validates synthetic calls/identities
+before the public writer, supplies explicit encoding0/gidx, and records the checked writer
+source path as well as subset/LD paths. Source loading retains the complete pinned allowlist
+and explicit-root checks from §2; it never discovers another installation.
+
+For complete stage measurements, the adapter exposes an optional public stage observer with
+fixed start/end events around input validation, source snapshot, CuGen import, subset,
+training validation, reference calculation, CPU LD/reconciliation, GPU LD/reconciliation,
+artifact writing and artifact verification. The CLI observer uses explicit device
+synchronization around subset/GPU LD, perf_counter intervals and stage-boundary memory
+observations. It may observe or fail a run, never alter the scientific calls or skip gates.
+Observer failures propagate and leave no completion manifest. Pure statistics/decoding
+remain unaware of observers, devices and clocks. Runs without an observer must not represent
+their public-call wall clocks as synchronized device measurements.
+
+The outer experiment report records source creation and complete run wall time through
+return of the serialized, verified artifact; this includes its writing/hashing/verification.
+It also records startup/source-loading/CUDA preflight costs separately, identifies the
+first invocation and subsequent repetitions, and states the boundaries of every interval.
+Measurement-report finalization is not included in its own elapsed interval. Measurements
+outside the scientific artifact do not require changing its exact member set or rewriting
+a completed manifest. The adapter's preliminary pre_artifact_wall_seconds remains explicitly
+partial, not the full-workflow interval. Report the actual both-backend admission workflow;
+do not label it a measured GPU-only production workflow.
+
 Mutate every held-out genotype in a separate source and rerun: full-source hash changes,
 training bytes, statistics, pair identities/counts and CPU/GPU outputs remain identical.
 Run source/binary/selection refusal tests locally before renting a GPU; then run real public

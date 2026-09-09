@@ -132,16 +132,45 @@ finite in-range precision checks. Failure raises, retains failure.json and omits
 
 **Files:** create `scripts/pilot_cugen_ld.py`, `tests/test_cugen_pilot_cli.py`,
 `tests/test_cugen_pilot_gpu.py`, `docs/research/cugen-training-ld-pilot-2026-09-09.md`.
+For the concrete Task3-to-Task4 interface gap, also create the focused
+`genomeos/validation/cugen_backend.py`; move the existing source admission/import responsibility
+there and modify `cugen_pilot.py`, `cugen_artifact.py` and `tests/test_cugen_pilot.py` only for
+the shared public loader, exact source-provenance paths and stage-observer contract below.
+The CLI may use focused `cugen_experiment.py` (case/experiment orchestration) and
+`cugen_measurement.py` (runtime observation/reporting) modules if required to keep each
+production module within500logical lines; neither belongs in pure reference/decoder code.
 **Consumes:** public run/verify adapter. CLI requires `--cugen-root`, `--out`, `--data-version`;
 `--case hand|scale|precision`, `--repeats`>=3, `--seed` defaults42. Output root must be new;
 one immutable subdirectory per case/repeat and a complete planned-run outcome summary.
 Optional `--source-revision` supplies the genomeOS commit label for a source-only GPU bundle;
 its provenance remains supplied, and actual executing source hashes are always recorded.
 
+**Shared source interface:** `load_verified_cugen_api(root:Path) -> VerifiedCuGenAPI` validates
+the entire pinned source before import and returns the three checked public callables
+`write_cugen`, `subset_cugen_file`, `ld_matrix`, with immutable repository/revision,
+allowlist-file and imported-file provenance. Represent file hashes as frozen tuples of
+path/hash pairs rather than mutable dictionaries in this public value. The adapter and
+CLI are its two actual consumers. Record cugen/write.py in imported provenance alongside
+the existing public paths; update the exact verifier source sets and executing genomeOS
+source hashes. No change to the37-file CuGen allowlist or external library revision.
+
+**Measurement interface:** add optional keyword `observer: PilotStageObserver | None = None`
+to `run_cugen_pilot`. The public callable protocol accepts `(stage: str, event: Literal["start",
+"end"]) -> None`; stage names are exactly input_validation, source_snapshot, cugen_import,
+subset, training_validation, reference, cpu_ld, cpu_reconciliation, gpu_ld,
+gpu_reconciliation, artifact_write, artifact_verification. Successful runs emit each ordered
+start/end pair once. An exception leaves the active stage incomplete and fails the run;
+observer exceptions likewise propagate, retain failure evidence and remove completion.
+The observer cannot select a backend, modify inputs or waive validation. CLI measurements
+stay outside the immutable artifact and the preliminary adapter runtime remains scope-labeled.
+
 - [ ] RED: subprocess tests with explicit source PYTHONPATH verify invalid args, existing output,
   unavailable CuGen/GPU nonzero exit (no skip), planned-run accounting and fixture reproducibility.
   Actual GPU tests cover spec§4 sizes/chunks/tiles, zero/allmissing/monomorphic, precision cases
   and held-out mutation invariance. Expected numeric values derive independently.
+  Cover source-loader refusal before import, writer provenance, ordered observer events,
+  callback failures including after artifact verification, unchanged scientific outputs,
+  and whole-run time including serialization/verification with controlled clocks/events.
 - [ ] GREEN: generate only synthetic inputs using public write_cugen with explicit encoding0
   and gidx; configure/record the three precision/reader environment controls before imports.
   Every stochastic path declares SEED=42. Timing uses perf_counter with CUDA synchronization
