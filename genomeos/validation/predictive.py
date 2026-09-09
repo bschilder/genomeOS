@@ -176,8 +176,11 @@ class CountPredictive:
 
     mean_draws: np.ndarray
     concentration: np.ndarray | None = None
+    cdf_backend: str = "scipy"
 
     def __post_init__(self) -> None:
+        if not isinstance(self.cdf_backend, str) or self.cdf_backend not in {"scipy", "cupy"}:
+            raise ValueError("cdf_backend must be either 'scipy' or 'cupy'")
         mean = _float_array(self.mean_draws, "mean_draws")
         if mean.ndim != 2:
             raise ValueError("mean_draws must be a two-dimensional (draws, observations) array")
@@ -211,12 +214,13 @@ class CountPredictive:
     def n_observations(self) -> int:
         return self.mean_draws.shape[1]
 
-    def _counts(
-        self, ac: object, an: object, *, cdf_threshold: bool = False
+    def validated_counts(
+        self, ac: object, an: object, *, allow_cdf_boundary: bool = False
     ) -> tuple[np.ndarray, np.ndarray]:
+        """Validate count vectors once for every scoring backend and diagnostic caller."""
         denominator = _validated_an(an, self.n_observations)
         count = _validated_ac(
-            ac, denominator, self.n_observations, cdf_threshold=cdf_threshold
+            ac, denominator, self.n_observations, cdf_threshold=allow_cdf_boundary
         )
         return count, denominator
 
@@ -248,7 +252,7 @@ class CountPredictive:
 
     def log_prob(self, ac: object, an: object) -> np.ndarray:
         """Integrated log probability mass for each valid observed count."""
-        count, denominator = self._counts(ac, an)
+        count, denominator = self.validated_counts(ac, an)
         return logsumexp(self._draw_log_mass(count, denominator), axis=0) - np.log(
             self.n_draws
         )
@@ -271,15 +275,29 @@ class CountPredictive:
             )
         )
 
+    def _cdf_evaluator(self):
+        if self.cdf_backend == "scipy":
+            def scipy_cdf(count: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+                return np.array(
+                    [
+                        [
+                            self._cdf_one(observation, int(row[observation]), int(n))
+                            for observation, n in enumerate(denominator)
+                        ]
+                        for row in count
+                    ]
+                )
+
+            return scipy_cdf
+
+        from genomeos.validation.predictive_cupy import CuPyCDF
+
+        return CuPyCDF(self.mean_draws, self.concentration)
+
     def cdf(self, ac: object, an: object) -> np.ndarray:
         """Integrated ``P(Y <= ac)``; ``ac=-1`` is admitted only as the lower CDF boundary."""
-        count, denominator = self._counts(ac, an, cdf_threshold=True)
-        return np.array(
-            [
-                self._cdf_one(index, int(count[index]), int(denominator[index]))
-                for index in range(self.n_observations)
-            ]
-        )
+        count, denominator = self.validated_counts(ac, an, allow_cdf_boundary=True)
+        return self._cdf_evaluator()(count[np.newaxis, :], denominator)[0]
 
     def sample_counts(self, an: object, seed: int = SEED) -> np.ndarray:
         """One replicated count for every predictive draw and observation."""
@@ -303,18 +321,17 @@ class CountPredictive:
         if not np.all(np.isfinite(levels)) or np.any((levels <= 0.0) | (levels > 1.0)):
             raise ValueError("probabilities must be finite and between 0 (exclusive) and 1")
 
-        result = np.empty((len(levels), self.n_observations), dtype=np.int64)
-        for level_index, level in enumerate(levels):
-            for observation, n in enumerate(denominator):
-                low, high = -1, int(n)
-                while high - low > 1:
-                    midpoint = (low + high) // 2
-                    if self._cdf_one(observation, midpoint, int(n)) >= level:
-                        high = midpoint
-                    else:
-                        low = midpoint
-                result[level_index, observation] = high
-        return result
+        low = np.full((len(levels), self.n_observations), -1, dtype=np.int64)
+        high = np.broadcast_to(denominator, low.shape).copy()
+        cdf = self._cdf_evaluator()
+        while np.any(high - low > 1):
+            active = high - low > 1
+            midpoint = (low + high) // 2
+            values = cdf(np.where(active, midpoint, high), denominator)
+            move_high = active & (values >= levels[:, np.newaxis])
+            high = np.where(move_high, midpoint, high)
+            low = np.where(active & ~move_high, midpoint, low)
+        return high
 
 
 def predictive_diagnostics(
@@ -325,7 +342,7 @@ def predictive_diagnostics(
     ``absolute_error`` can be averaged directly to obtain MAE. Average ``squared_error`` before
     taking its square root to obtain RMSE; averaging per-row square roots would instead be MAE.
     """
-    count, denominator = predictive._counts(ac, an)
+    count, denominator = predictive.validated_counts(ac, an)
     log_score = predictive.log_prob(count, denominator)
     observed_frequency = count / denominator
     levels = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])

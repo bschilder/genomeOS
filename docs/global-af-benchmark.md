@@ -108,3 +108,43 @@ admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; W
 LD, and GPU work; and WP7 temporal/origin modeling are all unimplemented by this runner. The HbS,
 G6PD, and carrier-screening publication gates remain unchanged, as does the unresolved restriction
 on redistributing derived surfaces from indigenous-population panels.
+
+## Optional GPU count-CDF profiling
+
+`CountPredictive` keeps `cdf_backend="scipy"` as its default and reference implementation. An
+explicit `cdf_backend="cupy"` accelerates only the exact CDF evaluations used by `cdf` and the
+quantiles in `predictive_diagnostics`; log mass, error ingredients, and seeded replicated-count
+sampling remain on CPU. The optional backend uses float64 bounded row/draw/support chunks and
+does not approximate the distribution, allocate an AN-sized support, downgrade precision, or
+fall back to SciPy. A missing CuPy installation or accessible CUDA device is an explicit error.
+
+The synthetic complete-workflow profiler is opt-in and requires a pinned CUDA-capable environment:
+
+```bash
+PYTHONPATH=. python scripts/profile_count_scoring.py \
+  --draws 2048 \
+  --observations 10 \
+  --an 1000 \
+  --concentration 20 \
+  --repeats 5 \
+  --seed 42 \
+  --out /tmp/genomeos-count-profile
+```
+
+The output directory must be new. `report.json` records the generated-input hash, actual executed
+source hashes, Git-observed revision, all installed distribution versions, device and dtype,
+chunk bounds, individual warm repeats, a first-scoring measurement, CUDA preflight/context cost,
+host/device transfer and synchronization scope, and complete diagnostic parity. GPU memory is
+reported as a separately sampled device-wide high-water delta; CuPy pool reservation is named
+separately and is never represented as peak live memory. A parity failure is preserved in the
+report and exits nonzero.
+
+A source-only remote snapshot without `.git` must supply a full revision explicitly with
+`--source-revision COMMIT`. The report labels that value `supplied`; it does not pretend Git
+observed it. The uploader must compare the report's scoring/profiler hashes with the committed
+local files before treating a hardware run as reproducible evidence.
+
+Every profiler output carries `evidence_kind="synthetic_performance_probe"` and
+`publication_eligible=false`. Cold and warm timing include construction, full diagnostics,
+transfers, and synchronization, but exclude imports and synthetic input generation. They are
+computational measurements, not model-accuracy results or allele-frequency benchmark evidence.

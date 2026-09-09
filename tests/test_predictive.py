@@ -8,6 +8,25 @@ import pytest
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
 
 
+def test_explicit_cpu_cdf_backend_matches_default():
+    means = np.array([[0.1], [0.4]])
+    default = CountPredictive(means)
+    explicit = CountPredictive(means, cdf_backend="scipy")
+    np.testing.assert_array_equal(default.cdf([2], [10]), explicit.cdf([2], [10]))
+
+
+def test_unknown_cdf_backend_is_not_a_fallback():
+    with pytest.raises(ValueError, match="cdf_backend"):
+        CountPredictive(np.array([[0.2]]), cdf_backend="automatic")
+
+
+@pytest.mark.parametrize("backend", [None, 1, ["scipy"]])
+def test_non_string_cdf_backend_is_refused(backend):
+    """Malformed selectors must receive the same explicit contract error."""
+    with pytest.raises(ValueError, match="cdf_backend"):
+        CountPredictive(np.array([[0.2]]), cdf_backend=backend)
+
+
 def test_binomial_log_prob_is_the_log_of_the_integrated_normalized_mass():
     """Dropping choose(AN, AC), or averaging logs, makes this hand result fail."""
     predictive = CountPredictive(np.array([[0.1], [0.9]]))
