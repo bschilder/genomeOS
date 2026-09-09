@@ -118,9 +118,9 @@ The following tasks implement reusable WP0/WP1 engineering prerequisites. They d
 
 **Interface:** immutable `CountPredictive(mean_draws, concentration=None)` with arrays shaped `(draws, observations)`; `None` explicitly selects binomial, otherwise concentration must match the shape and be finite/positive. Methods `log_prob(ac, an)`, `cdf(ac, an)`, `sample_counts(an, seed=42)` return per-observation log mass/CDF and `(draws, observations)` replicated counts. `predictive_diagnostics(predictive, ac, an, seed=42)` returns a per-observation DataFrame of integrated log score, frequency-scale MAE/RMSE ingredients, 50/80/95% predictive coverage/width, and randomized PIT. Use analytic mixture CDF/quantiles for coverage; point prediction is the predictive frequency distribution (mean for squared error, count-distribution median/an for absolute error). Include a clearly documented finite-discrete interval caveat.
 
-- [ ] RED: hand-calculated binomial and beta-binomial mixture probabilities; normalization term; log-mean-probability versus mean-log-probability; count boundary mass and impossible outcomes; deterministic PIT/count draws; mismatched shapes/noninteger counts/zero denominator/NaN/invalid concentration.
-- [ ] GREEN: implement NumPy/SciPy functions, stable log-sum-exp and exact discrete-CDF quantiles without allocating an array of length AN. No clipping invalid input into valid values; p=0/1 has exact degenerate semantics.
-- [ ] Verify tests and smoke, inspect diff/privacy, commit referencing #189. Keep modules below the repository size budget.
+- [x] RED: hand-calculated binomial and beta-binomial mixture probabilities; normalization term; log-mean-probability versus mean-log-probability; count boundary mass and impossible outcomes; deterministic PIT/count draws; mismatched shapes/noninteger counts/zero denominator/NaN/invalid concentration.
+- [x] GREEN: implement NumPy/SciPy functions, stable log-sum-exp and exact discrete-CDF quantiles without allocating an array of length AN. No clipping invalid input into valid values; p=0/1 has exact degenerate semantics.
+- [x] Verify tests and smoke, inspect diff/privacy, commit referencing #189. Keep modules below the repository size budget. Reviewed through `2bdae4c`; 34 focused scoring tests pass. Numerical limits are explicit in the module; an IEEE value being finite does not establish that its derived distribution is numerically usable.
 
 ### Task 2: Dependency-aware buffered split manifests
 
@@ -167,6 +167,8 @@ Output inventory, frozen split/config/input hashes, per-observation predictions,
 The September 9 CPU probe at Task 1 commit `a166b41` used seeded synthetic probabilities on the local Python 3.12/SciPy 1.18.1 environment. Full diagnostics for 2,048 draws, one observation, AN=1,000 took 0.018 seconds (binomial) versus 4.74 seconds (beta-binomial concentration 20). Ten observations, 256 draws and AN=10,000 took 21.54 seconds for beta-binomial diagnostics. These single-run timings identify a bottleneck; they are not controlled GPU comparisons or model-performance evidence.
 
 After the initial four tasks, test batched CuPy special-function/reduction kernels on a task-owned RunPod GPU against the CPU oracle. Use synthetic inputs only, float64, identical inputs, explicit cold/warm timing, synchronization, host/device transfers, memory usage and all requested failure/parity cases. CuPy does not list a drop-in beta-binomial CDF; do not assume API equivalence. Retain exact finite-count semantics and bounded memory. Record algorithmic improvements separately from device speedups. Any production acceleration is optional, explicitly selected, independently reviewed, and must fail clearly if unavailable; CPU-only installations and benchmark results remain supported. Stop task-owned resources after retrieving the report. A failed parity or speed test is a valid result, not a reason to weaken the scorer.
+
+A preliminary synthetic-only primitive probe was run while Task 1 fixes were reviewed: [reproducer and measurements](../../research/count-scoring-gpu-probe-2026-09-09.md). Warm vectorized primitive throughput justifies a complete GPU trial; cold-start cost and full diagnostic parity remain separate gates. The probe pod was stopped and deleted.
 
 ## Stop and redirect
 
