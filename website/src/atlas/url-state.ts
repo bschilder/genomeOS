@@ -416,7 +416,7 @@ export function parseExplorerState(
       observationOpacity: parseNumber(
         params,
         'obsOpacity',
-        0.95,
+        1,
         [0.1, 1],
         corrections,
       ),
@@ -437,8 +437,8 @@ export function parseExplorerState(
       observationShape: parseEnum(
         params,
         'obsShape',
-        ['circle', 'hemisphere', 'pin'],
-        'hemisphere',
+        ['circle', 'hemisphere', 'sphere', 'pin'],
+        'sphere',
         corrections,
       ),
       observationSize: parseEnum(

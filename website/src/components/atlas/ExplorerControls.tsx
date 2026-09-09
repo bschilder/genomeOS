@@ -146,8 +146,7 @@ export function ExplorerControls({
         </p>
         <h1>Explore human genetic variation</h1>
         <p>
-          Compare measurements with modeled geographic patterns—and see where
-          evidence ends.
+          Visualize measured and predicted allele frequencies across the world
         </p>
       </div>
 

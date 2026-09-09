@@ -180,10 +180,33 @@ describe('explorer URL state', () => {
     expect(zeroed.corrections).toEqual([]);
   });
 
-  it('defaults to frequency-sized hemisphere observations', () => {
+  it('defaults to full-opacity frequency-sized sphere observations', () => {
     const state = parseExplorerState('?entity=hbs-rs334', catalog).state;
     expect(state.observationSize).toBe('frequency');
-    expect(state.observationShape).toBe('hemisphere');
+    expect(state.observationShape).toBe('sphere');
+    expect(state.observationOpacity).toBe(1);
+  });
+
+  it('round-trips spheres and preserves explicitly selected domes', () => {
+    const parsed = parseExplorerState(
+      '?entity=hbs-rs334&obsShape=sphere',
+      catalog,
+    );
+
+    expect(parsed.corrections).toEqual([]);
+    expect(parsed.state.observationShape).toBe('sphere');
+    expect(
+      parseExplorerState(serializeExplorerState(parsed.state), catalog).state
+        .observationShape,
+    ).toBe('sphere');
+
+    const dome = parseExplorerState(
+      '?entity=hbs-rs334&obsShape=hemisphere&obsOpacity=0.62',
+      catalog,
+    );
+    expect(dome.corrections).toEqual([]);
+    expect(dome.state.observationShape).toBe('hemisphere');
+    expect(dome.state.observationOpacity).toBe(0.62);
   });
 
   it('defaults and validates the sampling-area outline color', () => {

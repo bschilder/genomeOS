@@ -49,11 +49,11 @@ export const DEFAULT_LAYERS: LayerVisibility = {
 export const DEFAULT_OBSERVATIONS: ObservationPresentation = {
   colorVariable: 'solid',
   gradient: ['#24144b', '#ad8bff', '#f4c86a'],
-  opacity: 0.95,
+  opacity: 1,
   samplingAreaColor: '#9af9e2',
   sizeRange: DEFAULT_OBSERVATION_SIZE_RANGE,
   samplingAreas: true,
-  shape: 'hemisphere',
+  shape: 'sphere',
   sizeVariable: 'frequency',
   solidColor: '#f4fbff',
 };

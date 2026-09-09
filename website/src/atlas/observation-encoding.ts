@@ -9,7 +9,7 @@ import {
 
 export type ObservationSizeVariable = 'fixed' | 'frequency' | 'ac' | 'an';
 export type ObservationColorVariable = 'solid' | 'gradient' | 'study' | 'ac';
-export type ObservationShape = 'circle' | 'hemisphere' | 'pin';
+export type ObservationShape = 'circle' | 'hemisphere' | 'sphere' | 'pin';
 export type ObservationSizeRange = readonly [number, number];
 
 export const MIN_OBSERVATION_MARKER_SIZE = 12;

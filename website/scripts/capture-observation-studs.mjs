@@ -11,12 +11,19 @@ const websiteRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-const outputPath = path.resolve(
+const domeOutputPath = path.resolve(
   websiteRoot,
   '..',
   'docs',
   'figures',
   'observation-studs.png',
+);
+const sphereOutputPath = path.resolve(
+  websiteRoot,
+  '..',
+  'docs',
+  'figures',
+  'observation-spheres.png',
 );
 const baseUrl = 'http://127.0.0.1:4323';
 
@@ -87,8 +94,16 @@ try {
     .getByLabel('Marker shape', { exact: true })
     .scrollIntoViewIfNeeded();
   await page.waitForTimeout(1_000);
-  await page.screenshot({ path: outputPath });
-  process.stdout.write(`Captured 1800×1100: ${outputPath}\n`);
+  await page.screenshot({ path: domeOutputPath });
+  await page.getByLabel('Marker shape', { exact: true }).selectOption('sphere');
+  await page.locator('[data-atlas-ready="true"]').waitFor({
+    timeout: 60_000,
+  });
+  await page.waitForTimeout(1_000);
+  await page.screenshot({ path: sphereOutputPath });
+  process.stdout.write(
+    `Captured 1800×1100: ${domeOutputPath}\nCaptured 1800×1100: ${sphereOutputPath}\n`,
+  );
 } finally {
   await browser?.close();
   if (server.exitCode === null) {

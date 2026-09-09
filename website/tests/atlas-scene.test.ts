@@ -10,6 +10,7 @@ import {
   MaterialAppearance,
   PolygonGeometry,
   PolygonHierarchy,
+  PrimitiveCollection,
   VerticalOrigin,
 } from 'cesium';
 import { describe, expect, it, vi } from 'vitest';
@@ -19,6 +20,7 @@ import type {
   SurfaceArtifact,
   SurfaceCell,
 } from '../src/atlas/contracts';
+import type { ObservationShape } from '../src/atlas/observation-encoding';
 import type { AtlasHover, AtlasPick } from '../src/atlas/scene/types';
 import { cameraState, keyboardCommandFor } from '../src/atlas/scene/camera';
 import {
@@ -84,6 +86,7 @@ import {
   resolveElevationView,
   transitionProgress,
 } from '../src/atlas/scene/atlas-scene';
+import * as atlasScene from '../src/atlas/scene/atlas-scene';
 import { styleAtlasScene } from '../src/atlas/scene/scene-policy';
 import * as scenePolicy from '../src/atlas/scene/scene-policy';
 import { heightForCell } from '../src/atlas/visual-encoding';
@@ -165,9 +168,7 @@ function stubCesiumBrowserImageTypes(): void {
   });
 }
 
-function buildObservationLayerForTest(
-  shape: 'circle' | 'hemisphere' | 'pin' = 'circle',
-) {
+function buildObservationLayerForTest(shape: ObservationShape = 'circle') {
   const surface = {
     artifact: {
       metric_domains: { post_mean: [0, 1], post_sd: [0, 1] },
@@ -729,6 +730,29 @@ describe('Cesium scene policy', () => {
     ['hemisphere', 1],
     ['pin', 3],
   ] as const)(
+    'uses the selected opacity as the full %s marker body alpha',
+    (shape, index) => {
+      stubCesiumBrowserImageTypes();
+      try {
+        const layer = buildObservationLayerForTest(shape);
+        const symbol = layer.collection.get(index).get(0);
+
+        layer.setStyleOpacity(1);
+        layer.setOpacity(1);
+
+        expect(symbol.color.alpha).toBe(1);
+      } finally {
+        vi.restoreAllMocks();
+        vi.unstubAllGlobals();
+      }
+    },
+  );
+
+  it.each([
+    ['circle', 2],
+    ['hemisphere', 1],
+    ['pin', 3],
+  ] as const)(
     'places %s observations above their sampling rings',
     (shape, index) => {
       stubCesiumBrowserImageTypes();
@@ -749,7 +773,7 @@ describe('Cesium scene policy', () => {
     },
   );
 
-  it('gives surface-mounted studs a low dome with the circle footprint', () => {
+  it('keeps surface-mounted studs screen-upright and opaque above map lines', () => {
     stubCesiumBrowserImageTypes();
     try {
       const circleLayer = buildObservationLayerForTest('circle');
@@ -761,23 +785,83 @@ describe('Cesium scene policy', () => {
       expect(hemisphere.height).toBeLessThan(hemisphere.width);
       expect(hemisphere.verticalOrigin).toBe(VerticalOrigin.BOTTOM);
       expect(hemisphere.eyeOffset.z).toBeLessThan(0);
-      const surfaceNormal = Ellipsoid.WGS84.geodeticSurfaceNormal(
-        hemisphere.position,
-        new Cartesian3(),
-      );
-      expect(
-        Cartesian3.equalsEpsilon(
-          hemisphere.alignedAxis,
-          surfaceNormal,
-          Number.EPSILON,
-        ),
-      ).toBe(true);
+      expect(hemisphere.alignedAxis).toEqual(Cartesian3.ZERO);
+      hemisphereLayer.setStyleOpacity(1);
+      hemisphereLayer.setOpacity(1);
+      expect(hemisphere.color.alpha).toBe(1);
+
+      hemisphereLayer.setElevationFactor(4, true);
+      expect(hemisphere.alignedAxis).toEqual(Cartesian3.ZERO);
       expect(hemisphere.image).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it('builds a full sphere whose lower edge stays above its sampling ring', () => {
+    stubCesiumBrowserImageTypes();
+    try {
+      const layer = buildObservationLayerForTest('sphere');
+      const ringPosition = layer.collection.get(0).get(0).positions[0];
+      const sphere = layer.collection.get(4).get(0);
+      const ringHeight =
+        Ellipsoid.WGS84.cartesianToCartographic(ringPosition).height;
+      const centerHeight = Ellipsoid.WGS84.cartesianToCartographic(
+        sphere.center,
+      ).height;
+
+      expect(sphere.id).toEqual(observationPickId('map-surveys:1'));
+      expect(sphere.radii.x).toBe(sphere.radii.y);
+      expect(sphere.radii.y).toBe(sphere.radii.z);
+      expect(centerHeight - sphere.radii.z - ringHeight).toBeGreaterThanOrEqual(
+        2_500,
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('resizes and fades an existing sphere without rebuilding it', () => {
+    stubCesiumBrowserImageTypes();
+    try {
+      const layer = buildObservationLayerForTest('sphere');
+      const spheres = layer.collection.get(4);
+      const sphere = spheres.get(0);
+
+      layer.setSizeRange([24, 48]);
+      expect(spheres.get(0)).toBe(sphere);
+      expect(sphere.radii).toEqual(new Cartesian3(36_000, 36_000, 36_000));
+
+      layer.setStyleOpacity(0.8);
+      layer.setOpacity(0.5);
+      expect(sphere.material.uniforms.color.alpha).toBeCloseTo(0.4);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('raises observations above a replacement surface and keeps highlights last', () => {
+    const primitives = new PrimitiveCollection();
+    const observations = new PrimitiveCollection();
+    const highlights = new PrimitiveCollection();
+    const replacementSurface = new PrimitiveCollection();
+    primitives.add(observations);
+    primitives.add(highlights);
+    primitives.add(replacementSurface);
+    const scene = atlasScene as typeof atlasScene & {
+      raiseScientificOverlays?: (
+        target: PrimitiveCollection,
+        observationLayer: PrimitiveCollection | null,
+        highlightLayer: PrimitiveCollection,
+      ) => void;
+    };
+
+    scene.raiseScientificOverlays?.(primitives, observations, highlights);
+
+    expect(primitives.get(primitives.length - 2)).toBe(observations);
+    expect(primitives.get(primitives.length - 1)).toBe(highlights);
   });
 
   it('renders pins as fixed-pixel, shaded teardrops anchored at their tip', () => {
@@ -916,7 +1000,7 @@ describe('Cesium scene policy', () => {
       expect((ring.material.uniforms.color as Color).alpha).toBeCloseTo(
         0.9 * 0.95 * 0.4,
       );
-      expect(point.color.alpha).toBeCloseTo(0.97 * 0.95 * 0.4);
+      expect(point.color.alpha).toBeCloseTo(0.95 * 0.4);
       expect(point.outlineColor.alpha).toBeCloseTo(0.92 * 0.95 * 0.4);
     } finally {
       vi.unstubAllGlobals();
