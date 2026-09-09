@@ -93,6 +93,15 @@ def test_analytic_mixture_cdfs_match_hand_calculated_values():
     )
 
 
+def test_public_count_quantiles_are_exact_left_continuous_endpoints():
+    """Returning frequency widths alone would hide the actual discrete interval endpoints."""
+    predictive = CountPredictive(np.array([[0.0], [1.0]]))
+
+    result = predictive.quantiles(an=np.array([1]), probabilities=np.array([0.5, 1.0]))
+
+    np.testing.assert_array_equal(result, np.array([[0], [1]]))
+
+
 def test_beta_binomial_cdf_handles_huge_denominators_with_a_short_exact_tail():
     """An AN-sized support array would make exact scoring unusable for large surveys."""
     an = 1_000_000_000

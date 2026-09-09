@@ -134,7 +134,9 @@ PYTHONPATH=. python scripts/profile_count_scoring.py \
 The output directory must be new. `report.json` records the generated-input hash, actual executed
 source hashes, Git-observed revision, all installed distribution versions, device and dtype,
 chunk bounds, individual warm repeats, a first-scoring measurement, CUDA preflight/context cost,
-host/device transfer and synchronization scope, and complete diagnostic parity. GPU memory is
+host/device transfer and synchronization scope, exact integer count-quantile endpoints, and
+complete diagnostic parity. Endpoint mismatches fail parity even when interval widths and observed
+coverage happen to match. GPU memory is
 reported as a separately sampled device-wide high-water delta; CuPy pool reservation is named
 separately and is never represented as peak live memory. A parity failure is preserved in the
 report and exits nonzero.

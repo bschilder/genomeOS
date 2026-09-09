@@ -312,7 +312,7 @@ class CountPredictive:
             probability[interior] = rng.beta(alpha, beta)
         return rng.binomial(denominator[np.newaxis, :], probability)
 
-    def _quantiles(self, an: object, probabilities: object) -> np.ndarray:
+    def quantiles(self, an: object, probabilities: object) -> np.ndarray:
         """Exact left-continuous count quantiles without materializing ``0, ..., AN``."""
         denominator = _validated_an(an, self.n_observations)
         levels = _float_array(probabilities, "probabilities")
@@ -346,7 +346,7 @@ def predictive_diagnostics(
     log_score = predictive.log_prob(count, denominator)
     observed_frequency = count / denominator
     levels = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
-    quantiles = predictive._quantiles(denominator, levels)
+    quantiles = predictive.quantiles(denominator, levels)
     by_level = {level: quantiles[index] for index, level in enumerate(levels)}
 
     median_frequency = by_level[0.5] / denominator

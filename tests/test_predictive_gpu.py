@@ -16,6 +16,10 @@ from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictiv
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILER = ROOT / "scripts" / "profile_count_scoring.py"
+PROFILE_SPEC = importlib.util.spec_from_file_location("profile_count_scoring", PROFILER)
+assert PROFILE_SPEC is not None and PROFILE_SPEC.loader is not None
+PROFILE_MODULE = importlib.util.module_from_spec(PROFILE_SPEC)
+PROFILE_SPEC.loader.exec_module(PROFILE_MODULE)
 
 
 def _cupy_device_available() -> bool:
@@ -109,6 +113,37 @@ def test_profiler_missing_cuda_is_an_actionable_nonzero_failure(tmp_path):
     assert completed.returncode == 2
     assert "CUDA" in completed.stderr
     assert not (tmp_path / "run").exists()
+
+
+def test_profiler_parity_fails_for_shifted_count_quantiles_with_equal_diagnostics():
+    """Equal widths and observed coverage cannot conceal shifted integer endpoints."""
+    frame = pd.DataFrame(
+        {
+            "log_score": [-1.0],
+            "absolute_error": [0.1],
+            "squared_error": [0.01],
+            "coverage_50": [True],
+            "interval_width_50": [0.2],
+            "coverage_80": [True],
+            "interval_width_80": [0.4],
+            "coverage_95": [True],
+            "interval_width_95": [0.6],
+            "randomized_pit": [0.5],
+        }
+    )
+
+    result = PROFILE_MODULE._parity(
+        frame,
+        frame.copy(),
+        np.array([[1]]),
+        np.array([[1]]),
+        cpu_quantiles=np.array([[1], [3]]),
+        gpu_quantiles=np.array([[2], [4]]),
+    )
+
+    assert result["count_quantiles_equal"] is False
+    assert result["maximum_absolute_count_quantile_discrepancy"] == 1
+    assert result["passed"] is False
 
 
 def test_explicit_cupy_backend_does_not_silently_fall_back_when_cupy_is_missing(monkeypatch):
@@ -251,7 +286,9 @@ def test_gpu_complete_diagnostics_match_cpu_across_row_and_draw_chunks(concentra
 
     cpu_frame = predictive_diagnostics(cpu, ac, an, seed=123)
     gpu_frame = predictive_diagnostics(gpu, ac, an, seed=123)
+    levels = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
 
+    np.testing.assert_array_equal(cpu.quantiles(an, levels), gpu.quantiles(an, levels))
     for column in ("coverage_50", "coverage_80", "coverage_95"):
         np.testing.assert_array_equal(cpu_frame[column], gpu_frame[column])
     for column in (
@@ -325,7 +362,10 @@ def test_gpu_quantile_tie_is_reported_without_relaxing_exact_endpoint_parity():
 
     cpu_frame = predictive_diagnostics(cpu, np.array([0]), np.array([1]), seed=42)
     gpu_frame = predictive_diagnostics(gpu, np.array([0]), np.array([1]), seed=42)
+    levels = np.array([0.25, 0.5, 0.75])
 
+    np.testing.assert_array_equal(cpu.quantiles([1], levels), np.array([[0], [0], [1]]))
+    np.testing.assert_array_equal(cpu.quantiles([1], levels), gpu.quantiles([1], levels))
     np.testing.assert_array_equal(
         cpu_frame[["coverage_50", "interval_width_50"]],
         gpu_frame[["coverage_50", "interval_width_50"]],

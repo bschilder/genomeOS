@@ -41,6 +41,7 @@ from genomeos.validation.predictive_cupy import (  # noqa: E402
 
 RTOL = 1e-9
 ATOL = 1e-11
+QUANTILE_LEVELS = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
 REVISION_PATTERN = re.compile(r"[0-9a-fA-F]{40}")
 SCIENCE_SOURCE_FILES = {
     "genomeos/validation/predictive.py": Path(predictive_module.__file__).resolve(),
@@ -267,6 +268,9 @@ def _parity(
     gpu: pd.DataFrame,
     cpu_samples: np.ndarray,
     gpu_samples: np.ndarray,
+    *,
+    cpu_quantiles: np.ndarray,
+    gpu_quantiles: np.ndarray,
 ) -> dict[str, object]:
     exact_columns = [
         "absolute_error",
@@ -289,7 +293,16 @@ def _parity(
         for column in tolerance_columns
     }
     sample_counts_equal = bool(np.array_equal(cpu_samples, gpu_samples))
-    passed = all(exact.values()) and all(within_tolerance.values()) and sample_counts_equal
+    count_quantiles_equal = bool(np.array_equal(cpu_quantiles, gpu_quantiles))
+    maximum_quantile_discrepancy = int(
+        np.max(np.abs(cpu_quantiles.astype(np.int64) - gpu_quantiles.astype(np.int64)))
+    )
+    passed = (
+        all(exact.values())
+        and all(within_tolerance.values())
+        and sample_counts_equal
+        and count_quantiles_equal
+    )
     return {
         "passed": passed,
         "rtol": RTOL,
@@ -298,6 +311,11 @@ def _parity(
         "tolerance_columns": within_tolerance,
         "maximum_absolute_discrepancy": max_absolute,
         "seeded_sample_counts_equal": sample_counts_equal,
+        "count_quantile_levels": QUANTILE_LEVELS.tolist(),
+        "count_quantiles_equal": count_quantiles_equal,
+        "maximum_absolute_count_quantile_discrepancy": maximum_quantile_discrepancy,
+        "cpu_count_quantiles": cpu_quantiles.tolist(),
+        "gpu_count_quantiles": gpu_quantiles.tolist(),
         "quantile_endpoint_policy": (
             "interval widths and coverage require exact equality, including discrete CDF ties"
         ),
@@ -337,7 +355,16 @@ def run(args: argparse.Namespace) -> int:
     gpu_predictive = CountPredictive(mean, concentration=concentration, cdf_backend="cupy")
     cpu_samples = cpu_predictive.sample_counts(an, seed=args.seed)
     gpu_samples = gpu_predictive.sample_counts(an, seed=args.seed)
-    parity = _parity(cpu, gpu, cpu_samples, gpu_samples)
+    cpu_quantiles = cpu_predictive.quantiles(an, QUANTILE_LEVELS)
+    gpu_quantiles = gpu_predictive.quantiles(an, QUANTILE_LEVELS)
+    parity = _parity(
+        cpu,
+        gpu,
+        cpu_samples,
+        gpu_samples,
+        cpu_quantiles=cpu_quantiles,
+        gpu_quantiles=gpu_quantiles,
+    )
     configuration = {
         "draws": args.draws,
         "observations": args.observations,
