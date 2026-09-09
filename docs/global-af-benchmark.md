@@ -10,6 +10,47 @@ heterogeneity term. Its outputs always state `publication_eligible=false`. A suc
 fixture run demonstrates that preparation, dependency-aware splitting, fitting, count prediction,
 scoring, and reporting compose reproducibly; it is not scientific performance evidence.
 
+## Observation-aware GP parameters
+
+A newly fitted `SurfaceFit` can expose the existing GP observation distribution for explicit
+genuinely unseen cohorts. The caller constructs `SurveyQueries` with one observation ID, cohort
+ID, fitted sampling-design label, latitude and longitude per row. AC and AN are separately
+validated observation counts in exactly that same row order; they are not inferred from queries.
+
+```python
+from genomeos.surfaces.fit import fit_surface
+from genomeos.surfaces.observation import SurveyQueries
+from genomeos.validation.predictive import CountPredictive, predictive_diagnostics
+
+fitted = fit_surface(qualified_training_observations, fit_config)
+queries = SurveyQueries(
+    observation_ids=("held-out-1", "held-out-2"),
+    cohort_ids=("unseen-study", "unseen-study"),
+    sampling_designs=("population_random", "healthy_reference"),
+    lat=(0.0, 5.0),
+    lon=(-8.0, 8.0),
+)
+ac = (1, 3)  # separately validated and aligned to queries
+an = (20, 40)
+
+parameters = fitted.predict_new_cohort_parameters(queries, seed=42)
+predictive = CountPredictive(parameters.mean_draws, concentration=parameters.concentration)
+diagnostics = predictive_diagnostics(predictive, ac, an, seed=42)
+```
+
+`parameters.draw_ids` retains the named posterior chain/draw coordinates. The first fitted design
+is the actual zero-offset reference used by the model, which can differ from the configured
+reference when that configured label was absent from training. Queries using an unfitted design
+or a training cohort are refused; seen-cohort conditioning is a different target. Legacy format-1
+caches remain readable by the old prediction methods, but caches without recorded metadata and
+the named latent-logit graph node refuse this interface and require refitting.
+
+This interface exposes the resident model's existing approximation; it does not repair its
+geographic footprint, qualify recruitment as representative of present-day residents, change
+the fitted approximation or serving behavior, or demonstrate an accuracy improvement. The HbS, G6PD,
+carrier-screening, external-validation, redistribution and publication gates remain unchanged,
+and no serving-path inference is authorized.
+
 ## Source-tree invocation
 
 Run from the repository root and explicitly select this checkout on `PYTHONPATH` so a shared
