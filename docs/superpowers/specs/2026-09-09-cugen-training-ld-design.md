@@ -84,7 +84,7 @@ all nine counts and pair identities. Do not project, impute or label the result 
 Per-variant moments retain called count and allele count. If no calls, biological mean/sxx/MAF
 are None. Otherwise use sum/n, sumsq-sum²/n and min(mean/2,1-mean/2), independently of CuGen.
 When validating storage, separately check CuGen's all-missing zero-stat convention.
-Float32 storage budgets: mean absolute2e-7; MAF absolute1e-7; sxx absolute1e-5*max(1,reference).
+Float32 storage budgets: mean absolute 2e-7; MAF absolute 1e-7; sxx absolute 1e-5*max(1,reference).
 
 The eight-person/seven-variant fixture is:
 
@@ -93,13 +93,13 @@ The eight-person/seven-variant fixture is:
  [2,0,2,3,1,1,1], [1,2,0,3,1,2,3], [0,1,1,3,1,0,0], [2,0,2,3,1,2,3]]
 ```
 
-Training order (4,0,2,1), gidx (30,10,70,20,60,40,50), chr1 positions101 through701 by100,
-explicit A-to-C synthetic identities. All21pairs:6observed,11insufficient,4zero-variance.
-Pair0/1 has n4, counts(1,0,0,0,1,0,1,0,1), R5/11; pair1/2 R-1; pair0/2 R-5/11;
-pair0/5 R sqrt(3)/2 with n3. Variant0 mean1.25/sxx2.75/MAF.375; variant1 mean.75/sxx2.75/MAF.375.
-Columns0/1/5 have correlation determinant -3/121: a deliberate counterexample to joint PSD.
-Precision controls include n3072/4096 near-fixed disjoint and overlapping heterozygotes,
-single/double flips, missingness, subset sizes1/3/4/5, chunks and tiles1/2/3.
+Training order (4,0,2,1), gidx (30,10,70,20,60,40,50), chromosome 1 positions 101 through 701 by 100,
+explicit A-to-C synthetic identities. All 21 pairs: 6 observed, 11 insufficient, 4 zero-variance.
+Pair 0/1 has n=4, counts (1,0,0,0,1,0,1,0,1), R=5/11; pair 1/2 R=-1; pair 0/2 R=-5/11;
+pair 0/5 R=sqrt(3)/2 with n=3. Variant 0 mean=1.25/sxx=2.75/MAF=.375; variant 1 mean=.75/sxx=2.75/MAF=.375.
+Columns 0/1/5 have correlation determinant -3/121: a deliberate counterexample to joint PSD.
+Precision controls include n=3072/4096 near-fixed disjoint and overlapping heterozygotes,
+single/double flips, missingness, subset sizes 1/3/4/5, chunks and tiles 1/2/3.
 
 ## 5. Binary admission before CuGen import
 
@@ -136,8 +136,17 @@ or tile-only memory as a measured whole-workflow peak.
 
 ## 7. Offline execution and immutable artifacts
 
-Validate inputs/binary and estimate allocations before CuGen import. Use an exclusive new
-output directory, reject source collisions and existing paths including symlinks. Stage a
+Require the caller's explicit evidence_kind=`synthetic_fixture`; refuse all other values in
+this initial pilot. This declaration records caller provenance, not an authenticated proof
+that arbitrary supplied bytes are synthetic. The provided CLI generates its own synthetic
+inputs. Never manufacture the declaration from a filename, missing value or default.
+Validate inputs/binary and estimate allocations before CuGen import. Check source file size
+before reading; the largest canonical admitted file is67072bytes. Read at most67073bytes
+and reject overflow/truncation or changed size rather than loading an unbounded source first.
+The executing adapter refuses `no_requested_pairs` before importing CuGen: an empty pair
+plan cannot demonstrate GPU LD execution. Pure reference/planning functions still return an
+empty tuple for that case. Use an exclusive new output directory, reject source collisions
+and existing paths including symlinks. Stage a
 validated bounded source snapshot there so later source changes cannot alter the execution.
 Use public subset_cugen_file with validated int64 training indices, explicit chunk_size,
 use_pinned=False. Independently decode and compare output before LD. Public ld_matrix calls
@@ -146,7 +155,9 @@ maf_min0,min_r2=0, output_format pairs, output=None, explicit windows, tile and 
 Require exact bp->kb->rounded-bp round-trip. Never automatic backend/fallback.
 
 Compare complete observed pair sets with reference; reject unexpected, duplicate, reversed,
-omitted-valid or emitted-invalid pairs and any annotation/N_OBS disagreement. Check finite
+omitted-valid or emitted-invalid pairs and any annotation/N_OBS disagreement. Verify emitted
+MAF_A/MAF_B against the independent training moments within the float32 MAF storage budget.
+Check finite
 in-range R/R2 and reference budgets. An execution/numeric failure leaves a failed report,
 nonzero CLI exit and no completion manifest. Reader warning #201 remains visible.
 
@@ -159,6 +170,9 @@ input and every produced-file SHA256, explicit requested/executed public paths, 
 validation summary. Scientific identity excludes runtime measurements; runtime is still hashed.
 The verifier requires the exact member set, rejects traversal/absolute paths/symlinks, verifies
 all hashes, revalidates input/subset/partition identities and re-runs pure numeric reconciliation.
+TSV reading preserves literal identity/count tokens: parse integer columns from canonical
+base10 integer strings, never through floating CSV inference. Preserve literal labels such
+as NA rather than treating them as missing. Float columns must parse finite in-range numbers.
 Hashes prove consistency, not authenticity or source permissions. No implicit real-data admission.
 
 ## 8. Hardware experiment and acceptance

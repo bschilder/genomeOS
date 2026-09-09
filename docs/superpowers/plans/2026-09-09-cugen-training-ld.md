@@ -96,19 +96,24 @@ and named terms; exact spec§6 formulas/budgets, fail before allocation if dimen
 **Files:** create `genomeos/validation/cugen_pilot.py`, `genomeos/validation/cugen_artifact.py`,
 `genomeos/validation/cugen_source.json`, `tests/test_cugen_pilot.py`.
 **Consumes:** Tasks1/2 contracts. **Produces:** `run_cugen_pilot(source:Path, *, variants,
-selection:TrainingSelection, genome_build, ploidy, data_version:str, cugen_root:Path,
+selection:TrainingSelection, genome_build, ploidy, evidence_kind:str, data_version:str, cugen_root:Path,
 window_variants,window_bp,chunk_size:int,tile_size:int,out:Path) -> Path` returning the completed
 manifest path only on success. `verify_cugen_pilot(out:Path) -> dict` rechecks spec§7 artifacts.
-`reconcile_ld_output(reference, variants, output:pd.DataFrame) -> dict` in ld_reference or a
+`reconcile_ld_output(reference, variants, moments, output:pd.DataFrame) -> dict` in ld_reference or a
 focused pure `ld_comparison.py` if needed; exact pair/annotation/count reconciliation and
 finite in-range precision checks. Failure raises, retains failure.json and omits manifest.
 
 - [ ] RED: actual public CPU fixture characterization then controlled external GPU boundary
   doubles for adapter error injection only. Assert invalid selector/layout/collision/budget
-  refuses before import/device calls; wrong/missing/extra/reversed pairs, N_OBS/annotation,
+  refuses before import/device calls; an overlarge source refuses before unbounded reading
+  (spec§7 max67072bytes, bounded read67073bytes); empty requested-pair plan refuses rather than
+  claiming GPU work; wrong/missing/extra/reversed pairs, N_OBS/annotation/MAF,
   nonfinite/out-of-budget R/R2 fail; existing output, partial writes and every missing/tampered
-  artifact refuse. Test completed-reader recomputation, not merely a hash parser. CPU doubles
-  never count as GPU verification. Source-root/hash mismatch must fail before import.
+  artifact refuse. Require explicit evidence_kind="synthetic_fixture", reject all other values;
+  missing declaration is not defaulted. Test completed-reader recomputation, not merely a hash parser. CPU doubles
+  never count as GPU verification. Source-root/hash mismatch must fail before import. Verifier
+  regressions include fractional integer tokens that round to integers in float64 and literal
+  NA labels; preserve raw tokens and reject coercion rather than relying on CSV type inference.
 - [ ] GREEN: freeze source hash allowlist from the explicit tested revision. Validate and
   snapshot source, then call `subset_cugen_file(..., use_pinned=False, chunk_size=chunk_size)`.
   Re-decode subset and compare `source_calls[selection.training_indices]` exactly. For each
