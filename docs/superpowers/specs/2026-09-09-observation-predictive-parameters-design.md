@@ -105,6 +105,16 @@ The public wrapper delegates PyMC extraction to `genomeos/surfaces/observation_p
 
 The adapter must not pretend a legacy graph has the new node. Cache format 1 may remain readable for legacy methods because added metadata is optional; new-interface capability is explicitly checked. Save/load tests cover new metadata, identical new predictions, unchanged legacy predictions, and an object with absent metadata. Trusted synthetic tests only: never load an untrusted pickle.
 
+**Compatibility comparison ruling, September 9:** the unchanged parent at `6692d1e` exhibits a
+small fresh-versus-reloaded prediction difference in the local environment; the original Git
+object reproduces it, while the same old pickle under parent/extracted code is bitwise equal.
+Preserve separately fingerprinted fresh-parent and parent-loaded-cache controls. Exact
+fresh-parent/fresh-new and cached-parent/cached-new comparisons test version compatibility;
+do not replace the former with the latter or weaken either with a numerical tolerance. Record the
+pre-existing execution-mode discrepancy and investigate its cause separately in
+[#198](https://github.com/bschilder/genomeOS/issues/198), without claiming that this refactor
+fixes it. New-interface save/load equality remains its own Task 3 requirement.
+
 ## Module budget and compatibility seam
 
 `fit.py` is near the repository's 800-line/50-KiB hard limit. Before adding integration, extract `FitConfig` and its configuration/geometry constants into `genomeos/surfaces/config.py`, preserving values, validation behavior and scientific documentation. Re-export existing public names from `fit.py` so callers and older pickle references resolve. Keep `SurfaceFit` in its current module; do not move its identity or change repository layout. Keep geometry/fitting algorithms in place. This is a narrow compatibility-preserving prerequisite, not a general refactor.
@@ -119,7 +129,7 @@ No dependency change or production schema change is required. Tests must cover o
 | Shared cohort mechanics are preserved | Same cohort/site latent inputs yield identical cohort increments; distinct cohorts have separate seeded draws; nugget effects remain per observation |
 | Draws really align | Synthetic permuted xarray dimensions/coordinate order, explicit expected chain/draw IDs, malformed-coordinate refusals, plus an actual fitted model integration |
 | Reordering does not change meaning | Pure composition and real-adapter permutation equality after matching observation IDs; duplicated coordinates share latent values before observation effects |
-| Legacy behavior remains reproducible | Existing tests, same-seed parent/new legacy output comparison and trusted synthetic persistence round trips |
+| Legacy behavior remains reproducible | Existing tests, exact same-seed parent/new comparisons separately for fresh and loaded graphs, and trusted synthetic persistence/capability checks |
 | Exact scoring is composable | Pass returned arrays to public `CountPredictive`; compare an analytical zero-effect case and run finite count diagnostics on real-fitter synthetic queries |
 | Failure remains visible | Missing old metadata/node, absent reference/query design, seen cohort, missing scale, malformed arrays/coordinates/seeds and unsupported convention are explicit errors |
 

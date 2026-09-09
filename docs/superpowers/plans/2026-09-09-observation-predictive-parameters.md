@@ -80,7 +80,8 @@ import sys
 directory = Path(sys.argv[1])
 numeric = directory / "legacy-before.npz"
 cached = directory / "legacy-before.pkl"
-if numeric.exists() or cached.exists():
+cache_numeric = directory / "cache-baseline.npz"
+if numeric.exists() or cached.exists() or cache_numeric.exists():
     raise RuntimeError("legacy evidence must not be overwritten")
 np.savez(
     numeric,
@@ -90,10 +91,30 @@ np.savez(
     prior_frequency_sd=fitted.prior_frequency_sd,
 )
 fixture["save_fit"](fitted, cached)
+restored = fixture["load_fit"](cached)
+np.savez(
+    cache_numeric,
+    latent=restored.predict_draws(lat, lon),
+    surface=restored.predict(lat, lon).to_numpy(),
+    survey=restored.predict_observation(lat, lon, an).to_numpy(),
+    prior_frequency_sd=restored.prior_frequency_sd,
+)
 print(f"Captured trusted synthetic evidence in {directory}")
 ```
 
-Run this code via the selected interpreter with the directory argument, not a production fixture or downloaded pickle. Record the command, git revision and source hashes. Keep generated cache/numeric files outside Git. The same fresh-fit calculation after Task 3 must reproduce the arrays on the same pinned environment; preserve discrepancies and investigate rather than relaxing tolerances silently. Separately load this old trusted cache after changes to test genuine missing-new-metadata behavior.
+Run this code via the selected interpreter with the directory argument, not a production fixture or downloaded pickle. Record the command, git revision and source hashes. Keep generated cache/numeric files outside Git. The same fresh-fit calculation after Task 3 must reproduce `legacy-before.npz` on the same recorded environment; preserve discrepancies and investigate rather than relaxing tolerances silently. Separately load this old trusted cache after changes and compare with `cache-baseline.npz`, including genuine missing-new-metadata behavior. The shared environment is not an exact lock-file installation; independent locked verification remains required before merge and must not replace these same-environment controls.
+
+**Evidence-driven comparison clarification, September 9:** a pre-change fit at `6692d1e`
+already differs slightly from its reloaded cache (maximum latent difference
+`5.5358870931776494e-08`, surface difference `3.432226325372767e-08`; survey array exact).
+Executing the original `fit.py` Git object as `genomeos.surfaces.fit` reproduced that difference.
+Comparing the same old pickle under original and extracted code is bitwise exact for all four
+arrays. Therefore fresh-parent/fresh-new and cached-parent/cached-new are separate exact gates;
+fresh-versus-cache is a separately retained numerical observation, not a tolerance to relax.
+The original fresh reference must never be replaced by the cache control. If recovering a cache
+control after extraction, execute and fingerprint the actual parent module in an isolated process;
+never label changed-code output as the parent control. The execution ledger/report records both
+controls and this ruling; the baseline discrepancy is tracked in [#198](https://github.com/bschilder/genomeOS/issues/198). Task 3's new-interface round-trip requirement remains independently tested.
 
 ### Task 1: Preserve configuration and cache import compatibility
 
@@ -103,7 +124,7 @@ Run this code via the selected interpreter with the directory argument, not a pr
 
 **Interfaces:** `genomeos.surfaces.config.FitConfig` becomes the defining class; `genomeos.surfaces.fit.FitConfig` remains the same exported class. Export these unchanged names from both modules: `SEED`, `LIKELIHOODS`, `LENGTHSCALE_PRIORS`, `NUTS_SAMPLERS`, `APPROXIMATIONS`, `INDUCING_PLACEMENTS`, `JITTER`, `MIN_SPACING_FRACTION`, `MAX_INDUCING_FRACTION`, `REFERENCE_DESIGN`, `EARTH_RADIUS_KM`, `LENGTHSCALE_REGIONS`, `MIN_LENGTHSCALE_ANCHOR_KM`, `MAX_LENGTHSCALE_ANCHOR_KM`. Keep private legacy `_EPS` and `ConvergenceError` in fit.py. Geometry algorithms are not moved.
 
-- [ ] **RED:** capture the legacy evidence above, then add the failing new-module/import test and full default/invalid-configuration parity assertions. The initial new-module import must fail for the expected missing file.
+- [x] **RED:** capture the legacy evidence above, then add the failing new-module/import test and full default/invalid-configuration parity assertions. The initial new-module import must fail for the expected missing file.
 
   ```python
   from dataclasses import asdict
@@ -121,7 +142,7 @@ Run this code via the selected interpreter with the directory argument, not a pr
   ```
 
   Run `"$AF_PYTHON" -m pytest tests/test_surface_config.py -q`. Compare every dataclass default and `__post_init__` branch to the captured parent source, not only the five values shown. Parameterize invalid likelihood, approximation, placement, sampler, HSGP expansion, lengthscale sigma/prior, R-hat bound and target acceptance.
-- [ ] **GREEN:** move the existing class and named constants verbatim, including scientific comments, into the focused configuration module with a design §§5, 7 docstring and `from __future__ import annotations`. Explicitly import/re-export names in fit.py. The essential compatibility seam is:
+- [x] **GREEN:** move the existing class and named constants verbatim, including scientific comments, into the focused configuration module with a design §§5, 7 docstring and `from __future__ import annotations`. Explicitly import/re-export names in fit.py. The essential compatibility seam is:
 
   ```python
   from genomeos.surfaces.config import FitConfig as FitConfig
@@ -129,8 +150,18 @@ Run this code via the selected interpreter with the directory argument, not a pr
   ```
 
   Use the same explicit re-export idiom for the complete list above. Do not alter validators or strip comments to pass the size check.
-- [ ] **Verify:** run `tests/test_surface_config.py`, `tests/test_surface_fit.py` and `tests/test_crossval.py`. Load the pre-change trusted fit and compare its three legacy numeric outputs to `legacy-before.npz` with exact array equality. This tests a real old module reference; a new pickle round trip alone does not.
-- [ ] **Gate/review/commit:** run every global gate, inspect staged paths, and commit `refactor: isolate surface configuration refs #191`. Record focused outputs, legacy equality and remaining Task 2/3 work. Independent review must check there is no scientific/default change.
+- [x] **Verify:** run `tests/test_surface_config.py`, `tests/test_surface_fit.py` and `tests/test_crossval.py`. Load the pre-change trusted fit and compare its three legacy numeric outputs and prior-frequency SD to `cache-baseline.npz` with exact array equality. This tests a real old module reference against its parent-loaded control; a new pickle round trip alone does not.
+- [x] **Gate/review/commit:** run every global gate, inspect staged paths, and commit `refactor: isolate surface configuration refs #191`. Record focused outputs, legacy equality and remaining Task 2/3 work. Independent review must check there is no scientific/default change.
+
+**Completed evidence:** `c74b617` passes 14 configuration tests, 68 fitter/cross-validation
+tests, 40 smoke tests and the listed lint/contract/module/privacy/whitespace gates. All four
+legacy numeric arrays match the parent-loaded cache control exactly. Independent review
+approved spec compliance and task quality with no Critical/Important findings; five existing
+uncaptured inducing warnings remain a deferred test-noise concern. The separate direct-import
+cycle is tracked in [#199](https://github.com/bschilder/genomeOS/issues/199); the established
+`fit.load_fit` seam works. Fresh-fit and new-interface round-trip checks remain Task 3 gates.
+Neither this milestone nor parent [PR #197](https://github.com/bschilder/genomeOS/pull/197)
+completes the full modeling program.
 
 ### Task 2: Pure unseen-cohort parameter composition
 
@@ -241,7 +272,7 @@ Run this code via the selected interpreter with the directory argument, not a pr
 
   `sorted_chains`, `sorted_draws`, event dimensions and event shapes come from validated actual coordinates, not presumed lengths. Compare latent/effect coordinate sets and labels, require exactly one positional axis for design contrasts and none for scalar effects. Missing cohort/nugget draws are errors when metadata says fitted; when omitted pass `None`. Call `compose_unseen_observations` with matched draw IDs and the original queries.
 - [ ] **Verify — real integration and scorer:** on the existing real fitter, request two unseen-cohort sites and compare recorded draw IDs to canonical posterior chain/draw coordinates. Compare repeated/permuted query outputs after ID alignment. Include duplicate coordinates, antimeridian equivalence and exact poles with controlled adapter fixtures. Feed real-fit synthetic query parameters into `CountPredictive`; use small denominators and a few points for finite diagnostics rather than a huge CPU CDF workload. Analytical tests, not marginal coverage, establish shared-cohort mechanics.
-- [ ] **Verify — genuine legacy and cache compatibility:** first load the pre-Task-1 trusted cache and prove its three legacy outputs remain exactly equal; the new method must refuse its absent metadata/node. Separately repeat the same-seed fresh-fit calculation and compare against every captured `legacy-before.npz` array. A mismatch blocks the claim of unchanged behavior and is investigated. On the real new fit, save/load and compare metadata and both new/legacy predictions exactly. Retain cache format 1 only if these old/new readability checks pass; document capability refusal rather than inventing metadata.
+- [ ] **Verify — genuine legacy and cache compatibility:** first load the pre-Task-1 trusted cache and prove its legacy outputs and prior-frequency SD remain exactly equal to `cache-baseline.npz`; the new method must refuse its absent metadata/node. Separately repeat the same-seed fresh-fit calculation and compare against every captured `legacy-before.npz` array. A mismatch blocks the claim of unchanged behavior and is investigated. On the real new fit, save/load and compare metadata and new-interface predictions exactly; assess unchanged legacy predictions in the separate fresh and cached comparison arms above. Preserve any fresh-versus-cache discrepancy explicitly rather than calling it equality. Retain cache format 1 only if these old/new readability checks pass; document capability refusal rather than inventing metadata.
 - [ ] **Document:** add the exact public consumer example and limitations to `docs/global-af-benchmark.md`:
 
   ```python
