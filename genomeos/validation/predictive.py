@@ -12,6 +12,13 @@ coverage must be interpreted together rather than treating nominal coverage as e
 Beta-binomial CDFs are summed exactly in fixed-size chunks, using the shorter support tail. This
 keeps memory bounded independently of ``AN`` but does not hide the computational cost: an exact
 interior CDF or quantile can still require time proportional to the shorter tail length.
+
+The supported count domain is ``-1 <= AC <= AN <= 2**31 - 1`` (with ``AC=-1`` reserved for the
+CDF boundary). The upper bound keeps integer successor and floating log-mass arithmetic inside a
+tested domain far beyond any individual survey. Interior beta-binomial concentrations above
+``1 / sqrt(float epsilon)`` are refused because subtracting their log-beta normalizers no longer
+retains reliable probability-scale precision; callers must explicitly select binomial semantics
+rather than obtain that distribution through an unstable finite-concentration approximation.
 """
 
 from __future__ import annotations
@@ -24,6 +31,8 @@ from scipy.special import betaln, gammaln, logsumexp, xlog1py, xlogy
 from scipy.stats import binom
 
 SEED = 42
+MAX_COUNT = int(np.iinfo(np.int32).max)
+_MAX_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
 _CDF_CHUNK_SIZE = 4096
 
 
@@ -57,8 +66,8 @@ def _count_vector(value: object, name: str, observations: int) -> np.ndarray:
         raise ValueError(f"{name} must be finite")
     if np.issubdtype(array.dtype, np.floating) and not np.all(array == np.floor(array)):
         raise ValueError(f"{name} must contain integer counts")
-    if np.any(np.abs(array) > np.iinfo(np.int64).max):
-        raise ValueError(f"{name} exceeds the supported integer range")
+    if np.any(array > MAX_COUNT):
+        raise ValueError(f"{name} exceeds the supported maximum {MAX_COUNT}")
     return array.astype(np.int64)
 
 
@@ -127,6 +136,27 @@ def _beta_binomial_cdf(k: int, n: int, mean: float, concentration: float) -> flo
     return float(-np.expm1(log_survival))
 
 
+def _validate_beta_shapes(mean: np.ndarray, concentration: np.ndarray) -> None:
+    interior = (mean > 0.0) & (mean < 1.0)
+    with np.errstate(over="ignore", under="ignore", invalid="ignore"):
+        alpha = mean[interior] * concentration[interior]
+        beta = (1.0 - mean[interior]) * concentration[interior]
+        log_normalizer = betaln(alpha, beta)
+    unusable = (
+        (alpha <= 0.0)
+        | (beta <= 0.0)
+        | ~np.isfinite(alpha)
+        | ~np.isfinite(beta)
+        | ~np.isfinite(log_normalizer)
+        | (concentration[interior] > _MAX_BETA_CONCENTRATION)
+    )
+    if np.any(unusable):
+        raise ValueError(
+            "interior mean and concentration produce beta-binomial shape parameters "
+            "outside the supported stable numeric domain"
+        )
+
+
 @dataclass(frozen=True, eq=False)
 class CountPredictive:
     """Immutable binomial or beta-binomial mixture over predictive draws.
@@ -161,6 +191,7 @@ class CountPredictive:
             raise ValueError("concentration must be finite")
         if np.any(concentration <= 0.0):
             raise ValueError("concentration must be positive")
+        _validate_beta_shapes(mean, concentration)
         concentration = _immutable_array(concentration)
         object.__setattr__(self, "concentration", concentration)
 

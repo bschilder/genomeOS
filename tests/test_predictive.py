@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from genomeos.validation.predictive import CountPredictive, predictive_diagnostics
+from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
 
 
 def test_binomial_log_prob_is_the_log_of_the_integrated_normalized_mass():
@@ -90,6 +90,20 @@ def test_beta_binomial_cdf_handles_huge_denominators_with_a_short_exact_tail():
     )
 
 
+def test_count_support_boundary_is_finite_and_larger_denominators_are_refused():
+    """Allowing int64.max overflows AN+1; the declared supported boundary must be real."""
+    predictive = CountPredictive(np.array([[0.5]]))
+
+    log_mass = predictive.log_prob(ac=np.array([0]), an=np.array([MAX_COUNT]))
+
+    assert log_mass == pytest.approx(np.array([MAX_COUNT * np.log(0.5)]))
+    assert np.all(np.isfinite(log_mass))
+    with pytest.raises(ValueError, match="supported maximum"):
+        predictive.log_prob(
+            ac=np.array([0]), an=np.array([np.iinfo(np.int64).max])
+        )
+
+
 def test_count_samples_are_seeded_draw_aligned_and_preserve_endpoints():
     """Changing the seed contract or sampling a pooled draw breaks reproducibility/shape."""
     predictive = CountPredictive(
@@ -144,15 +158,13 @@ def test_randomized_pit_is_deterministic_and_uses_the_lower_cdf_boundary():
     """Using F(y) directly would put a zero-count PIT above its probability jump."""
     predictive = CountPredictive(np.array([[0.25], [0.75]]))
 
-    first = predictive_diagnostics(
-        predictive, ac=np.array([0]), an=np.array([1]), seed=23
-    )
-    second = predictive_diagnostics(
-        predictive, ac=np.array([0]), an=np.array([1]), seed=23
-    )
+    first = predictive_diagnostics(predictive, ac=np.array([0]), an=np.array([1]))
+    second = predictive_diagnostics(predictive, ac=np.array([0]), an=np.array([1]))
 
     assert first.loc[0, "randomized_pit"] == second.loc[0, "randomized_pit"]
-    assert 0.0 <= first.loc[0, "randomized_pit"] <= 0.5
+    # F(-1)=0 and the hand-integrated mass at zero is (0.75 + 0.25) / 2 = 0.5.
+    expected = np.random.default_rng(42).random() * 0.5
+    assert first.loc[0, "randomized_pit"] == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(
@@ -173,6 +185,22 @@ def test_predictive_parameters_fail_closed(mean_draws, concentration, message):
     """Malformed predictive draws must not be reshaped, clipped, or defaulted."""
     with pytest.raises(ValueError, match=message):
         CountPredictive(mean_draws, concentration=concentration)
+
+
+@pytest.mark.parametrize(
+    ("mean", "concentration"),
+    [
+        (np.nextafter(0.0, 1.0), 0.1),
+        (np.nextafter(1.0, 0.0), np.nextafter(0.0, 1.0)),
+        (0.5, np.finfo(float).max),
+    ],
+)
+def test_unusable_derived_beta_shapes_are_refused_before_scoring(mean, concentration):
+    """Raw finite inputs can still underflow or exceed stable beta-binomial arithmetic."""
+    with pytest.raises(ValueError, match="beta-binomial shape"):
+        CountPredictive(
+            np.array([[mean]]), concentration=np.array([[concentration]])
+        )
 
 
 def test_predictive_arrays_are_immutable_copies():
