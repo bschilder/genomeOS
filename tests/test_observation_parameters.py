@@ -456,3 +456,62 @@ def test_extreme_finite_logits_retain_expit_endpoints_without_clipping():
         latent_logit_draws=np.array([[-1e308, 1e308], [-1e300, 1e300]]),
     )
     np.testing.assert_array_equal(result.mean_draws, [[0.0, 1.0], [0.0, 1.0]])
+
+
+def test_composition_refuses_design_overflow_before_later_effects_can_conceal_it():
+    """Finite cancellation inputs must not conceal an invalid design-addition intermediate."""
+    queries = SurveyQueries(("s",), ("new",), ("alternate",), (0.0,), (0.0,))
+    metadata = ObservationModelMetadata(
+        "new_cohort_count_v1",
+        ("reference", "alternate"),
+        ("training",),
+        True,
+        True,
+        "binomial",
+    )
+
+    with pytest.raises(ValueError, match="numerical domain.*design addition"):
+        compose_unseen_observations(
+            np.array([[-9e307]]),
+            draw_ids=((0, 0),),
+            queries=queries,
+            metadata=metadata,
+            design_effect_draws=np.array([[-9e307]]),
+            cohort_sd_draws=np.array([1.7e308]),
+            nugget_sd_draws=np.array([1.4e308]),
+            concentration_draws=None,
+            seed=42,
+        )
+
+
+@pytest.mark.parametrize(
+    ("latent", "nugget_sd", "stage"),
+    [
+        (0.0, 1.7e308, "nugget multiplication"),
+        (1.4e308, 5e307, "nugget accumulation"),
+    ],
+)
+def test_composition_refuses_random_effect_arithmetic_overflow(latent, nugget_sd, stage):
+    """Each invalid random-effect intermediate must fail at its originating operation."""
+    queries = SurveyQueries(("s",), ("new",), ("reference",), (0.0,), (0.0,))
+    metadata = ObservationModelMetadata(
+        "new_cohort_count_v1",
+        ("reference",),
+        ("training",),
+        False,
+        True,
+        "binomial",
+    )
+
+    with pytest.raises(ValueError, match=rf"numerical domain.*{stage}"):
+        compose_unseen_observations(
+            np.array([[latent]]),
+            draw_ids=((0, 0),),
+            queries=queries,
+            metadata=metadata,
+            design_effect_draws=np.empty((1, 0)),
+            cohort_sd_draws=None,
+            nugget_sd_draws=np.array([nugget_sd]),
+            concentration_draws=None,
+            seed=42,
+        )

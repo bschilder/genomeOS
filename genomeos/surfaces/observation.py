@@ -56,6 +56,28 @@ def _immutable_float64(array: np.ndarray) -> np.ndarray:
     return np.frombuffer(contiguous.tobytes(), dtype=np.float64).reshape(contiguous.shape)
 
 
+def _checked_composition_add(left: np.ndarray, right: np.ndarray, stage: str) -> np.ndarray:
+    with np.errstate(over="ignore", invalid="ignore"):
+        result = left + right
+    if not np.all(np.isfinite(result)):
+        raise ValueError(
+            f"observation composition exceeded the finite numerical domain during {stage}"
+        )
+    return result
+
+
+def _checked_composition_multiply(
+    left: np.ndarray, right: np.ndarray, stage: str
+) -> np.ndarray:
+    with np.errstate(over="ignore", invalid="ignore"):
+        result = left * right
+    if not np.all(np.isfinite(result)):
+        raise ValueError(
+            f"observation composition exceeded the finite numerical domain during {stage}"
+        )
+    return result
+
+
 def _validate_draw_ids(value: object, expected: int) -> tuple[tuple[int, int], ...]:
     if not isinstance(value, tuple):
         raise ValueError("draw_ids must be a tuple")
@@ -274,7 +296,9 @@ def compose_unseen_observations(
     design_index = np.array(
         [fitted_design_index[label] for label in queries.sampling_designs], dtype=np.intp
     )
-    logits = latent + full_design_effects[:, design_index]
+    logits = _checked_composition_add(
+        latent, full_design_effects[:, design_index], "design addition"
+    )
 
     cohorts = tuple(sorted(set(queries.cohort_ids)))
     cohort_lookup = {value: index for index, value in enumerate(cohorts)}
@@ -287,10 +311,16 @@ def compose_unseen_observations(
     cohort_seed, nugget_seed = np.random.SeedSequence(int(seed)).spawn(2)
     if cohort_sd is not None:
         cohort_z = np.random.default_rng(cohort_seed).normal(size=(draws, len(cohorts)))
-        logits += cohort_sd[:, None] * cohort_z[:, cohort_index]
+        cohort_effect = _checked_composition_multiply(
+            cohort_sd[:, None], cohort_z[:, cohort_index], "cohort multiplication"
+        )
+        logits = _checked_composition_add(logits, cohort_effect, "cohort accumulation")
     if nugget_sd is not None:
         nugget_z = np.random.default_rng(nugget_seed).normal(size=(draws, observations))
-        logits += nugget_sd[:, None] * nugget_z[:, observation_index]
+        nugget_effect = _checked_composition_multiply(
+            nugget_sd[:, None], nugget_z[:, observation_index], "nugget multiplication"
+        )
+        logits = _checked_composition_add(logits, nugget_effect, "nugget accumulation")
 
     return ObservationParameters(
         queries=queries,
