@@ -106,8 +106,28 @@ WP1 gates remain required on reviewed, permitted data.
 WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
 admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
 LD, and GPU work; and WP7 temporal/origin modeling are all unimplemented by this runner. The HbS,
-G6PD, and carrier-screening publication gates remain unchanged, as does the unresolved restriction
-on redistributing derived surfaces from indigenous-population panels.
+G6PD, and carrier-screening publication gates remain unchanged. The owner's resolved
+[#66 decision](https://github.com/bschilder/genomeOS/issues/66#issuecomment-5565166083) permits
+redistribution of fitted surfaces with source attribution and biocultural notices, a clear
+observed/inferred distinction, and explicit source restrictions honored. That conditional policy
+permission does not qualify any source or publish any scientific result in this milestone.
+
+## Count-scoring numerical domain
+
+`CountPredictive.log_prob` evaluates interior beta-binomial draws by finite products of paired
+probability factors, using `log1p` near one instead of subtracting nearly equal log-beta
+normalizers. Its deterministic work is O(draws × AN); it refuses AN above 65,536 for any interior
+beta-binomial draw. This cap limits each draw batch to 16 support chunks, with temporary factor
+arrays bounded by 128 draws × 4,096 terms (524,288 float64 elements each). It is an engineering
+work budget, not a scientific threshold or a binomial approximation. Diagnostics call this scorer
+first and inherit its refusal. Binomial and exact p=0/1 draws retain the existing AN maximum
+2,147,483,647, as do CDF/quantile-only queries with their existing bounded tail-sum arithmetic.
+The existing beta shape/concentration checks also remain in force.
+
+The accepted quantile levels remain `0 < q <= 1`; the 100% endpoint is the exact mixture support
+maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Earlier
+GPU timing reports identify their original source snapshots and require fresh hardware evidence
+for these revised scoring and endpoint paths.
 
 ## Optional GPU count-CDF profiling
 

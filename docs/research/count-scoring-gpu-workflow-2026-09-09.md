@@ -53,6 +53,17 @@ Repository-wide integration at the refined source state independently passed 657
 expected local GPU skips and five existing warnings in 290.65 seconds. Smoke passed 40 tests;
 lint, frozen-contract, and module-size checks also passed.
 
+The five pre-existing warnings are `UserWarning` inducing-point redundancy warnings, also present
+in the controller's fresh full suite at `8da0398` (657 passed, 8 skipped, 5 warnings in 294.57s).
+`tests/test_crossval.py::test_cross_validation_runs_and_reports_coverage_between_zero_and_one`
+and `tests/test_crossval.py::test_predictive_coverage_exceeds_latent_coverage_on_the_same_data`
+each emit warnings for spacing/range 179 km/738 km and 173 km/708 km (four warnings total).
+`tests/test_surface_fit.py::test_the_inducing_approximation_fits_and_predicts` emits the fifth
+at 175 km/887 km. Their rounded ratios are
+0.24, 0.24, and 0.20, below 0.25; adjacent inducing points correlate at approximately 0.99, and
+the warning recommends reducing `n_inducing`. These are unchanged production-fitting test paths;
+their scientific configurations were not changed to suppress warnings.
+
 ## Environment and measurement scope
 
 The task-owned RunPod used an NVIDIA A100-SXM4-80GB in `US-MD-1`, CUDA runtime API 12.9, driver API

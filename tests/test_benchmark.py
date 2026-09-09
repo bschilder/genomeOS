@@ -15,6 +15,7 @@ from genomeos.validation.benchmark import (
     summarize_benchmark,
     validate_allele_observations,
 )
+from genomeos.validation.predictive import CountPredictive, predictive_diagnostics
 
 DIAGNOSTIC_COLUMNS = (
     "log_score",
@@ -83,6 +84,16 @@ def _completed(
     split_id: str = "split-a", expected_test_ids: tuple[str, ...] = ("obs-1",)
 ) -> BenchmarkFoldStatus:
     return BenchmarkFoldStatus(split_id, "completed", expected_test_ids, None)
+
+
+def test_near_degenerate_count_diagnostics_compose_with_strict_reporter():
+    """Positive cancellation error in the scorer must not reach or weaken the reporter."""
+    predictive = CountPredictive(np.array([[1e-16]]), np.array([[1e6]]))
+    diagnostics = predictive_diagnostics(predictive, [0], [1])
+    predictions = pd.DataFrame([_prediction("obs-1")])
+    predictions[list(DIAGNOSTIC_COLUMNS)] = diagnostics
+    summarize_benchmark(predictions, (_completed(),), ("split-a",))
+    assert predictions.loc[0, "log_score"] == pytest.approx(np.log1p(-1e-16), abs=0.0)
 
 
 def test_inventory_reports_only_observation_counts_and_explicit_limitations():

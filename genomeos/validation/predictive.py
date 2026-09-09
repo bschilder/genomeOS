@@ -21,6 +21,11 @@ tested domain far beyond any individual survey. Interior beta-binomial concentra
 ``1 / sqrt(float epsilon)`` are refused because subtracting their log-beta normalizers no longer
 retains reliable probability-scale precision; callers must explicitly select binomial semantics
 rather than obtain that distribution through an unstable finite-concentration approximation.
+Log mass uses finite rising-factorial products instead of subtracting beta normalizers. For
+interior beta-binomial draws, ``log_prob`` (and hence diagnostics) additionally requires
+``AN <= 65_536``: its O(draws * AN) work is bounded to 16 support chunks per draw batch.
+CDF/quantile-only queries retain the larger count domain and their existing tail-sum arithmetic;
+binomial and exactly degenerate draws do not need the product and retain the larger domain too.
 """
 
 from __future__ import annotations
@@ -36,6 +41,46 @@ SEED = 42
 MAX_COUNT = int(np.iinfo(np.int32).max)
 _MAX_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
 _CDF_CHUNK_SIZE = 4096
+MAX_BETA_SCORING_COUNT = 65_536
+_MASS_DRAW_CHUNK_SIZE = 128
+
+
+def _beta_product_log_mass(k: int, n: int, mean: np.ndarray, c: np.ndarray) -> np.ndarray:
+    """Log[choose(n,k) (p*c)_k ((1-p)*c)_(n-k) / (c)_n], in bounded chunks.
+
+    Pair numerator factors with denominator factors before taking logs. Near-one factors use
+    log1p of the complementary ratio, so a nearly certain endpoint retains its tiny negative
+    log mass. Small factors use log(numerator)-log(denominator) to avoid ratio underflow.
+    """
+    result = np.zeros(mean.shape)
+    smaller = min(k, n - k)
+    log_choose = 0.0
+    for start in range(1, smaller + 1, _CDF_CHUNK_SIZE):
+        index = np.arange(start, min(start + _CDF_CHUNK_SIZE, smaller + 1))
+        log_choose += float(np.sum(np.log1p((n - smaller) / index)))
+    for draw_start in range(0, mean.size, _MASS_DRAW_CHUNK_SIZE):
+        stop = draw_start + _MASS_DRAW_CHUNK_SIZE
+        p = mean[draw_start:stop, None]
+        concentration = c[draw_start:stop, None]
+        alpha, beta = p * concentration, (1.0 - p) * concentration
+        total = np.full(p.shape[0], log_choose)
+        for start in range(0, n, _CDF_CHUNK_SIZE):
+            index = np.arange(start, min(start + _CDF_CHUNK_SIZE, n))[None, :]
+            success = index < k
+            numerator = np.where(success, alpha + index, beta + (index - k))
+            denominator = concentration + index
+            complement = np.where(success, beta, alpha + k) / denominator
+            terms = np.log(numerator) - np.log(denominator)
+            near_one = complement < 0.5
+            terms[near_one] = np.log1p(-complement[near_one])
+            # At the first factor, use p itself before shape multiplication can round it.
+            if start == 0:
+                terms[:, 0] = np.log(p[:, 0]) if k else np.log1p(-p[:, 0])
+            total += np.sum(terms, axis=1)
+        result[draw_start:stop] = total
+    if np.any(~np.isfinite(result)) or np.any(result > 0.0):
+        raise FloatingPointError("beta-binomial log mass is outside the stable numeric domain")
+    return result
 
 
 def _numeric_array(value: object, name: str) -> np.ndarray:
@@ -239,23 +284,30 @@ class CountPredictive:
         result[at_zero & (count == 0)] = 0.0
         result[at_one & (count == denominator)] = 0.0
         interior = ~(at_zero | at_one)
-        alpha = mean[interior] * self.concentration[interior]
-        beta = (1.0 - mean[interior]) * self.concentration[interior]
-        interior_count = np.broadcast_to(count, mean.shape)[interior]
-        interior_an = np.broadcast_to(denominator, mean.shape)[interior]
-        result[interior] = (
-            _log_combination(interior_an, interior_count)
-            + betaln(interior_count + alpha, interior_an - interior_count + beta)
-            - betaln(alpha, beta)
-        )
+        if np.any(interior & (denominator > MAX_BETA_SCORING_COUNT)):
+            raise ValueError(
+                f"interior beta-binomial log_prob requires AN <= {MAX_BETA_SCORING_COUNT}; "
+                "stable finite-product scoring exceeds its supported work budget"
+            )
+        for observation, n in enumerate(an):
+            selected = interior[:, observation]
+            if np.any(selected):
+                result[selected, observation] = _beta_product_log_mass(
+                    int(ac[observation]), int(n), mean[selected, observation],
+                    self.concentration[selected, observation],
+                )
         return result
 
     def log_prob(self, ac: object, an: object) -> np.ndarray:
         """Integrated log probability mass for each valid observed count."""
         count, denominator = self.validated_counts(ac, an)
-        return logsumexp(self._draw_log_mass(count, denominator), axis=0) - np.log(
-            self.n_draws
-        )
+        masses = self._draw_log_mass(count, denominator)
+        result = logsumexp(masses, axis=0) - np.log(self.n_draws)
+        near_one = np.all(masses > -np.log(2.0), axis=0)
+        result[near_one] = np.log1p(np.mean(np.expm1(masses[:, near_one]), axis=0))
+        if np.any(np.isnan(result) | (result > 0.0)):
+            raise FloatingPointError("integrated log mass is outside the stable numeric domain")
+        return result
 
     def _cdf_one(self, observation: int, ac: int, an: int) -> float:
         if ac == -1:
@@ -324,6 +376,10 @@ class CountPredictive:
         low = np.full((len(levels), self.n_observations), -1, dtype=np.int64)
         high = np.broadcast_to(denominator, low.shape).copy()
         cdf = self._cdf_evaluator()
+        at_one = levels == 1.0
+        upper_support = np.where(np.any(self.mean_draws > 0.0, axis=0), denominator, 0)
+        high[at_one] = upper_support
+        low[at_one] = upper_support - 1
         while np.any(high - low > 1):
             active = high - low > 1
             midpoint = (low + high) // 2

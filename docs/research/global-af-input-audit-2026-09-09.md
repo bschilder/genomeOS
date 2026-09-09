@@ -60,8 +60,11 @@ build when those inputs are absent. `data/store/artifacts/*/cells.parquet` conta
   [#190](https://github.com/bschilder/genomeOS/issues/190); no adapter or artifact was changed.
 - Reuse-review state and biocultural notices are not carried in browser observation exports.
   Read the contributing source records before qualification; public visibility is not export
-  permission. Existing restrictions, including the unresolved derived-surface question in
-  [#66](https://github.com/bschilder/genomeOS/issues/66), still apply.
+  permission. The owner's resolved
+  [#66 decision](https://github.com/bschilder/genomeOS/issues/66#issuecomment-5565166083) allows
+  fitted-surface redistribution with attribution and biocultural notices, clear identification of
+  inference versus observation, and explicit source restrictions honored. That conditional policy
+  permission does not replace source qualification; this milestone publishes no scientific surface.
 
 ## Consequence for implementation
 

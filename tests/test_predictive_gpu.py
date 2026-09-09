@@ -371,3 +371,27 @@ def test_gpu_quantile_tie_is_reported_without_relaxing_exact_endpoint_parity():
         gpu_frame[["coverage_50", "interval_width_50"]],
     )
     assert cpu.cdf([0], [1])[0] == gpu.cdf([0], [1])[0] == 0.5
+
+
+@requires_gpu
+@pytest.mark.parametrize("concentration", [None, 20.0])
+def test_gpu_one_hundred_percent_quantiles_use_exact_mixed_support(concentration):
+    """Both backends must use actual support despite CDF rounding at the 100% level."""
+    means = np.array([[0.0, 1.0, 0.1, 0.0], [0.0, 1.0, 0.5, 0.1]])
+    shape = None if concentration is None else np.full_like(means, concentration)
+    an = [100, 100, 1000, 100]
+    for backend in ["scipy", "cupy"]:
+        predictive = CountPredictive(means, shape, cdf_backend=backend)
+        np.testing.assert_array_equal(predictive.quantiles(an, [1.0]), [[0, 100, 1000, 100]])
+
+
+@requires_gpu
+def test_gpu_diagnostics_preserve_stable_near_degenerate_log_score():
+    """GPU CDF selection must compose with the analytically correct CPU scoring path."""
+    means, concentration = np.full((3, 1), 1e-16), np.full((3, 1), 1e6)
+    cpu = predictive_diagnostics(CountPredictive(means, concentration), [0], [1])
+    gpu = predictive_diagnostics(
+        CountPredictive(means, concentration, cdf_backend="cupy"), [0], [1]
+    )
+    np.testing.assert_allclose(gpu["log_score"], [np.log1p(-1e-16)], rtol=2e-14, atol=0.0)
+    pd.testing.assert_frame_equal(cpu, gpu, rtol=1e-9, atol=1e-11)

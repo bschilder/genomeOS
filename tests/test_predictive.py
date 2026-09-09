@@ -2,10 +2,104 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, localcontext
+from math import comb
+
 import numpy as np
 import pytest
 
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
+
+
+@pytest.mark.parametrize("mean", [1e-16, 1e-12, 0.1, np.nextafter(1.0, 0.0)])
+@pytest.mark.parametrize("concentration", [1e-10, 2.0, 1e6, 2.0**26])
+def test_beta_binomial_one_trial_is_bernoulli_even_near_degeneracy(mean, concentration):
+    """Beta-normalizer cancellation must not corrupt either Bernoulli outcome."""
+    predictive = CountPredictive(np.full((3, 1), mean), np.full((3, 1), concentration))
+    for count, expected in [(0, np.log1p(-mean)), (1, np.log(mean))]:
+        np.testing.assert_allclose(
+            predictive.log_prob([count], [1]), [expected], rtol=2e-14, atol=0.0
+        )
+
+
+@pytest.mark.parametrize(
+    ("mean", "concentration", "count", "denominator"),
+    [
+        (1e-16, 1e6, 0, 2),
+        (1e-12, 1e6, 0, 100),
+        (np.nextafter(1.0, 0.0), 1e6, 100, 100),
+        (1e-16, 1e6, 1, 100),
+        (0.3, 2.0**26, 35, 100),
+        (0.3, 1e-10, 35, 100),
+        (1e-16, 1e6, 0, 65_536),
+    ],
+)
+def test_beta_binomial_mass_matches_independent_decimal_products(
+    mean, concentration, count, denominator
+):
+    """An in-range but cancellation-corrupted negative log mass is also a failure."""
+    with localcontext() as context:
+        context.prec = 80
+        p, c = Decimal.from_float(mean), Decimal.from_float(concentration)
+        alpha, beta = p * c, (1 - p) * c
+        mass = Decimal(comb(denominator, count))
+        for index in range(denominator):
+            numerator = alpha + index if index < count else beta + index - count
+            mass *= numerator / (c + index)
+        expected = float(mass.ln())
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+    np.testing.assert_allclose(
+        predictive.log_prob([count], [denominator]), [expected], rtol=5e-12, atol=0.0
+    )
+
+
+def test_beta_binomial_large_count_scoring_refuses_before_diagnostics():
+    """A bounded stable scorer must refuse work beyond its budget without beta subtraction."""
+    predictive = CountPredictive(np.array([[1e-16]]), np.array([[1e6]]))
+    for operation in [
+        predictive.log_prob,
+        lambda ac, an: predictive_diagnostics(predictive, ac, an),
+    ]:
+        with pytest.raises(ValueError, match="beta-binomial.*65536"):
+            operation([0], [65_537])
+    # The exact support and boundary CDF do not require scoring this mass.
+    np.testing.assert_array_equal(predictive.cdf([-1], [65_537]), [0.0])
+    np.testing.assert_array_equal(predictive.quantiles([65_537], [1.0]), [[65_537]])
+
+
+def test_beta_scoring_cap_does_not_restrict_exact_degenerate_or_binomial_draws():
+    """Only interior beta draws require bounded finite products."""
+    degenerate = CountPredictive(np.array([[0.0, 1.0]]), np.ones((1, 2)))
+    np.testing.assert_array_equal(degenerate.log_prob([0, MAX_COUNT], [MAX_COUNT] * 2), [0, 0])
+    binomial = CountPredictive(np.array([[0.1]]))
+    np.testing.assert_allclose(binomial.log_prob([0], [65_537]), [65_537 * np.log1p(-0.1)])
+
+
+def test_stable_beta_mixture_normalizes_and_respects_allele_complement():
+    """Finite-product scoring must retain normalization and both allele orientations."""
+    means = np.array([[0.125], [0.875]])
+    concentration = np.array([[1e-10], [2.0**26]])
+    forward = CountPredictive(means, concentration)
+    reverse = CountPredictive(1 - means, concentration)
+    masses = np.array([forward.log_prob([k], [8])[0] for k in range(9)])
+    reflected = np.array([reverse.log_prob([8 - k], [8])[0] for k in range(9)])
+    assert np.exp(masses).sum() == pytest.approx(1.0, rel=2e-14, abs=0.0)
+    np.testing.assert_allclose(masses, reflected, rtol=2e-14, atol=0.0)
+
+
+@pytest.mark.parametrize("concentration", [None, 20.0])
+@pytest.mark.parametrize(
+    "means",
+    [[[0.1, 0.5]], [[0.0, 0.0]], [[1.0, 1.0]],
+     [[0.0, 0.0], [0.1, 0.5]], [[0.0, 0.0], [1.0, 1.0]]],
+)
+def test_one_hundred_percent_quantiles_use_exact_mixture_support(concentration, means):
+    """A rounded-one CDF below AN must never shorten the actual upper support."""
+    means = np.array(means)
+    shape = None if concentration is None else np.full_like(means, concentration)
+    predictive = CountPredictive(means, shape)
+    expected = [0, 0] if np.all(means == 0) else [100, 1000]
+    np.testing.assert_array_equal(predictive.quantiles([100, 1000], [1.0]), [expected])
 
 
 def test_explicit_cpu_cdf_backend_matches_default():
