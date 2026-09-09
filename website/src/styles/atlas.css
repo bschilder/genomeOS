@@ -743,9 +743,14 @@
 
 .atlas-elevation {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 1rem;
+  gap: 0.35rem;
+}
+
+.atlas-elevation > .atlas-field--range {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
 }
 
 .atlas-field--range span {
@@ -1882,6 +1887,7 @@ body:has(.atlas-explorer) .site-footer {
 
   .atlas-fieldset--display legend,
   .atlas-fieldset--layers legend,
+  .atlas-control-grid > .atlas-elevation,
   .atlas-control-grid > .atlas-field--range,
   .atlas-control-grid > .atlas-gradient-control,
   .atlas-control-grid > .atlas-dual-range,

@@ -862,6 +862,38 @@ test('explorer groups and explains maps before selection', async ({ page }) => {
   await expect(page).toHaveURL(/entity=hla-b-58-01/);
 });
 
+test('height exaggeration uses the available compact control width', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'the compact desktop sidebar has the two-column constraint being tested',
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/app/?entity=hbs-rs334');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  const inferredSurface = page
+    .locator('summary')
+    .filter({ hasText: /^Inferred surface$/ });
+  const section = inferredSurface.locator('..');
+  if (!(await section.getAttribute('open'))) await inferredSurface.click();
+  const slider = page.getByLabel('Height exaggeration');
+  const controlGrid = slider.locator(
+    'xpath=ancestor::*[contains(@class, "atlas-control-grid")]',
+  );
+  const [sliderBox, controlGridBox] = await Promise.all([
+    slider.boundingBox(),
+    controlGrid.boundingBox(),
+  ]);
+
+  expect(sliderBox).not.toBeNull();
+  expect(controlGridBox).not.toBeNull();
+  expect(sliderBox!.width / controlGridBox!.width).toBeGreaterThanOrEqual(0.72);
+});
+
 test('explorer offers the full basemap and terrain gallery', async ({
   page,
 }) => {
