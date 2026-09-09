@@ -8,6 +8,8 @@
 
 Read the local README, package configuration, `ld.py` module documentation and public `ld_matrix` implementation through its backend dispatch, relevant LD tests, the complete test fixture module, and writer encoding documentation. This is source inspection, not a claim to have read the entire CuGen codebase or its publisher-blocked paper.
 
+**Later September 9 update:** the full article was subsequently obtained through Europe PMC and read. The [full-text methods note](cugen-fulltext-notes-2026-09-09.md) records its exact snapshot, inspected sections and missing supplementary material. It does not change the executable scope of this preflight.
+
 Twelve existing CPU tests passed, **zero skips**, in 0.11 seconds under Python 3.12.13, NumPy 2.4.6, SciPy 1.18.1 and pandas 3.0.5. They exercise:
 
 - correlation against NumPy and internal r/r-squared consistency;
