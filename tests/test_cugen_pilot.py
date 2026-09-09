@@ -246,13 +246,13 @@ def test_reconcile_ld_output_accepts_exact_observed_pair() -> None:
         LDVariant(30, "1-101-A-C", "1", 101, "A", "C"),
         LDVariant(10, "1-201-A-C", "1", 201, "A", "C"),
     )
-    reference = (LDPair(0, 1, 30, 10, 4, (1, 0, 0, 0, 1, 0, 1, 0, 1), "observed", 5 / 11, 25 / 121),)
+    reference = (LDPair(0, 1, 30, 10, 4, (1, 0, 0, 0, 1, 0, 1, 0, 1), "observed", 5 / 11, (5 / 11) ** 2),)
     moments = (
         VariantMoments(4, 5, 1.25, 2.75, 0.375),
         VariantMoments(4, 3, 0.75, 2.75, 0.375),
     )
     output = pd.DataFrame(
-        [[1, 101, "1-101-A-C", 0.375, 1, 201, "1-201-A-C", 0.375, 4, 5 / 11, 25 / 121, 30, 10]],
+        [[1, 101, "1-101-A-C", 0.375, 1, 201, "1-201-A-C", 0.375, 4, 5 / 11, (5 / 11) ** 2, 30, 10]],
         columns=(
             "CHR_A",
             "POS_A",
@@ -305,7 +305,7 @@ def test_reconcile_ld_output_accepts_exact_observed_pair() -> None:
 def test_reconcile_ld_output_refuses_identity_count_and_numeric_defects(defect: str) -> None:
     """Catch any permissive reconciliation of wrong pairs, metadata, counts, or precision."""
     comparison = _comparison()
-    reference = (LDPair(0, 1, 30, 10, 4, (1, 0, 0, 0, 1, 0, 1, 0, 1), "observed", 5 / 11, 25 / 121),)
+    reference = (LDPair(0, 1, 30, 10, 4, (1, 0, 0, 0, 1, 0, 1, 0, 1), "observed", 5 / 11, (5 / 11) ** 2),)
     moments = (
         VariantMoments(4, 5, 1.25, 2.75, 0.375),
         VariantMoments(4, 3, 0.75, 2.75, 0.375),
@@ -865,7 +865,7 @@ def test_runtime_measurement_and_hash_do_not_change_scientific_identity(
     before = json.loads(manifest_path.read_text(encoding="utf-8"))["scientific_identity_sha256"]
     runtime_path = manifest_path.parent / "runtime.json"
     runtime = json.loads(runtime_path.read_text(encoding="utf-8"))
-    runtime["total_wall_seconds"] += 1.0
+    runtime["pre_artifact_wall_seconds"] += 1.0
     runtime_path.write_text(
         json.dumps(runtime, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",

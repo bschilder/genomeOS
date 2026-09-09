@@ -7,9 +7,11 @@ import importlib.util
 import math
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 import pytest
 
 CALLS = np.array(
@@ -47,6 +49,52 @@ def _api() -> tuple[object, object]:
         importlib.import_module("genomeos.validation.ld_contract"),
         importlib.import_module("genomeos.validation.ld_reference"),
     )
+
+
+def _comparison() -> object:
+    spec = importlib.util.find_spec("genomeos.validation.ld_comparison")
+    assert spec is not None, "public CuGen LD comparison module must exist"
+    return importlib.import_module("genomeos.validation.ld_comparison")
+
+
+def _literal_comparison_evidence() -> tuple[tuple[object, ...], tuple[object, ...], pd.DataFrame]:
+    _, reference = _api()
+    pairs = (
+        reference.LDPair(
+            0,
+            1,
+            30,
+            10,
+            4,
+            (1, 0, 0, 0, 1, 0, 1, 0, 1),
+            "observed",
+            5 / 11,
+            (5 / 11) ** 2,
+        ),
+    )
+    moments = (
+        reference.VariantMoments(4, 5, 1.25, 2.75, 0.375),
+        reference.VariantMoments(4, 3, 0.75, 2.75, 0.375),
+    )
+    output = pd.DataFrame(
+        [[1, 101, "1-101-A-C", 0.375, 1, 201, "1-201-A-C", 0.375, 4, 5 / 11, (5 / 11) ** 2, 30, 10]],
+        columns=(
+            "CHR_A",
+            "POS_A",
+            "ID_A",
+            "MAF_A",
+            "CHR_B",
+            "POS_B",
+            "ID_B",
+            "MAF_B",
+            "N_OBS",
+            "R",
+            "R2",
+            "gidx_a",
+            "gidx_b",
+        ),
+    )
+    return pairs, moments, output
 
 
 def _variants() -> tuple[object, ...]:
@@ -162,6 +210,67 @@ def test_reference_ld_uses_status_precedence_for_empty_and_constant_pairs() -> N
         None,
         None,
     )
+
+
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "count_sum",
+        "count_type",
+        "n_obs_type",
+        "status_precedence",
+        "zero_variance_status",
+        "correlation",
+        "moment_integer",
+        "moment_mean",
+        "moment_sxx",
+        "moment_maf",
+        "all_missing",
+        "pair_marginal",
+    ],
+)
+def test_comparator_refuses_malformed_independent_reference_before_reconciliation(
+    defect: str,
+) -> None:
+    """Catch forged count or moment evidence admitting a matching forged CuGen row."""
+    pairs, moments, output = _literal_comparison_evidence()
+    pair = pairs[0]
+    moment_list = list(moments)
+    variants = _variants()[:2]
+    if defect == "count_sum":
+        pair = replace(pair, counts=(0,) * 9)
+    elif defect == "count_type":
+        pair = replace(pair, counts=(True, 0, 0, 0, 1, 0, 1, 0, 1))
+    elif defect == "n_obs_type":
+        pair = replace(pair, n_obs=True)
+        output.loc[0, "N_OBS"] = 1
+    elif defect == "status_precedence":
+        pair = replace(pair, n_obs=1, counts=(1, 0, 0, 0, 0, 0, 0, 0, 0), r=0.0, r2=0.0)
+        output.loc[0, ["N_OBS", "R", "R2"]] = [1, 0.0, 0.0]
+    elif defect == "zero_variance_status":
+        pair = replace(pair, n_obs=2, counts=(2, 0, 0, 0, 0, 0, 0, 0, 0), r=0.0, r2=0.0)
+        output.loc[0, ["N_OBS", "R", "R2"]] = [2, 0.0, 0.0]
+    elif defect == "correlation":
+        pair = replace(pair, r=0.5, r2=0.25)
+        output.loc[0, ["R", "R2"]] = [0.5, 0.25]
+    elif defect == "moment_integer":
+        moment_list[0] = replace(moment_list[0], n_called=True)
+    elif defect == "moment_mean":
+        moment_list[0] = replace(moment_list[0], mean=1.0)
+    elif defect == "moment_sxx":
+        moment_list[0] = replace(moment_list[0], sxx=1.75)
+    elif defect == "moment_maf":
+        moment_list[0] = replace(moment_list[0], maf=0.4)
+        output.loc[0, "MAF_A"] = 0.4
+    elif defect == "all_missing":
+        _, reference = _api()
+        variants = _variants()[:3]
+        moment_list.append(reference.VariantMoments(0, 0, 0.0, None, None))
+    else:
+        moment_list[0] = replace(moment_list[0], sxx=0.75)
+
+    with pytest.raises((TypeError, ValueError)):
+        _comparison().reconcile_ld_output((pair,), variants, tuple(moment_list), output)
 
 
 def test_requested_pairs_applies_both_windows_inclusively_and_keeps_equal_positions() -> None:

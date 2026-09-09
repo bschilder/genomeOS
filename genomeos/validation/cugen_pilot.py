@@ -417,7 +417,11 @@ def run_cugen_pilot(
             "subset_seconds": float(subset_seconds),
             "cpu_ld_seconds": cpu_seconds,
             "gpu_ld_seconds": gpu_seconds,
-            "total_wall_seconds": time.perf_counter() - started,
+            "pre_artifact_wall_seconds": time.perf_counter() - started,
+            "ld_timing_scope": "unsynchronized_public_call_wall_intervals",
+            "pre_artifact_timing_scope": (
+                "ends_before_artifact_serialization_and_completed_reader_verification"
+            ),
         }
         manifest_path = write_completed_cugen_artifact(
             output,

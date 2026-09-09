@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from numbers import Integral
+from numbers import Integral, Real
 from typing import Literal
 
 import numpy as np
 
 from genomeos.validation.ld_contract import (
+    MAX_LD_PAIRS,
+    MAX_LD_SAMPLES,
     LDVariant,
     validate_hard_calls,
     validate_ld_variants,
@@ -46,6 +48,48 @@ class VariantMoments:
     mean: float | None
     sxx: float | None
     maf: float | None
+
+
+def _evidence_integer(value: object, name: str, maximum: int) -> int:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Integral):
+        raise TypeError(f"{name} must be an exact integer")
+    normalized = int(value)
+    if not 0 <= normalized <= maximum:
+        raise ValueError(f"{name} must be between 0 and {maximum}")
+    return normalized
+
+
+def _evidence_float(value: object, name: str, minimum: float, maximum: float) -> float:
+    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
+        raise TypeError(f"{name} must be a real number")
+    normalized = float(value)
+    if not math.isfinite(normalized) or not minimum <= normalized <= maximum:
+        raise ValueError(f"{name} must be finite and in [{minimum}, {maximum}]")
+    return normalized
+
+
+def _validate_moment(moment: VariantMoments) -> tuple[VariantMoments, tuple[int, int, int]]:
+    n = _evidence_integer(moment.n_called, "moment n_called", MAX_LD_SAMPLES)
+    ac = _evidence_integer(moment.ac, "moment ac", 2 * n)
+    if n == 0:
+        if ac != 0 or (moment.mean, moment.sxx, moment.maf) != (None, None, None):
+            raise ValueError("an all-missing moment must have zero ac and undefined statistics")
+        return VariantMoments(0, 0, None, None, None), (0, 0, 0)
+    mean = _evidence_float(moment.mean, "moment mean", 0.0, 2.0)
+    sxx = _evidence_float(moment.sxx, "moment sxx", 0.0, 4.0 * n)
+    maf = _evidence_float(moment.maf, "moment maf", 0.0, 0.5)
+    if mean != ac / n or maf != min(mean / 2.0, 1.0 - mean / 2.0):
+        raise ValueError("moment mean or MAF disagrees with n_called and ac")
+    for n_alt_homozygous in range(max(0, ac - n), ac // 2 + 1):
+        n_heterozygous = ac - 2 * n_alt_homozygous
+        n_reference = n - n_heterozygous - n_alt_homozygous
+        expected_sxx = n_heterozygous + 4 * n_alt_homozygous - ac * ac / n
+        if sxx == expected_sxx:
+            return (
+                VariantMoments(n, ac, mean, sxx, maf),
+                (n_reference, n_heterozygous, n_alt_homozygous),
+            )
+    raise ValueError("moment sxx is not realizable by exact diploid hard calls")
 
 
 def _window(value: object, name: str, *, positive: bool) -> int | None:
@@ -138,6 +182,82 @@ def _pair_from_counts(
         r,
         r2,
     )
+
+
+def validate_ld_evidence(
+    reference: object,
+    variants: object,
+    moments: object,
+    *,
+    genome_build: object,
+    ploidy: object,
+) -> tuple[tuple[LDPair, ...], tuple[VariantMoments, ...]]:
+    """Validate and snapshot exact pair counts, correlations, and realizable moments."""
+    block = validate_ld_variants(variants, genome_build=genome_build, ploidy=ploidy)
+    if not isinstance(reference, (tuple, list)):
+        raise TypeError("reference must contain LDPair records")
+    if len(reference) > MAX_LD_PAIRS:
+        raise ValueError(f"reference exceeds the pilot cap of {MAX_LD_PAIRS}")
+    raw_pairs = tuple(reference)
+    if any(not isinstance(pair, LDPair) for pair in raw_pairs):
+        raise TypeError("reference must contain LDPair records")
+    if not isinstance(moments, (tuple, list)):
+        raise TypeError("moments must contain VariantMoments records")
+    raw_moments = tuple(moments)
+    if any(not isinstance(moment, VariantMoments) for moment in raw_moments):
+        raise TypeError("moments must contain VariantMoments records")
+    if len(raw_moments) != len(block):
+        raise ValueError("moments must exactly match variants in file-row order")
+    validated_moments = tuple(_validate_moment(moment) for moment in raw_moments)
+    moment_block = tuple(item[0] for item in validated_moments)
+    genotype_counts = tuple(item[1] for item in validated_moments)
+    seen: set[tuple[int, int]] = set()
+    pairs: list[LDPair] = []
+    for pair in raw_pairs:
+        row_a = _evidence_integer(pair.row_a, "reference row_a", len(block) - 1)
+        row_b = _evidence_integer(pair.row_b, "reference row_b", len(block) - 1)
+        if row_a >= row_b:
+            raise ValueError("reference contains an invalid row pair")
+        identity = row_a, row_b
+        if identity in seen:
+            raise ValueError("reference contains a duplicate row pair")
+        seen.add(identity)
+        gidx_a = _evidence_integer(pair.gidx_a, "reference gidx_a", 2**63 - 1)
+        gidx_b = _evidence_integer(pair.gidx_b, "reference gidx_b", 2**63 - 1)
+        if (gidx_a, gidx_b) != (block[row_a].gidx, block[row_b].gidx):
+            raise ValueError("reference gidx identity disagrees with variants")
+        n_obs = _evidence_integer(pair.n_obs, "reference n_obs", MAX_LD_SAMPLES)
+        if not isinstance(pair.counts, tuple) or len(pair.counts) != 9:
+            raise ValueError("reference counts must be an exact nine-integer tuple")
+        counts = tuple(_evidence_integer(count, "reference count", MAX_LD_SAMPLES) for count in pair.counts)
+        if sum(counts) != n_obs:
+            raise ValueError("reference counts must sum exactly to n_obs")
+        expected = _pair_from_counts(row_a, row_b, block[row_a], block[row_b], counts)
+        if pair.status != expected.status:
+            raise ValueError("reference status disagrees with exact count precedence")
+        if expected.r is None:
+            if pair.r is not None or pair.r2 is not None:
+                raise ValueError("undefined reference correlation values must be None")
+            r, r2 = None, None
+        else:
+            r = _evidence_float(pair.r, "reference r", -1.0, 1.0)
+            r2 = _evidence_float(pair.r2, "reference r2", 0.0, 1.0)
+            if r != expected.r or r2 != expected.r2:
+                raise ValueError("reference r or r2 disagrees with exact counts")
+        marginals = (
+            tuple(sum(counts[3 * dosage + other] for other in range(3)) for dosage in range(3)),
+            tuple(sum(counts[3 * other + dosage] for other in range(3)) for dosage in range(3)),
+        )
+        if any(
+            observed > available
+            for observed_counts, available_counts in zip(
+                marginals, (genotype_counts[row_a], genotype_counts[row_b]), strict=True
+            )
+            for observed, available in zip(observed_counts, available_counts, strict=True)
+        ):
+            raise ValueError("reference pair marginals disagree with variant moments")
+        pairs.append(LDPair(row_a, row_b, gidx_a, gidx_b, n_obs, counts, expected.status, r, r2))
+    return tuple(pairs), moment_block
 
 
 def reference_ld(

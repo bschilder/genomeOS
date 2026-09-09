@@ -201,6 +201,8 @@ def write_completed_cugen_artifact(
     runtime: dict[str, Any],
 ) -> Path:
     """Write the seven completed members and create the completion manifest last."""
+    _require_data_version(data_version)
+    _verify_runtime(runtime)
     reference_document = {
         "schema_version": 1,
         "genome_build": genome_build,
@@ -261,15 +263,34 @@ def _require_keys(value: object, expected: set[str], name: str) -> dict[str, Any
     return value
 
 
+def _require_schema_version(document: dict[str, Any], name: str) -> None:
+    if type(document.get("schema_version")) is not int or document["schema_version"] != 1:
+        raise ValueError(f"{name} schema_version must be the integer 1")
+
+
+def _require_data_version(value: object) -> None:
+    if not isinstance(value, str) or not value or value != value.strip():
+        raise ValueError("data_version must be a nonempty whitespace-trimmed string")
+
+
 def _verify_runtime(runtime: object) -> None:
     document = _require_keys(
         runtime,
-        {"schema_version", "subset_seconds", "cpu_ld_seconds", "gpu_ld_seconds", "total_wall_seconds"},
+        {
+            "schema_version", "subset_seconds", "cpu_ld_seconds",
+            "gpu_ld_seconds", "pre_artifact_wall_seconds",
+            "ld_timing_scope", "pre_artifact_timing_scope",
+        },
         "runtime.json",
     )
-    if document["schema_version"] != 1:
-        raise ValueError("runtime schema_version must be 1")
-    for name in ("subset_seconds", "cpu_ld_seconds", "gpu_ld_seconds", "total_wall_seconds"):
+    _require_schema_version(document, "runtime.json")
+    if (
+        document["ld_timing_scope"] != "unsynchronized_public_call_wall_intervals"
+        or document["pre_artifact_timing_scope"]
+        != "ends_before_artifact_serialization_and_completed_reader_verification"
+    ):
+        raise ValueError("runtime timing scopes do not match the admitted measurement contract")
+    for name in ("subset_seconds", "cpu_ld_seconds", "gpu_ld_seconds", "pre_artifact_wall_seconds"):
         value = document[name]
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise TypeError(f"runtime {name} must be numeric")
@@ -318,9 +339,10 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
         },
         "manifest",
     )
+    _require_schema_version(manifest, "manifest")
+    _require_data_version(manifest["data_version"])
     if (
-        manifest["schema_version"] != 1
-        or manifest["status"] != "completed"
+        manifest["status"] != "completed"
         or manifest["evidence_kind"] != "synthetic_fixture"
         or manifest["publication_eligible"] is not False
         or manifest["joint_covariance_admitted"] is not False
@@ -359,8 +381,8 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
         },
         "reference.json",
     )
-    if reference_document["schema_version"] != 1:
-        raise ValueError("reference schema_version must be 1")
+    _require_schema_version(reference_document, "reference.json")
+    _require_data_version(reference_document["data_version"])
     variants = tuple(LDVariant(**item) for item in reference_document["variants"])
     partition = _require_keys(
         reference_document["partition"],
@@ -427,7 +449,12 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
     _records_equal(reference_document["workspace"], asdict(workspace), "workspace estimate")
     cpu_summary = reconcile_ld_output(pairs, variants, moments, _read_ld_tsv(root / "cpu.tsv"))
     gpu_summary = reconcile_ld_output(pairs, variants, moments, _read_ld_tsv(root / "gpu.tsv"))
-    validation = _json_file(root / "validation.json")
+    validation = _require_keys(
+        _json_file(root / "validation.json"),
+        {"schema_version", "subset_calls_exact", "cpu", "gpu", "workspace"},
+        "validation.json",
+    )
+    _require_schema_version(validation, "validation.json")
     expected_validation = {
         "schema_version": 1,
         "subset_calls_exact": True,

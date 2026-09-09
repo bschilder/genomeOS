@@ -12,8 +12,8 @@ from numbers import Integral, Real
 import numpy as np
 import pandas as pd
 
-from genomeos.validation.ld_contract import LDVariant, validate_ld_variants
-from genomeos.validation.ld_reference import LDPair, VariantMoments
+from genomeos.validation.ld_contract import validate_ld_variants
+from genomeos.validation.ld_reference import validate_ld_evidence
 
 LD_OUTPUT_COLUMNS = (
     "CHR_A",
@@ -47,37 +47,6 @@ def _float(value: object, column: str, *, minimum: float, maximum: float) -> flo
     return result
 
 
-def _validated_reference(
-    reference: object,
-    variants: tuple[LDVariant, ...],
-    moments: object,
-) -> tuple[tuple[LDPair, ...], tuple[VariantMoments, ...]]:
-    if not isinstance(reference, (tuple, list)) or any(not isinstance(pair, LDPair) for pair in reference):
-        raise TypeError("reference must contain LDPair records")
-    pairs = tuple(reference)
-    if not isinstance(moments, (tuple, list)) or any(
-        not isinstance(moment, VariantMoments) for moment in moments
-    ):
-        raise TypeError("moments must contain VariantMoments records")
-    moment_block = tuple(moments)
-    if len(moment_block) != len(variants):
-        raise ValueError("moments must exactly match variants in file-row order")
-    seen: set[tuple[int, int]] = set()
-    for pair in pairs:
-        if not (0 <= pair.row_a < pair.row_b < len(variants)):
-            raise ValueError("reference contains an invalid row pair")
-        identity = pair.row_a, pair.row_b
-        if identity in seen:
-            raise ValueError("reference contains a duplicate row pair")
-        seen.add(identity)
-        if (pair.gidx_a, pair.gidx_b) != (
-            variants[pair.row_a].gidx,
-            variants[pair.row_b].gidx,
-        ):
-            raise ValueError("reference gidx identity disagrees with variants")
-    return pairs, moment_block
-
-
 def reconcile_ld_output(
     reference: object,
     variants: object,
@@ -86,7 +55,13 @@ def reconcile_ld_output(
 ) -> dict[str, int | float | bool]:
     """Reconcile one CuGen pair frame against exact independent reference evidence."""
     block = validate_ld_variants(variants, genome_build="GRCh38", ploidy="autosomal_diploid")
-    pairs, moment_block = _validated_reference(reference, block, moments)
+    pairs, moment_block = validate_ld_evidence(
+        reference,
+        block,
+        moments,
+        genome_build="GRCh38",
+        ploidy="autosomal_diploid",
+    )
     if not isinstance(output, pd.DataFrame):
         raise TypeError("output must be a pandas DataFrame")
     if tuple(output.columns) != LD_OUTPUT_COLUMNS:
