@@ -871,16 +871,17 @@ test('height exaggeration uses the available compact control width', async ({
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/app/?entity=hbs-rs334');
-  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
-    timeout: 45_000,
-  });
 
   const inferredSurface = page
     .locator('summary')
     .filter({ hasText: /^Inferred surface$/ });
+  await expect(inferredSurface).toBeVisible({ timeout: 15_000 });
   const section = inferredSurface.locator('..');
-  if (!(await section.getAttribute('open'))) await inferredSurface.click();
+  await section.evaluate((element: HTMLDetailsElement) => {
+    element.open = true;
+  });
   const slider = page.getByLabel('Height exaggeration');
+  await expect(slider).toBeVisible();
   const controlGrid = slider.locator(
     'xpath=ancestor::*[contains(@class, "atlas-control-grid")]',
   );
