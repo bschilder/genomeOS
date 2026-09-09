@@ -97,7 +97,7 @@ and named terms; exact spec§6 formulas/budgets, fail before allocation if dimen
 `genomeos/validation/cugen_source.json`, `tests/test_cugen_pilot.py`.
 **Consumes:** Tasks1/2 contracts. **Produces:** `run_cugen_pilot(source:Path, *, variants,
 selection:TrainingSelection, genome_build, ploidy, evidence_kind:str, data_version:str, cugen_root:Path,
-window_variants,window_bp,chunk_size:int,tile_size:int,out:Path) -> Path` returning the completed
+window_variants,window_bp,chunk_size:int,tile_size:int,out:Path,source_revision:str|None=None) -> Path` returning the completed
 manifest path only on success. `verify_cugen_pilot(out:Path) -> dict` rechecks spec§7 artifacts.
 `reconcile_ld_output(reference, variants, moments, output:pd.DataFrame) -> dict` in ld_reference or a
 focused pure `ld_comparison.py` if needed; exact pair/annotation/count reconciliation and
@@ -114,6 +114,8 @@ finite in-range precision checks. Failure raises, retains failure.json and omits
   never count as GPU verification. Source-root/hash mismatch must fail before import. Verifier
   regressions include fractional integer tokens that round to integers in float64 and literal
   NA labels; preserve raw tokens and reject coercion rather than relying on CSV type inference.
+  Cover explicit supplied versus Git-observed genomeOS revisions and refusal of missing/malformed
+  provenance; hash actual imported sources in both cases per spec§7.
 - [ ] GREEN: freeze source hash allowlist from the explicit tested revision. Validate and
   snapshot source, then call `subset_cugen_file(..., use_pinned=False, chunk_size=chunk_size)`.
   Re-decode subset and compare `source_calls[selection.training_indices]` exactly. For each
@@ -133,6 +135,8 @@ finite in-range precision checks. Failure raises, retains failure.json and omits
 **Consumes:** public run/verify adapter. CLI requires `--cugen-root`, `--out`, `--data-version`;
 `--case hand|scale|precision`, `--repeats`>=3, `--seed` defaults42. Output root must be new;
 one immutable subdirectory per case/repeat and a complete planned-run outcome summary.
+Optional `--source-revision` supplies the genomeOS commit label for a source-only GPU bundle;
+its provenance remains supplied, and actual executing source hashes are always recorded.
 
 - [ ] RED: subprocess tests with explicit source PYTHONPATH verify invalid args, existing output,
   unavailable CuGen/GPU nonzero exit (no skip), planned-run accounting and fixture reproducibility.

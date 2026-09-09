@@ -167,7 +167,14 @@ schema_version1, evidence_kind synthetic_fixture, publication_eligible false,
 joint_covariance_admitted false, status completed; it records all sample/variant/partition,
 window/chunk/tile identity, data_version, source revision/hash allowlists for both libraries,
 input and every produced-file SHA256, explicit requested/executed public paths, and numeric
-validation summary. Scientific identity excludes runtime measurements; runtime is still hashed.
+validation summary. For genomeOS, optional source_revision supplies a full 40-hex commit
+label and is recorded as supplied, not Git-observed. If omitted, obtain a full commit from
+Git at the actual executing package root; absence or malformed provenance is an error.
+Always hash the actual relevant imported source files and verify their expected package paths;
+neither a supplied nor Git-observed label certifies that uncommitted bytes equal that commit.
+This permits a source-only GPU bundle without uploading private Git history. Scientific
+identity excludes runtime measurements and runtime-file hashes; runtime is still independently
+hashed in the manifest's file inventory.
 The verifier requires the exact member set, rejects traversal/absolute paths/symlinks, verifies
 all hashes, revalidates input/subset/partition identities and re-runs pure numeric reconciliation.
 TSV reading preserves literal identity/count tokens: parse integer columns from canonical
@@ -180,7 +187,9 @@ Hashes prove consistency, not authenticity or source permissions. No implicit re
 CLI generates only synthetic cases; fresh process controls CUPY_TF32=0,
 NVIDIA_TF32_OVERRIDE=0, USE_PINNED_READER=0 before imports. Record the allowlisted controls,
 versions, hardware, actual imported sources and method paths; do not claim instruction-level
-TF32 measurement. CuPy unavailable or no device is a failed requested experiment, not a skip.
+TF32 measurement. CLI --source-revision supplies the explicit genomeOS revision for source-only
+bundles, following §7; missing Git and missing supplied revision must refuse. CuPy unavailable
+or no device is a failed requested experiment, not a skip.
 Use seeded42 fixtures, at least3 repeated full workflows for a hand case and the64x4096
 scale case, retaining cold/individual repeat times. Include creation, validation, subsetting,
 independent CPU reference, library CPU/GPU LD, verification and serialization plus total wall
