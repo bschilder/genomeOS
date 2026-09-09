@@ -17,6 +17,7 @@
 - Keep `SurfaceFit` in `genomeos.surfaces.fit`. Preserve old import paths, defaults, validation, likelihoods, priors, convergence thresholds, legacy prediction methods and production artifacts.
 - Use `SEED = 42`; require an explicit nonnegative integer when a seed is supplied, refusing booleans. Coordinate/ID/draw validation never fabricates an observation.
 - Arrays have immutable float64 storage and explicit `(draws, observations)` shape; do not merely clear a reversible writeable flag.
+- Refuse nonfinite arithmetic intermediates in effect composition; `expit` must not conceal overflow as a plausible probability. Retain endpoints from finite logits without clipping or an implicit precision fallback.
 - New-cohort predictions refuse any training cohort ID, unknown sampling design, unavailable graph capability or inconsistent effect metadata. No seen-cohort fallback.
 - Geographic footprints, resident qualification, shared-schema coercion #192, inducing uncertainty and empirical calibration are separate unresolved work. This interface does not close them.
 - Task 1–5 of the initial [program plan](2026-09-09-global-af-modeling.md) must complete hardware, independent-review and stable-tree PR handoff before implementing this follow-up. Preparing this document does not mark those gates complete.
@@ -171,7 +172,7 @@ completes the full modeling program.
 
 **Interfaces:** implement `SurveyQueries`, `ObservationModelMetadata`, `ObservationParameters` and `compose_unseen_observations` with the exact fields, shapes and signature in the spec. This task has no PyMC import. `ObservationParameters.mean_draws` and `.concentration` are the public scorer inputs; query order and draw IDs travel with them.
 
-- [ ] **RED — explicit analytical contract:** write the following complete no-noise case first, then run it to observe the expected missing-module/function failure.
+- [x] **RED — explicit analytical contract:** write the following complete no-noise case first, then run it to observe the expected missing-module/function failure.
 
   ```python
   import numpy as np
@@ -206,7 +207,7 @@ completes the full modeling program.
   ```
 
   Run `"$AF_PYTHON" -m pytest tests/test_observation_parameters.py -q` and record RED before implementation.
-- [ ] **RED — noise mechanics and refusal tests:** add exact seeded-reference tests using two streams, including all four cohort/nugget fitted/omitted combinations:
+- [x] **RED — noise mechanics and refusal tests:** add exact seeded-reference tests using two streams, including all four cohort/nugget fitted/omitted combinations:
 
   ```python
   cohort_seed, nugget_seed = np.random.SeedSequence(42).spawn(2)
@@ -217,7 +218,15 @@ completes the full modeling program.
   Assign three explicit query IDs in unsorted order to two cohort IDs; calculate expected sorted-ID index maps and compare the actual logits/means. Verify identical cohort increments at two sites, independent nugget increments, same output after row permutation/inversion, and unchanged nugget draws when cohort effects are omitted. Repeat with zero scales and binomial `None` concentration. Compare returned arrays to `CountPredictive` analytical log masses for two identical draws at p=0.2, AC=1, AN=4: expected probability `4 * 0.2 * 0.8**3`.
 
   Parameterize exact refusals: empty/mismatched queries, repeated observation ID, blank/nonstring IDs, boolean/nonfinite/out-of-range coordinates, duplicate/boolean/fractional draw coordinates, unsupported convention/likelihood, duplicate or absent fitted designs, seen cohort, missing or extra effect arrays, wrong `(D,N)/(D,K)/(D,)` shapes, NaN/inf, negative scales, nonpositive concentration and invalid seeds. Test input-copy isolation and `setflags(write=True)` refusal on returned arrays. Test extreme finite logits without epsilon clipping.
-- [ ] **GREEN — implementation:** implement the frozen contracts and shape/domain checks before randomization. Store immutable arrays using a bytes-backed copy. Build canonical maps with exact labels and separate streams:
+
+  Add the reproduced [#200](https://github.com/bschilder/genomeOS/issues/200) overflow regression:
+  one alternate-design query, latent and design logits both `-9e307`, cohort/nugget scales
+  `1.7e308`/`1.4e308`, seed 42. The independent combined logit is positive, but unguarded
+  float64 addition returns a zero mean after overflow. Require a numerical-domain error, with
+  separate tests for design addition, scale multiplication and effect accumulation. Preserve
+  all ordinary seeded/reference/endpoint assertions; do not introduce a tolerance to conceal
+  this arithmetic failure.
+- [x] **GREEN — implementation:** implement the frozen contracts and shape/domain checks before randomization. Store immutable arrays using a bytes-backed copy. Build canonical maps with exact labels and separate streams:
 
   ```python
   cohorts = tuple(sorted(set(queries.cohort_ids)))
@@ -228,8 +237,16 @@ completes the full modeling program.
   ```
 
   Use dictionaries for the actual O(N) index mapping, not repeated `.index` at scale. Form one zero reference-design column plus recorded contrasts; add only declared effects using the fixed stream identities; `scipy.special.expit` produces means. Broadcast positive scalar concentration draws to `(D,N)` only when the fitted likelihood is beta-binomial. Return validated immutable `ObservationParameters`; no replicated count sampling or I/O here.
-- [ ] **Verify:** run `tests/test_observation_parameters.py` and `tests/test_predictive.py`. Confirm importing the pure module does not import PyMC or a serving/storage module. Verify all analytical and deliberately malformed fixtures; record exact failures fixed rather than counting skips as evidence.
-- [ ] **Gate/review/commit:** run every global gate, inspect staged paths, and commit `feat: compose unseen-cohort predictive parameters refs #191`. Independent review checks scientific effect semantics and immutable/aligned contracts before the integration task starts.
+- [x] **Verify:** run `tests/test_observation_parameters.py` and `tests/test_predictive.py`. Confirm importing the pure module does not import PyMC or a serving/storage module. Verify all analytical and deliberately malformed fixtures; record exact failures fixed rather than counting skips as evidence.
+- [x] **Gate/review/commit:** run every global gate, inspect staged paths, and commit `feat: compose unseen-cohort predictive parameters refs #191`. Independent review checks scientific effect semantics and immutable/aligned contracts before the integration task starts.
+
+**Completed evidence:** `fa6c3db` implements the pure contracts; `0c66f0d` repairs #200's
+reproduced arithmetic-overflow failure. The final focused run passes 79 composition and
+76 scorer tests (155 total), with no skips or warnings, plus 40 smoke tests and the listed
+lint/contract/module/privacy/whitespace gates. Independent task review approved spec and
+quality; the subsequent scoped review confirmed the overflow fix and no new breakage.
+Actual fitted-reference provenance, named posterior-axis extraction and graph/cache capability
+checks remain Task 3 acceptance items, not completed claims from this pure component.
 
 ### Task 3: Fit metadata, named latent draws and public GP adapter
 

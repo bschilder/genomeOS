@@ -57,6 +57,13 @@ Required fields:
 
 The arrays describe conditional mean/dispersion given each combined posterior/new-effect draw. They are not replicated counts. Numerical endpoints produced by `expit` are retained without arbitrary epsilon clipping. The downstream scorer still applies its documented special-function numerical limits; mathematically positive parameters do not guarantee numerically evaluable beta-binomial probabilities.
 
+**Arithmetic-domain clarification ([#200](https://github.com/bschilder/genomeOS/issues/200)):**
+finite input arrays do not guarantee finite additions or scale products. Refuse nonfinite
+composition intermediates with an explicit numerical-domain error before `expit` can hide them
+as plausible endpoints. Do not add clipping or an implicit higher-precision fallback. This may
+refuse mathematically finite cancellation cases outside float64's evaluable domain; ordinary
+finite large logits still retain their numerical probability endpoints.
+
 ### Pure composition function
 
 ```python
