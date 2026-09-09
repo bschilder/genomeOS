@@ -150,3 +150,6 @@ Every profiler output carries `evidence_kind="synthetic_performance_probe"` and
 `publication_eligible=false`. Cold and warm timing include construction, full diagnostics,
 transfers, and synchronization, but exclude imports and synthetic input generation. They are
 computational measurements, not model-accuracy results or allele-frequency benchmark evidence.
+
+The controlled synthetic A100 results, raw reports, timing qualifications, and resource lifecycle
+are preserved in [the complete-workflow evidence note](research/count-scoring-gpu-workflow-2026-09-09.md).
