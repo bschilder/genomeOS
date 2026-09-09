@@ -189,7 +189,8 @@ def test_summary_frame_has_one_row_per_fold():
 
 def test_cross_validation_runs_and_reports_coverage_between_zero_and_one():
     observations = _observations(n=90)
-    result = cross_validate(observations, FAST, n_folds=3, strategy="spatial")
+    with pytest.warns(UserWarning, match=r"inducing points are .*They are redundant"):
+        result = cross_validate(observations, FAST, n_folds=3, strategy="spatial")
     assert len(result.folds) == 3
     for fold in result.folds:
         assert 0.0 <= fold.coverage_95_predictive <= 1.0
@@ -239,7 +240,8 @@ def test_predictive_coverage_exceeds_latent_coverage_on_the_same_data():
     has stopped adding the variance it exists to add.
     """
     observations = _observations(n=90)
-    result = cross_validate(observations, FAST, n_folds=3, strategy="spatial")
+    with pytest.warns(UserWarning, match=r"inducing points are .*They are redundant"):
+        result = cross_validate(observations, FAST, n_folds=3, strategy="spatial")
     predictive = result._mean("coverage_95_predictive")
     latent = result._mean("coverage_95_latent")
     assert predictive >= latent, f"predictive {predictive:.2f} < latent {latent:.2f}"

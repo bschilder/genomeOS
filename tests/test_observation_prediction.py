@@ -76,10 +76,22 @@ def _model(*, latent_node: bool = True) -> pm.Model:
 def _fit(
     *,
     metadata: ObservationModelMetadata | None = None,
-    posterior: dict[str, xr.DataArray] | None = None,
+    posterior: dict[str, xr.DataArray] | xr.Dataset | None = None,
     latent_node: bool = True,
+    posterior_data_tree: bool = False,
 ) -> SurfaceFit:
     prediction_metadata = metadata if metadata is not None else _metadata()
+    if isinstance(posterior, xr.Dataset):
+        posterior_group = posterior.copy()
+    else:
+        posterior_group = xr.Dataset(
+            _posterior_variables() if posterior is None else posterior
+        )
+    idata = (
+        xr.DataTree.from_dict({"posterior": posterior_group})
+        if posterior_data_tree
+        else SimpleNamespace(posterior=posterior_group)
+    )
     return SurfaceFit(
         variant_id="chr11-5227002-T-A",
         config=FitConfig(),
@@ -90,9 +102,7 @@ def _fit(
         prior_frequency_sd=0.1,
         inducing_spacing_ratio=None,
         correlation_range_km=500.0,
-        idata=SimpleNamespace(
-            posterior=_posterior_variables() if posterior is None else posterior
-        ),
+        idata=idata,
         _model=_model(latent_node=latent_node),
         _centre=np.zeros(3),
         _scale=np.ones(3),
@@ -110,7 +120,53 @@ def _queries() -> SurveyQueries:
     )
 
 
-def _known_latent_boundary(expected_points: np.ndarray | None = None):
+def _no_effect_fit(*, posterior_data_tree: bool = False) -> SurfaceFit:
+    posterior = xr.Dataset(
+        {
+            "intercept": (
+                ("chain", "draw"),
+                np.array([[0.1, 0.2], [0.3, 0.4]]),
+            )
+        },
+        coords={"chain": [8, 7], "draw": [12, 11]},
+    )
+    return _fit(
+        metadata=_metadata(
+            fitted_designs=("reference",),
+            cohort_effect_applied=False,
+            likelihood="binomial",
+        ),
+        posterior=posterior,
+        posterior_data_tree=posterior_data_tree,
+    )
+
+
+def _no_effect_queries() -> SurveyQueries:
+    return replace(_queries(), sampling_designs=("reference", "reference"))
+
+
+def _no_effect_latent_boundary(
+    *,
+    chains: tuple[int, ...] = (8, 7),
+    draws: tuple[int, ...] = (12, 11),
+):
+    def sample_posterior_predictive(idata, *, var_names, random_seed, progressbar):
+        del idata, var_names, random_seed, progressbar
+        latent = xr.DataArray(
+            np.arange(len(chains) * len(draws) * 2).reshape(len(chains), len(draws), 2),
+            dims=("chain", "draw", "point_position"),
+            coords={"chain": list(chains), "draw": list(draws), "point_position": [0, 1]},
+        ).transpose("point_position", "draw", "chain")
+        return SimpleNamespace(posterior_predictive={"latent_logit_pred": latent})
+
+    return sample_posterior_predictive
+
+
+def _known_latent_boundary(
+    expected_points: np.ndarray | None = None,
+    *,
+    values: np.ndarray | None = None,
+):
     def sample_posterior_predictive(idata, *, var_names, random_seed, progressbar):
         del idata
         assert var_names == ["latent_logit_pred"]
@@ -119,13 +175,18 @@ def _known_latent_boundary(expected_points: np.ndarray | None = None):
         if expected_points is not None:
             model = pm.modelcontext(None)
             np.testing.assert_array_equal(model["x_pred"].get_value(), expected_points)
-        latent = xr.DataArray(
+        latent_values = (
             np.array(
                 [
                     [[1.0, 2.0], [3.0, 4.0]],
                     [[5.0, 6.0], [7.0, 8.0]],
                 ]
-            ),
+            )
+            if values is None
+            else values
+        )
+        latent = xr.DataArray(
+            latent_values,
             dims=("chain", "draw", "point_position"),
             coords={"chain": [0, 1], "draw": [2, 3], "point_position": [0, 1]},
         )
@@ -210,13 +271,147 @@ def test_adapter_extracts_every_fitted_and_omitted_random_effect_combination(
     )
 
 
+@pytest.mark.parametrize("posterior_data_tree", [False, True], ids=["dataset", "data_tree"])
+def test_no_effect_adapter_uses_actual_posterior_draw_identity(posterior_data_tree):
+    fit = _no_effect_fit(posterior_data_tree=posterior_data_tree)
+
+    with mock.patch(
+        "pymc.sample_posterior_predictive", side_effect=_no_effect_latent_boundary()
+    ):
+        parameters = predict_new_cohort_parameters(fit, _no_effect_queries())
+
+    assert parameters.draw_ids == ((7, 11), (7, 12), (8, 11), (8, 12))
+    assert parameters.mean_draws.dtype == np.float64
+
+
+def test_no_effect_latent_draw_labels_must_match_actual_posterior():
+    fit = _no_effect_fit()
+
+    with mock.patch(
+        "pymc.sample_posterior_predictive",
+        side_effect=_no_effect_latent_boundary(chains=(0, 1), draws=(2, 3)),
+    ):
+        with pytest.raises(ValueError, match="fitted posterior"):
+            predict_new_cohort_parameters(fit, _no_effect_queries())
+
+
+@pytest.mark.parametrize(
+    "posterior_problem",
+    ["missing", "not_xarray", "missing_labels", "empty", "duplicated", "noninteger"],
+)
+def test_actual_posterior_identity_is_validated_before_sampling(posterior_problem):
+    fit = _no_effect_fit()
+    if posterior_problem == "missing":
+        idata = SimpleNamespace()
+    elif posterior_problem == "not_xarray":
+        idata = SimpleNamespace(posterior={"intercept": np.zeros((2, 2))})
+    elif posterior_problem == "missing_labels":
+        idata = SimpleNamespace(posterior=xr.Dataset({"intercept": ("sample", [0.0])}))
+    else:
+        chain = {
+            "empty": [],
+            "duplicated": [7, 7],
+            "noninteger": ["seven", "eight"],
+        }[posterior_problem]
+        values = np.empty((len(chain), 2), dtype=np.float64)
+        idata = SimpleNamespace(
+            posterior=xr.Dataset(
+                {"intercept": (("chain", "draw"), values)},
+                coords={"chain": chain, "draw": [11, 12]},
+            )
+        )
+    object.__setattr__(fit, "idata", idata)
+
+    with mock.patch(
+        "pymc.sample_posterior_predictive",
+        side_effect=AssertionError("posterior errors must refuse before sampling"),
+    ):
+        with pytest.raises(ValueError, match="posterior"):
+            predict_new_cohort_parameters(fit, _no_effect_queries())
+
+
+@pytest.mark.parametrize(
+    "invalid_values",
+    [
+        np.zeros((2, 2), dtype=bool),
+        np.full((2, 2), "0.0"),
+        np.full((2, 2), 0.0, dtype=object),
+        np.full((2, 2), 0.5 + 9j),
+    ],
+    ids=["boolean", "string", "object", "complex"],
+)
+def test_posterior_effect_values_must_be_real_numeric_before_casting(invalid_values):
+    posterior = _posterior_variables()
+    posterior["cohort_sd"] = xr.DataArray(
+        invalid_values,
+        dims=("chain", "draw"),
+        coords={"chain": [0, 1], "draw": [2, 3]},
+    )
+    fit = _fit(posterior=posterior)
+
+    with mock.patch(
+        "pymc.sample_posterior_predictive",
+        side_effect=AssertionError("invalid posterior effects must refuse before sampling"),
+    ):
+        with pytest.raises(ValueError, match="real numeric"):
+            predict_new_cohort_parameters(fit, _queries())
+
+
+@pytest.mark.parametrize(
+    "invalid_values",
+    [
+        np.zeros((2, 2, 2), dtype=bool),
+        np.full((2, 2, 2), "0.0"),
+        np.full((2, 2, 2), 0.0, dtype=object),
+        np.full((2, 2, 2), 0.5 + 9j),
+    ],
+    ids=["boolean", "string", "object", "complex"],
+)
+def test_latent_values_must_be_real_numeric_before_casting(invalid_values):
+    fit = _fit()
+
+    with mock.patch(
+        "pymc.sample_posterior_predictive",
+        side_effect=_known_latent_boundary(values=invalid_values),
+    ):
+        with pytest.raises(ValueError, match="real numeric"):
+            predict_new_cohort_parameters(fit, _queries())
+
+
+@pytest.mark.parametrize(
+    ("effect_dtype", "latent_dtype"),
+    [(np.int64, np.float32), (np.float32, np.int16)],
+    ids=["integer_effect", "integer_latent"],
+)
+def test_real_integer_and_float_effects_and_latents_produce_float64(
+    effect_dtype, latent_dtype
+):
+    posterior = _posterior_variables()
+    posterior["cohort_sd"] = posterior["cohort_sd"].astype(effect_dtype)
+    latent_values = np.arange(8).reshape(2, 2, 2).astype(latent_dtype)
+    fit = _fit(posterior=posterior)
+
+    with mock.patch(
+        "pymc.sample_posterior_predictive",
+        side_effect=_known_latent_boundary(values=latent_values),
+    ):
+        parameters = predict_new_cohort_parameters(fit, _queries())
+
+    assert parameters.mean_draws.dtype == np.float64
+    assert parameters.concentration.dtype == np.float64
+
+
 def test_coordinate_equivalences_are_sampled_once_and_expanded_in_submission_order():
     metadata = _metadata(
         fitted_designs=("reference",),
         cohort_effect_applied=False,
         likelihood="binomial",
     )
-    fit = _fit(metadata=metadata, posterior={})
+    posterior = xr.Dataset(
+        {"intercept": (("chain", "draw"), np.zeros((2, 1)))},
+        coords={"chain": [1, 0], "draw": [3]},
+    )
+    fit = _fit(metadata=metadata, posterior=posterior)
     queries = SurveyQueries(
         observation_ids=("a", "b", "c", "d", "e", "f"),
         cohort_ids=("new",) * 6,
@@ -359,51 +554,43 @@ def test_posterior_effects_cannot_be_silently_ignored_when_metadata_omits_them(e
             )
 
 
-@pytest.mark.parametrize("coordinate_problem", ["repeated", "different"])
-def test_posterior_coordinate_labels_must_be_unique_and_equal_before_sampling(
-    coordinate_problem,
-):
-    posterior = _posterior_variables()
-    if coordinate_problem == "repeated":
-        posterior["cohort_sd"] = xr.DataArray(
-            np.zeros((2, 2)),
-            dims=("chain", "draw"),
-            coords={"chain": [0, 0], "draw": [2, 3]},
-        )
-        message = "unique"
-    else:
-        posterior["cohort_sd"] = xr.DataArray(
-            np.zeros((2, 2)),
-            dims=("chain", "draw"),
-            coords={"chain": [0, 2], "draw": [2, 3]},
-        )
-        message = "coordinate labels"
-    fit = _fit(posterior=posterior)
-    with mock.patch(
-        "pymc.sample_posterior_predictive",
-        side_effect=AssertionError("the expensive draw boundary must not be called"),
-    ):
-        with pytest.raises(ValueError, match=message):
-            predict_new_cohort_parameters(fit, _queries())
-
-
-@pytest.mark.parametrize("malformation", ["missing", "event_axis", "different_coordinates"])
+@pytest.mark.parametrize(
+    "malformation",
+    [
+        "missing",
+        "event_axis",
+        "missing_labels",
+        "empty_labels",
+        "duplicated_labels",
+        "noninteger_labels",
+        "different_coordinates",
+    ],
+)
 def test_named_latent_output_is_required_and_draw_aligned(malformation):
-    fit = _fit()
+    fit = _no_effect_fit()
 
     def boundary(idata, *, var_names, random_seed, progressbar):
         del idata, var_names, random_seed, progressbar
         if malformation == "missing":
             return SimpleNamespace(posterior_predictive={})
-        dims = ("chain", "draw") if malformation == "event_axis" else (
-            "chain",
-            "draw",
-            "point_position",
+        dims = (
+            ("chain", "draw")
+            if malformation == "event_axis"
+            else ("chain", "draw", "point_position")
         )
-        shape = (2, 2) if malformation == "event_axis" else (2, 2, 2)
-        coords = {"chain": [0, 1], "draw": [2, 3]}
-        if malformation == "different_coordinates":
-            coords["chain"] = [0, 2]
+        chains: list[object] = [7, 8]
+        if malformation == "empty_labels":
+            chains = []
+        elif malformation == "duplicated_labels":
+            chains = [7, 7]
+        elif malformation == "noninteger_labels":
+            chains = ["seven", "eight"]
+        elif malformation == "different_coordinates":
+            chains = [7, 9]
+        shape = (len(chains), 2) if malformation == "event_axis" else (len(chains), 2, 2)
+        coords = {"chain": chains, "draw": [11, 12]}
+        if malformation == "missing_labels":
+            coords.pop("chain")
         if len(shape) == 3:
             coords["point_position"] = [0, 1]
         variable = xr.DataArray(np.zeros(shape), dims=dims, coords=coords)
@@ -411,4 +598,4 @@ def test_named_latent_output_is_required_and_draw_aligned(malformation):
 
     with mock.patch("pymc.sample_posterior_predictive", side_effect=boundary):
         with pytest.raises(ValueError, match="latent_logit_pred"):
-            predict_new_cohort_parameters(fit, _queries())
+            predict_new_cohort_parameters(fit, _no_effect_queries())

@@ -52,10 +52,19 @@ def _validate_request(
     return metadata
 
 
-def _coordinate_labels(variable: xr.DataArray, name: str, dimension: str) -> tuple[int, ...]:
-    if dimension not in variable.coords:
+def _coordinate_labels(
+    variable: xr.DataArray | xr.Dataset | xr.DataTree,
+    name: str,
+    dimension: str,
+) -> tuple[int, ...]:
+    if dimension not in variable.dims or dimension not in variable.coords:
         raise ValueError(f"{name} must carry explicit {dimension} coordinate labels")
-    raw = variable.coords[dimension].to_numpy().tolist()
+    coordinate = variable.coords[dimension]
+    if coordinate.dims != (dimension,):
+        raise ValueError(f"{name} {dimension} coordinate labels must be one-dimensional")
+    raw = coordinate.to_numpy().tolist()
+    if not raw:
+        raise ValueError(f"{name} {dimension} coordinate labels must be nonempty")
     if any(
         isinstance(label, (bool, np.bool_)) or not isinstance(label, Integral) for label in raw
     ):
@@ -111,67 +120,71 @@ def _extract_named_array(
 
     ordered = ordered.transpose("chain", "draw", *event_dimensions)
     values = ordered.to_numpy().reshape(len(sorted_chains) * len(sorted_draws), *event_shape)
-    return np.asarray(values, dtype=np.float64), coordinates
+    if not (
+        np.issubdtype(values.dtype, np.integer)
+        or np.issubdtype(values.dtype, np.floating)
+    ):
+        raise ValueError(f"{name} values must have a real numeric dtype")
+    return values.astype(np.float64, copy=False), coordinates
 
 
-def _posterior_variable(fit: SurfaceFit, name: str) -> object:
+def _posterior_group(fit: SurfaceFit) -> xr.Dataset | xr.DataTree:
     posterior = getattr(fit.idata, "posterior", None)
+    if not isinstance(posterior, (xr.Dataset, xr.DataTree)):
+        raise ValueError("fitted posterior must be an xarray Dataset or DataTree")
+    return posterior
+
+
+def _posterior_variable(posterior: xr.Dataset | xr.DataTree, name: str) -> object:
     if posterior is None or name not in posterior:
         raise ValueError(f"fitted posterior is missing required variable {name!r}")
     return posterior[name]
 
 
 def _extract_effects(
-    fit: SurfaceFit, metadata: ObservationModelMetadata
+    posterior: xr.Dataset | xr.DataTree,
+    metadata: ObservationModelMetadata,
+    posterior_coordinates: tuple[tuple[int, ...], tuple[int, ...]],
 ) -> tuple[
     np.ndarray,
     np.ndarray | None,
     np.ndarray | None,
     np.ndarray | None,
-    tuple[tuple[int, ...], tuple[int, ...]] | None,
 ]:
-    expected_coordinates: tuple[tuple[int, ...], tuple[int, ...]] | None = None
+    draws = len(posterior_coordinates[0]) * len(posterior_coordinates[1])
     contrasts = len(metadata.fitted_designs) - 1
     if contrasts:
-        design, expected_coordinates = _extract_named_array(
-            _posterior_variable(fit, "beta_design"),
+        design, _ = _extract_named_array(
+            _posterior_variable(posterior, "beta_design"),
             "beta_design",
             event_size=contrasts,
-            expected_coordinates=None,
+            expected_coordinates=posterior_coordinates,
         )
     else:
-        if "beta_design" in fit.idata.posterior:
+        if "beta_design" in posterior:
             raise ValueError("posterior beta_design conflicts with single-design prediction metadata")
-        design = np.empty((0, 0), dtype=np.float64)
+        design = np.empty((draws, 0), dtype=np.float64)
 
     def scalar(name: str, applied: bool) -> np.ndarray | None:
-        nonlocal expected_coordinates
         if not applied:
-            if name in fit.idata.posterior:
+            if name in posterior:
                 raise ValueError(f"posterior {name} conflicts with omitted prediction metadata")
             return None
-        values, coordinates = _extract_named_array(
-            _posterior_variable(fit, name),
+        values, _ = _extract_named_array(
+            _posterior_variable(posterior, name),
             name,
             event_size=None,
-            expected_coordinates=expected_coordinates,
+            expected_coordinates=posterior_coordinates,
         )
-        if expected_coordinates is None:
-            expected_coordinates = coordinates
         return values
 
     cohort_sd = scalar("cohort_sd", metadata.cohort_effect_applied)
     nugget_sd = scalar("nugget_sd", metadata.nugget_applied)
     concentration = scalar("concentration", metadata.likelihood == "beta_binomial")
 
-    if metadata.likelihood == "binomial" and "concentration" in fit.idata.posterior:
+    if metadata.likelihood == "binomial" and "concentration" in posterior:
         raise ValueError("posterior concentration conflicts with binomial prediction metadata")
-    if expected_coordinates is None:
-        return design, cohort_sd, nugget_sd, concentration, None
-    draws = len(expected_coordinates[0]) * len(expected_coordinates[1])
-    if contrasts == 0:
-        design = np.empty((draws, 0), dtype=np.float64)
-    return design, cohort_sd, nugget_sd, concentration, expected_coordinates
+    return design, cohort_sd, nugget_sd, concentration
 
 
 def _canonical_coordinates(queries: SurveyQueries) -> tuple[np.ndarray, np.ndarray]:
@@ -201,8 +214,13 @@ def predict_new_cohort_parameters(
 ) -> ObservationParameters:
     """Extract fitted draw-aligned parameters for explicit genuinely unseen survey cohorts."""
     metadata = _validate_request(fit, queries, seed)
-    design, cohort_sd, nugget_sd, concentration, posterior_coordinates = _extract_effects(
-        fit, metadata
+    posterior = _posterior_group(fit)
+    posterior_coordinates = (
+        tuple(sorted(_coordinate_labels(posterior, "fitted posterior", "chain"))),
+        tuple(sorted(_coordinate_labels(posterior, "fitted posterior", "draw"))),
+    )
+    design, cohort_sd, nugget_sd, concentration = _extract_effects(
+        posterior, metadata, posterior_coordinates
     )
     points, submitted_index = _canonical_coordinates(queries)
 
@@ -217,17 +235,12 @@ def predict_new_cohort_parameters(
     posterior_predictive = getattr(drawn, "posterior_predictive", None)
     if posterior_predictive is None or "latent_logit_pred" not in posterior_predictive:
         raise ValueError("posterior predictive output is missing latent_logit_pred")
-    latent_unique, latent_coordinates = _extract_named_array(
+    latent_unique, _ = _extract_named_array(
         posterior_predictive["latent_logit_pred"],
         "latent_logit_pred",
         event_size=len(points),
         expected_coordinates=posterior_coordinates,
     )
-    if posterior_coordinates is None:
-        posterior_coordinates = latent_coordinates
-        draws = len(posterior_coordinates[0]) * len(posterior_coordinates[1])
-        design = np.empty((draws, 0), dtype=np.float64)
-
     draw_ids = tuple(
         (chain, draw)
         for chain in posterior_coordinates[0]

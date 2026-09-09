@@ -223,10 +223,11 @@ def test_inducing_placement_is_deterministic_given_the_seed():
 
 def test_the_inducing_approximation_fits_and_predicts():
     observations = _observations(n=70)
-    fit = fit_surface(
-        observations,
-        FitConfig(draws=400, tune=800, chains=4, approximation="inducing", n_inducing=40),
-    )
+    with pytest.warns(UserWarning, match=r"inducing points are .*They are redundant"):
+        fit = fit_surface(
+            observations,
+            FitConfig(draws=400, tune=800, chains=4, approximation="inducing", n_inducing=40),
+        )
     pred = fit.predict(lat=[0.0, 0.0], lon=[-8.0, 8.0])
     assert ((pred["post_median"] > 0) & (pred["post_median"] < 1)).all()
     assert pred["post_median"].iloc[0] < pred["post_median"].iloc[1], "must follow the cline"
