@@ -398,10 +398,19 @@ import sys
 from pathlib import Path
 import numpy as np
 from genomeos.surfaces.fit import load_fit
-from genomeos.surfaces.observation import SurveyQueries
+from genomeos.surfaces.observation import ObservationModelMetadata, SurveyQueries
 
 directory = Path(sys.argv[1])
 fitted = load_fit(directory / "observation-surface.pkl")
+expected_metadata = ObservationModelMetadata(
+    convention="new_cohort_count_v1",
+    fitted_designs=("population_random", "healthy_reference"),
+    training_cohort_ids=("cohort-0", "cohort-1", "cohort-2", "cohort-3"),
+    cohort_effect_applied=True,
+    nugget_applied=False,
+    likelihood="beta_binomial",
+)
+assert fitted.prediction_metadata == expected_metadata
 queries = SurveyQueries(
     observation_ids=("cache-a", "cache-b"),
     cohort_ids=("new-cache", "new-cache"),
@@ -415,9 +424,6 @@ np.savez(
     mean_draws=parameters.mean_draws,
     concentration=parameters.concentration,
     draw_ids=np.asarray(parameters.draw_ids, dtype=np.int64),
-)
-assert fitted.prediction_metadata.fitted_designs == (
-    "population_random", "healthy_reference"
 )
 """
     subprocess.run([sys.executable, "-c", script, str(tmp_path)], check=True)
