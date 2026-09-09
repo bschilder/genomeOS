@@ -130,9 +130,9 @@ The following tasks implement reusable WP0/WP1 engineering prerequisites. They d
 
 **Interface:** `build_buffered_splits(observations, block_assignments, dependencies, *, buffer_km, data_version)` returns a tuple of frozen `BenchmarkSplit` records. Observations require unique `source_record_id`, `cohort_id`, `lat`, `lon`, `radius_km`; block_assignments maps every record ID exactly once to a nonempty block ID. Dependencies are explicit undirected `(record_id, record_id)` pairs. Automatically connect shared cohort IDs; union transitive explicit dependencies. Test IDs are the block's seed records; exclude all connected training candidates and candidates within buffer distance of any test footprint. Store sorted train/test/excluded IDs, exclusion reasons, minimum realized edge-to-edge separation (None when unavailable), input fingerprint, buffer, data_version, and content-derived split ID. Never discard a planned block: an empty train set is an explicit infeasible split. Keep empty test blocks impossible by construction; require ≥2 blocks.
 
-- [ ] RED: transitive dependencies, multi-site cohorts, repeated variants at one location, overlapping footprints, antimeridian/poles, exact buffer boundary, infeasible folds, orphan edges/assignments, invalid coordinates/radii/identities, determinism under input row and edge reordering.
-- [ ] GREEN: pure deterministic split builder and strict `validate_split` verifying complete disjoint membership, no dependency/buffer leakage, and fingerprint/ID consistency. Use geodesic great-circle distance and chunking to avoid an unbounded all-pairs matrix.
-- [ ] Verify focused tests/smoke/privacy; commit referencing #189.
+- [x] RED: transitive dependencies, multi-site cohorts, repeated variants at one location, overlapping footprints, antimeridian/poles, exact buffer boundary, infeasible folds, orphan edges/assignments, invalid coordinates/radii/identities, determinism under input row and edge reordering.
+- [x] GREEN: pure deterministic split builder and strict `validate_split` verifying complete disjoint membership, no dependency/buffer leakage, and fingerprint/ID consistency. Use geodesic great-circle distance and chunking to avoid an unbounded all-pairs matrix.
+- [x] Verify focused tests/smoke/privacy; commit referencing #189. Reviewed `2017c49` with no findings; 30 focused tests and 40 smoke tests passed. Declared dependencies and footprints still require empirical qualification.
 
 ### Task 3: Inventory and fail-closed benchmark reporting
 
