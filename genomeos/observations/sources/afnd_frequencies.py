@@ -230,7 +230,21 @@ def load(
 
     refuse(freq["af"].isna(), "no_frequency_reported")
     refuse(freq["n_indiv"].isna() | (freq["n_indiv"] <= 0), "no_sample_size")
+    # A fraction of an individual is not a sample size. Truncating one would invent a measurement
+    # nobody made, and it would do so inconsistently: `an` rounds 100.5 to 201 while an identity
+    # keyed on `int()` truncates it to 100, so the same row would claim 100.5 individuals in its
+    # counts and 100 in its identity. Worse, 100.0 and 100.5 differ as floats — passing the
+    # duplicate check below — and then collide once truncated, which is the `unique=True` failure
+    # #154 exists to prevent. Refused here rather than coerced, and before the duplicate check, so
+    # such a row is reported for what is actually wrong with it.
+    refuse(freq["n_indiv"].notna() & (freq["n_indiv"] % 1 != 0), "fractional_sample_size")
     refuse(~freq["af"].between(0.0, 1.0), "frequency_outside_unit_interval")
+
+    # One canonical integer, built after the checks that guarantee it is safe to take, and the
+    # only sample size anything downstream reads. The duplicate check, the count reconstruction
+    # and the record identity all consume this column, so they cannot disagree about how many
+    # individuals a row describes. Rows still refused at this point never reach it.
+    freq["n_individuals"] = freq["n_indiv"].where(keep).astype("Int64")
 
     # The join is on population name, which is AFND's own public key and the key both sides
     # already use — so this is an exact join, not a fuzzy match. Unmatched names are almost all
@@ -256,7 +270,7 @@ def load(
     # Exact repeats carry no distinguishable evidence, but must be counted as
     # refusals rather than disappearing through an unreported drop.
     refuse(
-        freq.duplicated(subset=["group", "gene", "allele", "population", "af", "n_indiv"]),
+        freq.duplicated(subset=["group", "gene", "allele", "population", "af", "n_individuals"]),
         "duplicate_source_record",
     )
 
@@ -267,7 +281,7 @@ def load(
         refusals["below_min_populations"] = int(below.sum())
         rows = rows[~below]
 
-    an = (2 * rows["n_indiv"]).round().astype(int)
+    an = (2 * rows["n_individuals"]).astype(int)
     designs = rows["population"].map(lambda p: ascertainment[p])
     ids = rows["population"].map(name_to_id)
     geo = placed.reindex(ids.to_numpy())
@@ -286,14 +300,14 @@ def load(
             "ac": (rows["af"] * an).round().astype(int),
             "an": an,
             "source_record_id": [
-                stable_source_record_id("afnd-frequencies", group, gene, allele, population, af, int(n))
+                stable_source_record_id("afnd-frequencies", group, gene, allele, population, af, n)
                 for group, gene, allele, population, af, n in zip(
                     rows["group"],
                     rows["gene"],
                     rows["allele"],
                     rows["population"],
                     rows["af"],
-                    rows["n_indiv"],
+                    rows["n_individuals"],
                     strict=True,
                 )
             ],
@@ -316,6 +330,6 @@ def load(
         refusals=refusals,
         n_variants=int(obs["variant_id"].nunique()),
         n_populations=int(obs["population_id"].nunique()),
-        reconstructed_beyond_exact=int((rows["n_indiv"] > EXACT_RECONSTRUCTION_MAX_N).sum()),
+        reconstructed_beyond_exact=int((rows["n_individuals"] > EXACT_RECONSTRUCTION_MAX_N).sum()),
     )
     return obs, report
