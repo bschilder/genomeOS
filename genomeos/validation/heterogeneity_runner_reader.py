@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
+from pathlib import Path
+from urllib.parse import quote
 
 from genomeos.validation.heterogeneity_codec import EncodedB0HEvidence, decode_b0h_evidence
 from genomeos.validation.heterogeneity_runner_records import (
     AdmissionReceipt,
     CampaignManifest,
+    CaseEvidence,
+    CollectedB0HSnapshot,
     EvidenceReceipt,
     OwnerLoss,
     PreparedNull,
@@ -232,3 +238,113 @@ class B0HSqlReader:
             )
             for case in self.manifest.cases
         )
+
+
+def read_collected_b0h_snapshot(
+    directory: Path, *, expected_database_sha256: str, expected_inventory_sha256: str
+) -> CollectedB0HSnapshot:
+    from genomeos.validation.heterogeneity_runner_binding import (
+        require_paired_generations,
+        validate_case_evidence,
+    )
+
+    for digest in (expected_database_sha256, expected_inventory_sha256):
+        if type(digest) is not str or len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+            raise StoreIntegrityError("explicit lowercase expected SHA256 required")
+    database, inventory_path, receipt_path = (
+        directory / "study.sqlite3",
+        directory / "inventory.json",
+        directory / "collection.json",
+    )
+
+    def require_closed_files():
+        if directory.is_symlink() or not directory.is_dir():
+            raise StoreIntegrityError("collection directory missing or symlink")
+        for path in (database, inventory_path, receipt_path):
+            if path.is_symlink() or not path.is_file():
+                raise StoreIntegrityError("collection file missing or symlink")
+        for suffix in ("-journal", "-wal", "-shm"):
+            path = database.with_name(database.name + suffix)
+            if path.exists() or path.is_symlink():
+                raise StoreIntegrityError("collected database has unexpected journal/WAL sidecar")
+
+    def digest(path):
+        with path.open("rb") as stream:
+            return hashlib.file_digest(stream, "sha256").hexdigest()
+
+    def canonical(value):
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("ascii")
+
+    require_closed_files()
+    expected_receipt = canonical(
+        {
+            "format": "b0h_collection",
+            "version": "1",
+            "database_sha256": expected_database_sha256,
+            "inventory_sha256": expected_inventory_sha256,
+        }
+    )
+    inventory_bytes = inventory_path.read_bytes()
+    if receipt_path.read_bytes() != expected_receipt or sha256(inventory_bytes) != expected_inventory_sha256:
+        raise StoreIntegrityError("collection receipt/inventory differs from externally retained digests")
+    if digest(database) != expected_database_sha256:
+        raise StoreIntegrityError("collected database differs from externally retained digest")
+    connection = sqlite3.connect(
+        "file:" + quote(str(database.resolve())) + "?mode=ro", uri=True, isolation_level=None
+    )
+    try:
+        connection.execute("BEGIN")
+        campaign = connection.execute(
+            "SELECT singleton,manifest,admission,null_reference FROM campaign"
+        ).fetchall()
+        if len(campaign) != 1 or campaign[0][0] != 1:
+            raise StoreIntegrityError("collected campaign cardinality mismatch")
+        roots = []
+        for root_digest, cls in zip(
+            campaign[0][1:], (CampaignManifest, AdmissionReceipt, PreparedNull), strict=True
+        ):
+            row = connection.execute(
+                "SELECT kind,body FROM objects WHERE digest=?", (root_digest,)
+            ).fetchone()
+            if row is None or type(row[1]) is not bytes or sha256(row[1]) != root_digest:
+                raise StoreIntegrityError("collected campaign root missing/corrupt")
+            value = read_runner_record(row[1])
+            if type(value) is not cls or value.format != row[0]:
+                raise StoreIntegrityError("collected campaign root type mismatch")
+            roots.append(value)
+        manifest, admission, null = roots
+        if (
+            record_digest(admission) != manifest.admission_sha256
+            or record_digest(null) != manifest.null_sha256
+            or admission.source != manifest.source
+            or admission.runtime != manifest.runtime
+        ):
+            raise StoreIntegrityError("collected admission/null binding mismatch")
+        reader = B0HSqlReader(connection, manifest=manifest, admission=admission, null=null)
+        if canonical(reader.inventory()) != inventory_bytes:
+            raise StoreIntegrityError("collected inventory differs from exact database records")
+        cases = tuple(
+            CaseEvidence(reader.campaign_sha256, case, reader.stages(case)) for case in manifest.cases
+        )
+        for case in cases:
+            validate_case_evidence(manifest, case)
+        indexed = {case.case: case for case in cases}
+        for case in cases:
+            if case.case.study_id != 0 and case.case.track_id == 0:
+                paired = SbcCaseId(1, case.case.study_id, case.case.case_id, case.case.replicate_id)
+                right = indexed[paired]
+                if case.stages and right.stages:
+                    require_paired_generations(case.stages[0], right.stages[0])
+        require_closed_files()
+        if (
+            digest(database) != expected_database_sha256
+            or inventory_path.read_bytes() != inventory_bytes
+            or receipt_path.read_bytes() != expected_receipt
+        ):
+            raise StoreIntegrityError("collection changed during read transaction")
+        connection.execute("COMMIT")
+        return CollectedB0HSnapshot(
+            manifest, null, cases, expected_database_sha256, expected_inventory_sha256
+        )
+    finally:
+        connection.close()

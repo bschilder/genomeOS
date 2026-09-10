@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
+import json
 import os
+import shutil
 import sqlite3
 import time
 from pathlib import Path
@@ -504,3 +507,33 @@ class LocalB0HStore:
     def inventory(self) -> tuple[tuple[str, tuple[str, ...]], ...]:
         self._require_open()
         return self._reader.inventory()
+
+    def collect(self, destination: Path) -> tuple[str, str]:
+        self._require_open()
+        inventory = self.inventory()
+        inventory_bytes = json.dumps(inventory, sort_keys=True, separators=(",", ":")).encode("ascii")
+        self._db.close()
+        self._db = None
+        destination.mkdir(parents=False, exist_ok=False)
+        target = destination / "study.sqlite3"
+        shutil.copyfile(self.database, target)
+        with target.open("rb") as copied:
+            os.fsync(copied.fileno())
+
+        def digest(path):
+            with path.open("rb") as stream:
+                return hashlib.file_digest(stream, "sha256").hexdigest()
+
+        source_digest, copied_digest = digest(self.database), digest(target)
+        if source_digest != copied_digest:
+            raise StoreIntegrityError("closed database collection checksum mismatch")
+        with (destination / "inventory.json").open("xb") as stream:
+            stream.write(inventory_bytes)
+            stream.flush()
+            os.fsync(stream.fileno())
+        descriptor = os.open(destination, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        return source_digest, sha256(inventory_bytes)

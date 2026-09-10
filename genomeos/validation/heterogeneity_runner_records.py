@@ -346,6 +346,28 @@ class CaseEvidence:
     stages: tuple[StoredStage, ...]
 
 
+@dataclass(frozen=True)
+class CollectedB0HSnapshot:
+    manifest: CampaignManifest
+    null: PreparedNull
+    cases: tuple[CaseEvidence, ...]
+    database_sha256: str
+    inventory_sha256: str
+
+    def __post_init__(self) -> None:
+        if type(self.manifest) is not CampaignManifest or type(self.null) is not PreparedNull:
+            raise ValueError("snapshot root type mismatch")
+        if type(self.cases) is not tuple or any(type(case) is not CaseEvidence for case in self.cases):
+            raise ValueError("snapshot cases must be immutable exact records")
+        for digest in (self.database_sha256, self.inventory_sha256):
+            if (
+                type(digest) is not str
+                or len(digest) != 64
+                or any(c not in "0123456789abcdef" for c in digest)
+            ):
+                raise ValueError("snapshot digest must be lowercase SHA256")
+
+
 def prepared_null(reference: RankNullReference) -> PreparedNull:
     if type(reference) is not RankNullReference:
         raise ValueError("null requires RankNullReference")
