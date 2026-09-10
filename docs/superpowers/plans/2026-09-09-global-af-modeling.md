@@ -111,6 +111,10 @@ test independent sites/time windows and climate-family ablations accordingly.
 
 **Exit:** independent site/time validation and modern-prediction ablation; regional feasibility is not a global historical claim.
 
+The [CLUES2 full-main-text methods note](../../research/temporal-genetics-methods-2026-09-10.md)
+records the direct-likelihood/genealogy tradeoff and proposed temporal controls;
+its supplement remains unread and no temporal implementation is admitted by it.
+
 ## Public interfaces and publication
 
 The eventual adapter contract is `fit(training_data, features, connectivity, config)`, `predict_latent(model, population_queries)`, `predict_observations(model, survey_designs)`, and `evaluate(predictions, observations, benchmark_manifest)`. Preserve current `fit_surface` through an adapter; do not expose private PyMC implementation as a shared interface.
