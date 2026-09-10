@@ -134,8 +134,8 @@ class GenerationFailure:
     index: int | None
     reason: str
     truth: ParameterTruth | None
-    sampled_mean: float | None
-    sampled_rho: float | None
+    sampled_mean: float | int | None
+    sampled_rho: float | int | None
     offending_value: float | int | None
     exception_type: str | None
     exception_message: str | None
@@ -189,6 +189,17 @@ Literal annotations may clarify those domains without changing public values.
 No successful-result default for a missing field. Exceptions in RNG calls become
 typed generation failures only under the narrow spec rules; malformed callers
 raise ValueError. No catch-all wrapper around generator validation.
+
+Task-review refinement: enforce the spec's exact case/truth/stage/index table
+in GenerationFailure, including ordinary heldout index0, shared fresh-cluster
+index1 only, and no Beta/shape failures at rho0. Enforce the exact three built-in
+numerical exception names and reason/evidence relationships; unexpected subclasses
+propagate instead of acquiring a false built-in exception label. Preserve sampled
+failure candidates with the lossless float|int scalar helper rather than float
+conversion. Add malformed-constructor fixtures and invalid huge/2**53+1 prior-
+return fixtures, preserving exact evidence with no untyped overflow or rounding.
+Boundary/rho0 recording fixtures explicitly assert the heldout call list equals
+[("binomial",20,q)], alongside all sixteen training calls and queue exhaustion.
 
 - [ ] **Step 1: Write identity, literal numerical and structural failing tests.**
 

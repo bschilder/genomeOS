@@ -234,6 +234,48 @@ or shape arithmetic, retaining class/message. No blanket function exception
 handler or error-message substring classification. Unexpected RuntimeError,
 MemoryError or process loss remains a runner unresolved exception, not a redraw.
 
+Task-review refinement: these three exact built-in exception classes form the
+closed serialized exception domain. An unexpected subclass also propagates;
+its custom name is not silently recoded to a built-in class. Constructor
+`exception_type` admits only `ValueError`, `FloatingPointError`, `OverflowError`
+where exception evidence is permitted, with the actual string message. A caught
+RNG exception has no returned offending scalar or newly sampled candidate.
+Shape failures may carry either permitted exception evidence or an actual invalid
+shape scalar, not both. Scalar and boundary failures carry no exception fields.
+
+The failure constructor enforces the operations that each case actually reaches:
+
+| Stage | Eligible case / truth | Index |
+| --- | --- | --- |
+| truth_mean, truth_rho, truth_validation | Prior study0, before validated truth | None |
+| beta_shapes | Any nonstructural case with validated rho>0 | None |
+| training_cluster | Shared study2 | 0 or1 |
+| training_population | Validated rho>0 | 0..15 |
+| training_switch | Shared study2 | 0..15 |
+| training_count | Any nonstructural case with validated truth | 0..15 |
+| heldout_cluster | Shared study2, fresh cluster draw only | 1 |
+| heldout_population | Validated rho>0 | 0 ordinary;0 or1 shared |
+| heldout_switch | Shared study2 | 0 or1 |
+| heldout_count | Any nonstructural case with validated truth | 0 ordinary;0 or1 shared |
+
+Prior post-validation failure truth is strictly interior in both parameters;
+fixed failures retain their exact declared truth. Existing stage/reason pairings
+stand. A rho-zero case cannot claim a Beta/shape/switch/cluster operation that
+was never called. These are result-schema checks, not proof that an operation
+historically occurred; actual invocation evidence remains separately required.
+
+Sampled failure candidates use `float | int | None`, matching the already
+declared lossless failure-scalar domain. Preserve actual supported non-Boolean
+integers exactly, including invalid huge or non-binary64-representable returns;
+never narrow them through float. Unsupported values still raise ValueError for
+direct constructor inputs. Before truth validation, invalid numeric candidates
+can be retained as both sampled candidate and offending scalar without becoming
+a valid probability. This public annotation refinement affects only failure
+evidence; successful truth/probability fields remain float and unchanged.
+Cost: later artifact consumers handle the same exact integer evidence in these
+two fields that they already must handle in offending_value. No valid NumPy draw,
+scientific method, seed, call order or acceptance threshold is changed.
+
 After validated truth retain it even if the first population draw fails. Before
 truth validation retain only the scalar candidates actually returned. Never
 invent a missing candidate, recover values from an exception string, promote a
