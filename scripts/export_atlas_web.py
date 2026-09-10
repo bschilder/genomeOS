@@ -464,7 +464,10 @@ def _external_resources(
         )
         source = str(resource["source"])
         if source not in {"gnomad", "dbsnp", "alphagenome"} or source in seen:
-            raise ValueError(f"allowlist artifact {artifact_id}: external source must be unique gnomad/dbsnp/alphagenome")
+            raise ValueError(
+                f"allowlist artifact {artifact_id}: external source must be unique "
+                "gnomad/dbsnp/alphagenome"
+            )
         seen.add(source)
         normalized = str(resource["normalized_variant_id"])
         if normalized != variant_id:

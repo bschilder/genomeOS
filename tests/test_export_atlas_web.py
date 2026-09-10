@@ -330,7 +330,10 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
                     "avi_phred": 11.77,
                     "avi_raw_score": 0.2093,
                     "avi_tail_quantile": 0.0665,
-                    "deep_link": "https://deepmind.google.com/science/alphagenome/atlas?q=chr11:5227002:T%3EA&m=variant",
+                    "deep_link": (
+                        "https://deepmind.google.com/science/alphagenome/atlas"
+                        "?q=chr11:5227002:T%3EA&m=variant"
+                    ),
                     "dominant_modality": "ALPHAMISSENSE",
                     "model_version": model_version,
                     "prediction_class": "predicted_impact",
