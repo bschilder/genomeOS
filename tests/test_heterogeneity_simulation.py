@@ -39,6 +39,10 @@ class RecordingRng:
     def binomial(self, n: int, p: float) -> object:
         return self._next("binomial", n, p)
 
+    def assert_exhausted(self) -> None:
+        with pytest.raises(StopIteration):
+            next(self.events)
+
 
 class GeneratorFactory:
     def __init__(self, rngs: list[RecordingRng]) -> None:
@@ -349,6 +353,9 @@ def test_boundary_and_rho_zero_make_no_beta_or_uniform_calls(
         ]
         assert all(call[0] == "binomial" for call in count.calls + heldout.calls)
         assert count.calls == [("binomial", 20, q)] * 16
+        assert heldout.calls == [("binomial", 20, q)]
+        count.assert_exhausted()
+        heldout.assert_exhausted()
 
 
 def test_latent_beta_endpoints_are_retained_forwarded_and_counted(
@@ -460,7 +467,14 @@ def test_expected_rng_exceptions_are_typed(monkeypatch: pytest.MonkeyPatch, erro
     assert (failure.exception_type, failure.exception_message) == (type(error).__name__, str(error))
 
 
-@pytest.mark.parametrize("error", (RuntimeError("runner"), MemoryError("memory")))
+class CustomValueError(ValueError):
+    pass
+
+
+@pytest.mark.parametrize(
+    "error",
+    (RuntimeError("runner"), MemoryError("memory"), CustomValueError("custom")),
+)
 def test_unexpected_rng_exceptions_propagate(monkeypatch: pytest.MonkeyPatch, error: BaseException) -> None:
     population = RecordingRng([("beta", error)])
     _patch_rngs(monkeypatch, [population])
@@ -553,6 +567,191 @@ def test_truth_draw_failures_retain_only_returned_scalar_candidates(
         assert math.isnan(failure.sampled_mean)
     else:
         assert failure.sampled_mean == sampled_mean
+
+
+@pytest.mark.parametrize(
+    ("events", "expected_mean", "expected_rho"),
+    (
+        ([("beta", 10**10000)], 10**10000, None),
+        ([("beta", 2**53 + 1)], 2**53 + 1, None),
+        ([("beta", 0.4), ("beta", 10**10000)], 0.4, 10**10000),
+        ([("beta", 0.4), ("beta", 2**53 + 1)], 0.4, 2**53 + 1),
+    ),
+    ids=("huge_mean", "wide_mean", "huge_rho", "wide_rho"),
+)
+def test_invalid_prior_integer_candidates_remain_exact_failure_evidence(
+    monkeypatch: pytest.MonkeyPatch,
+    events: list[tuple[str, object]],
+    expected_mean: float | int,
+    expected_rho: int | None,
+) -> None:
+    _patch_rngs(monkeypatch, [RecordingRng(events)])
+    failure = sim.generate_sbc_case(sim.SbcCaseId(0, 0, 0, 0))
+    assert isinstance(failure, sim.GenerationFailure)
+    expected_stage = "truth_mean" if expected_rho is None else "truth_rho"
+    expected_offending = expected_mean if expected_rho is None else expected_rho
+    assert (failure.stage, failure.reason) == (expected_stage, "invalid_rng_scalar")
+    assert failure.sampled_mean == expected_mean
+    assert failure.sampled_rho == expected_rho
+    assert failure.offending_value == expected_offending
+    if isinstance(expected_mean, int):
+        assert type(failure.sampled_mean) is int
+    if expected_rho is not None:
+        assert type(failure.sampled_rho) is int
+
+
+def test_failure_constructor_rejects_impossible_operation_and_exception_states() -> None:
+    rho_zero = sim.generate_sbc_case(sim.SbcCaseId(0, 1, 1, 0))
+    ordinary = sim.generate_sbc_case(sim.SbcCaseId(0, 1, 13, 0))
+    shared = sim.generate_sbc_case(sim.SbcCaseId(0, 2, 3, 0))
+    assert isinstance(rho_zero, sim.GeneratedDataset)
+    assert isinstance(ordinary, sim.GeneratedDataset)
+    assert isinstance(shared, sim.GeneratedDataset)
+
+    def failure(
+        source: sim.GeneratedDataset,
+        stage: str,
+        index: int | None,
+        *,
+        reason: str = "rng_exception",
+        offending: float | int | None = None,
+        exception_type: str | None = "ValueError",
+        exception_message: str | None = "failed",
+    ) -> sim.GenerationFailure:
+        return sim.GenerationFailure(
+            source.case_id,
+            source.provenance,
+            stage,
+            index,
+            reason,
+            source.truth,
+            None,
+            None,
+            offending,
+            exception_type,
+            exception_message,
+        )
+
+    invalid = (
+        lambda: failure(ordinary, "heldout_count", 1),
+        lambda: failure(ordinary, "heldout_population", 1),
+        lambda: failure(shared, "heldout_cluster", 0),
+        lambda: failure(rho_zero, "beta_shapes", None, reason="invalid_beta_shapes"),
+        lambda: failure(rho_zero, "training_population", 0),
+        lambda: failure(ordinary, "training_cluster", 0),
+        lambda: failure(ordinary, "training_switch", 0),
+        lambda: failure(
+            ordinary,
+            "training_count",
+            0,
+            exception_type="MemoryError",
+        ),
+        lambda: failure(
+            ordinary,
+            "training_count",
+            0,
+            exception_type="CustomValueError",
+        ),
+        lambda: failure(ordinary, "training_count", 0, offending=1),
+        lambda: failure(
+            ordinary,
+            "training_count",
+            0,
+            reason="invalid_rng_scalar",
+            exception_type="ValueError",
+            exception_message="failed",
+        ),
+        lambda: failure(
+            ordinary,
+            "beta_shapes",
+            None,
+            reason="invalid_beta_shapes",
+            offending=0.0,
+        ),
+        lambda: failure(
+            ordinary,
+            "beta_shapes",
+            None,
+            reason="invalid_beta_shapes",
+            offending=1.0,
+            exception_type=None,
+            exception_message=None,
+        ),
+        lambda: sim.GenerationFailure(
+            ordinary.case_id,
+            ordinary.provenance,
+            [],  # type: ignore[arg-type]
+            0,
+            "rng_exception",
+            ordinary.truth,
+            None,
+            None,
+            None,
+            "ValueError",
+            "failed",
+        ),
+        lambda: sim.GenerationFailure(
+            ordinary.case_id,
+            ordinary.provenance,
+            "training_count",
+            0,
+            [],  # type: ignore[arg-type]
+            ordinary.truth,
+            None,
+            None,
+            None,
+            "ValueError",
+            "failed",
+        ),
+        lambda: sim.GenerationFailure(
+            ordinary.case_id,
+            ordinary.provenance,
+            "training_count",
+            0,
+            "rng_exception",
+            object(),  # type: ignore[arg-type]
+            None,
+            None,
+            None,
+            "ValueError",
+            "failed",
+        ),
+    )
+    for construct in invalid:
+        with pytest.raises(ValueError):
+            construct()
+
+    prior = sim.generate_sbc_case(sim.SbcCaseId(0, 0, 0, 0))
+    assert isinstance(prior, sim.GeneratedDataset)
+    for malformed in (True, Fraction(1, 2), np.longdouble("0.2"), np.array([0.2])):
+        with pytest.raises(ValueError):
+            sim.GenerationFailure(
+                prior.case_id,
+                prior.provenance,
+                "truth_mean",
+                None,
+                "invalid_rng_scalar",
+                None,
+                malformed,  # type: ignore[arg-type]
+                None,
+                None,
+                None,
+                None,
+            )
+    with pytest.raises(ValueError):
+        sim.GenerationFailure(
+            prior.case_id,
+            prior.provenance,
+            "training_count",
+            0,
+            "rng_exception",
+            sim.ParameterTruth(prior.truth.mean, 0.0),
+            prior.truth.mean,
+            prior.truth.rho,
+            None,
+            "ValueError",
+            "failed",
+        )
 
 
 @pytest.mark.parametrize(

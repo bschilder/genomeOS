@@ -18,9 +18,9 @@ quadrature, storage, HTTP, environment, filesystem, or UI code.
 The first readable single-module draft was about 610 logical lines/37 KiB. The
 controller ruled that sampling and contracts should be split, then retained the
 cohesive contract module as a documented exception to the preferred 500-line
-target rather than compress or drop joint validation. The final sampling module
-is 414 logical lines/16,295 bytes; the contract module is 638 logical
-lines/30,427 bytes. Both remain below the hard 800-line/50-KiB gate.
+target rather than compress or drop joint validation. After fix review, the
+sampling module is 418 logical lines/16,449 bytes; the contract module is 725
+logical lines/34,855 bytes. Both remain below the hard 800-line/50-KiB gate.
 
 Protocol is `b0h_sbc_v1`; algorithm is `b0h_generation_v1`; the bit generator is
 PCG64 with float64 arithmetic and `SEED = 42`. Entropy is exactly
@@ -60,9 +60,13 @@ unselected V candidates remain counted. Prior truth endpoints instead produce
 `rounded_prior_boundary`. Invalid/nonfinite/nonscalar RNG values, invalid Beta
 shapes, and invalid counts produce a typed failure with exact stage and index;
 no partial rows are returned. ValueError, FloatingPointError, and OverflowError
-from an individual RNG call become `rng_exception`; RuntimeError and MemoryError
-propagate for the later runner to resolve. There is no redraw or successful-
-subset path.
+from an individual RNG call become `rng_exception`; RuntimeError, MemoryError,
+and subclasses of the three admitted built-ins propagate for the later runner
+to resolve. Failure construction enforces the exact case/truth/stage/index
+table, closed exception names, and mutually exclusive exception/scalar shape
+evidence. Invalid prior integer returns remain exact `float | int | None`
+candidate evidence, including integers beyond binary64 precision or range.
+There is no redraw or successful-subset path.
 
 ## Shared-history derivation
 
@@ -98,15 +102,25 @@ MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
   -m pytest tests/test_heterogeneity_simulation.py -q
 ```
 
-It passed 61/61 cases. The same environment ran `python scripts/smoke.py`,
-which reported `contract up to date`, 40 passing smoke cases, and `smoke checks
-passed`. Locked Ruff reported `All checks passed!`; module-size reported
-`module-size check passed (75 modules)`; privacy reported
-`private-file check passed (699 tracked files)`; and `git diff --check` exited
-zero without output. Fixtures independently reconstruct one fixed and one prior
-realization from literal PCG64 entropies, verify shared stream order and
-selection, boundary and AN=0 behavior, endpoint accounting, all failure stages,
-immutability, constructor refusals, paired-track reuse, and order independence.
+The initial implementation passed 61/61 cases. Fix-round RED on the expanded
+focused file produced 6 failures and 59 passes: an admitted-exception subclass
+was serialized, huge integer candidates overflowed, `2**53+1` candidates were
+rounded, and impossible failure artifacts were accepted. A supplemental RED
+constructor test produced 1 failure for positive finite shape evidence. Final
+GREEN, run with `-o addopts=''` so pytest printed its count, reported `67 passed
+in 0.60s`.
+
+The same final environment ran `python scripts/smoke.py`, which reported
+`contract up to date`, 40 passing smoke cases, and `smoke checks passed`. Locked
+`ruff check .` reported `All checks passed!`; module-size reported `module-size
+check passed (75 modules)`; privacy reported `private-file check passed (703
+tracked files)`; and `git diff --check` exited zero without output. Fixtures
+independently reconstruct one fixed and one prior realization from literal
+PCG64 entropies, verify shared stream order and selection, explicitly exhaust
+all 16 training plus one rho-zero/boundary heldout Binomial calls, preserve huge
+integer evidence, enforce the failure-state table, and check endpoint accounting,
+AN=0 behavior, all failure stages, immutability, paired-track reuse, and order
+independence.
 
 These checks do not establish exact mathematical continuous draws from NumPy,
 sampler calibration, convergence, timing, demographic realism, biological

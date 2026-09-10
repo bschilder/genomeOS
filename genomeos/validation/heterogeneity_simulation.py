@@ -89,8 +89,8 @@ class _DrawContext:
     case: SbcCaseId
     provenance: GenerationProvenance
     truth: ParameterTruth | None = None
-    sampled_mean: float | None = None
-    sampled_rho: float | None = None
+    sampled_mean: float | int | None = None
+    sampled_rho: float | int | None = None
 
     def failure(
         self,
@@ -100,8 +100,8 @@ class _DrawContext:
         *,
         offending: object = None,
         error: BaseException | None = None,
-        sampled_mean: float | None = None,
-        sampled_rho: float | None = None,
+        sampled_mean: float | int | None = None,
+        sampled_rho: float | int | None = None,
     ) -> GenerationFailure:
         return GenerationFailure(
             self.case,
@@ -128,6 +128,8 @@ def _call(
     try:
         return getattr(rng, method)(*args), None
     except _RNG_EXCEPTIONS as error:
+        if type(error) not in _RNG_EXCEPTIONS:
+            raise
         return None, error
 
 
@@ -178,6 +180,8 @@ def _beta_shapes(context: _DrawContext) -> tuple[float, float] | GenerationFailu
             a = np.float64(truth.mean * kappa)
             b = np.float64((1.0 - truth.mean) * kappa)
     except _RNG_EXCEPTIONS as error:
+        if type(error) not in _RNG_EXCEPTIONS:
+            raise
         return context.failure("beta_shapes", None, "invalid_beta_shapes", error=error)
     values = (kappa, a, b)
     invalid = tuple(value for value in values if not math.isfinite(float(value)) or value <= 0.0)

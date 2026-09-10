@@ -43,6 +43,7 @@ _STAGES = {
     "heldout_count",
 }
 _RNG_STAGES = _STAGES - {"truth_validation", "beta_shapes"}
+_SERIALIZED_EXCEPTIONS = {"ValueError", "FloatingPointError", "OverflowError"}
 
 
 def simulation_integer(value: object, name: str) -> int:
@@ -611,29 +612,18 @@ class GenerationFailure:
     index: int | None
     reason: str
     truth: ParameterTruth | None
-    sampled_mean: float | None
-    sampled_rho: float | None
+    sampled_mean: float | int | None
+    sampled_rho: float | int | None
     offending_value: float | int | None
     exception_type: str | None
     exception_message: str | None
 
     def __post_init__(self) -> None:
         case, provenance = _case_provenance(self.case_id, self.provenance)
-        if self.stage not in _STAGES or case.study_id == 3:
+        if type(self.stage) is not str or self.stage not in _STAGES or case.study_id == 3:
             raise ValueError("generation failure stage or study is invalid")
-        if self.stage in {"truth_mean", "truth_rho", "truth_validation", "beta_shapes"}:
-            if self.index is not None:
-                raise ValueError("truth and shape failure indices must be None")
-        else:
-            index = simulation_integer(self.index, "index")
-            upper = 1 if self.stage.startswith("heldout_") or self.stage == "training_cluster" else 15
-            if not 0 <= index <= upper:
-                raise ValueError("failure index is outside its stage domain")
-            object.__setattr__(self, "index", index)
-        if self.stage in {"truth_mean", "truth_rho", "truth_validation"} and case.study_id != 0:
-            raise ValueError("truth-draw failures are restricted to the prior study")
-        if ("cluster" in self.stage or "switch" in self.stage) and case.study_id != 2:
-            raise ValueError("cluster and switch failures are restricted to the shared study")
+        if type(self.reason) is not str:
+            raise ValueError("generation failure reason must be a literal string")
         allowed_reason = (
             {"rounded_prior_boundary"}
             if self.stage == "truth_validation"
@@ -643,38 +633,40 @@ class GenerationFailure:
         )
         if self.reason not in allowed_reason:
             raise ValueError("generation failure reason does not match its stage")
+        if self.truth is not None and not isinstance(self.truth, ParameterTruth):
+            raise ValueError("failure truth must be a ParameterTruth or None")
         truth = None if self.truth is None else ParameterTruth(self.truth.mean, self.truth.rho)
         mean = (
             None
             if self.sampled_mean is None
-            else float(simulation_failure_scalar(self.sampled_mean, "sampled_mean"))
+            else simulation_failure_scalar(self.sampled_mean, "sampled_mean")
         )
         rho = (
             None
             if self.sampled_rho is None
-            else float(simulation_failure_scalar(self.sampled_rho, "sampled_rho"))
+            else simulation_failure_scalar(self.sampled_rho, "sampled_rho")
         )
-        if case.study_id == 0:
-            later = self.stage not in {"truth_mean", "truth_rho", "truth_validation"}
-            if later != (truth is not None):
-                raise ValueError("prior truth is retained exactly after validation")
-            if truth is not None and (mean is None or rho is None or truth != ParameterTruth(mean, rho)):
+        truth_stage = self.stage in {"truth_mean", "truth_rho", "truth_validation"}
+        if truth_stage:
+            if case.study_id != 0 or truth is not None:
+                raise ValueError("truth-draw failures require unvalidated prior truth")
+        elif truth is None:
+            raise ValueError("post-validation failures require validated truth")
+        if case.study_id == 0 and truth is not None:
+            if not 0.0 < truth.mean < 1.0 or not 0.0 < truth.rho < 1.0:
+                raise ValueError("validated prior failure truth must be strictly interior")
+            if mean is None or rho is None:
+                raise ValueError("validated prior failure must retain both candidates")
+            valid_mean = simulation_probability(mean, "sampled_mean")
+            valid_rho = simulation_probability(rho, "sampled_rho")
+            if (valid_mean, valid_rho) != (truth.mean, truth.rho):
                 raise ValueError("validated prior truth must match sampled candidates")
-            if self.stage == "truth_mean" and rho is not None:
-                raise ValueError("truth_mean failure cannot retain rho")
-            if self.stage == "truth_rho" and mean is None:
-                raise ValueError("truth_rho failure must retain mean")
-            if self.stage == "truth_validation" and (mean is None or rho is None):
-                raise ValueError("truth_validation failure must retain both candidates")
-            if self.stage == "truth_rho":
-                simulation_probability(mean, "sampled_mean")
-            if self.stage == "truth_validation":
-                valid_mean = simulation_probability(mean, "sampled_mean")
-                valid_rho = simulation_probability(rho, "sampled_rho")
-                if valid_mean not in (0.0, 1.0) and valid_rho not in (0.0, 1.0):
-                    raise ValueError("rounded prior boundary requires an endpoint candidate")
-        elif mean is not None or rho is not None or truth != fixed_simulation_truth(case):
+        elif case.study_id != 0 and (
+            mean is not None or rho is not None or truth != fixed_simulation_truth(case)
+        ):
             raise ValueError("fixed failure must carry its known truth and no prior candidates")
+        self._validate_prior_candidates(mean, rho)
+        index = self._validate_operation(case, truth)
         offending = (
             None
             if self.offending_value is None
@@ -684,27 +676,125 @@ class GenerationFailure:
         if (
             not paired_exception
             or self.exception_type is not None
-            and (not isinstance(self.exception_type, str) or not isinstance(self.exception_message, str))
+            and (
+                type(self.exception_type) is not str
+                or type(self.exception_message) is not str
+                or self.exception_type not in _SERIALIZED_EXCEPTIONS
+            )
         ):
-            raise ValueError("exception metadata must be paired strings")
-        if self.reason == "rng_exception" and self.exception_type is None:
-            raise ValueError("rng_exception requires exception metadata")
-        if (
-            self.reason in {"invalid_rng_scalar", "rounded_prior_boundary"}
-            and self.exception_type is not None
-        ):
-            raise ValueError("explicit scalar failures cannot carry exception metadata")
+            raise ValueError("exception metadata must be paired permitted strings")
+        if self.reason == "rng_exception":
+            if self.exception_type is None or offending is not None:
+                raise ValueError("rng_exception requires only exception evidence")
+            if self.stage == "truth_mean" and mean is not None:
+                raise ValueError("throwing truth_mean calls return no candidate")
+            if self.stage == "truth_rho" and rho is not None:
+                raise ValueError("throwing truth_rho calls return no candidate")
+        elif self.reason == "invalid_beta_shapes":
+            if (self.exception_type is None) == (offending is None):
+                raise ValueError("shape failure requires exactly one evidence form")
+            if offending is not None and (
+                offending > 0 and (not isinstance(offending, float) or math.isfinite(offending))
+            ):
+                raise ValueError("shape scalar evidence must be nonpositive or nonfinite")
+        elif self.exception_type is not None:
+            raise ValueError("scalar and boundary failures cannot carry exception metadata")
+        if self.reason == "invalid_rng_scalar":
+            candidate = mean if self.stage == "truth_mean" else rho if self.stage == "truth_rho" else None
+            if self.stage in {"truth_mean", "truth_rho"} and (
+                (candidate is None) != (offending is None)
+                or candidate is not None
+                and not self._same_scalar(candidate, offending)
+            ):
+                raise ValueError("invalid prior candidate must match offending evidence")
+        if self.reason == "rounded_prior_boundary":
+            expected = mean if mean in (0.0, 1.0) else rho
+            if offending is None or not self._same_scalar(expected, offending):
+                raise ValueError("boundary evidence must identify the first endpoint candidate")
         _set_fields(
             self,
             (
                 ("case_id", case),
                 ("provenance", provenance),
+                ("index", index),
                 ("truth", truth),
                 ("sampled_mean", mean),
                 ("sampled_rho", rho),
                 ("offending_value", offending),
             ),
         )
+
+    def _validate_prior_candidates(
+        self, mean: float | int | None, rho: float | int | None
+    ) -> None:
+        if self.stage == "truth_mean":
+            if rho is not None:
+                raise ValueError("truth_mean failure cannot retain rho")
+            if self.reason == "invalid_rng_scalar" and mean is not None:
+                try:
+                    simulation_probability(mean, "sampled_mean")
+                except ValueError:
+                    pass
+                else:
+                    raise ValueError("invalid truth_mean candidate must be outside its domain")
+        elif self.stage == "truth_rho":
+            if mean is None:
+                raise ValueError("truth_rho failure must retain mean")
+            simulation_probability(mean, "sampled_mean")
+            if self.reason == "invalid_rng_scalar" and rho is not None:
+                try:
+                    simulation_probability(rho, "sampled_rho")
+                except ValueError:
+                    pass
+                else:
+                    raise ValueError("invalid truth_rho candidate must be outside its domain")
+        elif self.stage == "truth_validation":
+            if mean is None or rho is None:
+                raise ValueError("truth_validation failure must retain both candidates")
+            valid_mean = simulation_probability(mean, "sampled_mean")
+            valid_rho = simulation_probability(rho, "sampled_rho")
+            if valid_mean not in (0.0, 1.0) and valid_rho not in (0.0, 1.0):
+                raise ValueError("rounded prior boundary requires an endpoint candidate")
+
+    def _validate_operation(self, case: SbcCaseId, truth: ParameterTruth | None) -> int | None:
+        if self.stage in {"truth_mean", "truth_rho", "truth_validation"}:
+            allowed: tuple[int, ...] | None = None
+        elif self.stage == "beta_shapes":
+            allowed = None if truth is not None and truth.rho > 0.0 else ()
+        elif self.stage == "training_cluster":
+            allowed = (0, 1) if case.study_id == 2 else ()
+        elif self.stage == "training_population":
+            allowed = tuple(range(16)) if truth is not None and truth.rho > 0.0 else ()
+        elif self.stage == "training_switch":
+            allowed = tuple(range(16)) if case.study_id == 2 else ()
+        elif self.stage == "training_count":
+            allowed = tuple(range(16))
+        elif self.stage == "heldout_cluster":
+            allowed = (1,) if case.study_id == 2 else ()
+        elif self.stage == "heldout_population":
+            allowed = (
+                ((0, 1) if case.study_id == 2 else (0,))
+                if truth is not None and truth.rho > 0.0
+                else ()
+            )
+        elif self.stage == "heldout_switch":
+            allowed = (0, 1) if case.study_id == 2 else ()
+        else:
+            allowed = (0, 1) if case.study_id == 2 else (0,)
+        if allowed is None:
+            if self.index is not None:
+                raise ValueError("truth and shape failure indices must be None")
+            return None
+        index = simulation_integer(self.index, "index")
+        if index not in allowed:
+            raise ValueError("failure index is outside its case and stage domain")
+        return index
+
+    @staticmethod
+    def _same_scalar(left: float | int | None, right: float | int | None) -> bool:
+        if type(left) is not type(right):
+            return False
+        return bool(left == right or isinstance(left, float) and math.isnan(left) and math.isnan(right))
 
     status = property(lambda self: "generation_failed")
 
