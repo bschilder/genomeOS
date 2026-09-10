@@ -98,7 +98,9 @@ The corrected source-identity contract references that parent and has SHA-256
 
 Both cohort stages retain 510 PASS biallelic SNPs and 80 populations, yielding 40,800
 population/variant cells per stage. Population sample sizes range from 6 to 176. All 510
-variant totals match the independent native AC/AN calculation in each stage.
+called AC/AN cohort totals match the independent native calculation in each stage. This checks
+the sum across populations at each variant, not each population cell or quality-filtered counts
+independently; the latter rely on the explicit derivation and hand-control tests above.
 
 | Quantity | Technical QC, 4,117 samples | Additional ancestry exclusions, 4,094 samples |
 | --- | ---: | ---: |
@@ -120,6 +122,21 @@ Corrected local count-table SHA-256 hashes:
 - Additional ancestry exclusions: `c940be8697ce4d6ec021a7fa317a1d68ff807f613ac5a37419854c92be10bd84`.
 - Aggregate audit JSON: `0d21d84a8fd8c2757c032fa536f112139436542e77a8d38d981d00b8fd925b28`.
 
+## Reported dependencies across populations
+
+A subsequent exact-ID join of the qualified PC-Relate edge source to the source population
+identities found **four cross-population reported pairs** in both sample stages:
+CDX/Dai (one), Cambodian/Japanese (one), and ITU/STU (two). There are 1,302 retained reported
+pairs after technical QC and 1,294 after the additional ancestry exclusions.
+
+At the population level, the reported-edge graph has 74 singleton components and three
+two-population components. Development holdouts must retain those population pairs together
+or explicitly remove the connected participants from training before recounting. These 77
+components are not certified independent cohorts: incomplete kinship ascertainment, joint
+calling, variant discovery and other shared-source dependencies remain. The population-level
+aggregate audit SHA-256 is `a4f8a305d5b795bbea36672eb00ca27f69866695cfcd26e83e965689da51858e`.
+No individual relationship endpoints were emitted by this diagnostic.
+
 ## Meaning, remaining work and verification
 
 This is usable evidence that exact reference-panel allele counts can be prepared and checked.
@@ -129,8 +146,8 @@ inference or accuracy comparison has occurred. Geography remains approximate ori
 recruitment footprints, present-day residence and collection dates are not established.
 
 Next, package the research count contract and preparation diagnostics into reviewed reproducible
-interfaces, then freeze a separately labeled within-resource development comparison. Explicitly
-audit cross-population reported-kinship dependencies before splitting. A genome-wide experiment
+interfaces, then freeze a separately labeled within-resource development comparison that
+respects the reported cross-population dependencies above. A genome-wide experiment
 needs prespecified additional blocks, unchanged count targets and separate population/locus
 holdouts. The primary resident, 300 km footprint-buffer, independent external confirmation,
 calibration and scientific release gates are not waived. CuGen remains optional and independent.
@@ -145,4 +162,7 @@ smoke and **838 pytest tests**, with 11 skips and 15 rasterio `PendingDeprecatio
 This verifies the unchanged production code; ignored research diagnostics are outside that
 pytest suite. Raw source slices, participant lists, count tables and diagnostic scripts remain
 local research material, not a packaged or reviewed production ingestion implementation.
+Diagnostic scripts and aggregate manifests are not archived with this commit; reproducing the
+diagnostics currently requires retained local materials. Code packaging, exact runnable
+invocations and independent review of that implementation remain required follow-up work.
 No genotype/count dataset or scientific surface is published by this documentation milestone.
