@@ -205,7 +205,12 @@ B0 artifacts remain compatible. New model configuration, backend and fit-seed
 metadata use a versioned manifest; source hashes cover every consumed new module
 and the runner. For B0H add `fit_diagnostics.json` with all planned split IDs and
 attempt budget/seed/status/reason/diagnostics, plus `posterior_draws.npz` containing
-numeric mean/rho arrays and Unicode variant IDs for successful folds only.
+numeric mean/rho arrays and Unicode variant IDs for every accepted fit, including
+folds that subsequently fail prediction/scoring. Such folds remain failed and
+produce no predictions; accepted-fit evidence is not completed-fold evidence.
+The [comparison integration contract](2026-09-10-reference-count-b0h-integration-design.md)
+explicitly clarifies this inclusion rule, B0 backend behavior and B0H five-fold
+enforcement without changing scientific or comparison-completion gates.
 The NPZ contains no object/pickle arrays; consumers load with allow_pickle=False.
 Fingerprint exact output bytes. Retain the existing prediction/missing/fold
 contracts. B0H `posteriors.tsv` reports training totals and posterior mean/rho
