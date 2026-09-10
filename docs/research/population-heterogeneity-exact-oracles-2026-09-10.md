@@ -144,9 +144,34 @@ MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
 tests/test_reference_heterogeneity_sampling.py -s
 ```
 
-Focused regression tests, smoke, lint, and privacy checks were subsequently run
-with the same locked interpreter/environment; their fresh results are reported in
-the Task 2 handoff.
+The four required verification commands were then run with the same environment
+variables and locked runtime.
+
+```bash
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest tests/test_reference_heterogeneity.py tests/test_reference_heterogeneity_sampling.py tests/test_reference_counts.py
+```
+
+Outcome: `129 passed in 7.32s`.
+
+```bash
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/smoke.py
+```
+
+Outcome: `contract up to date`, 40 tests passed, and `smoke checks passed`.
+
+```bash
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/ruff check .
+```
+
+Outcome: `All checks passed!`.
+
+```bash
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
+```
+
+Outcome: `private-file check passed (680 tracked files)`. The required pre-commit
+rerun after staging the two new tracked files also passed and reported 682 tracked
+files.
 
 ## Limits
 
