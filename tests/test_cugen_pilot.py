@@ -6,6 +6,7 @@ import hashlib
 import importlib
 import importlib.util
 import json
+import os
 import shutil
 import struct
 from dataclasses import FrozenInstanceError
@@ -31,6 +32,15 @@ SELECTION = validate_training_selection(
     excluded_ids=(),
 )
 REVISION = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _qualified_cugen_root() -> Path:
+    value = os.environ.get("CUGEN_ROOT")
+    if value is None:
+        pytest.skip("CUGEN_ROOT is not set to a controller-qualified pinned CuGen source")
+    root = Path(value)
+    assert root.is_dir(), "CUGEN_ROOT does not name an available pinned CuGen source"
+    return root
 
 
 def _comparison() -> object:
@@ -535,9 +545,7 @@ def test_adapter_refuses_source_output_collision(tmp_path: Path) -> None:
 
 def test_cugen_source_allowlist_matches_the_pinned_public_checkout() -> None:
     """Catch drift between the frozen allowlist and the explicitly qualified CuGen revision."""
-    root = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
-    if not root.is_dir():
-        pytest.skip("controller-qualified pinned CuGen source is unavailable")
+    root = _qualified_cugen_root()
     backend = importlib.import_module("genomeos.validation.cugen_backend")
 
     result = backend.load_verified_cugen_api(root)
@@ -552,9 +560,7 @@ def test_cugen_source_allowlist_matches_the_pinned_public_checkout() -> None:
 
 def test_validated_pinned_root_resolves_actual_public_function_sources() -> None:
     """Catch importing same-named public functions from an unqualified CuGen installation."""
-    root = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
-    if not root.is_dir():
-        pytest.skip("controller-qualified pinned CuGen source is unavailable")
+    root = _qualified_cugen_root()
     backend = importlib.import_module("genomeos.validation.cugen_backend")
     admitted = backend.load_verified_cugen_api(root)
 
@@ -568,8 +574,7 @@ def test_validated_pinned_root_resolves_actual_public_function_sources() -> None
 
 def test_public_source_loader_returns_frozen_writer_and_complete_public_provenance() -> None:
     """Catch omitting the checked writer or exposing mutable source-hash provenance."""
-    root = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
-    assert root.is_dir(), "controller-qualified pinned CuGen source is required for Task 4"
+    root = _qualified_cugen_root()
     backend_spec = importlib.util.find_spec("genomeos.validation.cugen_backend")
     assert backend_spec is not None, "public checked CuGen source loader module must exist"
     backend = importlib.import_module("genomeos.validation.cugen_backend")
@@ -677,9 +682,7 @@ def test_source_hash_mismatch_refuses_before_cugen_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Catch a source label or package location being trusted instead of actual bytes."""
-    pinned = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
-    if not pinned.is_dir():
-        pytest.skip("controller-qualified pinned CuGen source is unavailable")
+    pinned = _qualified_cugen_root()
     pilot, _ = _pilot_modules()
     copied = tmp_path / "cugen-copy"
     shutil.copytree(pinned, copied, ignore=shutil.ignore_patterns(".git", "__pycache__"))

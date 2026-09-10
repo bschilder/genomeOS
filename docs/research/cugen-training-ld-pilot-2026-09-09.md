@@ -1,11 +1,11 @@
-# CuGen training-only LD synthetic pilot — hardware evidence
+# CuGen training-only LD synthetic pilot — corrected-source rerun pending
 
-**Status:** the bounded synthetic hardware-admission checks passed for CuGen revision
-`b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1` at genomeOS commit
-`50e583a06d772c21d1bf81f3b814ba0fd4947761`. This admits only the tested pairwise-complete,
-unphased ALT-dosage correlation behavior. It is not evidence of allele-frequency improvement,
-source-specific real-genome access, phased or haplotype estimation, joint covariance, expanded
-scale, or publication eligibility.
+**Status:** exact-source hardware admission is pending a rerun. The first hardware execution used
+CuGen revision `b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1` at genomeOS commit
+`50e583a06d772c21d1bf81f3b814ba0fd4947761` and is retained below as historical first-run evidence
+and cost. Review then corrected portable test setup, machine-readable cold-start labels, and a
+missing startup interval. Because the executing script and its hash changed, the first run does not
+prove the corrected exact source. No corrected-source GPU result is claimed here.
 
 ## Scientific and engineering contract
 
@@ -31,7 +31,32 @@ The CLI used seed 42 and three repeats. Hand and scale scheduled a baseline and 
 for each repeat; precision scheduled one baseline per repeat. Each planned execution wrote a
 separate immutable artifact directory, and each `experiment.json` accounts for every planned run.
 
-## Provenance and execution audit
+## Review correction and report schema
+
+Ordinary tests no longer depend on an untracked absolute controller checkout. Clean-checkout CLI
+contracts use an explicit unavailable source to verify deterministic planning and complete retained
+failure accounting. Checks that require actual pinned CuGen source read `CUGEN_ROOT` and skip
+explicitly when that qualified root is absent; actual CUDA execution additionally requires the
+executing genomeOS revision.
+
+Planning now records `cold=true` only on the first invocation in process order while retaining the
+independent integer `repeat` and boolean `held_out_mutated` fields. For hand and scale, the later
+repeat-0 held-out-mutated run is therefore machine-labeled warm rather than merely interpreted that
+way in prose.
+
+The experiment report now records these separately scoped top-level intervals:
+
+| Field | Scope |
+|---|---|
+| `startup_seconds` | `main()` entry through argument parsing, in-main imports, case construction, planning and output/report initialization; excludes interpreter-before-main time |
+| `source_load_seconds` | verification and import of the exact qualified CuGen source plus executing-source provenance collection |
+| `cuda_preflight_seconds` | CuPy/device discovery, selection, synchronization and recorded hardware/environment identity |
+
+The corrected `measurement_scope.startup` value is
+`main_entry_through_argument_parsing_imports_case_construction_planning_and_output_initialization`.
+No startup value is inferred for the earlier hardware run, which predates this field.
+
+## Historical first-run provenance and execution audit
 
 The controller first attempted the requested A100-SXM4-80GB in `US-NY-1` and `US-NJ-1`; neither had
 capacity. Pod `x274644i80dnwy` then ran in `US-MD-1` with the required pinned name and image. It was
@@ -58,7 +83,7 @@ The shared loader verified all 37 CuGen files before import. Imported provenance
 validated before the public `write_cugen(..., encoding=0, gidx=...)` call and independently decoded
 afterward.
 
-## Hardware and environment
+## Historical first-run hardware and environment
 
 | Property | Recorded value |
 |---|---|
@@ -75,7 +100,7 @@ Exact installed distributions were `cuda-pathfinder==1.8.1`, `cupy-cuda12x==14.2
 `pluggy==1.6.0`, `pyarrow==25.0.1`, `Pygments==2.21.0`, `pytest==9.0.2`,
 `python-dateutil==2.9.0.post0`, `scipy==1.18.1`, and `six==1.17.0`.
 
-## Hardware results
+## Historical first-run hardware results
 
 All seven actual-CUDA tests passed in 12.98 seconds. They emitted 84 unsuppressed upstream
 `Pandas4Warning` instances from CuGen's `astype(..., copy=False)` call, tracked separately in #201;
@@ -109,10 +134,11 @@ both CPU and GPU backends, reconciliation, artifact writing, and completed-reade
 | `precision` | first process invocation | 0.0120 | 0.1015 | 0.5708 |
 | `precision` | subsequent two | 0.0096–0.0097 | 0.0171–0.0173 | 0.1728–0.1767 |
 
-In the raw schedule, `cold` labels every repeat-0 condition. Only the first invocation within each
-CLI process is a true process/library cold start; the later repeat-0 held-out-mutated execution for
-hand and scale is therefore included among the subsequent warmed observations, not averaged as a
-second cold start. These small synthetic timings are descriptive pilot measurements, not production
+In the historical raw schedule, `cold` incorrectly labels every repeat-0 condition. Only the first
+invocation within each CLI process is a true process/library cold start, so the table includes the
+later repeat-0 held-out-mutated execution for hand and scale among the subsequent warmed
+observations rather than treating it as a second cold start. The corrected report will encode this
+fact directly. These small synthetic timings are descriptive first-run measurements, not production
 throughput or scaling claims.
 
 Peak observed process RSS was 657,702,912 bytes. The largest retained device-pool reading at a
@@ -120,7 +146,7 @@ stage boundary was 2,362,368 bytes. The RSS number is an observed process high-w
 device number is a used/retained pool snapshot at an observer boundary, explicitly not total CUDA
 memory or a within-stage peak.
 
-## Measurement boundaries and conclusion
+## Measurement boundaries and current conclusion
 
 The adapter emitted exactly one ordered start/end boundary for each of 12 stages: input validation,
 source snapshot, CuGen import, subset, training validation, independent reference, CPU LD and
@@ -128,9 +154,15 @@ reconciliation, GPU LD and reconciliation, artifact writing, and completed-reade
 The external observer synchronized before and after subset and GPU stages. Report finalization was
 outside the measured full-workflow interval.
 
-This evidence supports the bounded synthetic admission claim at the two pinned source revisions and
-recorded environment. It does not establish predictive AF improvement, new-region extrapolation,
-source-specific real-genome access, phased or haplotype inference, a valid joint covariance matrix,
-larger-scale performance, reproducibility on other hardware/software, or publication eligibility.
-The artifacts themselves record `joint_covariance_admitted=false` and `publication_eligible=false`.
-Those broader claims remain WP6 follow-up gates.
+The historical first run met the bounded numerical and invariance gates recorded above, but it is not
+final exact-source evidence for the corrected script. Admission remains pending until the controller
+runs the actual-CUDA tests and all three CLI cases from the correction commit, retrieves and verifies
+the new hashes, and deletes the task pod. No result from the first run is carried forward as proof of
+the changed source.
+
+Even after a corrected-source rerun, this pilot cannot establish predictive AF improvement,
+new-region extrapolation, source-specific real-genome access, phased or haplotype inference, a valid
+joint covariance matrix, larger-scale performance, portability beyond the recorded environment, or
+publication eligibility. The historical artifacts record `joint_covariance_admitted=false` and
+`publication_eligible=false`; the corrected run must preserve those boundaries. These broader
+claims remain WP6 follow-up gates.

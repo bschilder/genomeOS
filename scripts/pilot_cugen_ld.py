@@ -100,7 +100,7 @@ def _planned(case: Any, repeats: int) -> list[dict[str, Any]]:
                 {
                     "run_id": f"{case.name}-repeat-{repeat:03d}-{suffix}",
                     "repeat": repeat,
-                    "cold": repeat == 0,
+                    "cold": not plans,
                     "held_out_mutated": mutated,
                     "status": "planned",
                 }
@@ -209,6 +209,7 @@ def _invariance(out: Path, plans: list[dict[str, Any]], repeats: int) -> list[di
 
 
 def main() -> int:
+    startup_started = time.perf_counter()
     parser = _parser()
     args = parser.parse_args()
     if args.repeats < 3:
@@ -255,6 +256,10 @@ def main() -> int:
         "planned_runs": plans,
         "controls": dict(_CONTROLS),
         "measurement_scope": {
+            "startup": (
+                "main_entry_through_argument_parsing_imports_case_construction_planning_"
+                "and_output_initialization"
+            ),
             "full_workflow": "adapter_entry_through_serialized_completed_reader_return",
             "ld_only": "synchronized_stage_intervals",
             "memory": "rss_high_water_and_stage_boundary_pool_snapshots_not_total_cuda_peaks",
@@ -263,6 +268,7 @@ def main() -> int:
         },
         "held_out_invariance": [],
     }
+    summary["startup_seconds"] = time.perf_counter() - startup_started
     try:
         source_load_started = time.perf_counter()
         api = load_verified_cugen_api(args.cugen_root)

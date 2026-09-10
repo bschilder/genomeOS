@@ -10,19 +10,30 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "pilot_cugen_ld.py"
-PINNED_CUGEN = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
 REVISION = "0123456789abcdef0123456789abcdef01234567"
 
 
-def _command(out: Path, *, case: str = "hand", repeats: int = 3) -> list[str]:
+def _qualified_cugen_root() -> Path:
+    value = os.environ.get("CUGEN_ROOT")
+    if value is None:
+        pytest.skip("CUGEN_ROOT is not set to a controller-qualified pinned CuGen source")
+    root = Path(value)
+    assert root.is_dir(), "CUGEN_ROOT does not name an available pinned CuGen source"
+    return root
+
+
+def _command(
+    out: Path, *, cugen_root: Path, case: str = "hand", repeats: int = 3
+) -> list[str]:
     return [
         sys.executable,
         str(SCRIPT),
         "--cugen-root",
-        str(PINNED_CUGEN),
+        str(cugen_root),
         "--out",
         str(out),
         "--data-version",
@@ -221,7 +232,12 @@ def test_cli_refuses_existing_output_without_mutation(tmp_path: Path) -> None:
     sentinel.write_text("keep", encoding="utf-8")
 
     completed = subprocess.run(
-        _command(output), cwd=ROOT, env=_environment(), capture_output=True, text=True, check=False
+        _command(output, cugen_root=tmp_path / "unavailable-cugen"),
+        cwd=ROOT,
+        env=_environment(),
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
     assert completed.returncode == 2
@@ -229,15 +245,46 @@ def test_cli_refuses_existing_output_without_mutation(tmp_path: Path) -> None:
     assert sentinel.read_text(encoding="utf-8") == "keep"
 
 
-def test_unavailable_gpu_is_nonzero_with_complete_planned_run_accounting(tmp_path: Path) -> None:
+def test_unavailable_cugen_is_nonzero_with_complete_planned_run_accounting(tmp_path: Path) -> None:
+    """Catch a clean checkout needing controller scratch to retain every planned failure."""
+    output = tmp_path / "failed"
+
+    completed = subprocess.run(
+        _command(output, cugen_root=tmp_path / "unavailable-cugen"),
+        cwd=ROOT,
+        env=_environment(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 2
+    summary = json.loads((output / "experiment.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["planned_count"] == 6
+    assert summary["completed_count"] == 0
+    assert summary["failed_count"] == 6
+    assert len(summary["planned_runs"]) == 6
+    assert all(item["status"] == "failed" for item in summary["planned_runs"])
+    assert all(item["failure"]["stage"] == "cugen_import" for item in summary["planned_runs"])
+
+
+def test_actual_source_unavailable_gpu_is_nonzero_with_complete_planned_run_accounting(
+    tmp_path: Path,
+) -> None:
     """Catch an unavailable requested GPU becoming a skip or silently dropped planned runs."""
-    assert PINNED_CUGEN.is_dir(), "controller-qualified pinned CuGen source is required"
+    pinned_cugen = _qualified_cugen_root()
     environment = _environment()
     environment["CUDA_VISIBLE_DEVICES"] = ""
     output = tmp_path / "failed"
 
     completed = subprocess.run(
-        _command(output), cwd=ROOT, env=environment, capture_output=True, text=True, check=False
+        _command(output, cugen_root=pinned_cugen),
+        cwd=ROOT,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
     )
 
     assert completed.returncode == 2
@@ -254,14 +301,19 @@ def test_unavailable_gpu_is_nonzero_with_complete_planned_run_accounting(tmp_pat
 
 def test_cli_source_generation_is_reproducible_across_fresh_failed_processes(tmp_path: Path) -> None:
     """Catch process-dependent synthetic bytes before hardware execution begins."""
-    assert PINNED_CUGEN.is_dir(), "controller-qualified pinned CuGen source is required"
+    pinned_cugen = _qualified_cugen_root()
     environment = _environment()
     environment["CUDA_VISIBLE_DEVICES"] = ""
     outputs = (tmp_path / "first", tmp_path / "second")
     summaries: list[dict[str, object]] = []
     for output in outputs:
         completed = subprocess.run(
-            _command(output), cwd=ROOT, env=environment, capture_output=True, text=True, check=False
+            _command(output, cugen_root=pinned_cugen),
+            cwd=ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+            check=False,
         )
         assert completed.returncode == 2
         summaries.append(json.loads((output / "experiment.json").read_text(encoding="utf-8")))
@@ -272,3 +324,56 @@ def test_cli_source_generation_is_reproducible_across_fresh_failed_processes(tmp
     assert [item["source_sha256"] for item in summaries[0]["planned_runs"]] == [
         item["source_sha256"] for item in summaries[1]["planned_runs"]
     ]
+
+
+def test_cli_plan_order_is_reproducible_with_one_cold_invocation_without_controller_checkout(
+    tmp_path: Path,
+) -> None:
+    """Catch nondeterministic plans or two repeat-zero conditions labeled process-cold."""
+    expected = [
+        ("hand-repeat-000-baseline", 0, True, False),
+        ("hand-repeat-000-held-out-mutated", 0, False, True),
+        ("hand-repeat-001-baseline", 1, False, False),
+        ("hand-repeat-001-held-out-mutated", 1, False, True),
+        ("hand-repeat-002-baseline", 2, False, False),
+        ("hand-repeat-002-held-out-mutated", 2, False, True),
+    ]
+    for output in (tmp_path / "first", tmp_path / "second"):
+        completed = subprocess.run(
+            _command(output, cugen_root=tmp_path / "unavailable-cugen"),
+            cwd=ROOT,
+            env=_environment(),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        assert completed.returncode == 2
+        summary = json.loads((output / "experiment.json").read_text(encoding="utf-8"))
+        assert [
+            (item["run_id"], item["repeat"], item["cold"], item["held_out_mutated"])
+            for item in summary["planned_runs"]
+        ] == expected
+
+
+def test_cli_reports_separately_scoped_startup_before_source_loading(tmp_path: Path) -> None:
+    """Catch startup work being omitted or merged into source loading and CUDA preflight."""
+    output = tmp_path / "failed"
+    completed = subprocess.run(
+        _command(output, cugen_root=tmp_path / "unavailable-cugen"),
+        cwd=ROOT,
+        env=_environment(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 2
+    summary = json.loads((output / "experiment.json").read_text(encoding="utf-8"))
+    assert summary["startup_seconds"] >= 0.0
+    assert summary["measurement_scope"]["startup"] == (
+        "main_entry_through_argument_parsing_imports_case_construction_planning_"
+        "and_output_initialization"
+    )
+    assert "source_load_seconds" not in summary
+    assert "cuda_preflight_seconds" not in summary

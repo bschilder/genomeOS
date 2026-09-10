@@ -36,8 +36,10 @@ requires_gpu = pytest.mark.skipif(not _gpu_available(), reason="requires a worki
 
 
 def _runtime_inputs() -> tuple[Path, str]:
-    root = Path(os.environ.get("CUGEN_ROOT", "/private/tmp/genomeos-cugen-precision.jfAGjg/source"))
+    root_value = os.environ.get("CUGEN_ROOT")
     revision = os.environ.get("GENOMEOS_SOURCE_REVISION", "")
+    assert root_value is not None, "CUGEN_ROOT must name the audited pinned source tree"
+    root = Path(root_value)
     assert root.is_dir(), "CUGEN_ROOT must name the audited pinned source tree"
     assert re.fullmatch(r"[0-9a-f]{40}", revision), (
         "GENOMEOS_SOURCE_REVISION must be the executing source-only bundle commit"
