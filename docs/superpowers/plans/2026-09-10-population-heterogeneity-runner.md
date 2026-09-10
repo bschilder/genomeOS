@@ -691,6 +691,39 @@ git commit -m "feat: add closed B0H campaign records and wire contract" -m "Adva
 
 **Files:** Create `genomeos/validation/heterogeneity_runner_store.py`, `genomeos/validation/heterogeneity_runner_reader.py`, `tests/heterogeneity_runner_fixtures.py`, `tests/test_heterogeneity_runner_store.py`; add the shown in-memory packet/stage records to `heterogeneity_runner_records.py`. Scientific claim: immutable invocation evidence survives acknowledged publication and cannot authorize repeated science after ambiguous loss. Acceptance covers exact transactions, ownership, corruption and retained known-live bytes. Consume Task1 closed records/codec envelopes; produce `LocalB0HStore`, `PublicationPacket`, `StoredStage`, `CaseEvidence` and `PendingPublication`. The executor is the consumer; this task has no science calls.
 
+### Root correction following independent Task 2 review
+
+The runner spec §§4–5 governs these corrections; the initial literal storage code
+below is not authority to reintroduce a reviewed defect. Retain the corrected
+implementation and its regression tests rather than replaying the initial blocks.
+
+- Move `heterogeneity_runner_binding.py`, originally scheduled in Task 3, into
+  Task 2. Before START is committed, validate the complete stored case plus the
+  prospective uncompleted stage with the shared pure validator. This includes
+  exact prerequisites, runtime/backend and actual convergence-only retry eligibility.
+  Task 3 consumes this module; it does not create a second transition engine.
+- Preserve the exact SQL schema, but explicitly reject NULL/unmatched completion
+  and loss references. SQLite foreign-key checking alone does not reject NULL.
+  Bind each owner-loss record to the indexed START digest and its actual prior
+  owner on read, reuse and transaction readback.
+- Refuse orphan receipt/failure/metadata/payload relationships before publication
+  and during uncertain readback. Same-byte complete-result reuse is valid;
+  receipt-only repair is not. Share narrowly factored relational checks without
+  reading all payload BLOBs or running full database integrity scans before every
+  write. Preserve deep audit at open/inventory.
+- Classify transaction-inspection errors independently of the original error.
+  Corruption, integrity and programming failures are nonretryable even after I/O
+  failure; genuinely retryable uninspectable storage retains the existing policy.
+- Add behavioral regressions for these boundaries before applying their fixes.
+  The initial Task 2 pre-implementation RED was not run; that is a recorded
+  process deviation, not historical TDD evidence supplied by later passing tests.
+
+Costs of these rulings: earlier ownership of one already-planned pure module,
+additional relational checks, and stopping on genuine corruption rather than
+retrying it. The original implementation cannot claim test-first compliance.
+These corrections do not change scientific outcomes, the frozen schema, stage
+delivery counts, numerical gates, seeds or the bounded live-publication policy.
+
 ### Transaction-store implementation contract
 
 The following schema is fixed. Every foreign-key target must exist in the same
@@ -1745,7 +1778,8 @@ git commit -m "feat: add transactional single-owner B0H evidence store" -m "Adva
 
 ## Task 3: Bound restoration and exactly-once public-stage execution
 
-**Files:** Create `genomeos/validation/heterogeneity_runner_binding.py`, `genomeos/validation/heterogeneity_runner.py`
+**Files:** Consume the shared `genomeos/validation/heterogeneity_runner_binding.py`
+produced and reviewed in Task 2; create `genomeos/validation/heterogeneity_runner.py`
 and `tests/test_heterogeneity_runner.py`. Scientific claim: each case consumes
 exactly its retained inputs and declared accepted attempt. Acceptance: literal
 wrapper-call counts and immutable reuse, convergence-only retry, identity and
@@ -2104,7 +2138,10 @@ env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/priva
 Expected: both named test cases fail because the executor module does not exist;
 all Task1/Task2 tests must already pass. No after-the-fact collection error counts as RED.
 
-- [ ] Step 3: Create `genomeos/validation/heterogeneity_runner_binding.py` with this code.
+- [ ] Step 3: Verify and consume the shared binding module already produced in
+  Task 2. The original module listing below documents its planned interface;
+  do not overwrite reviewed corrections. Any required binding change is a scoped
+  integration fix with a behavioral regression, not a second implementation.
 
 ```python
 """Pure B0H receipt and dataset binding (design §§5,7–8,12; runner §§3–6)."""
