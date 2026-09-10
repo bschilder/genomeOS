@@ -67,7 +67,7 @@ module-size, privacy, and inspect staged paths/diff. Root runs full CI before PR
 - Produces: `pooled_beta_posteriors(training_counts: Sequence[PooledAlleleCount], variant_ids: Sequence[str], *, prior_alpha: float, prior_beta: float) -> tuple[B0VariantPosterior, ...]`.
 - Preserves: `fit_pooled_b0(...) -> PooledB0Fit`, and imports of posterior/error types from `baseline`.
 
-- [ ] **Step 1: Add failing arithmetic and validation tests.**
+- [x] **Step 1: Add failing arithmetic and validation tests.**
 
 ```python
 def test_posterior_pools_only_matching_variant():
@@ -88,7 +88,7 @@ variants, absent variants, nonfinite/nonpositive/bool priors, and numeric overfl
 are errors; NumPy integer inputs normalize losslessly. Sum beyond int64 using
 Python integers without wraparound and refuse resulting unstable shapes.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest tests/test_count_baseline.py -q
@@ -96,7 +96,7 @@ Python integers without wraparound and refuse resulting unstable shapes.
 
 Expect missing-module failure before implementation; preserve output in report.
 
-- [ ] **Step 3: Implement the pure kernel and adapt P1.**
+- [x] **Step 3: Implement the pure kernel and adapt P1.**
 
 ```python
 # count_baseline.py: validate datum at construction and function inputs explicitly.
@@ -124,7 +124,7 @@ Preserve sampled output test-row ordering, public names, seed checks and shared
 draws. New kernel has no pandas/P1 imports. Include its executed module path/hash
 in the existing CLI source map, not merely a string naming an unexecuted file.
 
-- [ ] **Step 4: Add P1 regression and run GREEN plus existing runner tests.**
+- [x] **Step 4: Add P1 regression and run GREEN plus existing runner tests.**
 
 ```python
 # In a test using the existing tiny valid observation fixture, compare the
@@ -139,7 +139,7 @@ np.testing.assert_array_equal(fit.predictive.mean_draws[:, 0],
 Also keep the missing-ascertainment P1 hard-error test; no research input should
 be admitted by the P1 adapter. Run both test files and mandatory task gates.
 
-- [ ] **Step 5: Commit after staged-path/privacy review.**
+- [x] **Step 5: Commit after staged-path/privacy review.**
 
 ```bash
 git add genomeos/validation/count_baseline.py genomeos/validation/baseline.py scripts/benchmark_allele_frequency.py tests/test_count_baseline.py tests/test_benchmark_cli.py
@@ -162,7 +162,7 @@ git commit -m "refactor: share pooled allele-count posterior kernel" -m "Advance
 - Produces: `fit_reference_b0(training: Sequence[ReferenceCount], testing: Sequence[ReferenceCount], *, prior_alpha: float, prior_beta: float) -> ReferenceB0Fit`.
 - Produces: `ReferenceInfeasibleError(ValueError)` for no scoreable test rows; reuse `B0InfeasibleError` for missing training variants.
 
-- [ ] **Step 1: Add RED tests for missingness, folds, and analytic agreement.**
+- [x] **Step 1: Add RED tests for missingness, folds, and analytic agreement.**
 
 ```python
 def row(group, ac=1, an=4):
@@ -189,13 +189,13 @@ edge reordering/count changes. Test unknown/self/duplicate edges, too few
 components, bool/invalid seeds/fold counts, duplicate records/group-variants,
 inconsistent labels and invalid counts/IDs.
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest tests/test_reference_counts.py -q
 ```
 
-- [ ] **Step 3: Implement the narrow pure interfaces.**
+- [x] **Step 3: Implement the narrow pure interfaces.**
 
 ```python
 # Graph components are canonical before any RNG use.
@@ -227,7 +227,7 @@ with scoreable testing must raise absent-variant infeasibility. Do not require
 test variant/group label identities to exist in training. No optional metadata
 registry or spatial fallback. Keep the module under the repository size budget.
 
-- [ ] **Step 4: Run GREEN and leakage/numerical regressions.**
+- [x] **Step 4: Run GREEN and leakage/numerical regressions.**
 
 ```python
 first = fit_reference_b0([row("train")], [row("test", 0, 4)],
@@ -244,7 +244,7 @@ CDF/quantiles agree with SciPy published-function values on small supports;
 extreme shapes that round mean to1 are refused, not clipped. Run task1 and task2
 focused tests plus mandatory task gates.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add genomeos/validation/reference_counts.py tests/test_reference_counts.py
@@ -264,7 +264,7 @@ git commit -m "feat: add dependency-aware reference count baseline" -m "Advances
 - Produces CLI and six artifacts exactly specified in spec §CLI and artifact contract.
 - Main returns0 for complete comparison,2 for completed artifact publication with failed/infeasible folds; structural validation raises with nonzero exit and no scientific artifacts.
 
-- [ ] **Step 1: Create tiny synthetic fixtures and failing subprocess tests.**
+- [x] **Step 1: Create tiny synthetic fixtures and failing subprocess tests.**
 
 ```text
 record_id\tvariant_id\tgroup_id\tregion_id\tvariant_group\tac\tan
@@ -293,13 +293,13 @@ command = [sys.executable, str(ROOT / "scripts/benchmark_reference_counts.py"),
            "--seed", "42", "--out", str(out)]
 ```
 
-- [ ] **Step 2: Run RED.**
+- [x] **Step 2: Run RED.**
 
 ```bash
 /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest tests/test_reference_counts_cli.py -q
 ```
 
-- [ ] **Step 3: Implement local parsing, fold scoring, and artifacts.**
+- [x] **Step 3: Implement local parsing, fold scoring, and artifacts.**
 
 ```python
 # Preserve labels literally and validate raw integer tokens before conversion.
@@ -336,7 +336,7 @@ Write deterministic JSON (sorted keys, no NaN/Infinity; follow existing CLI's
 representation for zero-probability log scores) and deterministic TSV. Keep the
 runner under500logical lines; ask controller before introducing another module.
 
-- [ ] **Step 4: Run complete and incomplete artifact tests plus all focused tests.**
+- [x] **Step 4: Run complete and incomplete artifact tests plus all focused tests.**
 
 ```python
 assert summary["target"] == "reference_panel_within_resource"
@@ -355,7 +355,7 @@ literal `NA`/leadingzero labels, output reuse refusal, conflicting PYTHONPATH,
 and recomputed file hashes. Verify scoreable membership matches fold status and
 summary; no failed fold or unavailable row vanishes. Run mandatory task gates.
 
-- [ ] **Step 5: Commit and hand off real-data execution to the controller.**
+- [x] **Step 5: Commit and hand off real-data execution to the controller.**
 
 ```bash
 git add scripts/benchmark_reference_counts.py tests/test_reference_counts_cli.py tests/fixtures/reference_counts
@@ -367,3 +367,20 @@ already qualified count audit (never re-downloads or reclassifies samples), and
 executes the spec's12predeclared runs. Aggregate evidence and hashes go in a new
 research note and the dedicated branch PR. Do not commit real input/output rows,
 claim sealed validation, or close #189 from this development baseline.
+
+## Execution evidence (September 10)
+
+Tasks 1–3 are implemented and reviewed. The completed-run fixture uses two
+folds because a missing-only component can otherwise make the tiny fixture
+infeasible; the explicit five-fold test retains that outcome. The runner uses
+strict CSV logical-record parsing instead of the pandas sketch above: pandas
+could interpret an extra field as an implicit index, masking malformed rows.
+
+The [twelve-run report](../../research/reference-count-baseline-2026-09-10.md)
+records all unchanged real-data configurations, independent artifact checks,
+the failed prior attempts, full CPU CI and reproducible aggregate results.
+The empirical failures prompted the separately tracked
+[count-calibration numerical repair](2026-09-10-count-calibration-numerics.md).
+That repair's changed CUDA path still needs actual hardware verification;
+source-upload authorization is pending. No worldwide improvement or release
+gate is claimed, and #189 remains open.

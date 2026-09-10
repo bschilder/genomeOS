@@ -47,30 +47,30 @@ Files in scope:
 - `scripts/benchmark_allele_frequency.py`
 - directly corresponding predictive, GPU, benchmark and CLI tests
 
-- [ ] Add failing synthetic CDF/PIT regressions with an independent standard-
+- [x] Add failing synthetic CDF/PIT regressions with an independent standard-
   library Decimal or exact-rational oracle. Use invented inputs, not real panel
   rows. Check the complementary orientation and a mixture; preserve the tiny
   lower-tail and large-support-short-tail cases. Report exact RED commands.
-- [ ] Add a failure-accounting regression: inject an invalid diagnostic frame
+- [x] Add a failure-accounting regression: inject an invalid diagnostic frame
   into one fold, then require a nonzero completed report, an explicit failed
   fold with reason, no prediction rows from that fold, all planned identities,
   and successful later folds. Cover both existing research runners.
-- [ ] Correct the tail choice in CPU and CuPy implementations consistently.
+- [x] Correct the tail choice in CPU and CuPy implementations consistently.
   Prefer directly summing the small-probability complement when the initially
   shorter tail is near one (a one-half crossover is a deterministic algorithmic
   choice, not a fitted parameter). Maintain bounded temporary arrays, exact
   boundary semantics, explicit numerical-domain refusal, and no CPU fallback
   for an explicitly requested CUDA backend. If diagnosis shows a larger change
   is required, report evidence before expanding this task.
-- [ ] Expose the existing diagnostic validator as a narrow public benchmark
+- [x] Expose the existing diagnostic validator as a narrow public benchmark
   boundary, validate its input structure without mutating it, and reuse it in
   the summary and inside each runner's per-fold handler before global rows are
   appended. Keep one set of range/finite/coverage rules and legitimate negative-
   infinite log scores. Invalid output must not become a completed fold.
-- [ ] Run focused tests and mandatory smoke, Ruff, contract, module-size and
+- [x] Run focused tests and mandatory smoke, Ruff, contract, module-size and
   privacy gates. Inspect the exact staged paths/diff before a dedicated-branch
   fix commit referencing #209; preserve unrelated work and real local data.
-- [ ] Independent task review, including the numerical oracle and failure
+- [x] Independent task review, including the numerical oracle and failure
   accounting; no broad unrelated cleanup. Address actual findings within the
   task review budget.
 - [ ] Verify changed CuPy code on actual CUDA hardware with synthetic inputs
@@ -86,3 +86,18 @@ two terminal failure records. Inspect all twelve outcomes and every manifest;
 do not choose data/folds/priors from their results. Record aggregate-only
 evidence, full stable-source CI and the dedicated-branch PR. These runs remain
 within-resource development checks, not resident-geographic or release evidence.
+
+## Controller evidence (September 10)
+
+Reviewed source `92659aa6999b04652fd0c3208c1e0836c96832a6` passed the full
+CPU suite (963 passed, 17 CUDA-dependent skips, 15 existing warnings), all
+mandatory gates, and the unchanged twelve-run real-data protocol. Every run
+completed all five folds and passed the independent input/source/output,
+training-posterior, membership and metric audit. See the
+[aggregate report](../../research/reference-count-baseline-2026-09-10.md).
+
+Actual CUDA acceptance is still pending: a task-owned A40 was provisioned, but
+automatic approval review refused the source upload before execution. The pod
+was deleted immediately; no source was uploaded or scorer checks run. The
+specific source-only authorization was requested asynchronously. Keep this
+hardware item open and the repair unmerged; local model work can proceed.
