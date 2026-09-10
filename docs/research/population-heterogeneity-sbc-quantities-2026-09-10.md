@@ -49,3 +49,14 @@ control actually failed, while retaining true failed-control mode-one states.
 The focused post-correction command passed `124` tests in `1.74s`; it includes
 empty, short, long, and opposite-map scalar-vector regressions for quantities
 3 and 4, plus scalar and dependence contradictory control-state regressions.
+
+## Point-slot domain correction
+
+Constructed or restored canonical point-slot maps now require the public
+non-Boolean integer domain before their normalized Python integers are checked
+against the complete-control or failed-control map. The correction rejects
+Boolean and floating identifiers even where Python equality would make them
+numerically match slots, while accepting and normalizing signed and unsigned
+NumPy integer identifiers. The final focused command passed `138` tests in
+`1.70s`; no normal-execution rank failure, reference study, or NUTS result is
+reported by this domain-boundary regression.

@@ -706,3 +706,50 @@ def test_outer_retains_true_failed_control_mode_one_ranks(monkeypatch):
     result = selected_sbc_quantities(data, attempt=attempt)
     assert all(entry.status == "control_failed" for entry in result.ranks[6:12])
     assert replace(result) == result
+
+
+def selected_result_with_control_state(monkeypatch, *, failed):
+    install_mocks(monkeypatch)
+    data, attempt = fixture()
+    if failed:
+
+        def failed_control(*, seed):
+            return PriorControlResult(
+                seed,
+                ((0.25, 0.125),) * 3,
+                PriorControlFailure(3, "rho", "rounded_boundary", 0.375, 0.0, None, None),
+            )
+
+        monkeypatch.setattr(quantities, "draw_prior_control", failed_control)
+    return selected_sbc_quantities(data, attempt=attempt)
+
+
+@pytest.mark.parametrize("failed", (False, True))
+@pytest.mark.parametrize(
+    "index,value",
+    ((0, False), (0, np.bool_(False)), (1, 1.0), (2, np.float64(2.0))),
+)
+def test_outer_refuses_noninteger_canonical_point_slots(monkeypatch, failed, index, value):
+    result = selected_result_with_control_state(monkeypatch, failed=failed)
+    slots = list(result.point_slots)
+    slots[index] = value
+    with pytest.raises(ValueError):
+        replace(result, point_slots=tuple(slots))
+
+
+@pytest.mark.parametrize("failed", (False, True))
+@pytest.mark.parametrize("slot_type", (np.int64, np.uint64))
+def test_outer_normalizes_supported_numpy_integer_point_slots(monkeypatch, failed, slot_type):
+    result = selected_result_with_control_state(monkeypatch, failed=failed)
+    restored = replace(result, point_slots=tuple(slot_type(slot) for slot in result.point_slots))
+    assert restored.point_slots == result.point_slots
+    assert all(type(slot) is int for slot in restored.point_slots)
+
+
+@pytest.mark.parametrize("failed", (False, True))
+def test_outer_refuses_wrong_integer_canonical_point_slot_map(monkeypatch, failed):
+    result = selected_result_with_control_state(monkeypatch, failed=failed)
+    slots = list(result.point_slots)
+    slots[-1] = slots[-2]
+    with pytest.raises(ValueError):
+        replace(result, point_slots=tuple(slots))

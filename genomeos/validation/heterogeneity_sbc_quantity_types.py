@@ -350,7 +350,10 @@ class SelectedSbcQuantities:
         if control.seed != expected_control_seed:
             raise ValueError("control identity does not match accepted attempt")
         slots = tuple(range(13)) if control.status == "complete" else (0, 1, 2, 3, 4, 9, 10, 11, 12)
-        if type(self.point_slots) is not tuple or self.point_slots != slots:
+        if type(self.point_slots) is not tuple:
+            raise ValueError("point_slots does not match the control outcome")
+        point_slots = tuple(simulation_integer(slot, "point slot") for slot in self.point_slots)
+        if point_slots != slots:
             raise ValueError("point_slots does not match the control outcome")
         if type(self.points) is not tuple or len(self.points) != len(slots):
             raise ValueError("points does not match the canonical point map")
@@ -449,6 +452,7 @@ class SelectedSbcQuantities:
         object.__setattr__(self, "selected_indices", tuple(indices))
         object.__setattr__(self, "selection_seeds", seeds)
         object.__setattr__(self, "control", control)
+        object.__setattr__(self, "point_slots", point_slots)
         object.__setattr__(self, "points", points)
         object.__setattr__(self, "scalar_quantities", scalars)
         object.__setattr__(self, "reference_error", reference_error)
