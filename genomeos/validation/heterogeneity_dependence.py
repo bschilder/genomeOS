@@ -24,6 +24,7 @@ from genomeos.validation.heterogeneity_oracle import (
 _ORDERS = (64, 128, 256)
 _CONVERGENCE_TOLERANCE = 1e-6
 _ROUNDING_MULTIPLIER = 64.0
+_POINT_SCALAR_TYPES = (float, np.float16, np.float32, np.float64)
 
 
 @dataclass(frozen=True)
@@ -58,16 +59,14 @@ class DependenceComparisons:
 
 
 def _finite_interior_scalar(value: object, name: str) -> float:
-    if isinstance(value, (bool, np.bool_)) or not isinstance(value, Real):
-        raise ValueError(f"{name} must be a finite real scalar strictly inside (0, 1)")
-    try:
-        normalized = float(value)
-    except OverflowError as error:
+    if type(value) not in _POINT_SCALAR_TYPES:
         raise ValueError(
-            f"{name} must be a finite real scalar strictly inside (0, 1)"
-        ) from error
+            f"{name} must be a built-in float or NumPy float16, float32, or "
+            "float64 scalar strictly inside (0, 1)"
+        )
+    normalized = float(value)
     if not math.isfinite(normalized) or not 0.0 < normalized < 1.0:
-        raise ValueError(f"{name} must be a finite real scalar strictly inside (0, 1)")
+        raise ValueError(f"{name} must be a finite scalar strictly inside (0, 1)")
     return normalized
 
 

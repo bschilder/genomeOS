@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import FrozenInstanceError, replace
+from fractions import Fraction
 
 import numpy as np
 import pytest
@@ -276,6 +277,41 @@ def test_reference_rejects_malformed_or_invalid_points(points: object) -> None:
         )
 
 
+@pytest.mark.parametrize(
+    "point",
+    [
+        (Fraction(1, 4) + Fraction(1, 2**60), 0.25),
+        (0.25, Fraction(1, 4) + Fraction(1, 2**60)),
+        (np.longdouble("0.25"), 0.25),
+        (0.25, np.longdouble("0.25")),
+    ],
+)
+def test_reference_rejects_lossy_or_extended_precision_point_scalars(
+    point: tuple[object, object],
+) -> None:
+    with pytest.raises(ValueError):
+        heterogeneity_dependence_reference(
+            ((0, 2),),
+            mean_prior=(1.0, 1.0),
+            rho_prior=(1.0, 1.0),
+            points=(point,),  # type: ignore[arg-type]
+        )
+
+
+def test_reference_rejects_float_subclasses_without_conversion() -> None:
+    class MisleadingFloat(float):
+        def __float__(self) -> float:
+            return 0.25
+
+    with pytest.raises(ValueError):
+        heterogeneity_dependence_reference(
+            ((0, 2),),
+            mean_prior=(1.0, 1.0),
+            rho_prior=(1.0, 1.0),
+            points=((MisleadingFloat(0.75), 0.25),),
+        )
+
+
 def test_reference_validates_counts_even_on_separable_path() -> None:
     with pytest.raises(ValueError):
         heterogeneity_dependence_reference(
@@ -372,6 +408,48 @@ def test_comparisons_resolve_mixed_signs_and_identical_repeat() -> None:
     assert result.comparisons_by_order == _raw_comparisons(reference, 0, draws)
 
 
+def test_supported_binary_float_representations_preserve_identical_ties() -> None:
+    scalar_types = (float, np.float16, np.float32, np.float64)
+    points = tuple(
+        (scalar_type(0.25), scalar_type(0.25)) for scalar_type in scalar_types
+    )
+    reference = heterogeneity_dependence_reference(
+        ((0, 2),),
+        mean_prior=(1.0, 1.0),
+        rho_prior=(1.0, 1.0),
+        points=(*points, points[0]),
+    )
+
+    result = dependence_comparisons(
+        reference, truth_index=0, draw_indices=(1, 2, 3, 4)
+    )
+
+    assert tuple((point.mean, point.rho) for point in reference.points) == (
+        (0.25, 0.25),
+    ) * 5
+    assert result.status == "resolved"
+    assert result.comparisons == (0, 0, 0, 0)
+
+
+@pytest.mark.parametrize("toward", [0.0, 1.0])
+def test_adjacent_binary64_points_do_not_use_identity_shortcut(toward: float) -> None:
+    adjacent = np.nextafter(0.25, toward)
+    reference = heterogeneity_dependence_reference(
+        ((0, 2),),
+        mean_prior=(1.0, 1.0),
+        rho_prior=(1.0, 1.0),
+        points=((0.25, 0.25), *((adjacent, 0.25),) * 4),
+    )
+
+    result = dependence_comparisons(
+        reference, truth_index=0, draw_indices=(1, 2, 3, 4)
+    )
+
+    assert all(point.mean != reference.points[0].mean for point in reference.points[1:])
+    assert result.status == "dependence_rank_order_unresolved"
+    assert result.comparisons is None
+
+
 def test_separable_comparisons_are_literal_ties_but_retain_raw_signs() -> None:
     reference = heterogeneity_dependence_reference(
         ((0, 1), (1, 2)),
@@ -463,9 +541,33 @@ def test_comparisons_refuse_malformed_or_nonfinite_forged_points(
 ) -> None:
     reference = _anchored_comparison_reference()
     forged_point = replace(reference.points[1], **{field: value})
-    forged = replace(reference, points=(reference.points[0], forged_point, *reference.points[2:]))
+    forged = replace(
+        reference, points=(reference.points[0], forged_point, *reference.points[2:])
+    )
 
     with pytest.raises(error):
+        dependence_comparisons(forged, truth_index=0, draw_indices=(1, 2, 3, 4))
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("mean", Fraction(1, 4)),
+        ("rho", Fraction(1, 4)),
+        ("mean", np.longdouble("0.25")),
+        ("rho", np.longdouble("0.25")),
+    ],
+)
+def test_comparisons_reject_unsupported_forged_point_scalars(
+    field: str, value: object
+) -> None:
+    reference = _anchored_comparison_reference()
+    forged_point = replace(reference.points[1], **{field: value})
+    forged = replace(
+        reference, points=(reference.points[0], forged_point, *reference.points[2:])
+    )
+
+    with pytest.raises(ValueError):
         dependence_comparisons(forged, truth_index=0, draw_indices=(1, 2, 3, 4))
 
 
