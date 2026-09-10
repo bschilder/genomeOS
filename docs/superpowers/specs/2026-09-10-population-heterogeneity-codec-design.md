@@ -356,9 +356,10 @@ that three-byte payload must separately fail float64-array length validation.
 
 ## 8. Review decisions and limits
 
-Root has completed personal spec review and chosen the corrections recorded
-in self-review.md. The implementation plan still needs personal review before
-branch adoption or execution. No primitive/runtime anchor has been executed.
+Root personally reviewed, corrected and adopted the implementation plan before
+branch execution. Executable acceptance evidence is recorded in the research
+note; final whole-branch review remains a separate handoff step. No
+primitive/runtime anchor has been executed.
 String hex trades human readability and metadata size for exact arbitrary
 Python string preservation. Budgets stay explicit because unexpected typed
 fit returns may be larger than the planned B0H fit; no new scientific cap is

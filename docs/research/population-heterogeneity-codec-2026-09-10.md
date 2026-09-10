@@ -28,34 +28,58 @@ calibration, durability, recovery, publication eligibility or full-study result.
 
 ## Executed verification
 
-Only commands actually run and their captured results are recorded below.
+The implementation chronology was not a behavioral TDD RED/GREEN cycle:
+production, fixture, and test files existed before the first test command. The
+first collection-only run failed because pytest attempted to render the
+arbitrary-size integer parameter under Python's 4300-digit limit. This was not
+a production-behavior RED. The test-only workaround was subsequently replaced
+by explicit pytest IDs, leaving interpreter policy unchanged.
 
 ```text
-RED
+Initial collection-only command (actual output; not a behavioral RED):
 env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest -o addopts='' -q tests/test_heterogeneity_codec.py
 ERROR during collection: ValueError: Exceeds the limit (4300 digits) for integer string conversion.
 
-GREEN / focused dependencies
+Original focused dependency run after the temporary test-only workaround:
 env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest -o addopts='' -q tests/test_heterogeneity_codec.py tests/test_heterogeneity_codec_wire.py tests/test_heterogeneity_codec_contract.py tests/test_heterogeneity_summaries.py tests/test_heterogeneity_sbc_quantities.py tests/test_heterogeneity_attempts.py tests/test_heterogeneity_simulation.py
-404 passed in 13.83s
+404 passed in 13.90s
 
-smoke
+Later original focused+smoke run (separate actual run):
 env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/smoke.py
-contract up to date; 40 passed; smoke checks passed
+contract up to date
+smoke checks passed
 
-ruff
+Later original ruff run:
 /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/ruff check .
 All checks passed!
 
-contract
-.../python scripts/freeze_contract.py --check
+Later original contract check:
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/freeze_contract.py --check
 contract up to date
 
-module size
-.../python scripts/check_module_size.py
+Later original module-size check:
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_module_size.py
 module-size check passed (85 modules)
 
-privacy
-.../python scripts/check_private_files.py
+Later original privacy check:
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
 private-file check passed (730 tracked files)
+
+Final corrected-tree focused dependency run:
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest -o addopts='' -q tests/test_heterogeneity_codec.py tests/test_heterogeneity_codec_wire.py tests/test_heterogeneity_codec_contract.py tests/test_heterogeneity_summaries.py tests/test_heterogeneity_sbc_quantities.py tests/test_heterogeneity_attempts.py tests/test_heterogeneity_simulation.py
+404 passed in 13.54s
+
+Final corrected-tree static gates:
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/smoke.py
+contract up to date; 40 passed; smoke checks passed
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/ruff check .
+All checks passed!
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/freeze_contract.py --check
+contract up to date
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_module_size.py
+module-size check passed (85 modules)
+env PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
+private-file check passed (734 tracked files)
+git diff --check
+passed
 ```
