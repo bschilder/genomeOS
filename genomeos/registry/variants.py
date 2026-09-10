@@ -10,6 +10,7 @@ Every row is hand-authored and reviewed. Nothing here resolves a variant automat
 
 from __future__ import annotations
 
+import pandas as pd
 import pandera.pandas as pa
 
 #: A locus is either resolved to a coordinate, or recorded as unresolvable with a reason. An
@@ -54,3 +55,61 @@ VARIANT_NORMALIZATION_SCHEMA = pa.DataFrameSchema(
     coerce=True,
     name="variant_normalization",
 )
+
+_COMPLEMENT = str.maketrans({"A": "T", "T": "A", "C": "G", "G": "C"})
+_PALINDROMES: tuple[frozenset[str], ...] = (frozenset({"A", "T"}), frozenset({"C", "G"}))
+
+
+def complement(alleles: str) -> str:
+    """`"A/G"` -> `"T/C"`. Each allele independently; the slash is preserved."""
+    return alleles.translate(_COMPLEMENT)
+
+
+def is_palindromic(printed_alleles: str) -> bool:
+    """True when complementing returns the same pair, so the letters cannot reveal strand.
+
+    `A/T` and `C/G` are their own complements. For those the round-trip check in `validate_rows`
+    passes under *either* strand and therefore proves nothing, which is why such rows are required
+    to carry `strand_evidence` instead (design §5).
+    """
+    return frozenset(printed_alleles.split("/")) in _PALINDROMES
+
+
+def validate_rows(frame: pd.DataFrame) -> pd.DataFrame:
+    """Schema validation plus the cross-field invariants pandera cannot express."""
+    validated = VARIANT_NORMALIZATION_SCHEMA.validate(frame)
+    for row in validated.itertuples():
+        where = f"variant_normalization[{row.variant_id}]"
+        if row.status == "unresolved":
+            if not row.refusal_reason.strip():
+                raise ValueError(f"{where}: an unresolved row requires a refusal_reason")
+            if row.rsid or row.normalized_variant_id or row.strand:
+                raise ValueError(
+                    f"{where}: an unresolved row must not carry an rsid, coordinate, or strand"
+                )
+            continue
+
+        for field in ("rsid", "normalized_variant_id", "strand", "reference_resource"):
+            if not str(getattr(row, field)).strip():
+                raise ValueError(f"{where}: a resolved row requires {field}")
+        if not row.naming_citation.strip():
+            raise ValueError(
+                f"{where}: a resolved row requires a naming_citation — the source establishing "
+                "that the legacy name denotes this rsID. Without one the row is unresolved (§6)."
+            )
+        if row.refusal_reason.strip():
+            raise ValueError(f"{where}: a resolved row must not carry a refusal_reason")
+
+        _, _, ref, alt = row.normalized_variant_id.rsplit("-", 3)
+        printed = row.printed_alleles if row.strand == "plus" else complement(row.printed_alleles)
+        if frozenset(printed.split("/")) != frozenset({ref, alt}):
+            raise ValueError(
+                f"{where}: printed_alleles {row.printed_alleles!r} on the {row.strand} strand "
+                f"does not round-trip to {{{ref}, {alt}}}"
+            )
+        if is_palindromic(row.printed_alleles) and not row.strand_evidence.strip():
+            raise ValueError(
+                f"{where}: {row.printed_alleles!r} is palindromic, so the round-trip cannot "
+                "detect a strand error; strand_evidence is required"
+            )
+    return validated
