@@ -270,3 +270,6 @@ data/raw/*
 
 # Agent worktrees and local session state
 .claude/
+
+# Subagent-driven development scratch (ledgers, briefs, review packages)
+.superpowers/
