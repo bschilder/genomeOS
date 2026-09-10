@@ -321,6 +321,40 @@ def test_injected_numeric_failure_is_published_and_other_folds_continue(tmp_path
     assert "injected numeric failure" in " ".join(statuses.reason)
 
 
+def test_injected_invalid_diagnostics_fail_one_fold_before_append_and_later_folds_continue(
+    tmp_path, monkeypatch
+):
+    spec = importlib.util.spec_from_file_location("reference_runner_invalid_diagnostics", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    real_diagnostics = runner.predictive_diagnostics
+    calls = 0
+
+    def invalid_once(*args, **kwargs):
+        nonlocal calls
+        diagnostics = real_diagnostics(*args, **kwargs)
+        calls += 1
+        if calls == 1:
+            diagnostics.loc[0, "randomized_pit"] = 1.1
+        return diagnostics
+
+    monkeypatch.setattr(runner, "predictive_diagnostics", invalid_once)
+    out = tmp_path / "run"
+    args = runner._parser().parse_args(_command(out)[2:])
+
+    assert runner.run(args) == 2
+    summary = _json(out / "summary.json")
+    assert summary["split_counts"] == {"planned": 2, "completed": 1, "failed": 1, "infeasible": 0}
+    rows = pd.read_csv(out / "row_status.tsv", sep="\t", keep_default_na=False)
+    failed_split = rows.loc[rows.status == "failed", "split_id"].unique().tolist()
+    assert len(failed_split) == 1
+    assert "randomized_pit" in " ".join(rows.loc[rows.status == "failed", "reason"])
+    predictions = pd.read_csv(out / "predictions.tsv", sep="\t")
+    assert failed_split[0] not in set(predictions.split_id)
+    assert set(rows.status) >= {"failed", "scored"}
+
+
 @pytest.mark.parametrize("helper", ["_git_record", "_package_versions"])
 def test_provenance_failure_publishes_no_output_directory(tmp_path, monkeypatch, helper):
     spec = importlib.util.spec_from_file_location("reference_runner", SCRIPT)

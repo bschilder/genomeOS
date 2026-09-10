@@ -33,7 +33,11 @@ import genomeos.validation.benchmark as benchmark_module  # noqa: E402
 import genomeos.validation.count_baseline as count_baseline_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.reference_counts as reference_counts_module  # noqa: E402
-from genomeos.validation.benchmark import BenchmarkFoldStatus, summarize_benchmark  # noqa: E402
+from genomeos.validation.benchmark import (  # noqa: E402
+    BenchmarkFoldStatus,
+    summarize_benchmark,
+    validate_predictive_diagnostics,
+)
 from genomeos.validation.count_baseline import B0InfeasibleError  # noqa: E402
 from genomeos.validation.predictive import predictive_diagnostics  # noqa: E402
 from genomeos.validation.reference_counts import (  # noqa: E402
@@ -247,6 +251,7 @@ def run(args: argparse.Namespace) -> int:
                 [row.an for row in scored],
                 seed=pit_seeds[index],
             )
+            diagnostics = validate_predictive_diagnostics(diagnostics)
             for position, row in enumerate(scored):
                 record = {
                     "split_id": fold.split_id, "source_record_id": row.record_id,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
@@ -458,3 +459,37 @@ def test_fitting_failures_are_written_and_cause_nonzero_exit(tmp_path):
     manifest = _json(output / "manifest.json")
     assert {fold["status"] for fold in manifest["splits"]} == {"failed"}
     assert _json(output / "summary.json")["benchmark"]["split_counts"]["failed"] == 2
+
+
+def test_invalid_fold_diagnostics_are_failed_before_append_and_later_folds_continue(
+    tmp_path, monkeypatch
+):
+    spec = importlib.util.spec_from_file_location("benchmark_runner_invalid_diagnostics", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    real_diagnostics = runner.predictive_diagnostics
+    calls = 0
+
+    def invalid_once(*args, **kwargs):
+        nonlocal calls
+        diagnostics = real_diagnostics(*args, **kwargs)
+        calls += 1
+        if calls == 1:
+            diagnostics.loc[0, "randomized_pit"] = 1.1
+        return diagnostics
+
+    monkeypatch.setattr(runner, "predictive_diagnostics", invalid_once)
+    output = tmp_path / "invalid-diagnostics"
+    args = runner._parser().parse_args(_command(output)[2:])
+
+    assert runner.run(args) == 1
+    summary = _json(output / "summary.json")["benchmark"]
+    assert summary["split_counts"] == {"planned": 2, "completed": 1, "failed": 1, "infeasible": 0}
+    statuses = pd.read_csv(output / "fold_status.tsv", sep="\t", keep_default_na=False)
+    failed_split = statuses.loc[statuses.status == "failed", "split_id"].tolist()
+    assert len(failed_split) == 1
+    assert "randomized_pit" in statuses.loc[statuses.status == "failed", "failure_reason"].item()
+    predictions = pd.read_csv(output / "predictions.tsv", sep="\t")
+    assert failed_split[0] not in set(predictions.split_id)
+    assert set(statuses.status) == {"failed", "completed"}

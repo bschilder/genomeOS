@@ -38,6 +38,7 @@ from genomeos.validation.benchmark import (  # noqa: E402
     inventory_observations,
     summarize_benchmark,
     validate_allele_observations,
+    validate_predictive_diagnostics,
 )
 from genomeos.validation.predictive import predictive_diagnostics  # noqa: E402
 from genomeos.validation.splits import build_buffered_splits  # noqa: E402
@@ -311,6 +312,7 @@ def _fold_predictions(
         testing["an"].to_numpy(),
         seed=predictive_seed,
     )
+    diagnostics = validate_predictive_diagnostics(diagnostics)
     posterior_by_variant = {posterior.variant_id: posterior for posterior in fit.posteriors}
     assignment_by_id = assignments.set_index("source_record_id")
     rows: list[dict[str, object]] = []

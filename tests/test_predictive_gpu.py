@@ -354,6 +354,23 @@ def test_gpu_beta_binomial_cdf_preserves_the_analytic_tiny_lower_tail():
 
 
 @requires_gpu
+@pytest.mark.parametrize(
+    ("mean", "concentration", "count", "an"),
+    [(1e-11, 5000.0, 0, 2), (1e-11, 8000.0, 1, 352), (0.0014, 6400.0, 6, 52)],
+)
+def test_gpu_near_one_short_lower_tail_matches_repaired_cpu_cdf(
+    mean, concentration, count, an
+):
+    """The GPU must pivot to the small-probability complement before near-one cancellation."""
+    means = np.array([[mean]])
+    concentrations = np.array([[concentration]])
+    cpu = CountPredictive(means, concentrations)
+    gpu = CountPredictive(means, concentrations, cdf_backend="cupy")
+
+    np.testing.assert_allclose(gpu.cdf([count], [an]), cpu.cdf([count], [an]), rtol=2e-14, atol=0.0)
+
+
+@requires_gpu
 def test_gpu_quantile_tie_is_reported_without_relaxing_exact_endpoint_parity():
     """The exact half-mass tie must retain the left-continuous endpoint on both backends."""
     means = np.array([[0.0], [1.0]])
