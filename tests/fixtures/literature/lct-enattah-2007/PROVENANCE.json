@@ -1,0 +1,32 @@
+{
+ "corpus_id": "lct-rs4988235",
+ "discovery": {
+  "manifest_tool": "scripts/fetch_pubmed_manifest.py",
+  "note": "The three queries were executed against PubMed on 2026-09-12 with the documented parameters (retmode=json, retmax=100000) and the raw ESearch response bytes are committed under payloads/. Each committed payload reproduces byte-for-byte on a fresh execution of the same query, so the capture is reproducible rather than merely asserted. The slice was merged 2026-09-06 with no payloads committed and no builder, so no capture from that date survives; Q1 and Q2 reproduce the merged candidate sets exactly, and Q3 does not: the merged manifest recorded 25 candidates for that query while the query matches 58, and those 25 are exactly the set PubMed returns with retmax=25, so the merged capture was truncated rather than the index having changed. searches.pending.tsv is manifest_tool build_manifest() applied to these payloads offline. The published searches.tsv is NOT rewritten here: re-fetching changes search_id by construction, so superseding the published manifest version is a data revision and is tracked separately. See docs/audits/lct-enattah-2007-corpus.md.",
+  "manifest_version": "lct-rs4988235@2026-09-12.1",
+  "queries": [
+   {
+    "name": "Q1",
+    "query": "Enattah[Author] AND 13910[All Fields]",
+    "executed_at": "2026-09-12T04:08:24Z",
+    "payload": "payloads/Q1.json"
+   },
+   {
+    "name": "Q2",
+    "query": "Bersaglieri[Author] AND lactase[All Fields]",
+    "executed_at": "2026-09-12T04:08:25Z",
+    "payload": "payloads/Q2.json"
+   },
+   {
+    "name": "Q3",
+    "query": "rs4988235[All Fields] AND (population[Title/Abstract] OR frequency[Title/Abstract])",
+    "executed_at": "2026-09-12T04:08:25Z",
+    "payload": "payloads/Q3.json"
+   }
+  ]
+ },
+ "extraction": {
+  "builder": "scripts/build_lct_enattah_fixture.py",
+  "extracted_at": "2026-09-06T06:55:57Z"
+ }
+}
