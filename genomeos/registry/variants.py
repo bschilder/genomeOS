@@ -10,6 +10,9 @@ Every row is hand-authored and reviewed. Nothing here resolves a variant automat
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
+
 import pandas as pd
 import pandera.pandas as pa
 
@@ -113,3 +116,38 @@ def validate_rows(frame: pd.DataFrame) -> pd.DataFrame:
                 "detect a strand error; strand_evidence is required"
             )
     return validated
+
+
+@dataclass(frozen=True)
+class NormalizedIdentity:
+    """A reviewed second name for a variant. Only ever constructed from a `resolved` row."""
+
+    variant_id: str
+    rsid: str
+    normalized_variant_id: str
+    strand: str
+
+
+def load(path: Path) -> pd.DataFrame:
+    """Read and fully validate the registry. Raises rather than returning a partial table."""
+    frame = pd.read_csv(path, sep="\t", dtype=str, keep_default_na=False)
+    return validate_rows(frame)
+
+
+def normalized_identity(variant_id: str, registry: pd.DataFrame) -> NormalizedIdentity | None:
+    """The reviewed identity for `variant_id`, or `None` if there is not one.
+
+    `None` covers both "no row" and "recorded as unresolvable". Callers must treat it as a
+    refusal — there is no fallback, and in particular no inferring a coordinate from the shape of
+    the identifier (§7).
+    """
+    matches = registry[(registry["variant_id"] == variant_id) & (registry["status"] == "resolved")]
+    if matches.empty:
+        return None
+    row = matches.iloc[0]
+    return NormalizedIdentity(
+        variant_id=variant_id,
+        rsid=row["rsid"],
+        normalized_variant_id=row["normalized_variant_id"],
+        strand=row["strand"],
+    )

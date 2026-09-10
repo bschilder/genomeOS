@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pandera.errors
 import pytest
 
-from genomeos.registry.variants import VARIANT_NORMALIZATION_SCHEMA, complement, is_palindromic, validate_rows
+from genomeos.registry.variants import (
+    VARIANT_NORMALIZATION_SCHEMA,
+    NormalizedIdentity,
+    complement,
+    is_palindromic,
+    load,
+    normalized_identity,
+    validate_rows,
+)
 
 
 def _row(**overrides) -> dict[str, object]:
@@ -120,3 +130,65 @@ def test_an_unresolved_row_needs_a_reason_and_no_coordinate():
     )
     with pytest.raises(ValueError, match="unresolved"):
         validate_rows(keeps_coordinate)
+
+
+@pytest.mark.parametrize("field", ["rsid", "normalized_variant_id", "strand", "reference_resource"])
+def test_a_resolved_row_missing_a_required_field_is_refused(field):
+    """The `raise` in validate_rows is the sole enforcement here — the schema itself admits ""
+    for rsid, normalized_variant_id, and strand (design §6, §7.1)."""
+    bad = pd.DataFrame([_row(**{field: ""})])
+    with pytest.raises(ValueError, match=field):
+        validate_rows(bad)
+
+
+def _write(tmp_path: Path, rows: list[dict[str, object]]) -> Path:
+    path = tmp_path / "variant_normalization.tsv"
+    pd.DataFrame(rows).to_csv(path, sep="\t", index=False)
+    return path
+
+
+def test_load_reads_and_validates(tmp_path):
+    registry = load(_write(tmp_path, [_row()]))
+    assert list(registry["variant_id"]) == ["cyt:example-1-a"]
+
+
+def test_load_refuses_an_invalid_file(tmp_path):
+    path = _write(tmp_path, [_row(status="resolved", naming_citation="")])
+    with pytest.raises(ValueError, match="naming_citation"):
+        load(path)
+
+
+def test_a_resolved_variant_returns_its_identity(tmp_path):
+    registry = load(_write(tmp_path, [_row()]))
+    assert normalized_identity("cyt:example-1-a", registry) == NormalizedIdentity(
+        variant_id="cyt:example-1-a",
+        rsid="rs1",
+        normalized_variant_id="chr1-100-A-G",
+        strand="plus",
+    )
+
+
+def test_an_absent_variant_returns_none(tmp_path):
+    """Absence is a refusal for the caller, not a blank to fill (§7)."""
+    registry = load(_write(tmp_path, [_row()]))
+    assert normalized_identity("cyt:not-in-the-registry", registry) is None
+
+
+def test_an_unresolved_variant_returns_none(tmp_path):
+    """A recorded refusal is consumed exactly like an absent row; the difference is visibility."""
+    registry = load(
+        _write(
+            tmp_path,
+            [
+                _row(
+                    status="unresolved",
+                    rsid="",
+                    normalized_variant_id="",
+                    strand="",
+                    naming_citation="",
+                    refusal_reason="no candidate rsID in LitVar2 or dbSNP",
+                )
+            ],
+        )
+    )
+    assert normalized_identity("cyt:example-1-a", registry) is None
