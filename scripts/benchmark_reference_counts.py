@@ -158,6 +158,13 @@ def _git_record() -> dict[str, object]:
     return {"head": revision, "dirty": dirty}
 
 
+def _package_versions() -> dict[str, str]:
+    return {
+        name: importlib.metadata.version(name)
+        for name in ("numpy", "scipy", "pandas")
+    }
+
+
 def _science_hashes() -> dict[str, str]:
     modules = {
         "genomeos/observations/schema.py": observations_schema_module,
@@ -192,6 +199,8 @@ def run(args: argparse.Namespace) -> int:
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"{field} must be nonempty text")
     sources = _science_hashes()
+    git_record = _git_record()
+    package_versions = _package_versions()
     rows = _read_counts(args.counts)
     edges, qualification = _read_dependencies(args.dependencies)
     split_seed, pit_seeds = _seeds(args.seed, args.folds)
@@ -314,8 +323,9 @@ def run(args: argparse.Namespace) -> int:
                 zip((fold.split_id for fold in folds), pit_seeds, strict=True)
             ),
         },
-        "git": _git_record(), "science_source_sha256": sources,
-        "package_versions": {name: importlib.metadata.version(name) for name in ("numpy", "scipy", "pandas")},
+        "git": git_record,
+        "science_source_sha256": sources,
+        "package_versions": package_versions,
         "output_files": {name: _sha(args.out / name) for name in OUTPUT_FILENAMES},
     }
     _json_write(args.out / "manifest.json", manifest)

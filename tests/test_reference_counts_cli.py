@@ -10,6 +10,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -77,9 +78,49 @@ def test_complete_run_writes_reproducible_artifact_contract(tmp_path):
     )
     assert summary["scored_observation_count"] == len(predictions)
     manifest = _json(first_out / "manifest.json")
+    assert manifest["input_files"] == {
+        "counts": {
+            "sha256": hashlib.sha256((FIXTURES / "counts.tsv").read_bytes()).hexdigest(),
+            "size_bytes": len((FIXTURES / "counts.tsv").read_bytes()),
+        },
+        "dependencies": {
+            "sha256": hashlib.sha256(
+                (FIXTURES / "dependencies.json").read_bytes()
+            ).hexdigest(),
+            "size_bytes": len((FIXTURES / "dependencies.json").read_bytes()),
+        },
+    }
     for name, record in manifest["output_files"].items():
         contents = (first_out / name).read_bytes()
         assert record == {"sha256": hashlib.sha256(contents).hexdigest(), "size_bytes": len(contents)}
+    expected_sources = {
+        "genomeos/observations/schema.py",
+        "genomeos/validation/benchmark.py",
+        "genomeos/validation/count_baseline.py",
+        "genomeos/validation/predictive.py",
+        "genomeos/validation/reference_counts.py",
+        "scripts/benchmark_reference_counts.py",
+    }
+    assert set(manifest["science_source_sha256"]) == expected_sources
+    for relative, digest in manifest["science_source_sha256"].items():
+        assert digest == hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+    split_sequence, pit_parent = np.random.SeedSequence(42).spawn(2)
+    expected_split = int(split_sequence.generate_state(1, dtype=np.uint32)[0])
+    expected_pit = tuple(
+        int(child.generate_state(1, dtype=np.uint32)[0])
+        for child in pit_parent.spawn(2)
+    )
+    assert manifest["seeds"] == {
+        "root": 42,
+        "split": expected_split,
+        "pit_by_fold": {
+            "reference-0": expected_pit[0],
+            "reference-1": expected_pit[1],
+        },
+    }
+    splits = _json(first_out / "splits.json")
+    assert splits["split_seed"] == expected_split
+    assert tuple(fold["pit_seed"] for fold in splits["folds"]) == expected_pit
 
 
 def test_five_folds_retain_missing_only_infeasible_fold(tmp_path):
@@ -179,6 +220,18 @@ def test_output_reuse_is_refused_without_modifying_artifacts(tmp_path):
     assert before == {path.name: path.read_bytes() for path in out.iterdir()}
 
 
+@pytest.mark.parametrize(("option", "value"), [("--source-release", ""), ("--cohort-stage", "")])
+def test_blank_source_metadata_publishes_no_artifacts(tmp_path, option, value):
+    out = tmp_path / "run"
+    command = _command(out)
+    command[command.index(option) + 1] = value
+
+    completed = _run(command)
+
+    assert completed.returncode != 0
+    assert not out.exists()
+
+
 def test_missing_training_variant_and_all_missing_tests_remain_accounted(tmp_path):
     counts = tmp_path / "counts.tsv"
     counts.write_text(
@@ -226,3 +279,22 @@ def test_injected_numeric_failure_is_published_and_other_folds_continue(tmp_path
     assert "failed" in set(statuses.status)
     assert "scored" in set(statuses.status)
     assert "injected numeric failure" in " ".join(statuses.reason)
+
+
+@pytest.mark.parametrize("helper", ["_git_record", "_package_versions"])
+def test_provenance_failure_publishes_no_output_directory(tmp_path, monkeypatch, helper):
+    spec = importlib.util.spec_from_file_location("reference_runner", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    out = tmp_path / "run"
+    args = runner._parser().parse_args(_command(out)[2:])
+
+    def fail():
+        raise ValueError("injected provenance failure")
+
+    monkeypatch.setattr(runner, helper, fail)
+
+    with pytest.raises(ValueError, match="injected provenance failure"):
+        runner.run(args)
+    assert not out.exists()
