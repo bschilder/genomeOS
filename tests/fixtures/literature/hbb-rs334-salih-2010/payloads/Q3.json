@@ -1,28 +1,20 @@
 {
- "database": "pubmed",
- "query": "rs334[All Fields] AND genotype[Title/Abstract]",
- "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
- "retmode": "json",
- "retmax": "200",
- "captured_at": "2026-09-09T04:23:22Z",
- "response": {
-  "header": {
-   "type": "esearch",
-   "version": "0.3"
-  },
-  "esearchresult": {
-   "count": "5",
-   "retmax": "5",
-   "retstart": "0",
-   "idlist": [
-    "39444160",
-    "35934714",
-    "31941490",
-    "24934404",
-    "20128890"
-   ],
-   "translationset": [],
-   "querytranslation": "\"rs334\"[All Fields] AND \"genotype\"[Title/Abstract]"
-  }
+ "header": {
+  "type": "esearch",
+  "version": "0.3"
+ },
+ "esearchresult": {
+  "count": "5",
+  "retmax": "5",
+  "retstart": "0",
+  "idlist": [
+   "39444160",
+   "35934714",
+   "31941490",
+   "24934404",
+   "20128890"
+  ],
+  "translationset": [],
+  "querytranslation": "\"rs334\"[All Fields] AND \"genotype\"[Title/Abstract]"
  }
 }

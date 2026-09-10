@@ -1,0 +1,36 @@
+{
+ "corpus_id": "hbb-rs334-salih-2010",
+ "discovery": {
+  "manifest_tool": "scripts/fetch_pubmed_manifest.py",
+  "note": "The payloads below were captured on 2026-09-09 with a direct NCBI ESearch call (retmode=json, retmax=200) before this workflow was applied to the slice. searches.pending.tsv is manifest_tool's build_manifest() applied to those payloads offline. No live re-fetch has been run since, so the screened candidate set is unchanged from the one reviewed.",
+  "manifest_version": "hbb-rs334-salih-2010@2026-09-09.1",
+  "queries": [
+   {
+    "name": "Q1",
+    "query": "rs334[All Fields] AND (population[Title/Abstract] OR frequency[Title/Abstract])",
+    "executed_at": "2026-09-09T04:23:22Z",
+    "payload": "payloads/Q1.json"
+   },
+   {
+    "name": "Q2",
+    "query": "(\"sickle cell\"[Title] OR \"haemoglobin S\"[Title] OR \"hemoglobin S\"[Title]) AND (\"gene frequency\"[Title/Abstract] OR \"allele frequency\"[Title/Abstract]) AND (population[Title/Abstract] OR survey[Title/Abstract] OR community[Title/Abstract])",
+    "executed_at": "2026-09-09T04:23:22Z",
+    "payload": "payloads/Q2.json"
+   },
+   {
+    "name": "Q3",
+    "query": "rs334[All Fields] AND genotype[Title/Abstract]",
+    "executed_at": "2026-09-09T04:23:22Z",
+    "payload": "payloads/Q3.json"
+   }
+  ]
+ },
+ "screening": {
+  "manifest_version": "hbb-rs334-salih-2010@2026-09-09.2",
+  "over": "hbb-rs334-salih-2010@2026-09-09.1"
+ },
+ "extraction": {
+  "builder": "scripts/build_hbb_salih_fixture.py",
+  "extracted_at": "2026-09-09T04:23:22Z"
+ }
+}
