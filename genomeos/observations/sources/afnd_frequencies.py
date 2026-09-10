@@ -8,11 +8,21 @@ variants rather than two.
 
 **Counts are reconstructed, and that is the main caveat.** AFND publishes a *frequency*
 (`alleles_over_2n`) and a sample size (`n`), not the underlying allele count, so
-``ac = round(af * 2n)``. The frequency is printed to four decimal places, which bounds the
+``ac = round(af * 2n)``. Most rows print the frequency to four decimal places, which bounds the
 reconstruction error at ``0.00005 * 2n`` — under half an allele for any sample below 10,000, so
 the recovered integer is almost always exact. It is still a reconstruction, and a binomial
 likelihood over a reconstructed count is not quite the same object as one over a measured count.
 Recorded in `assay` as ``frequency_reconstructed`` rather than left to be inferred.
+
+Four decimals is the **worst case across the corpus, not a description of every row**. About 8% of
+rows — 10,040 of 123,502 in the 2026-08 harvest, all `hla` — print to seven decimals for rare
+alleles, e.g. ``0.0000980``. The bound above is therefore conservative for those rows rather than
+violated, so the reconstruction claim is unaffected. **Never format this column to fixed decimals
+for an identity or an equality comparison.** ``f"{af:.4f}"`` maps ``0.0000980`` and ``0.0000900``
+onto one string and ``0.0000050`` onto ``"0.0000"`` — collapsing distinct measurements and
+publishing an observed rare allele as absent (#231, and #228 where that was proposed and rejected).
+`str()` of the parsed float is the shortest round-tripping form and is lossless at any precision
+AFND publishes.
 
 **Ascertainment is inherited from the population, and refused where AFND does not state it.**
 §7.1 gives `sampling_design` and `disease_ascertainment_excluded` no defaults. The registry keeps

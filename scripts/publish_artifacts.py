@@ -187,8 +187,12 @@ def main() -> None:
             data_version=args.data_version,
             resolution=args.h3_res,
             n_cells=len(frame),
-            correlation_range_km=round(float(fit.correlation_range_km), 1),
-            prior_frequency_sd=round(float(fit.prior_frequency_sd), 5),
+            # Stored unrounded: the manifest is the record of what the fit actually used, and a
+            # consumer applying a stricter contraction threshold without refitting divides by
+            # `prior_frequency_sd` to recompute it (#234). Rounding for reading happens at the
+            # `print` below, not in the artifact.
+            correlation_range_km=float(fit.correlation_range_km),
+            prior_frequency_sd=float(fit.prior_frequency_sd),
             likelihood=fit.config.likelihood,
             lengthscale_sigma=float(fit.config.lengthscale_sigma),
             n_observations=len(observations),
