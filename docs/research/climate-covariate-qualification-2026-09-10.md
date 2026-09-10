@@ -49,6 +49,10 @@ leaving nearby, source-dependent reconstructions in training establishes tempora
 generalization. The resident target remains primary; origin and historical
 allele-frequency outputs require their own validation under WP7.
 
+The companion [temporal source qualification](temporal-climate-source-qualification-2026-09-10.md)
+maps eight candidate families to those questions and separates environmental
+history at a place from independently supported ancestral exposure.
+
 ## Candidate and reuse boundary
 
 Prioritize **CHELSA-climatologies V2.1, 1981–2010**, monthly `tas` and
