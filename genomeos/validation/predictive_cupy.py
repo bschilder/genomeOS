@@ -192,6 +192,11 @@ class CuPyCDF:
                 values = cp.where(boundary_one, 0.0, values)
                 values = cp.where(k[:, None] < 0, 0.0, values)
                 values = cp.where(k[:, None] >= n[:, None], 1.0, values)
+                invalid = ~cp.isfinite(values) | (values < 0.0) | (values > 1.0)
+                if bool(cp.asnumpy(cp.any(invalid))):
+                    raise FloatingPointError(
+                        "CuPy CDF produced a non-finite or out-of-range component probability"
+                    )
                 total += cp.sum(values, axis=1)
             output[row_start:row_stop] = total / self._mean.shape[0]
         return cp.asnumpy(output).reshape(ac.shape)

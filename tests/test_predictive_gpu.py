@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
+from genomeos.validation.predictive_cupy import CuPyCDF
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILER = ROOT / "scripts" / "profile_count_scoring.py"
@@ -368,6 +369,58 @@ def test_gpu_near_one_short_lower_tail_matches_repaired_cpu_cdf(
     gpu = CountPredictive(means, concentrations, cdf_backend="cupy")
 
     np.testing.assert_allclose(gpu.cdf([count], [an]), cpu.cdf([count], [an]), rtol=2e-14, atol=0.0)
+
+
+@requires_gpu
+def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch):
+    """A negative draw CDF can cancel in the mixture and evade aggregate validation."""
+    evaluator = CuPyCDF(np.array([[0.2], [0.3]]), np.ones((2, 1)))
+    cp = evaluator._cp
+    calls = 0
+
+    def injected_tail(*args):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return cp.asarray([[np.log(0.25), np.log(1.5)]])
+        return cp.asarray([[np.log(0.25), np.log1p(0.25)]])
+
+    monkeypatch.setattr(evaluator, "_tail_logsum", injected_tail)
+
+    with pytest.raises(FloatingPointError, match="component"):
+        evaluator(np.array([[0]]), np.array([2]))
+
+
+@requires_gpu
+def test_gpu_refuses_nan_cdf_component_before_accumulation(monkeypatch):
+    """A non-finite draw must be refused at its source rather than only after averaging."""
+    evaluator = CuPyCDF(np.array([[0.2], [0.3]]), np.ones((2, 1)))
+    cp = evaluator._cp
+    monkeypatch.setattr(
+        evaluator,
+        "_tail_logsum",
+        lambda *args: cp.asarray([[np.log(0.25), cp.nan]]),
+    )
+
+    with pytest.raises(FloatingPointError, match="component"):
+        evaluator(np.array([[0]]), np.array([2]))
+
+
+@requires_gpu
+def test_gpu_exact_boundaries_override_irrelevant_invalid_tail_components(monkeypatch):
+    """Exact probability and count boundaries must be assigned before component validation."""
+    evaluator = CuPyCDF(np.array([[0.0], [1.0]]), np.ones((2, 1)))
+    cp = evaluator._cp
+    monkeypatch.setattr(
+        evaluator,
+        "_tail_logsum",
+        lambda *args: cp.full((1, 2), cp.nan, dtype=cp.float64),
+    )
+
+    np.testing.assert_array_equal(
+        evaluator(np.array([[-1], [2]]), np.array([2])),
+        np.array([[0.0], [1.0]]),
+    )
 
 
 @requires_gpu
