@@ -340,11 +340,11 @@ def dependence_comparisons(
 
     resolved_comparisons = []
     rank_order_resolved = True
+    truth_parameters = (float(truth.mean), float(truth.rho))
     for draw_position, draw_index in enumerate(normalized_draws):
         draw = validated.points[draw_index]
-        if validated.analytic_separability or (
-            draw.mean == truth.mean and draw.rho == truth.rho
-        ):
+        draw_parameters = (float(draw.mean), float(draw.rho))
+        if validated.analytic_separability or draw_parameters == truth_parameters:
             resolved_comparisons.append(0)
             continue
         signs = tuple(row[draw_position] for row in comparisons_by_order)

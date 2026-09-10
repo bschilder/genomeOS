@@ -450,6 +450,32 @@ def test_adjacent_binary64_points_do_not_use_identity_shortcut(toward: float) ->
     assert result.comparisons is None
 
 
+def test_forged_mixed_supported_scalars_use_binary64_identity() -> None:
+    point = DependencePointReference(
+        mean=np.float32(0.25),
+        rho=np.float32(0.25),
+        components=((0.0, 0.0, 0.0, 0.0),) * 3,
+        raw_values=(0.0, 0.0, 0.0),
+        value=0.0,
+        error_bound=0.0,
+        resolved=True,
+    )
+    adjacent = replace(point, mean=float(np.nextafter(0.25, 1.0)))
+    reference = HeterogeneityDependenceReference(
+        orders=(64, 128, 256),
+        analytic_separability=False,
+        points=(point, adjacent, adjacent, adjacent, adjacent),
+    )
+
+    result = dependence_comparisons(
+        reference, truth_index=0, draw_indices=(1, 2, 3, 4)
+    )
+
+    assert float(point.mean) != adjacent.mean
+    assert result.status == "dependence_rank_order_unresolved"
+    assert result.comparisons is None
+
+
 def test_separable_comparisons_are_literal_ties_but_retain_raw_signs() -> None:
     reference = heterogeneity_dependence_reference(
         ((0, 1), (1, 2)),
