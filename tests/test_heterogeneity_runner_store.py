@@ -447,8 +447,11 @@ def test_loss_creation_refuses_corrupt_retained_start_index(tmp_path):
         path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
     ) as store:
         store.start(start)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
         store._db.execute("UPDATE starts SET case_id=? WHERE digest=?", ("wrong-case", record_digest(start)))
-        with pytest.raises(storage.StoreIntegrityError):
+        with pytest.raises(storage.StoreIntegrityError, match="retained START"):
             store.record_owner_loss(start)
 
 
@@ -570,3 +573,259 @@ def test_orphan_object_rejected_on_completed_reuse(tmp_path):
         )
         with pytest.raises(storage.StoreIntegrityError):
             publish(store, retained)
+
+
+@pytest.mark.parametrize("start_ref", [None, "unmatched-start"])
+def test_complete_packet_with_null_or_unmatched_start_is_refused(tmp_path, start_ref):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    retained = packet(manifest, start, data)
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+        publish(store, retained)
+        assert store.stages(data.case_id)[0].receipt == retained.receipt
+        store._db.execute("PRAGMA foreign_keys=OFF")
+        store._db.execute(
+            "UPDATE completions SET start_digest=? WHERE start_digest=?", (start_ref, record_digest(start))
+        )
+        store._db.execute("PRAGMA foreign_keys=ON")
+        with pytest.raises(storage.StoreIntegrityError):
+            store.inventory()
+
+
+def test_existing_loss_reuse_refuses_corrupt_retained_start(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
+        store.record_owner_loss(start)
+        row = store._db.execute("SELECT body FROM objects WHERE digest=?", (record_digest(start),)).fetchone()
+        store._db.execute(
+            "UPDATE objects SET body=? WHERE digest=?",
+            (bytes([row[0][0] ^ 1]) + row[0][1:], record_digest(start)),
+        )
+        with pytest.raises(storage.StoreIntegrityError):
+            store.record_owner_loss(start)
+
+
+def test_loss_creation_refuses_corrupt_retained_start_bytes(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    start = start_record(manifest, dataset())
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
+        row = store._db.execute("SELECT body FROM objects WHERE digest=?", (record_digest(start),)).fetchone()
+        store._db.execute(
+            "UPDATE objects SET body=? WHERE digest=?",
+            (bytes([row[0][0] ^ 1]) + row[0][1:], record_digest(start)),
+        )
+        with pytest.raises(storage.StoreIntegrityError):
+            store.record_owner_loss(start)
+
+
+def test_loss_reuse_refuses_corrupt_retained_start_index(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    start = start_record(manifest, dataset())
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
+        store.record_owner_loss(start)
+        store._db.execute("UPDATE starts SET case_id=? WHERE digest=?", ("wrong-case", record_digest(start)))
+        with pytest.raises(storage.StoreIntegrityError):
+            store.record_owner_loss(start)
+
+
+def test_loss_readback_refuses_start_corruption_injected_after_entry(tmp_path, monkeypatch):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
+        original = store._transaction
+
+        def corrupt_then_transaction(write, matches):
+            row = store._db.execute(
+                "SELECT body FROM objects WHERE digest=?", (record_digest(start),)
+            ).fetchone()
+            store._db.execute(
+                "UPDATE objects SET body=? WHERE digest=?",
+                (bytes([row[0][0] ^ 1]) + row[0][1:], record_digest(start)),
+            )
+            return original(write, matches)
+
+        monkeypatch.setattr(store, "_transaction", corrupt_then_transaction)
+        with pytest.raises(storage.StoreIntegrityError):
+            store.record_owner_loss(start)
+
+
+def test_loss_readback_refuses_start_index_corruption_injected_after_entry(tmp_path, monkeypatch):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    start = start_record(manifest, dataset())
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
+        original = store._transaction
+
+        def corrupt_then_transaction(write, matches):
+            store._db.execute(
+                "UPDATE starts SET case_id=? WHERE digest=?", ("wrong-case", record_digest(start))
+            )
+            return original(write, matches)
+
+        monkeypatch.setattr(store, "_transaction", corrupt_then_transaction)
+        with pytest.raises(storage.StoreIntegrityError):
+            store.record_owner_loss(start)
+
+
+def test_uncertain_absent_publication_checks_orphan_before_pending(tmp_path, monkeypatch):
+    import sqlite3
+
+    from genomeos.validation.heterogeneity_runner_records import OwnerLoss
+
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    retained = packet(manifest, start, data)
+    with storage.LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        store.start(start)
+        orphan = OwnerLoss(
+            format="b0h_owner_loss",
+            version="1",
+            start_sha256=record_digest(start),
+            previous_owner_id="other-owner",
+            observing_owner_id="third-owner",
+            observed_unix_ns=1,
+            evidence="prior_process_exclusion_released",
+            surviving_receipts=(),
+        )
+        injected = []
+        original = store._commit
+
+        def ack_lost():
+            error = sqlite3.OperationalError("acknowledgment unavailable")
+            error.sqlite_errorcode = sqlite3.SQLITE_IOERR
+            raise error
+
+        original_transaction = store._transaction
+
+        def inject_at_inspection(write, matches):
+            def inspect():
+                store._put_object(orphan)
+                injected.append(
+                    store._db.execute(
+                        "SELECT 1 FROM completions WHERE start_digest=?", (record_digest(start),)
+                    ).fetchone()
+                    is None
+                )
+                return matches()
+
+            return original_transaction(write, inspect)
+
+        monkeypatch.setattr(store, "_transaction", inject_at_inspection)
+        monkeypatch.setattr(store, "_commit", ack_lost)
+        with pytest.raises(storage.StoreIntegrityError):
+            publish(store, retained)
+        assert injected == [True]
+        monkeypatch.setattr(store, "_commit", original)
+
+
+def test_uncertain_present_publication_checks_orphan_at_inspection(tmp_path, monkeypatch):
+    import sqlite3
+
+    from genomeos.validation.heterogeneity_runner_records import OwnerLoss
+
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    retained = packet(manifest, start, data)
+    with storage.LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        store.start(start)
+        original_transaction = store._transaction
+        injected = []
+        orphan = OwnerLoss(
+            format="b0h_owner_loss",
+            version="1",
+            start_sha256=record_digest(start),
+            previous_owner_id="other-owner",
+            observing_owner_id="third-owner",
+            observed_unix_ns=1,
+            evidence="prior_process_exclusion_released",
+            surviving_receipts=(),
+        )
+
+        def inject_at_inspection(write, matches):
+            def inspect():
+                store._put_object(orphan)
+                injected.append(
+                    store._db.execute(
+                        "SELECT 1 FROM completions WHERE start_digest=?", (record_digest(start),)
+                    ).fetchone()
+                    is not None
+                )
+                return matches()
+
+            return original_transaction(write, inspect)
+
+        def ack_lost():
+            store._db.execute("COMMIT")
+            error = sqlite3.OperationalError("acknowledgment unavailable")
+            error.sqlite_errorcode = sqlite3.SQLITE_IOERR
+            raise error
+
+        monkeypatch.setattr(store, "_transaction", inject_at_inspection)
+        monkeypatch.setattr(store, "_commit", ack_lost)
+        with pytest.raises(storage.StoreIntegrityError):
+            publish(store, retained)
+        assert injected == [True]

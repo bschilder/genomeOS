@@ -338,11 +338,11 @@ class LocalB0HStore:
             row = self._db.execute(
                 "SELECT digest,receipt,failure FROM completions WHERE start_digest=?", (digest,)
             ).fetchone()
+            self._check_publication_relationships(digest, receipt, encoded, failure)
             if row is None:
                 return False
             if row != wanted:
                 raise StoreIntegrityError("immutable completion conflict")
-            self._check_publication_relationships(digest, receipt, encoded, failure)
             stage = self._stage(digest)
             if (
                 stage.completion != completion
@@ -357,7 +357,6 @@ class LocalB0HStore:
             return
         if start.owner_id != self.owner_id:
             raise StoreIntegrityError("only live START owner publishes new evidence")
-        self._check_publication_relationships(digest, receipt, encoded, failure)
 
         def write():
             result_digest = self._put_object(receipt if receipt is not None else failure)
@@ -441,17 +440,7 @@ class LocalB0HStore:
     def record_owner_loss(self, start: StageStart) -> OwnerLoss:
         self._require_open()
         digest = record_digest(start)
-        retained = self._reader.record(digest, StageStart)
-        indexed = self._db.execute(
-            "SELECT case_id,stage,attempt FROM starts WHERE digest=?", (digest,)
-        ).fetchone()
-        expected_index = (
-            retained.key.case.canonical_id,
-            retained.key.stage,
-            -1 if retained.key.attempt_id is None else retained.key.attempt_id,
-        )
-        if retained != start or indexed != expected_index:
-            raise StoreIntegrityError("retained START differs from caller or index")
+        self._validate_retained_start(start, digest)
         prior = self._db.execute("SELECT digest FROM losses WHERE start_digest=?", (digest,)).fetchone()
         if prior is not None:
             loss = self._object(prior[0], OwnerLoss)
@@ -478,6 +467,7 @@ class LocalB0HStore:
             self._db.execute("INSERT INTO losses VALUES(?,?)", (digest, self._put_object(loss)))
 
         def matches():
+            self._validate_retained_start(start, digest)
             row = self._db.execute("SELECT digest FROM losses WHERE start_digest=?", (digest,)).fetchone()
             if row != (record_digest(loss),):
                 return False
@@ -486,6 +476,19 @@ class LocalB0HStore:
 
         self._transaction(write, matches)
         return loss
+
+    def _validate_retained_start(self, start: StageStart, digest: str) -> None:
+        retained = self._reader.record(digest, StageStart)
+        indexed = self._db.execute(
+            "SELECT case_id,stage,attempt FROM starts WHERE digest=?", (digest,)
+        ).fetchone()
+        expected_index = (
+            retained.key.case.canonical_id,
+            retained.key.stage,
+            -1 if retained.key.attempt_id is None else retained.key.attempt_id,
+        )
+        if retained != start or indexed != expected_index:
+            raise StoreIntegrityError("retained START differs from caller or index")
 
     def _stage(self, digest: str) -> StoredStage:
         return self._reader.stage(digest)
