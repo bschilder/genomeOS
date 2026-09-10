@@ -1,0 +1,7 @@
+record_id	variant_id	group_id	region_id	variant_group	ac	an
+a:v	v	a	r1	block	0	4
+b:v	v	b	r1	block	1	4
+c:v	v	c	r1	block	2	4
+d:v	v	d	r2	block	3	4
+e:v	v	e	r2	block	4	4
+f:v	v	f	r2	block	0	0
