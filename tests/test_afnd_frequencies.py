@@ -9,10 +9,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
+from genomeos.observations.source_ids import stable_source_record_id
 from genomeos.observations.sources import afnd_frequencies as af
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -109,6 +111,51 @@ def test_source_record_ids_hash_the_complete_source_native_key(frequencies):
     assert "afnd-frequencies:7cd70a92357a376ce61c9c87f357e90a06006f920698a5dcf867d8b75e4776f0" in set(
         obs["source_record_id"]
     )
+
+
+def test_the_identity_does_not_depend_on_which_numeric_scalar_form_reaches_it():
+    """A published id must not move because a value arrived as a NumPy scalar (#160 review).
+
+    `stable_source_record_id` stringifies each part, so the identity rests on how a number
+    formats. `str()` and `repr()` diverge for NumPy scalars under NEP 51 — `repr(np.float64(1.5))`
+    is `"np.float64(1.5)"` while `str()` is still `"1.5"` — so the helper's use of `str()` is
+    load-bearing rather than incidental. Asserting the invariant directly means swapping `str()`
+    for `repr()`, or a future NumPy changing `__str__`, fails by name instead of silently
+    re-minting every AFND record.
+    """
+    key = ("afnd-frequencies", "hla", "DQB1", "DQB1*03:01", "Peru Lamas City Lama")
+    for value in (0.125, 0.25, 0.1234, 0.3333, 0.0001, 0.9999):
+        assert stable_source_record_id(*key, float(value), 100) == stable_source_record_id(
+            *key, np.float64(value), 100
+        )
+    assert stable_source_record_id(*key, 0.125, 100) == stable_source_record_id(
+        *key, 0.125, np.int64(100)
+    )
+
+
+def test_the_adapter_hands_the_identity_native_python_scalars(frequencies, monkeypatch):
+    """Do not make the identity rely on NumPy's formatting when it need not (#160 review).
+
+    The test above proves the two forms agree today. This one removes the dependency: the
+    adapter converts at the call site, so no NumPy scalar reaches the hash and no future NumPy
+    release can move a published id. `n_individuals` is a nullable `Int64`, whose values iterate
+    as `np.int64` rather than unboxing to `int` the way a NumPy-backed float column does — an
+    asymmetry that is easy to miss by reading the code.
+    """
+    seen: list[tuple[type, ...]] = []
+    real = af.stable_source_record_id
+
+    def spy(namespace, *parts):
+        seen.append(tuple(type(part) for part in parts))
+        return real(namespace, *parts)
+
+    monkeypatch.setattr(af, "stable_source_record_id", spy)
+    af.load(frequencies, POPULATIONS, "test")
+
+    assert seen, "the adapter minted no identities, so nothing was checked"
+    for types in seen:
+        assert types[-2] is float, f"frequency reached the identity as {types[-2]}"
+        assert types[-1] is int, f"sample size reached the identity as {types[-1]}"
 
 
 def test_two_measurements_of_one_allele_and_population_remain_distinct(tmp_path):

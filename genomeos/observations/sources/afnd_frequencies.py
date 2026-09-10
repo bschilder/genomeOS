@@ -300,7 +300,11 @@ def load(
             "ac": (rows["af"] * an).round().astype(int),
             "an": an,
             "source_record_id": [
-                stable_source_record_id("afnd-frequencies", group, gene, allele, population, af, n)
+                # `int(n)` cannot truncate: a non-integral sample size was already refused
+                # as `fractional_sample_size`. It keeps NumPy out of the identity — an `Int64`
+                # column iterates as `np.int64`, and the hash is `str()` of each part, so a
+                # future NumPy `__str__` change would otherwise re-mint every published id.
+                stable_source_record_id("afnd-frequencies", group, gene, allele, population, af, int(n))
                 for group, gene, allele, population, af, n in zip(
                     rows["group"],
                     rows["gene"],

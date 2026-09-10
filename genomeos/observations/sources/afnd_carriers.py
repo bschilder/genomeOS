@@ -162,7 +162,9 @@ def load(
             "carriers": (rows["carrier_fraction"] * n_individuals).round().astype(int).to_numpy(),
             "n_individuals": n_individuals.to_numpy(),
             "source_record_id": [
-                stable_source_record_id("afnd-carriers", gene, population, fraction, n)
+                # `int(n)` cannot truncate here either, and for the same reason keeps the
+                # identity independent of NumPy's scalar formatting (see `afnd_frequencies`).
+                stable_source_record_id("afnd-carriers", gene, population, fraction, int(n))
                 for gene, population, fraction, n in zip(
                     rows["gene"],
                     rows["population"],
