@@ -11,8 +11,9 @@ This freezes the generator, not the sampler runner or an executed calibration st
 2. Evidence: exact case/seed identities, independent literal NumPy constructions,
    controlled RNG-call fixtures, analytic marginal/covariance identities, and
    explicit generation failures. Unit tests are not sampler-calibration evidence.
-3. Component: one pure `genomeos.validation.heterogeneity_simulation` module;
-   immutable case/result objects and `generate_sbc_case(case)` feed the later
+3. Component: pure `genomeos.validation.heterogeneity_simulation` sampling and
+   its `heterogeneity_simulation_types` case/result contracts. The original
+   facade exposes immutable objects and `generate_sbc_case(case)` to the later
    offline runner. No fitting, scoring, storage or scheduling responsibility.
 4. Assumptions/refusals: pinned float64 NumPy/PCG64 execution of the declared
    laws. No redraw, clipping, easier seed, success-only output, hidden partial
@@ -33,10 +34,45 @@ This freezes the generator, not the sampler runner or an executed calibration st
 - Production modules target at most500 logical lines; split by responsibility
   before crossing the repository limit.
 
-Generation imports NumPy and public `ReferenceCount`, not production likelihood,
-fitter, predictor, rank or quadrature helpers. A helper private to this module is
-not a new cross-module interface. There is no arbitrary truth/prior/AN/seed/RNG
-override on the public generator.
+Generation imports NumPy and its public case/result contracts; the contracts
+consume public `ReferenceCount`, not production likelihood, fitter, predictor,
+rank or quadrature helpers. There is no arbitrary truth/prior/AN/seed/RNG
+override on the public generator. No circular imports or private cross-module
+imports: validated contracts point inward, sampling depends on them.
+
+### Module-size refinement before implementation completion
+
+The first readable single-module draft reached about610 logical lines/37KiB.
+Split validated identities/results from sampling rather than compress validation
+to reach the500-line target. `heterogeneity_simulation` explicitly re-exports
+the original public API; supporting scalar/metadata helpers remain in the types
+module and are shared by constructor validation and sampling. This changes no
+scientific rule, random call order, seed, result field or facade signature.
+
+Supporting typed interfaces in `heterogeneity_simulation_types`:
+
+```python
+def simulation_integer(value: object, name: str) -> int: ...
+def simulation_probability(value: object, name: str) -> float: ...
+def simulation_failure_scalar(value: object, name: str) -> float | int: ...
+def fixed_simulation_truth(case: SbcCaseId) -> ParameterTruth | None: ...
+def simulation_training_an(case: SbcCaseId) -> tuple[int, ...]: ...
+def simulation_reference_count(
+    generation: GenerationId, where: str, key: str, ac: int, an: int,
+) -> ReferenceCount: ...
+```
+
+The integer helper normalizes exact non-Boolean integers; callers enforce their
+individual bounds. Probability and failure-scalar helpers enforce the exact
+numeric domains below; the latter retains actual nonfinite scalar evidence and
+does not turn unsupported objects into values. Local sampling code can leave
+unsupported offending objects absent. Truth/AN helpers validate the supplied
+case before applying its closed decoding; prior/structural fixed truth is None.
+The row helper requires a valid generation identity, `where` exactlytrain or
+heldout, canonical string row0..15 or the case's permitted heldout kind, the
+corresponding declared AN, and valid integerAC. Study3 has no heldout kind.
+Generation-only provenance assembly and nullable offending-evidence wrappers
+remain private to sampling; no generic factory or registry is introduced.
 
 ## Cases, identities and seeds
 

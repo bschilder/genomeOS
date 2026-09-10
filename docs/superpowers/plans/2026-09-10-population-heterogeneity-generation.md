@@ -5,9 +5,9 @@
 **Goal:** Independently generate every declared B0H synthetic case with exact
 identity, latent/count provenance, structural absence and failure accounting.
 
-**Architecture:** One pure bounded identity-to-dataset module; public immutable
-results connect the declared study manifest to the future fitter adapter. The
-generator never calls the fitted likelihood, predictor or scorer. This unit
+**Architecture:** A pure sampling module and validated case/result contracts;
+the original facade connects the declared manifest to the future fitter adapter.
+The generator never calls the fitted likelihood, predictor or scorer. This unit
 implements generation only, not the sampler runner or1936-fit study execution.
 
 **Tech Stack:** Locked Python3.12, NumPy, pytest; no new dependency.
@@ -41,13 +41,17 @@ Tiny generation calls in deterministic unit fixtures are explicitly in scope.
 ### Task 1: Independent known-truth case generation and exact fixtures
 
 **Files:** Create `genomeos/validation/heterogeneity_simulation.py`,
+`genomeos/validation/heterogeneity_simulation_types.py`,
 `tests/test_heterogeneity_simulation.py`, and
 `docs/research/population-heterogeneity-generation-2026-09-10.md`.
 
-**Interfaces:** Consume only public `ReferenceCount` from
+**Interfaces:** The types module consumes only public `ReferenceCount` from
 `genomeos.validation.reference_counts` (record_id,variant_id,group_id,region_id,
-variant_group,ac,an). Produce the following frozen value objects and functions;
-all constructor domains and relationships are validated as in the spec.
+variant_group,ac,an). Sampling consumes those public contracts. Produce the
+following frozen facade value objects and functions; all constructor domains
+and relationships are validated as in the spec. The types module owns case,
+seed and result validation plus enumeration; the original sampling module
+explicitly re-exports that original API without a circular dependency.
 
 ```python
 Entropy = tuple[int, int, int, int, int, int, int, int, int]
@@ -146,6 +150,32 @@ def sbc_seed_identity(
 ) -> SeedIdentity: ...
 def generate_sbc_case(case: SbcCaseId) -> GenerationResult: ...
 ```
+
+The readable single-module draft exceeded the500-line target, so the controller
+authorized the focused contract/sampling split. The only new supporting public
+interfaces live in the types module, not the original facade:
+
+```python
+def simulation_integer(value: object, name: str) -> int: ...
+def simulation_probability(value: object, name: str) -> float: ...
+def simulation_failure_scalar(value: object, name: str) -> float | int: ...
+def fixed_simulation_truth(case: SbcCaseId) -> ParameterTruth | None: ...
+def simulation_training_an(case: SbcCaseId) -> tuple[int, ...]: ...
+def simulation_reference_count(
+    generation: GenerationId, where: str, key: str, ac: int, an: int,
+) -> ReferenceCount: ...
+```
+
+These are the actual shared scalar and metadata contracts, not private imports
+or a registry/factory layer. Numeric helper domains are exactly the spec's
+successful-probability and failure-evidence rules; integer normalization leaves
+contextual bounds to callers. Case helpers validate before decoding. Row helper
+requires valid GenerationId, literaltrain/heldout, canonical string index0..15
+or permitted target kind, matching AN and valid integerAC. Structural cases have
+no heldout. Keep generation-only provenance/evidence wrappers local/private.
+Both production modules target500logical lines and retain the hard800/50KiB gate.
+Test original facade exports/import order plus supporting helper refusals; no
+random call, seed, scientific field or original interface is changed by the split.
 
 Fixed labels: protocolb0h_sbc_v1, algorithmb0h_generation_v1,
 bit_generatorPCG64,floating_dtypefloat64. Cases/stages/reasons/labels/RNG call
@@ -350,7 +380,7 @@ ruff check .
 python scripts/check_module_size.py
 python scripts/check_private_files.py
 git diff --check
-git add genomeos/validation/heterogeneity_simulation.py tests/test_heterogeneity_simulation.py docs/research/population-heterogeneity-generation-2026-09-10.md
+git add genomeos/validation/heterogeneity_simulation.py genomeos/validation/heterogeneity_simulation_types.py tests/test_heterogeneity_simulation.py docs/research/population-heterogeneity-generation-2026-09-10.md
 git diff --cached --name-only
 python scripts/check_private_files.py
 git diff --cached --check
