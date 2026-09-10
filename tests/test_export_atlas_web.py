@@ -398,3 +398,33 @@ def test_export_keeps_reviewed_surface_when_observations_are_unavailable(
     assert artifact["observations_sha256"] is None
     assert artifact["observations_url"] is None
     assert catalog["registry_versions"] == ["afnd-test-registry"]
+
+
+def test_a_coordinate_keyed_resource_needs_a_reviewed_normalization(tmp_path):
+    """A cytokine locus is entity_type=variant but has a composite id, so it must refuse until
+    the registry says otherwise. Previously this passed the exporter and failed in the browser."""
+    from genomeos.registry.variants import VARIANT_NORMALIZATION_SCHEMA
+
+    empty = VARIANT_NORMALIZATION_SCHEMA.validate(
+        pd.DataFrame(columns=list(VARIANT_NORMALIZATION_SCHEMA.columns))
+    )
+    entry = {
+        "external_resources": [
+            {
+                "source": "gnomad",
+                "normalized_variant_id": "cyt:il-6-174-c",
+                "dataset": "gnomad_r4",
+                "cache_file": "external/gnomad/cyt.json",
+            }
+        ]
+    }
+    with pytest.raises(ValueError, match="no reviewed normalization"):
+        export_atlas_web._external_resources(
+            entry,
+            artifact_id="cyt-il-6-174-c",
+            variant_id="cyt:il-6-174-c",
+            entity_type="variant",
+            source_root=tmp_path,
+            out_dir=tmp_path / "out",
+            variant_registry=empty,
+        )

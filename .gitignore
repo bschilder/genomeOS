@@ -266,6 +266,12 @@ data/store/*
 !data/raw/
 data/raw/*
 !data/raw/afnd_populations.tsv
+# The reviewed variant-normalization registry (design 2026-09-10 §5) is hand-authored and
+# reviewed, unlike the rest of the built P0 registry, so it is committed like
+# catalog-metadata.json above rather than treated as build output.
+!data/registry/
+data/registry/*
+!data/registry/variant_normalization.tsv
 *.pkl
 
 # Agent worktrees and local session state
