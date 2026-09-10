@@ -644,3 +644,65 @@ def test_actual_reference_on_one_valid_mixed_an_case(monkeypatch):
             assert entry.rank == randomized_rank(0, expected.comparisons, seed=entry.seed.scalar_uint128)
         else:
             assert entry.status == expected.status and entry.rank is None
+
+
+@pytest.mark.parametrize("quantity", (3, 4))
+@pytest.mark.parametrize("length", (0, 12, 14, 9))
+def test_outer_scalar_vectors_match_complete_control_point_count(monkeypatch, quantity, length):
+    install_mocks(monkeypatch)
+    data, attempt = fixture()
+    result = selected_sbc_quantities(data, attempt=attempt)
+    scalar = replace(result.scalar_quantities[quantity], values=(0.25,) * length)
+    scalars = (*result.scalar_quantities[:quantity], scalar, *result.scalar_quantities[quantity + 1 :])
+    with pytest.raises(ValueError, match="scalar vector length"):
+        replace(result, scalar_quantities=scalars)
+
+
+@pytest.mark.parametrize("quantity", (3, 4))
+@pytest.mark.parametrize("length", (0, 8, 10, 13))
+def test_outer_scalar_vectors_match_failed_control_point_count(monkeypatch, quantity, length):
+    install_mocks(monkeypatch)
+    data, attempt = fixture()
+
+    def failed_control(*, seed):
+        return PriorControlResult(
+            seed,
+            ((0.25, 0.125),) * 3,
+            PriorControlFailure(3, "rho", "rounded_boundary", 0.375, 0.0, None, None),
+        )
+
+    monkeypatch.setattr(quantities, "draw_prior_control", failed_control)
+    result = selected_sbc_quantities(data, attempt=attempt)
+    scalar = replace(result.scalar_quantities[quantity], values=(0.25,) * length)
+    scalars = (*result.scalar_quantities[:quantity], scalar, *result.scalar_quantities[quantity + 1 :])
+    with pytest.raises(ValueError, match="scalar vector length"):
+        replace(result, scalar_quantities=scalars)
+
+
+@pytest.mark.parametrize("quantity", (0, 5))
+def test_outer_rejects_control_failed_rank_when_parent_control_completed(monkeypatch, quantity):
+    install_mocks(monkeypatch)
+    data, attempt = fixture()
+    result = selected_sbc_quantities(data, attempt=attempt)
+    index = 6 + quantity
+    failed = replace(result.ranks[index], status="control_failed", rank=None, comparisons=None, error=None)
+    ranks = (*result.ranks[:index], failed, *result.ranks[index + 1 :])
+    with pytest.raises(ValueError, match="control failure"):
+        replace(result, ranks=ranks)
+
+
+def test_outer_retains_true_failed_control_mode_one_ranks(monkeypatch):
+    install_mocks(monkeypatch)
+    data, attempt = fixture()
+
+    def failed_control(*, seed):
+        return PriorControlResult(
+            seed,
+            ((0.25, 0.125),) * 3,
+            PriorControlFailure(3, "rho", "rounded_boundary", 0.375, 0.0, None, None),
+        )
+
+    monkeypatch.setattr(quantities, "draw_prior_control", failed_control)
+    result = selected_sbc_quantities(data, attempt=attempt)
+    assert all(entry.status == "control_failed" for entry in result.ranks[6:12])
+    assert replace(result) == result

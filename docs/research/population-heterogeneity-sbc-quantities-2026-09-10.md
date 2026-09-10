@@ -39,3 +39,13 @@ python -m pytest tests/test_heterogeneity_diagnostic_seeds.py \
 Its observed result was `105 passed in 1.60s`. The observed mandatory gate
 outputs were `smoke checks passed`, `All checks passed!` (Ruff), `contract up
 to date`, and `module-size check passed (80 modules)`.
+
+## Enclosing-state correction
+
+The closed evidence record also binds every successful scalar vector to its
+canonical retained-point count (thirteen after complete controls, nine after a
+control failure). It rejects a `control_failed` mode-one rank unless its parent
+control actually failed, while retaining true failed-control mode-one states.
+The focused post-correction command passed `124` tests in `1.74s`; it includes
+empty, short, long, and opposite-map scalar-vector regressions for quantities
+3 and 4, plus scalar and dependence contradictory control-state regressions.

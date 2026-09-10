@@ -379,6 +379,8 @@ class SelectedSbcQuantities:
             range(5)
         ):
             raise ValueError("scalar quantities must be ordered q0 through q4")
+        if any(item.values is not None and len(item.values) != len(points) for item in scalars):
+            raise ValueError("scalar vector length must match the canonical point count")
         for quantity, expected in enumerate(
             (
                 tuple(point[0] for point in points),
@@ -430,6 +432,8 @@ class SelectedSbcQuantities:
             if entry.mode_id == 1 and control.status == "failed":
                 if entry.status != "control_failed":
                     raise ValueError("failed control must dominate mode-1 ranks")
+            elif entry.status == "control_failed":
+                raise ValueError("control failure rank requires a failed parent control")
             elif entry.quantity_id < 5:
                 failed = scalars[entry.quantity_id].values is None
                 if failed != (entry.status == "quantity_failed") and not (
