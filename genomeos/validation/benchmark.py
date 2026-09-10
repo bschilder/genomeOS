@@ -10,6 +10,9 @@ the coercing frozen P1 schema sees them, then validates a deep copy. The submitt
 never mutated. ``inventory_observations`` returns only row and distinct-label counts; allele
 denominators are deliberately not summed across loci or described as people.
 
+``validate_predictive_diagnostics`` is the shared nonmutating structure and numeric-range
+boundary used before a runner accepts a fold and again before global summarization.
+
 ``BenchmarkFoldStatus`` is the immutable handoff from the runner. Every planned split has exactly
 one record. Completed records have no failure reason; ``failed`` and ``infeasible`` records carry
 a nonempty reason. ``expected_test_ids`` records the complete test identity set that a completed
@@ -211,7 +214,7 @@ def _require_predictions(predictions: pd.DataFrame) -> pd.DataFrame:
     duplicated = result.duplicated(subset=["split_id", "source_record_id"], keep=False)
     if duplicated.any():
         raise ValueError("prediction (split_id, source_record_id) keys must be unique")
-    _validate_diagnostics(result)
+    validate_predictive_diagnostics(result.loc[:, _DIAGNOSTIC_COLUMNS])
     return result
 
 
@@ -221,19 +224,29 @@ def _require_real(value: object, field: str) -> float:
     return float(value)
 
 
-def _validate_diagnostics(predictions: pd.DataFrame) -> None:
+def validate_predictive_diagnostics(diagnostics: pd.DataFrame) -> pd.DataFrame:
+    """Return a validated diagnostic copy for one fold or a complete benchmark."""
+    if not isinstance(diagnostics, pd.DataFrame):
+        raise TypeError("diagnostics must be a pandas DataFrame")
+    if diagnostics.columns.duplicated().any():
+        raise ValueError("diagnostics must not contain duplicate column labels")
+    missing = sorted(set(_DIAGNOSTIC_COLUMNS) - set(diagnostics.columns))
+    if missing:
+        raise ValueError(f"diagnostics is missing required columns: {missing}")
+    result = diagnostics.loc[:, _DIAGNOSTIC_COLUMNS].copy(deep=True)
     for column in _BOUNDED_DIAGNOSTICS:
-        for value in predictions[column].array:
+        for value in result[column].array:
             numeric = _require_real(value, column)
             if not isfinite(numeric) or not 0.0 <= numeric <= 1.0:
                 raise ValueError(f"{column} values must be finite and between 0 and 1")
-    for value in predictions["log_score"].array:
+    for value in result["log_score"].array:
         numeric = _require_real(value, "log_score")
         if np.isnan(numeric) or numeric == np.inf or numeric > 0.0:
             raise ValueError("log_score values must be nonpositive and finite or -Infinity")
     for column in _COVERAGE_COLUMNS:
-        if not all(isinstance(value, (bool, np.bool_)) for value in predictions[column].array):
+        if not all(isinstance(value, (bool, np.bool_)) for value in result[column].array):
             raise ValueError(f"{column} values must be Boolean")
+    return result
 
 
 def _prepare_statuses(

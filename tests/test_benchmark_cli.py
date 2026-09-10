@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
+from pandera.errors import SchemaError
 
 from genomeos.validation.baseline import B0InfeasibleError, fit_pooled_b0
 from genomeos.validation.benchmark import validate_allele_observations
@@ -135,6 +138,7 @@ def test_successful_runner_writes_explicit_b0_nonpublication_record(tmp_path):
         "genomeos/observations/schema.py",
         "genomeos/validation/baseline.py",
         "genomeos/validation/benchmark.py",
+        "genomeos/validation/count_baseline.py",
         "genomeos/validation/predictive.py",
         "genomeos/validation/splits.py",
         "scripts/benchmark_allele_frequency.py",
@@ -197,6 +201,13 @@ def test_runner_bootstraps_its_checkout_under_conflicting_pythonpath(tmp_path):
         (ROOT / "genomeos" / "validation" / "baseline.py").read_bytes()
     ).hexdigest()
     assert manifest["science_source_sha256"]["genomeos/validation/baseline.py"] == expected
+    expected_kernel = hashlib.sha256(
+        (ROOT / "genomeos" / "validation" / "count_baseline.py").read_bytes()
+    ).hexdigest()
+    assert (
+        manifest["science_source_sha256"]["genomeos/validation/count_baseline.py"]
+        == expected_kernel
+    )
 
 
 def test_pooled_fit_uses_training_counts_only_and_shares_variant_draws():
@@ -248,6 +259,54 @@ def test_pooled_fit_uses_training_counts_only_and_shares_variant_draws():
         if positions.sum() > 1:
             variant_draws = original.predictive.mean_draws[:, positions]
             assert (variant_draws == variant_draws[:, :1]).all()
+
+
+def test_pooled_fit_preserves_pre_extraction_draw_sequence():
+    observations = _read_observations(FIXTURES / "observations.tsv")
+    training = observations[observations["source_record_id"].str.startswith("east")]
+    one_variant = observations.loc[
+        observations["source_record_id"] == "west-v1"
+    ].copy()
+    repeated = one_variant.copy()
+    repeated.loc[:, "source_record_id"] = "west-v1-repeat"
+    repeated.loc[:, "cohort_id"] = "cohort-west-repeat"
+    testing = pd.concat([one_variant, repeated], ignore_index=True)
+
+    fit = fit_pooled_b0(
+        training,
+        testing,
+        prior_alpha=1.0,
+        prior_beta=1.0,
+        posterior_draws=32,
+        seed=42,
+    )
+    train_ac = int(training.loc[training["variant_id"] == "chr1-100-A-G", "ac"].sum())
+    train_an = int(training.loc[training["variant_id"] == "chr1-100-A-G", "an"].sum())
+    rng = np.random.default_rng(42)
+    expected = rng.beta(1.0 + train_ac, 1.0 + train_an - train_ac, size=32)
+
+    np.testing.assert_array_equal(fit.predictive.mean_draws[:, 0], expected)
+    np.testing.assert_array_equal(
+        fit.predictive.mean_draws[:, 0], fit.predictive.mean_draws[:, 1]
+    )
+
+
+def test_pooled_fit_keeps_p1_missing_ascertainment_as_hard_error():
+    observations = _read_observations(FIXTURES / "observations.tsv")
+    training = observations[observations["source_record_id"].str.startswith("east")].drop(
+        columns="sampling_design"
+    )
+    testing = observations[observations["source_record_id"].str.startswith("west")]
+
+    with pytest.raises(SchemaError, match="sampling_design"):
+        fit_pooled_b0(
+            training,
+            testing,
+            prior_alpha=1.0,
+            prior_beta=1.0,
+            posterior_draws=32,
+            seed=42,
+        )
 
 
 def test_missing_training_variant_uses_typed_scientific_infeasibility():
@@ -400,3 +459,37 @@ def test_fitting_failures_are_written_and_cause_nonzero_exit(tmp_path):
     manifest = _json(output / "manifest.json")
     assert {fold["status"] for fold in manifest["splits"]} == {"failed"}
     assert _json(output / "summary.json")["benchmark"]["split_counts"]["failed"] == 2
+
+
+def test_invalid_fold_diagnostics_are_failed_before_append_and_later_folds_continue(
+    tmp_path, monkeypatch
+):
+    spec = importlib.util.spec_from_file_location("benchmark_runner_invalid_diagnostics", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    real_diagnostics = runner.predictive_diagnostics
+    calls = 0
+
+    def invalid_once(*args, **kwargs):
+        nonlocal calls
+        diagnostics = real_diagnostics(*args, **kwargs)
+        calls += 1
+        if calls == 1:
+            diagnostics.loc[0, "randomized_pit"] = 1.1
+        return diagnostics
+
+    monkeypatch.setattr(runner, "predictive_diagnostics", invalid_once)
+    output = tmp_path / "invalid-diagnostics"
+    args = runner._parser().parse_args(_command(output)[2:])
+
+    assert runner.run(args) == 1
+    summary = _json(output / "summary.json")["benchmark"]
+    assert summary["split_counts"] == {"planned": 2, "completed": 1, "failed": 1, "infeasible": 0}
+    statuses = pd.read_csv(output / "fold_status.tsv", sep="\t", keep_default_na=False)
+    failed_split = statuses.loc[statuses.status == "failed", "split_id"].tolist()
+    assert len(failed_split) == 1
+    assert "randomized_pit" in statuses.loc[statuses.status == "failed", "failure_reason"].item()
+    predictions = pd.read_csv(output / "predictions.tsv", sep="\t")
+    assert failed_split[0] not in set(predictions.split_id)
+    assert set(statuses.status) == {"failed", "completed"}

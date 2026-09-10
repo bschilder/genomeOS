@@ -21,29 +21,15 @@ import numpy as np
 import pandas as pd
 
 from genomeos.validation.benchmark import validate_allele_observations
+from genomeos.validation.count_baseline import B0InfeasibleError as B0InfeasibleError
+from genomeos.validation.count_baseline import (
+    B0VariantPosterior,
+    PooledAlleleCount,
+    pooled_beta_posteriors,
+)
 from genomeos.validation.predictive import CountPredictive
 
 SEED = 42
-
-
-class B0InfeasibleError(ValueError):
-    """The declared holdout cannot be evaluated by the B0 scientific model."""
-
-    def __init__(self, absent_variants: tuple[str, ...]) -> None:
-        self.absent_variants = absent_variants
-        super().__init__(f"test variants absent from training: {list(absent_variants)}")
-
-
-@dataclass(frozen=True)
-class B0VariantPosterior:
-    """Auditable pooled posterior parameters for one training variant."""
-
-    variant_id: str
-    training_observation_count: int
-    training_ac: int
-    training_an: int
-    alpha: float
-    beta: float
 
 
 @dataclass(frozen=True)
@@ -100,39 +86,22 @@ def fit_pooled_b0(
     normalized_seed = _seed(seed)
 
     test_variants = tuple(sorted(testing["variant_id"].unique()))
-    training_variants = set(training["variant_id"])
-    absent = tuple(sorted(set(test_variants) - training_variants))
-    if absent:
-        raise B0InfeasibleError(absent)
+    counts = tuple(
+        PooledAlleleCount(row.source_record_id, row.variant_id, row.ac, row.an)
+        for row in training.itertuples(index=False)
+    )
+    posteriors = pooled_beta_posteriors(
+        counts,
+        test_variants,
+        prior_alpha=alpha_prior,
+        prior_beta=beta_prior,
+    )
 
     rng = np.random.default_rng(normalized_seed)
-    draws_by_variant: dict[str, np.ndarray] = {}
-    posteriors: list[B0VariantPosterior] = []
-    for variant_id in test_variants:
-        rows = training.loc[training["variant_id"] == variant_id]
-        total_ac = int(rows["ac"].sum())
-        total_an = int(rows["an"].sum())
-        posterior_alpha = alpha_prior + total_ac
-        posterior_beta = beta_prior + total_an - total_ac
-        if (
-            not isfinite(posterior_alpha)
-            or not isfinite(posterior_beta)
-            or not isfinite(posterior_alpha + posterior_beta)
-        ):
-            raise ValueError(
-                f"posterior parameters for {variant_id!r} are outside the stable numeric domain"
-            )
-        draws_by_variant[variant_id] = rng.beta(posterior_alpha, posterior_beta, size=draws)
-        posteriors.append(
-            B0VariantPosterior(
-                variant_id=variant_id,
-                training_observation_count=int(len(rows)),
-                training_ac=total_ac,
-                training_an=total_an,
-                alpha=posterior_alpha,
-                beta=posterior_beta,
-            )
-        )
+    draws_by_variant = {
+        posterior.variant_id: rng.beta(posterior.alpha, posterior.beta, size=draws)
+        for posterior in posteriors
+    }
 
     mean_draws = np.column_stack(
         [draws_by_variant[variant_id] for variant_id in testing["variant_id"]]
@@ -140,5 +109,5 @@ def fit_pooled_b0(
     return PooledB0Fit(
         predictive=CountPredictive(mean_draws),
         observation_ids=tuple(testing["source_record_id"]),
-        posteriors=tuple(posteriors),
+        posteriors=posteriors,
     )

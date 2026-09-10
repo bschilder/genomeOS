@@ -5,7 +5,8 @@ host-resident draw and count arrays through a public typed interface; validation
 owned by ``genomeos.validation.predictive``. CuPy is imported only when ``CuPyCDF`` is explicitly
 constructed, and a missing library or CUDA device is an error rather than a CPU fallback.
 
-Beta-binomial tails are exact finite sums. Temporary log-mass grids are bounded by
+Beta-binomial tails are exact finite sums, pivoting at probability one half so subtraction always
+uses the directly summed smaller tail. Temporary log-mass grids are bounded by
 ``CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE`` float64 elements and no
 array dimension depends on the complete allele-number support.
 """
@@ -22,6 +23,7 @@ CDF_SUPPORT_CHUNK_SIZE = 1024
 MAX_TEMPORARY_ELEMENTS = (
     CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE
 )
+LOG_HALF = float(np.log(0.5))
 
 
 def _load_cupy() -> tuple[Any, Any]:
@@ -162,14 +164,13 @@ class CuPyCDF:
                     short_start,
                     short_stop,
                 )
-                short_is_valid = log_short < 0.0
                 values = cp.where(
                     lower_is_shorter[:, None],
                     cp.exp(log_short),
                     -cp.expm1(log_short),
                 )
 
-                fallback = interior & ~short_is_valid
+                fallback = interior & (log_short > LOG_HALF)
                 if bool(cp.asnumpy(cp.any(fallback))):
                     long_start = cp.where(lower_is_shorter, k + 1, 0)
                     long_stop = cp.where(lower_is_shorter, n + 1, k + 1)
@@ -191,6 +192,11 @@ class CuPyCDF:
                 values = cp.where(boundary_one, 0.0, values)
                 values = cp.where(k[:, None] < 0, 0.0, values)
                 values = cp.where(k[:, None] >= n[:, None], 1.0, values)
+                invalid = ~cp.isfinite(values) | (values < 0.0) | (values > 1.0)
+                if bool(cp.asnumpy(cp.any(invalid))):
+                    raise FloatingPointError(
+                        "CuPy CDF produced a non-finite or out-of-range component probability"
+                    )
                 total += cp.sum(values, axis=1)
             output[row_start:row_stop] = total / self._mean.shape[0]
         return cp.asnumpy(output).reshape(ac.shape)

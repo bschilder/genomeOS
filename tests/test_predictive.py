@@ -228,6 +228,83 @@ def test_beta_binomial_cdf_preserves_tiny_lower_tail_near_mean_one():
     )
 
 
+def _decimal_beta_binomial_cdf(mean: float, concentration: float, count: int, an: int) -> Decimal:
+    with localcontext() as context:
+        context.prec = 100
+        p = Decimal.from_float(mean)
+        c = Decimal.from_float(concentration)
+        alpha, beta = p * c, (1 - p) * c
+        total = Decimal(0)
+        for k in range(count + 1):
+            mass = Decimal(comb(an, k))
+            for index in range(an):
+                numerator = alpha + index if index < k else beta + index - k
+                mass *= numerator / (c + index)
+            total += mass
+        return +total
+
+
+@pytest.mark.parametrize(
+    ("mean", "concentration", "count", "an"),
+    [
+        (1e-11, 5000.0, 0, 2),
+        (1e-11, 8000.0, 1, 352),
+        (0.0014, 6400.0, 6, 52),
+        (0.18, 6000.0, 103, 290),
+    ],
+)
+def test_beta_binomial_cdf_matches_independent_decimal_oracle_near_one(
+    mean, concentration, count, an
+):
+    """A shorter lower support tail can still be near one and lose complement precision."""
+    expected = float(_decimal_beta_binomial_cdf(mean, concentration, count, an))
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    result = predictive.cdf([count], [an])[0]
+
+    assert result == pytest.approx(expected, rel=2e-15, abs=0.0)
+    assert 0.0 <= result <= 1.0
+
+
+def test_beta_binomial_cdf_and_pit_preserve_complements_and_mixture_bounds():
+    """Wrong tail selection can corrupt either allele orientation and push a mixture PIT over one."""
+    means = np.array([[1e-11], [1.0 - 1e-11]])
+    concentrations = np.full((2, 1), 5000.0)
+    predictive = CountPredictive(means, concentrations)
+    reverse = CountPredictive(1.0 - means, concentrations)
+
+    forward_cdf = predictive.cdf([0], [2])[0]
+    reflected_survival = 1.0 - reverse.cdf([1], [2])[0]
+    diagnostics = predictive_diagnostics(predictive, [1], [2], seed=42)
+
+    expected = float(
+        (_decimal_beta_binomial_cdf(1e-11, 5000.0, 0, 2)
+         + _decimal_beta_binomial_cdf(1.0 - 1e-11, 5000.0, 0, 2))
+        / 2
+    )
+    assert forward_cdf == pytest.approx(expected, rel=2e-15, abs=0.0)
+    assert reflected_survival == pytest.approx(expected, rel=2e-15, abs=0.0)
+    assert 0.0 <= diagnostics.loc[0, "randomized_pit"] <= 1.0
+
+
+def test_near_one_randomized_pit_matches_decimal_cdf_plus_independent_mass():
+    """A negative but inaccurate near-one log CDF must not make a valid PIT exceed one."""
+    mean, concentration = 1e-11, 5000.0
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+    diagnostics = predictive_diagnostics(predictive, [1], [2], seed=42)
+    with localcontext() as context:
+        context.prec = 100
+        p, c = Decimal.from_float(mean), Decimal.from_float(concentration)
+        mass_one = Decimal(2) * c * p * (1 - p) / (c + 1)
+        expected = _decimal_beta_binomial_cdf(mean, concentration, 0, 2) + (
+            Decimal.from_float(np.random.default_rng(42).random()) * mass_one
+        )
+
+    actual = diagnostics.loc[0, "randomized_pit"]
+    assert actual == pytest.approx(float(expected), rel=0.0, abs=np.finfo(float).eps)
+    assert 0.0 <= actual <= 1.0
+
+
 def test_count_support_boundary_is_finite_and_larger_denominators_are_refused():
     """Allowing int64.max overflows AN+1; the declared supported boundary must be real."""
     predictive = CountPredictive(np.array([[0.5]]))

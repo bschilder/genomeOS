@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.validation.baseline as baseline_module  # noqa: E402
 import genomeos.validation.benchmark as benchmark_module  # noqa: E402
+import genomeos.validation.count_baseline as count_baseline_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.splits as splits_module  # noqa: E402
 from genomeos.validation.baseline import B0InfeasibleError, fit_pooled_b0  # noqa: E402
@@ -37,6 +38,7 @@ from genomeos.validation.benchmark import (  # noqa: E402
     inventory_observations,
     summarize_benchmark,
     validate_allele_observations,
+    validate_predictive_diagnostics,
 )
 from genomeos.validation.predictive import predictive_diagnostics  # noqa: E402
 from genomeos.validation.splits import build_buffered_splits  # noqa: E402
@@ -101,6 +103,7 @@ SCIENCE_SOURCE_FILES = {
     "genomeos/observations/schema.py": Path(observations_schema_module.__file__).resolve(),
     "genomeos/validation/baseline.py": Path(baseline_module.__file__).resolve(),
     "genomeos/validation/benchmark.py": Path(benchmark_module.__file__).resolve(),
+    "genomeos/validation/count_baseline.py": Path(count_baseline_module.__file__).resolve(),
     "genomeos/validation/predictive.py": Path(predictive_module.__file__).resolve(),
     "genomeos/validation/splits.py": Path(splits_module.__file__).resolve(),
     "scripts/benchmark_allele_frequency.py": Path(__file__).resolve(),
@@ -309,6 +312,7 @@ def _fold_predictions(
         testing["an"].to_numpy(),
         seed=predictive_seed,
     )
+    diagnostics = validate_predictive_diagnostics(diagnostics)
     posterior_by_variant = {posterior.variant_id: posterior for posterior in fit.posteriors}
     assignment_by_id = assignments.set_index("source_record_id")
     rows: list[dict[str, object]] = []

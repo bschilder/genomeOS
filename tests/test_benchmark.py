@@ -14,6 +14,7 @@ from genomeos.validation.benchmark import (
     inventory_observations,
     summarize_benchmark,
     validate_allele_observations,
+    validate_predictive_diagnostics,
 )
 from genomeos.validation.predictive import CountPredictive, predictive_diagnostics
 
@@ -94,6 +95,31 @@ def test_near_degenerate_count_diagnostics_compose_with_strict_reporter():
     predictions[list(DIAGNOSTIC_COLUMNS)] = diagnostics
     summarize_benchmark(predictions, (_completed(),), ("split-a",))
     assert predictions.loc[0, "log_score"] == pytest.approx(np.log1p(-1e-16), abs=0.0)
+
+
+def test_public_diagnostic_validator_is_nonmutating_and_preserves_negative_infinity():
+    """Runner validation must retain legitimate impossible outcomes without altering its frame."""
+    diagnostics = pd.DataFrame([_prediction("obs-1", log_score=-np.inf)])[list(DIAGNOSTIC_COLUMNS)]
+    before = diagnostics.copy(deep=True)
+
+    validated = validate_predictive_diagnostics(diagnostics)
+
+    assert validated is not diagnostics
+    pd.testing.assert_frame_equal(validated, before)
+    pd.testing.assert_frame_equal(diagnostics, before)
+
+
+def test_public_diagnostic_validator_rejects_invalid_structure_and_range():
+    """A runner must reject malformed fold diagnostics before prediction rows are appended."""
+    missing = pd.DataFrame([_prediction("obs-1")])[list(DIAGNOSTIC_COLUMNS)].drop(
+        columns="randomized_pit"
+    )
+    with pytest.raises(ValueError, match="missing required columns"):
+        validate_predictive_diagnostics(missing)
+
+    invalid = pd.DataFrame([_prediction("obs-1", randomized_pit=1.0000000000001)])[list(DIAGNOSTIC_COLUMNS)]
+    with pytest.raises(ValueError, match="randomized_pit"):
+        validate_predictive_diagnostics(invalid)
 
 
 def test_inventory_reports_only_observation_counts_and_explicit_limitations():
