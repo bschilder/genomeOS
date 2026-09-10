@@ -39,9 +39,10 @@ from genomeos.validation.sbc_ranks import simulate_rank_null
 
 
 def _emit_timing(record: dict) -> None:
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
     try:
-        print(json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False), flush=True)
-    except OSError:
+        print(payload, flush=True)
+    except (OSError, ValueError):
         try:
             print(
                 json.dumps(
@@ -55,7 +56,7 @@ def _emit_timing(record: dict) -> None:
                 file=sys.stderr,
                 flush=True,
             )
-        except OSError:
+        except (OSError, ValueError):
             pass
 
 
@@ -105,7 +106,8 @@ class _TimedStore(LocalB0HStore):
         return self._observe("store_open", None, super().__enter__)
 
     def start(self, record: StageStart) -> None:
-        return self._observe("start_publication", record_digest(record), lambda: super().start(record))
+        method = super().start
+        return self._observe("start_publication", record_digest(record), lambda: method(record))
 
     def complete(
         self,
@@ -116,14 +118,16 @@ class _TimedStore(LocalB0HStore):
         encoded: EncodedB0HEvidence | None,
         failure: StageExecutionFailure | None,
     ) -> None:
+        method = super().complete
         return self._observe(
             "result_publication",
             record_digest(start),
-            lambda: super().complete(start, completion, receipt=receipt, encoded=encoded, failure=failure),
+            lambda: method(start, completion, receipt=receipt, encoded=encoded, failure=failure),
         )
 
     def collect(self, destination: Path) -> tuple[str, str]:
-        return self._observe("closed_collection", None, lambda: super().collect(destination))
+        method = super().collect
+        return self._observe("closed_collection", None, lambda: method(destination))
 
 
 def frozen_file(path: Path, raw: bytes) -> None:

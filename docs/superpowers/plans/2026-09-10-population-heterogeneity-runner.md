@@ -3901,16 +3901,17 @@ from genomeos.validation.sbc_ranks import simulate_rank_null
 
 
 def _emit_timing(record: dict) -> None:
+    payload = json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
     try:
-        print(json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False), flush=True)
-    except OSError:
+        print(payload, flush=True)
+    except (OSError, ValueError):
         # Operational report transport can fail without discarding PendingPublication.
         # No synthetic duration or durable-report claim replaces the unavailable stream.
         try:
             print(json.dumps({"format": "b0h_timing_report_unavailable", "version": "1",
                               "reason": "stdout_write_failed"}, sort_keys=True,
                              separators=(",", ":")), file=sys.stderr, flush=True)
-        except OSError:
+        except (OSError, ValueError):
             pass
 
 

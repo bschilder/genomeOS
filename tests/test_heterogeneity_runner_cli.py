@@ -191,3 +191,46 @@ def test_failed_null_preparation_publishes_no_campaign_and_calls_no_case(tmp_pat
     assert not (tmp_path / "null.json").exists()
     assert not (tmp_path / "manifest.json").exists()
     assert not (tmp_path / "study.sqlite3").exists()
+
+
+def test_timed_store_parent_methods_are_invoked(tmp_path, monkeypatch):
+    cli = command()
+    from heterogeneity_runner_fixtures import dataset
+    from test_heterogeneity_runner_store import packet, publish, start_record
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    with cli._TimedStore.create(tmp_path / "study.sqlite3", manifest=manifest,
+                                admission=admission, null=null, owner_id="fixture-owner") as store:
+        start = start_record(manifest, data)
+        store.start(start)
+        publish(store, packet(manifest, start, data))
+
+
+def test_timing_closed_stdout_preserves_pending_publication(monkeypatch):
+    cli = command()
+    import io
+    closed = io.StringIO()
+    closed.close()
+    monkeypatch.setattr(cli.sys, "stdout", closed)
+    cli._emit_timing({"format": "b0h_storage_interval", "version": "1"})
+
+
+def test_timing_closed_both_streams_does_not_replace_pending(monkeypatch):
+    cli = command()
+    import io
+    closed_out = io.StringIO()
+    closed_err = io.StringIO()
+    closed_out.close()
+    closed_err.close()
+    monkeypatch.setattr(cli.sys, "stdout", closed_out)
+    monkeypatch.setattr(cli.sys, "stderr", closed_err)
+    cli._emit_timing({"format": "b0h_storage_interval", "version": "1"})
+
+
+def test_timing_serialization_error_propagates(monkeypatch):
+    cli = command()
+    class Broken:
+        def __iter__(self):
+            raise RuntimeError("serialization defect")
+    with pytest.raises(TypeError):
+        cli._emit_timing({"broken": Broken()})
