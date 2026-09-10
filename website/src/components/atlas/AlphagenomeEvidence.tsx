@@ -52,24 +52,6 @@ export function AlphagenomeEvidence({ info }: { info: AlphagenomeInfo }) {
         </dl>
       </section>
 
-      <section className="atlas-external-section">
-        <h3>Model attribution</h3>
-        <p className="atlas-external-section__intro">
-          The features that contributed most to this score, largest first.
-        </p>
-        <dl className="atlas-external-fields">
-          {record.top_attributions.map((item) => (
-            <Field
-              key={item.feature}
-              label={item.feature}
-              value={item.value.toLocaleString(undefined, {
-                maximumFractionDigits: 4,
-              })}
-            />
-          ))}
-        </dl>
-      </section>
-
       <a
         className="atlas-external-source-link"
         href={record.deep_link}

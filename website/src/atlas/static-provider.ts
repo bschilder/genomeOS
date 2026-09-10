@@ -234,6 +234,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
         (info.source !== 'dbsnp' || info.query.rsid !== resource.rsid)) ||
       (resource.source === 'alphagenome' &&
         (info.source !== 'alphagenome' ||
+          info.method !== resource.method ||
           info.record.model_version !== resource.model_version))
     ) {
       throw new Error(`${source} cache query does not match the catalog`);

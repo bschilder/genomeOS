@@ -450,6 +450,7 @@ describe('atlas browser contracts', () => {
   it('validates AlphaGenome AVI predicted-impact evidence as labeled, never measured', () => {
     const evidence = {
       query: { normalized_variant_id: 'chr11-5227002-T-A' },
+      method: 'atlas_lookup',
       record: {
         avi_phred: 11.77,
         avi_raw_score: 0.2093,
@@ -460,11 +461,6 @@ describe('atlas browser contracts', () => {
         model_version:
           'AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09',
         prediction_class: 'predicted_impact',
-        top_attributions: [
-          { feature: 'ALPHAMISSENSE', value: 0.1662 },
-          { feature: 'CACTUS_241_WAY', value: 0.0318 },
-          { feature: 'MERGED_SPLICING', value: 0.0281 },
-        ],
       },
       retrieved_at: '2026-09-09T06:39:18.081934Z',
       schema_version: 1,
@@ -496,8 +492,9 @@ describe('atlas browser contracts', () => {
   it('accepts an alphagenome external resource only with its pinned model version', () => {
     const resource = {
       cache_sha256:
-        '3ad46f3d90676a5cf675e48228192e78b00ac914cea4bad03900ebdaa0c931b3',
+        'dda009906a7d6c9835f75858cbb960d81b0ae0b008a874f0fb46f7583d63e497',
       cache_url: 'external/alphagenome/chr11-5227002-t-a.json',
+      method: 'atlas_lookup',
       model_version:
         'AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09',
       normalized_variant_id: artifact.variant_id,

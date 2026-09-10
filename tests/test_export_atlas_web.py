@@ -337,12 +337,8 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
                     "dominant_modality": "ALPHAMISSENSE",
                     "model_version": model_version,
                     "prediction_class": "predicted_impact",
-                    "top_attributions": [
-                        {"feature": "ALPHAMISSENSE", "value": 0.1662},
-                        {"feature": "CACTUS_241_WAY", "value": 0.0318},
-                        {"feature": "MERGED_SPLICING", "value": 0.0281},
-                    ],
                 },
+                "method": "atlas_lookup",
                 "retrieved_at": "2026-09-09T06:39:18.081934Z",
                 "schema_version": 1,
                 "source": "alphagenome",
@@ -354,6 +350,7 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
         "external_resources": [
             {
                 "source": "alphagenome",
+                "method": "atlas_lookup",
                 "normalized_variant_id": VARIANT_ID,
                 "model_version": model_version,
                 "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
@@ -370,6 +367,7 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
     )
     assert len(resources) == 1
     assert resources[0]["source"] == "alphagenome"
+    assert resources[0]["method"] == "atlas_lookup"
     assert resources[0]["model_version"] == model_version
     assert resources[0]["cache_sha256"]
     assert written[0].exists()
@@ -383,8 +381,148 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
                 "external_resources": [
                     {
                         "source": "alphagenome",
+                        "method": "atlas_lookup",
                         "normalized_variant_id": VARIANT_ID,
                         "model_version": "stale-model",
+                        "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+                    }
+                ]
+            },
+            artifact_id="hbs-test",
+            variant_id=VARIANT_ID,
+            entity_type="variant",
+            source_root=store,
+            out_dir=out,
+        )
+
+
+def test_export_refuses_an_external_lookup_without_coordinate_identity(
+    tmp_path: Path,
+) -> None:
+    """The exporter must enforce the same coordinate shape the browser contract does.
+
+    A composite locus id typed `variant` (the cytokine entries) passes every other check, so
+    without this gate it would export and pass CI, then fail in a reader's browser at runtime.
+    """
+    store = tmp_path / "store"
+    out = tmp_path / "web"
+    composite_id = "cyt:il-6-174-c"
+    with pytest.raises(ValueError, match="coordinate variant id"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "method": "atlas_lookup",
+                        "normalized_variant_id": composite_id,
+                        "model_version": "AlphaGenome (Avsec et al. 2026); Atlas AVI",
+                        "cache_file": "external/alphagenome/cyt-il-6-174-c.json",
+                    }
+                ]
+            },
+            artifact_id="cyt-il-6-174-c",
+            variant_id=composite_id,
+            entity_type="variant",
+            source_root=store,
+            out_dir=out,
+        )
+
+
+def test_export_refuses_non_redistributable_alphagenome_attributions(
+    tmp_path: Path,
+) -> None:
+    """The AVI Score Feature Breakdown is non-commercial use only, so it cannot ship here.
+
+    DeepMind defines the breakdown as separate from the AVI Score, which permits commercial use.
+    The browser contract uses a strict object and would reject the field, so the exporter has to
+    reject it too, otherwise Python and TypeScript disagree again.
+    """
+    store = tmp_path / "store"
+    out = tmp_path / "web"
+    model_version = "AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09"
+    cache_dir = store / "external" / "alphagenome"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "chr11-5227002-t-a.json").write_text(
+        json.dumps(
+            {
+                "query": {"normalized_variant_id": VARIANT_ID},
+                "method": "atlas_lookup",
+                "record": {
+                    "avi_phred": 11.77,
+                    "avi_raw_score": 0.2093,
+                    "avi_tail_quantile": 0.0665,
+                    "deep_link": (
+                        "https://deepmind.google.com/science/alphagenome/atlas"
+                        "?q=chr11:5227002:T%3EA&m=variant"
+                    ),
+                    "dominant_modality": "ALPHAMISSENSE",
+                    "model_version": model_version,
+                    "prediction_class": "predicted_impact",
+                    "top_attributions": [{"feature": "ALPHAMISSENSE", "value": 0.1662}],
+                },
+                "retrieved_at": "2026-09-09T06:39:18.081934Z",
+                "schema_version": 1,
+                "source": "alphagenome",
+                "source_release": "AlphaGenome Atlas AVI (2026-09)",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="not redistributable"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "method": "atlas_lookup",
+                        "normalized_variant_id": VARIANT_ID,
+                        "model_version": model_version,
+                        "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+                    }
+                ]
+            },
+            artifact_id="hbs-test",
+            variant_id=VARIANT_ID,
+            entity_type="variant",
+            source_root=store,
+            out_dir=out,
+        )
+
+
+def test_export_refuses_an_alphagenome_method_mismatch(tmp_path: Path) -> None:
+    store = tmp_path / "store"
+    out = tmp_path / "web"
+    cache_dir = store / "external" / "alphagenome"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "chr11-5227002-t-a.json").write_text(
+        json.dumps(
+            {
+                "query": {"normalized_variant_id": VARIANT_ID},
+                "method": "model_inference",
+                "record": {
+                    "avi_phred": 11.77,
+                    "avi_raw_score": 0.2093,
+                    "avi_tail_quantile": 0.0665,
+                    "deep_link": "https://deepmind.google.com/science/alphagenome/atlas",
+                    "dominant_modality": "ALPHAMISSENSE",
+                    "model_version": "v",
+                    "prediction_class": "predicted_impact",
+                },
+                "retrieved_at": "2026-09-09T06:39:18.081934Z",
+                "schema_version": 1,
+                "source": "alphagenome",
+                "source_release": "AlphaGenome Atlas AVI (2026-09)",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="method mismatch"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "method": "atlas_lookup",
+                        "normalized_variant_id": VARIANT_ID,
+                        "model_version": "v",
                         "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
                     }
                 ]
