@@ -181,7 +181,7 @@ Also cover missing versions, checksum generation, non-finite posterior values, m
 Run:
 
 ```bash
-/Users/bschilder/code/genomeOS/.venv/bin/python -m pytest tests/test_export_atlas_web.py -v
+.venv/bin/python -m pytest tests/test_export_atlas_web.py -v
 ```
 
 Expected: FAIL because `scripts.export_atlas_web` does not exist.
@@ -237,7 +237,7 @@ context map. The 1:50m source keeps borders aligned with the basemap at ordinary
 Run:
 
 ```bash
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/export_atlas_web.py \
+.venv/bin/python scripts/export_atlas_web.py \
   --store data/store \
   --hbs-csv /private/tmp/genomeos-hf/map_hbs_surveys.csv \
   --g6pd-csv /private/tmp/genomeos-hf/map_g6pd_surveys.csv \
@@ -253,8 +253,8 @@ against both source manifests and the export test.
 Run:
 
 ```bash
-/Users/bschilder/code/genomeOS/.venv/bin/python -m pytest tests/test_export_atlas_web.py -v
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/check_private_files.py
+.venv/bin/python -m pytest tests/test_export_atlas_web.py -v
+.venv/bin/python scripts/check_private_files.py
 ```
 
 Expected: PASS, with only the two MAP collections in the catalog.
@@ -768,11 +768,11 @@ npm run test:e2e
 
 ```bash
 cd /private/tmp/genomeos-153-docs
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/freeze_contract.py --check
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/check_module_size.py
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/check_private_files.py
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/smoke.py
-/Users/bschilder/code/genomeOS/.venv/bin/python -m pytest
+.venv/bin/python scripts/freeze_contract.py --check
+.venv/bin/python scripts/check_module_size.py
+.venv/bin/python scripts/check_private_files.py
+.venv/bin/python scripts/smoke.py
+.venv/bin/python -m pytest
 ```
 
 - [ ] **Step 4: Inspect the local explorer with the user**
@@ -797,7 +797,7 @@ git commit -m "docs: complete Cesium explorer plan (#55)"
 - [ ] **Step 7: Run final privacy and staged-path checks**
 
 ```bash
-/Users/bschilder/code/genomeOS/.venv/bin/python scripts/check_private_files.py
+.venv/bin/python scripts/check_private_files.py
 git diff --cached --name-only
 git status --short
 ```
