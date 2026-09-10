@@ -362,7 +362,18 @@ def test_reference_retains_all_finite_evidence_when_order_gaps_do_not_resolve(
     assert not point.resolved
     assert point.value == point.raw_values[-1]
     assert len(point.components) == len(point.raw_values) == 3
-    assert point.error_bound >= 2e-6
+    assert abs((-1.0 + 2e-6) - -1.0) < 2e-6
+    adjacent_gaps = tuple(
+        abs(right - left)
+        for left, right in zip(point.raw_values[:-1], point.raw_values[1:], strict=True)
+    )
+    rounding_floor = (
+        64
+        * np.finfo(np.float64).eps
+        * max(1 + sum(abs(term) for term in row) for row in point.components)
+    )
+    assert point.error_bound == max(*adjacent_gaps, rounding_floor)
+    assert point.error_bound > 1e-6
 
 
 def _anchored_comparison_reference() -> HeterogeneityDependenceReference:
