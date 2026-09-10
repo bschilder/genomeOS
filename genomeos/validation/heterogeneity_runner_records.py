@@ -1,11 +1,13 @@
 """Closed offline B0H runner records (design §§5,7–8,12; runner §§2–5)."""
+
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Annotated, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from genomeos.validation.heterogeneity_codec import B0HCodecLimits
+from genomeos.validation.heterogeneity_codec import B0HCodecLimits, B0HEvidence, EncodedB0HEvidence
 from genomeos.validation.heterogeneity_simulation import enumerate_sbc_cases
 from genomeos.validation.heterogeneity_simulation_types import SbcCaseId
 from genomeos.validation.sbc_ranks import RankNullReference
@@ -16,25 +18,44 @@ Natural = Annotated[int, Field(ge=0)]
 Positive = Annotated[int, Field(gt=0)]
 StageName = Literal["generation", "structural", "fit", "quantities", "summary"]
 RootName = Literal[
-    "GeneratedDataset", "AllUnavailableDataset", "GenerationFailure",
-    "FitAttemptResult", "StructuralCheckResult", "SelectedSbcQuantities",
+    "GeneratedDataset",
+    "AllUnavailableDataset",
+    "GenerationFailure",
+    "FitAttemptResult",
+    "StructuralCheckResult",
+    "SelectedSbcQuantities",
     "HeterogeneityFitSummary",
 ]
 
 
 class ClosedRecord(BaseModel):
-    model_config = ConfigDict(strict=True, frozen=True, extra="forbid",
-                              revalidate_instances="always")
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid", revalidate_instances="always")
 
     @model_validator(mode="before")
     @classmethod
     def literal_scalar_types(cls, value):
         if type(value) is dict:
-            bool_fields = {"jax_float64", "cupy_float64", "exclusive_lock_observed",
-                           "rollback_observed", "commit_readback_observed", "directory_fsync_observed"}
-            int_fields = {"sample_size", "replicates", "seed", "attempt_id", "accepted_attempt",
-                          "track_id", "study_id", "mode_id", "quantity_id",
-                          "planned_initial_fits", "planned_retry_slots"}
+            bool_fields = {
+                "jax_float64",
+                "cupy_float64",
+                "exclusive_lock_observed",
+                "rollback_observed",
+                "commit_readback_observed",
+                "directory_fsync_observed",
+            }
+            int_fields = {
+                "sample_size",
+                "replicates",
+                "seed",
+                "attempt_id",
+                "accepted_attempt",
+                "track_id",
+                "study_id",
+                "mode_id",
+                "quantity_id",
+                "planned_initial_fits",
+                "planned_retry_slots",
+            }
             for name, item in value.items():
                 if name in bool_fields and type(item) is not bool:
                     raise ValueError("Boolean observation must be literal bool")
@@ -104,8 +125,9 @@ class PreparedNull(ClosedRecord):
     sample_size: Literal[512]
     replicates: Literal[100000]
     seed: Literal[1653499886]
-    statistics: Annotated[tuple[Annotated[int, Field(ge=0, le=2048)], ...],
-                           Field(min_length=100000, max_length=100000)]
+    statistics: Annotated[
+        tuple[Annotated[int, Field(ge=0, le=2048)], ...], Field(min_length=100000, max_length=100000)
+    ]
 
     @model_validator(mode="after")
     def identity(self) -> Self:
@@ -257,8 +279,71 @@ class OwnerLoss(ClosedRecord):
         return self
 
 
-RunnerRecord = (AdmissionReceipt | PreparedNull | CampaignManifest | StageStart
-                | EvidenceReceipt | StageExecutionFailure | StageCompletion | OwnerLoss)
+RunnerRecord = (
+    AdmissionReceipt
+    | PreparedNull
+    | CampaignManifest
+    | StageStart
+    | EvidenceReceipt
+    | StageExecutionFailure
+    | StageCompletion
+    | OwnerLoss
+)
+
+
+@dataclass(frozen=True)
+class PublicationPacket:
+    start: StageStart
+    completion: StageCompletion
+    receipt: EvidenceReceipt | None
+    encoded: EncodedB0HEvidence | None
+    failure: StageExecutionFailure | None
+
+    def __post_init__(self) -> None:
+        from genomeos.validation.heterogeneity_runner_wire import record_digest
+
+        if type(self.start) is not StageStart or type(self.completion) is not StageCompletion:
+            raise ValueError("publication requires exact START and COMPLETE roots")
+        digest = record_digest(self.start)
+        record_digest(self.completion)
+        if self.completion.start_sha256 != digest:
+            raise ValueError("publication completion START mismatch")
+        if self.receipt is not None:
+            if (
+                type(self.receipt) is not EvidenceReceipt
+                or type(self.encoded) is not EncodedB0HEvidence
+                or self.failure is not None
+                or self.receipt.start_sha256 != digest
+                or self.completion.receipt_sha256 != record_digest(self.receipt)
+                or self.completion.failure_sha256 is not None
+            ):
+                raise ValueError("publication scientific fields mismatch")
+        elif (
+            type(self.failure) is not StageExecutionFailure
+            or self.encoded is not None
+            or self.failure.start_sha256 != digest
+            or self.completion.failure_sha256 != record_digest(self.failure)
+            or self.completion.receipt_sha256 is not None
+        ):
+            raise ValueError("publication failure fields mismatch")
+
+
+@dataclass(frozen=True)
+class StoredStage:
+    start: StageStart
+    completion: StageCompletion | None
+    receipt: EvidenceReceipt | None
+    failure: StageExecutionFailure | None
+    loss: OwnerLoss | None
+    encoded: EncodedB0HEvidence | None
+    value: B0HEvidence | None
+
+
+@dataclass(frozen=True)
+class CaseEvidence:
+    campaign_sha256: str
+    case: SbcCaseId
+    stages: tuple[StoredStage, ...]
 
 
 def prepared_null(reference: RankNullReference) -> PreparedNull:
@@ -270,9 +355,15 @@ def prepared_null(reference: RankNullReference) -> PreparedNull:
         raise ValueError("null requires 100000 statistics")
     if reference.seed != 1653499886:
         raise ValueError("null seed must be 1653499886")
-    return PreparedNull(format="b0h_rank_null", version="1",
-                        entropy=(42, 211, 1, 100, 0, 0, 0, 0, 0), sample_size=512,
-                        replicates=100000, seed=1653499886, statistics=reference.statistics)
+    return PreparedNull(
+        format="b0h_rank_null",
+        version="1",
+        entropy=(42, 211, 1, 100, 0, 0, 0, 0, 0),
+        sample_size=512,
+        replicates=100000,
+        seed=1653499886,
+        statistics=reference.statistics,
+    )
 
 
 def restore_null(record: PreparedNull) -> RankNullReference:
