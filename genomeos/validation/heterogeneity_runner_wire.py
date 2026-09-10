@@ -8,13 +8,24 @@ from typing import Annotated
 from pydantic import Field, TypeAdapter
 
 from genomeos.validation.heterogeneity_codec import (
-    B0HCodecLimits, EncodedB0HEvidence, decode_b0h_evidence,
+    B0HCodecLimits,
+    EncodedB0HEvidence,
+    decode_b0h_evidence,
 )
 from genomeos.validation.heterogeneity_runner_records import (
-    AdmissionReceipt, CampaignManifest, EvidenceReceipt, PayloadIdentity,
-    PreparedNull, RunnerRecord, StageStart, StageCompletion, StageExecutionFailure, OwnerLoss,
+    AdmissionReceipt,
+    CampaignManifest,
+    EvidenceReceipt,
+    OwnerLoss,
+    PayloadIdentity,
+    PreparedNull,
+    RunnerRecord,
+    StageCompletion,
+    StageExecutionFailure,
+    StageStart,
 )
 from genomeos.validation.heterogeneity_simulation import enumerate_sbc_cases
+from genomeos.validation.heterogeneity_simulation_types import SbcCaseId
 
 MAX_OPERATION_BYTES = 8 * 1024 * 1024
 _RECORDS = TypeAdapter(Annotated[RunnerRecord, Field(discriminator="format")])
@@ -50,7 +61,10 @@ def _tuplify(value: object) -> object:
     if type(value) is list:
         return tuple(_tuplify(item) for item in value)
     if type(value) is dict:
-        return {key: _tuplify(item) for key, item in value.items()}
+        converted = {key: _tuplify(item) for key, item in value.items()}
+        if set(converted) == {"track_id", "study_id", "case_id", "replicate_id"}:
+            return SbcCaseId(**converted)
+        return converted
     return value
 
 
