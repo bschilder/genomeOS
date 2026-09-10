@@ -211,3 +211,119 @@ The committed research note must contain the full fixed matrix, priors, budgets,
 git add tests/test_reference_heterogeneity_quadrature.py docs/research/population-heterogeneity-quadrature-2026-09-10.md
 git commit -m "test: compare heterogeneity sampling with refined quadrature" -m "Advances #211 and #189; no real-data improvement claim."
 ```
+
+### Task 3: Correct the demonstrated likelihood cancellation (#214)
+
+Task 2 remains incomplete: its fixed primary-original case failed with 276
+divergences, preserved in commit be684318 and the research note. This task is
+the localized production correction permitted above, not a new model.
+
+**Scientific contract:** evaluate the declared normalized beta-binomial law and
+its logit gradients accurately on the stated numerical checks; the measurable
+evidence is independent exact/high-precision comparisons and then the unchanged
+actual sampler oracles. A pure PyTensor expression helper is consumed by the
+offline fitter's observed node. Integer counts already validated by the fitter,
+float64, and strict interior mean/rho are assumed; output-domain refusals and all
+fit gates stay unchanged. No real/global-accuracy claim follows.
+
+**Files:** Create `genomeos/surfaces/heterogeneity_likelihood.py` and focused
+`tests/test_heterogeneity_likelihood.py`; modify only the observed-likelihood
+integration in `genomeos/surfaces/reference_heterogeneity.py`. A separate
+test-only high-precision reference helper and literal synthetic fixture are
+allowed under `tests/`; do not add dependencies. Record the numerical derivation,
+measured checks and limitations in
+`docs/research/population-heterogeneity-likelihood-2026-09-10.md`. Append the
+post-fix actual evidence to the existing quadrature note without deleting its
+failure history. Existing sampler tests, inputs and thresholds are frozen.
+
+**Interface:** `beta_binomial_logp(value, n, mean, rho) -> TensorVariable`,
+typed symbolic per-observation normalized log masses. It must use its supplied
+`value`, not close over a different observed array. Preserve `obs` as an observed
+node via `pm.CustomDist(..., logp=beta_binomial_logp, observed=ac, dtype="int64")`.
+Document unsupported direct PyMC random generation; the public prediction path
+continues to use CountPredictive. Retain support and parameter checks, including
+integer count support. No production import from the independent oracle, test
+reference or private scorer. No environment/global configuration or I/O.
+
+- [ ] **Step 1: Add failing numerical regressions before production edits.**
+
+Test the actual model's JAXified observed log likelihood and transformed logit
+gradients at mean `0.9120608465340185`, rho `8.091265212637455e-18`, counts
+`((0,1),(1,2),(2,4),(3,9),(12,20))`. Independent finite products give summed
+logp `-26.757334358778397` and gradient
+`[-14.834190475224663, 2.7841657124119296e-15]`; old code gives +6160 and zeros.
+The known RED must be numerical, not merely a missing-module import.
+
+Also test AN1 and AN2/AC1 exact identities, zero AN value/gradient, and supplied
+value/support handling. Freeze count pairs
+`(0,1),(1,2),(12,20),(0,65536),(1,65536),(32768,65536),(65535,65536),
+(65536,65536),(17,33)` at parameter points
+`(0.9120608465340185,8.091265212637455e-18),(.5,.1),(.01,.8),
+(.999999,.999999),(1e-12,1e-20),(1e-100,1e-100),(1e-250,1e-250),
+(.5,1e-300),(1e-250,.8),(.5,nextafter(1.,0.))`.
+Compare actual PyTensor/JAX values and logit gradients with independent
+400-digit Decimal ordinary logGamma/digamma calculations (not the candidate
+kernel). Literal fixtures may avoid repeating high-precision setup on every
+test, but retain a reproducible test helper and exact logits/provenance.
+Numerical bounds: value `atol=5e-10, rtol=1e-14`; logit gradient
+`atol=1e-9, rtol=1e-12`. These are not changes to sampler MCSE/gates.
+
+- [ ] **Step 2: Implement the stabilized expression and observed integration.**
+
+Let `d=1-rho` and `S(a,r,n)=sum(j=0..n-1) log(a+j*r)`. Return
+`logchoose(n,value)+S(mean*d,rho,value)+S((1-mean)*d,rho,n-value)-S(d,rho,n)`.
+Pass logs of a/r rather than forming kappa. For each S accumulate j0..15 with
+masked row-vector factors: j0 is loga; others
+`logaddexp(loga, log(j)+logr)`. For the remaining `N=max(n-16,0)` use
+`logA=logaddexp(loga,log(16)+logr)`, `w=exp(logr-logA)`, `t=N*w`, `L=log1p(t)`:
+
+```text
+tail = N*logA + N*h(t) + (N-1/2)*L + correction
+h(t) = log1p(t)/t - 1
+correction = sum(c*w**p*expm1(-p*L))
+(p,c) = (1,1/12),(3,-1/360),(5,1/1260),(7,-1/1680),
+        (9,1/1188),(11,-691/360360)
+```
+
+For `t<=1/8`, h uses its degree24 alternating series
+`sum(i=1..24) (-1)**i*t**i/(i+1)`, evaluated by Horner. Protect inactive
+operands with the SAME predicate: `u=where(small,t,1/8)` for the polynomial,
+`v=where(small,1/8,t)` for the direct expression. Do not use min/max at this
+join: half-gradients at ties caused a demonstrated error. Do not compute r/A
+directly: intermediate AD inverse powers overflow for joint tiny parameters.
+Parameter-free logchoose must include its constant and meet max-AN bounds.
+Six Stirling terms after shifting x>=16 bound truncation far below rounding;
+do not describe that as a full uniform floating-point gradient proof.
+
+- [ ] **Step 3: Pass focused tests before rerunning samplers.**
+
+Check exact helper branch join and both sides for AN33/64/65536. Use
+mean=.5, AC=AN, `kappa=(8*(AN-16)-16)/.5`,
+`rho=1/(1+kappa*factor)` for factors `1-1e-10,1,1+1e-10`; also directly
+verify the exact symbolic helper join so transformed rounding cannot mask it.
+Check full PMF normalization and complement symmetry at AN1/2/16/17/32/64
+and parameters `(.01,.8),(.5,.1),(.9120608465340185,8.091265212637455e-18)`.
+Inspect/test graph structure for bounded row-vector work independent of AN,
+without a support-sized matrix, scan, custom Op or VJP. Exercise actual
+PyTensor/JAX and model transforms, not only a NumPy transcription.
+Run existing structural fitter tests to preserve priors, labels, AN0 filtering,
+float64 checks, numerical refusals and fixed diagnostics.
+
+- [ ] **Step 4: Rerun the unchanged actual oracles and retain all outcomes.**
+
+Run `tests/test_reference_heterogeneity_sampling.py` and
+`tests/test_reference_heterogeneity_quadrature.py` with the original configs,
+counts, priors, seeds and thresholds. A code-corrected rerun is identified as
+such, not substituted for the original failure. Any failure is reported to root;
+no retry/seed/threshold change. Record every track and per-quantity comparison
+in the existing evidence note. No broad SBC or real fit in this task.
+
+- [ ] **Step 5: Run gates, inspect and commit only owned files.**
+
+Use the locked environment and prefixes above. Run focused new and existing
+heterogeneity/reference-count tests, mandatory smoke, Ruff, module-size and
+privacy gates. Inspect `git diff --cached --name-only` before the commit and
+rerun the privacy gate after staging. Root owns full CI, independent review,
+push and PR. Do not close #211/#189. If all #214 checks genuinely pass, use
+`fix: stabilize heterogeneity likelihood evaluation` with `Closes #214` in
+the commit body; otherwise preserve honest evidence and escalate before commit.
