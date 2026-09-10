@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from math import log
+from types import SimpleNamespace
 
 import arviz as az
 import numpy as np
@@ -13,6 +15,7 @@ import xarray as xr
 from genomeos.surfaces.heterogeneity_types import (
     HeterogeneityConvergenceError,
     PopulationHeterogeneityConfig,
+    VariantTrainingCounts,
 )
 from genomeos.surfaces.reference_heterogeneity import (
     fit_reference_population_heterogeneity,
@@ -157,6 +160,29 @@ def test_graph_uses_asymmetric_prior_shapes(monkeypatch: pytest.MonkeyPatch) -> 
     prior_logp = float(model.compile_logp(vars=[model["mean"], model["rho"]], jacobian=False)(point))
     expected = log(12 * 0.25 * 0.75**2) + log(60 * 0.2**2 * 0.8**3)
     assert prior_logp == pytest.approx(expected, abs=1e-6)
+
+
+def test_graph_aligns_distinct_rows_to_their_literal_variant_parameters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fit_config = config()
+    captured = install_sampler(monkeypatch, idata_for(("a", "z"), draws=fit_config.draws))
+    fit_reference_population_heterogeneity(
+        [row("group-a", "a", ac=1, an=2), row("group-z", "z", ac=0, an=3)],
+        config=fit_config,
+    )
+    model = captured["model"]
+    point = model.initial_point()
+    point["mean_logodds__"] = np.array([log(0.25 / 0.75), log(0.6 / 0.4)])
+    point["rho_logodds__"] = np.array([log(0.2 / 0.8), log(0.5 / 0.5)])
+
+    observed_logp = float(model.compile_logp(vars=[model["obs"]], jacobian=False)(point))
+
+    # Variant a: P(AC=1|AN=2, mean=.25, rho=.2)=.3.
+    # Variant z: P(AC=0|AN=3, mean=.6, rho=.5)=.4*1.4*2.4/(1*2*3)=.224.
+    assert observed_logp == pytest.approx(log(0.3) + log(0.224), abs=1e-12)
+    # Swapping the row-to-variant index instead gives .24 * .5.
+    assert observed_logp != pytest.approx(log(0.24) + log(0.5), abs=1e-6)
 
 
 def test_fit_retains_literal_identities_training_totals_and_immutable_copies(
@@ -316,7 +342,10 @@ def test_fit_refuses_nonmixing_chains_using_real_arviz(monkeypatch: pytest.Monke
         fit_reference_population_heterogeneity([row("train")], config=config())
 
 
-@pytest.mark.parametrize(("test_method", "bad_value"), [("bulk", 199.0), ("tail", np.nan)])
+@pytest.mark.parametrize(
+    ("test_method", "bad_value"),
+    [("bulk", 199.0), ("tail", 199.0), ("tail", np.nan)],
+)
 def test_fit_refuses_low_or_nonfinite_ess(
     monkeypatch: pytest.MonkeyPatch, test_method: str, bad_value: float
 ) -> None:
@@ -371,6 +400,54 @@ def fitted_for_prediction(monkeypatch: pytest.MonkeyPatch):
     return fit_reference_population_heterogeneity(
         [row("train-a", "a"), row("train-v", "v")], config=fit_config
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "nested"),
+    [
+        (
+            "training_counts",
+            SimpleNamespace(
+                variant_id="a",
+                training_observation_count=1,
+                training_ac=1,
+                training_an=2,
+            ),
+        ),
+        (
+            "diagnostics",
+            SimpleNamespace(
+                variant_id="a",
+                max_rhat=np.nan,
+                min_bulk_ess=300.0,
+                min_tail_ess=300.0,
+            ),
+        ),
+    ],
+)
+def test_fit_contract_rejects_non_contract_nested_items(
+    monkeypatch: pytest.MonkeyPatch, field: str, nested: SimpleNamespace
+) -> None:
+    fitted = fitted_for_prediction(monkeypatch)
+    replacement = list(getattr(fitted, field))
+    replacement[0] = nested
+    with pytest.raises(ValueError, match=field):
+        replace(fitted, **{field: tuple(replacement)})
+
+
+def test_fit_contract_rejects_training_count_aggregate_inconsistent_with_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fitted = fitted_for_prediction(monkeypatch)
+    first = fitted.training_counts[0]
+    contradictory = VariantTrainingCounts(
+        first.variant_id,
+        first.training_observation_count + 1,
+        first.training_ac,
+        first.training_an,
+    )
+    with pytest.raises(ValueError, match="training_observation_count"):
+        replace(fitted, training_counts=(contradictory, *fitted.training_counts[1:]))
 
 
 def test_prediction_preserves_scoreable_and_unavailable_order_and_backend(

@@ -214,10 +214,21 @@ class PopulationHeterogeneityFit:
 
         training_counts = tuple(self.training_counts)
         diagnostics = tuple(self.diagnostics)
+        if any(not isinstance(item, VariantTrainingCounts) for item in training_counts):
+            raise ValueError("training_counts must contain VariantTrainingCounts values")
+        if any(not isinstance(item, VariantHeterogeneityDiagnostics) for item in diagnostics):
+            raise ValueError(
+                "diagnostics must contain VariantHeterogeneityDiagnostics values"
+            )
         if tuple(item.variant_id for item in training_counts) != variant_ids:
             raise ValueError("training_counts must match variant_ids")
         if tuple(item.variant_id for item in diagnostics) != variant_ids:
             raise ValueError("diagnostics must match variant_ids")
+        available_record_count = len(training_record_ids) - len(unavailable_ids)
+        if sum(item.training_observation_count for item in training_counts) != available_record_count:
+            raise ValueError(
+                "summed training_observation_count must match available training provenance"
+            )
         if any(item.max_rhat > MAX_RHAT for item in diagnostics) or any(
             item.min_bulk_ess < MIN_ESS or item.min_tail_ess < MIN_ESS for item in diagnostics
         ):
