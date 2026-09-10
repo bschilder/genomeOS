@@ -40,13 +40,19 @@ MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
   -m pytest tests/test_heterogeneity_attempts.py -q -rA
 ```
 
-The actual RED was the following captured collection-failure summary while the
-module path did not exist:
+The only retained RED output is this actual captured collection-failure
+summary:
 
 ```text
 ERROR tests/test_heterogeneity_attempts.py
 !!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
 ```
+
+That output does not contain an exception line or traceback, so the historical
+cause of collection failure is unverified. The attempt module path did not yet
+exist, which made a missing-module failure the implementation-time inference,
+but the retained output cannot distinguish it from another collection-time
+cause. No traceback has been reconstructed after implementation.
 
 The implementation GREEN for the same command was `58 passed`. A subsequent
 test-first immutability check initially failed because assigning
@@ -100,7 +106,7 @@ PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
 module-size check passed (76 modules)
 
 wc -l -c genomeos/validation/heterogeneity_attempts.py
-478 18912 genomeos/validation/heterogeneity_attempts.py
+481 19014 genomeos/validation/heterogeneity_attempts.py
 
 PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
 /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
@@ -144,3 +150,39 @@ coverage, predictive gain, convergence of actual sampled fits, complete corpus
 execution, durable checkpoint/resume behavior, dataset-byte/runtime binding,
 CLI orchestration, or GPU performance. Those remain requirements of the later
 actual SBC/stress study and benchmark-admission work.
+
+## Review fix verification
+
+Fix round 1 disclosed that the historical collection-error cause is unverified
+and replaced the unannotated sampler-expectation lambda with an ordinary
+`@property` getter returning `int`. No runtime behavior or scientific contract
+changed.
+
+```text
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python \
+  -m pytest tests/test_heterogeneity_attempts.py -o addopts='' -q
+............................................................             [100%]
+60 passed in 0.91s
+
+LOCKED_ENV scripts/smoke.py
+contract up to date
+........................................                                 [100%]
+smoke checks passed
+
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/ruff check .
+All checks passed!
+
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_module_size.py
+module-size check passed (76 modules)
+
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
+private-file check passed (708 tracked files)
+
+git diff --check
+[exit 0; no output]
+```

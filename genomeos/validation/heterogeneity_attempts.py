@@ -308,7 +308,10 @@ class StructuralCheckResult:
         object.__setattr__(self, "case", case)
         object.__setattr__(self, "returned_type", returned_type)
 
-    expected_sampler_calls = property(lambda self: 0)
+    @property
+    def expected_sampler_calls(self) -> int:
+        """Return the fixed sampler-call expectation, not an observed count."""
+        return 0
 
 
 def plan_fit_attempt(dataset: GeneratedDataset, *, attempt_id: int) -> FitAttemptSpec:
