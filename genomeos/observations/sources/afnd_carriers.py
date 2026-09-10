@@ -108,6 +108,15 @@ def load(
 
     refuse(presence["carrier_fraction"].isna(), "no_presence_frequency_reported")
     refuse(presence["n_indiv"].isna() | (presence["n_indiv"] <= 0), "no_sample_size")
+    # A fraction of a person is not a sample size. Rounding it would invent a denominator the
+    # source never published — and unlike truncation it can move in either direction — so the
+    # row is refused for its actual defect before any integer conversion (#225).
+    refuse(presence["n_indiv"].notna() & (presence["n_indiv"] % 1 != 0), "fractional_sample_size")
+
+    # One canonical integer sample size, built once the checks above have passed. This is the
+    # only form read downstream, so the duplicate check, the carrier-count reconstruction and
+    # the record identity cannot disagree about how many people were sampled.
+    presence["n_individuals"] = presence["n_indiv"].where(keep).astype("Int64")
 
     registry, aliases, _ = afnd_registry.load(populations, registry_version=ingest_version)
     name_to_id = dict(zip(aliases["label"], aliases["population_id"], strict=True))
@@ -125,7 +134,9 @@ def load(
         "ascertainment_not_stated",
     )
     refuse(
-        presence.duplicated(subset=["group", "gene", "allele", "population", "carrier_fraction", "n_indiv"]),
+        presence.duplicated(
+            subset=["group", "gene", "allele", "population", "carrier_fraction", "n_individuals"]
+        ),
         "duplicate_source_record",
     )
 
@@ -137,7 +148,7 @@ def load(
         rows = rows[~below]
 
     designs = rows["population"].map(lambda p: ascertainment[p])
-    n_individuals = rows["n_indiv"].round().astype(int)
+    n_individuals = rows["n_individuals"].astype(int)
     ids = rows["population"].map(name_to_id)
     geo = placed.reindex(ids.to_numpy())
     frame = pd.DataFrame(
@@ -151,12 +162,12 @@ def load(
             "carriers": (rows["carrier_fraction"] * n_individuals).round().astype(int).to_numpy(),
             "n_individuals": n_individuals.to_numpy(),
             "source_record_id": [
-                stable_source_record_id("afnd-carriers", gene, population, fraction, int(n))
+                stable_source_record_id("afnd-carriers", gene, population, fraction, n)
                 for gene, population, fraction, n in zip(
                     rows["gene"],
                     rows["population"],
                     rows["carrier_fraction"],
-                    rows["n_indiv"],
+                    rows["n_individuals"],
                     strict=True,
                 )
             ],
