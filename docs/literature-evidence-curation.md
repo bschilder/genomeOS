@@ -162,6 +162,40 @@ If a value requires another operation or a chain of operations, leave it unresol
 new tested method through an issue. Reviewer approval cannot turn a free-text calculation in a data
 cell into an allowed derivation.
 
+## Discovery is one existing tool, and it is not optional
+
+**Use `scripts/fetch_pubmed_manifest.py`. Do not write your own fetcher.** Two corpus slices have
+now reimplemented it — worse each time, with wall-clock timestamps that re-mint `search_id` on every
+run, no payload validation, and screening fused into capture. If it does not fit your source, say so
+in the PR and explain why; do not quietly route around it.
+
+What you get by using it, and would have to rebuild correctly otherwise:
+
+- `--executed-at` is a **required argument**, not the clock. `search_id` hashes the timestamp, so a
+  clock read means every rerun mints new identities for the same search.
+- Network I/O ends at that script. `build_manifest(payload, ...)` is a pure function over a captured
+  payload, so a committed payload replays into the same manifest without touching the network.
+- The payload is validated, not trusted: non-numeric PMIDs, leading zeros, duplicates, and a
+  `count` that disagrees with the returned `idlist` all raise. That last one is the dangerous case —
+  a truncated or paginated response otherwise becomes a short, confident-looking manifest.
+
+**Commit the raw payload** next to the manifest it produced, and record the exact invocation the way
+[`docs/audits/lct-rs4988235-pilot.json`](audits/lct-rs4988235-pilot.json) records its `command`.
+A manifest whose payload was not kept cannot be replayed, re-screened, or audited by anyone who was
+not present when it was run.
+
+### Discovery and screening are separate manifest versions
+
+A fetch emits **every candidate as `pending`**. Screening happens afterwards, as a new immutable
+`manifest_version` over that snapshot. Design §5.3 is explicit that automated discovery scripts
+"always emit `pending` verification and may not expose a command-line option to self-certify their
+output."
+
+Fusing the two — deciding `included`/`excluded` inside the capture step — loses the boundary that
+makes the screen auditable, because there is no longer a record of what the search returned before
+judgement was applied. It also makes the coverage numbers ambiguous, since "candidates found" and
+"papers excluded" are then counted against no fixed snapshot.
+
 ## Search manifest columns
 
 Search results are discovery records, never observations and never automatic inclusion decisions.
@@ -204,18 +238,41 @@ terms, repository surfaces, landing page, and relevant supplement surface; recor
 `not_checked` means the check did not happen and cannot be promoted. Any explicit restriction wins
 over every permissive or unstated source in the aggregate.
 
+## Coverage totals must reconcile
+
+Promotion emits a machine-readable coverage report with one row per evidence-tracked field: total
+records, reported, derived, not reported, ambiguous, not reviewed, promoted, and refused, plus the
+aggregate unresolved count as the sum of the three non-value states. **The totals must reconcile**
+(design §8). A report whose parts do not add up to its whole is not a report.
+
+Two ways this goes wrong in practice, both seen:
+
+- **Counting different things in one sentence.** Unique papers and manifest rows are different
+  numbers: one PMID matching two queries is one paper and two rows. State which you are counting,
+  and make the arithmetic check out against the total you quote.
+- **Reporting a shrinking refusal count as progress.** A PR that reduces unresolved counts must show
+  which source records changed and the evidence rows that justified each change. A smaller number
+  on its own is not success — it is equally consistent with having invented the missing values.
+
+Coverage reports may aggregate `not_reported`, `ambiguous`, and `not_reviewed` as unresolved, but the
+stored status never collapses those states.
+
 ## Minimum curation workflow
 
-1. Snapshot discovery with `scripts/fetch_pubmed_manifest.py`; every candidate starts pending.
-2. Assign one immutable source record and exact record locator per independent measurement.
-3. Fill only source-supported main values and all 19 field decisions. Use `not_reviewed` before
+1. Snapshot discovery with `scripts/fetch_pubmed_manifest.py` and an explicit `--executed-at`;
+   every candidate starts pending. Commit the raw payload and the invocation. Writing a bespoke
+   fetcher instead is a review blocker, not a style choice.
+2. Screen the snapshot as a **new** `manifest_version`, giving every exclusion a reason. Never edit
+   a published manifest version in place.
+3. Assign one immutable source record and exact record locator per independent measurement.
+4. Fill only source-supported main values and all 19 field decisions. Use `not_reviewed` before
    inspection, `not_reported` only after documenting the complete checked scope, and `ambiguous`
    for located conflicting/vague text.
-4. Resolve variants, citations, counts, controlled mappings, or modern dates only through an
+5. Resolve variants, citations, counts, controlled mappings, or modern dates only through an
    allowlisted method with exact raw input and a decision reference.
-5. Add population geography separately to P0 with provenance and a reviewed uncertainty radius;
+6. Add population geography separately to P0 with provenance and a reviewed uncertainty radius;
    never copy a paper’s country or coordinates directly into the literature ledger.
-6. Have an independent reviewer check allele orientation, called denominator, cohort identity,
+7. Have an independent reviewer check allele orientation, called denominator, cohort identity,
    ascertainment, date, source locator, and reuse record.
-7. Run schema validation and the publications adapter. Treat every reported refusal as work to
+8. Run schema validation and the publications adapter. Treat every reported refusal as work to
    resolve or preserve, never as a prompt to fill a plausible value.
