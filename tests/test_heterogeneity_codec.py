@@ -7,7 +7,6 @@ import hashlib
 import json
 import socket
 import struct
-import sys
 from dataclasses import fields, is_dataclass, replace
 from pathlib import Path
 
@@ -31,8 +30,6 @@ from genomeos.validation.heterogeneity_codec import (
 )
 from genomeos.validation.heterogeneity_codec_contract import ROOT_TYPES
 from genomeos.validation.heterogeneity_simulation_types import GenerationFailure, SbcCaseId
-
-sys.set_int_max_str_digits(20_000)
 
 LIMITS = B0HCodecLimits(2_000_000, 2_000_000)
 
@@ -202,7 +199,11 @@ def test_nonfinite_failure_payloads_are_not_labels(word):
     assert control.status == "complete"
 
 
-@pytest.mark.parametrize("value", [1 << 16000, -(1 << 16000), -0.0, float("inf"), -float("inf")])
+@pytest.mark.parametrize(
+    "value",
+    [1 << 16000, -(1 << 16000), -0.0, float("inf"), -float("inf")],
+    ids=["positive-huge", "negative-huge", "signed-zero", "positive-inf", "negative-inf"],
+)
 def test_huge_and_signed_failure_scalars(value):
     data = dataset()
     if value == 0.0:
