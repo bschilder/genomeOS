@@ -1,0 +1,3678 @@
+{
+  "array_file_count": 48,
+  "array_npy_file_bytes": 774144,
+  "array_raw_payload_bytes": 768000,
+  "array_shapes": {
+    "(2000, 1)": 32,
+    "(4, 500, 1)": 16
+  },
+  "case_count": 8,
+  "cases": [
+    {
+      "case": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "case_summed_stage_seconds": 88.343704836,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-00-summary-cupy-0004.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-00-summary-scipy-0002.npy"
+        },
+        {
+          "cupy": "arrays/case-00-summary-cupy-0005.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-00-summary-scipy-0003.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": 0.22842296331365708,
+          "cupy_minus_scipy": 6.161737786669619e-15,
+          "path": ".predictive.rows[0].randomized_pit",
+          "scipy": 0.22842296331365092
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0048192282583084,
+        "min_bulk_ess": 685.021861944679,
+        "min_tail_ess": 505.52574654573397,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 0,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.5811761724305371,
+          "parameter": "mean",
+          "quantiles": [
+            0.5065366114859295,
+            0.5321454345832645,
+            0.5579208665937586,
+            0.5829174905412304,
+            0.6058368834851813,
+            0.6269937838036119,
+            0.6544924315952751
+          ],
+          "truth": 0.5606902532778495
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.018130157965265525,
+          "parameter": "rho",
+          "quantiles": [
+            0.0004479287782715489,
+            0.0018549876251837789,
+            0.005246862866120285,
+            0.012402603436967351,
+            0.024733275641170817,
+            0.04148922873177316,
+            0.07063762047367698
+          ],
+          "truth": 0.002698611364430435
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.09999999999999998,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.15,
+            0.35,
+            0.55
+          ],
+          "log_score": -2.116248083645874,
+          "randomized_pit": 0.22842296331365708,
+          "squared_error": 0.006589570970472291,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.5643003702861538,
+            "row": {
+              "ac": 10,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.09999999999999998,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.15,
+            0.35,
+            0.55
+          ],
+          "log_score": -2.116248083645874,
+          "randomized_pit": 0.22842296331365092,
+          "squared_error": 0.006589570970472291,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.5643003702861538,
+            "row": {
+              "ac": 10,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          3,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          3,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          2,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 2.9319111073465347e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          56
+        ],
+        [
+          1,
+          236
+        ],
+        [
+          2,
+          333
+        ],
+        [
+          3,
+          241
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 33.203659406,
+        "generation": 0.002403135,
+        "selected_quantities": 0.828298208,
+        "summary-cupy": 43.608658989,
+        "summary-scipy": 10.700685098
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.5606902532778495,
+        "rho": 0.002698611364430435
+      }
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "case_summed_stage_seconds": 39.033572551,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-01-summary-cupy-0010.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-01-summary-scipy-0008.npy"
+        },
+        {
+          "cupy": "arrays/case-01-summary-cupy-0011.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-01-summary-scipy-0009.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0068265803239556,
+        "min_bulk_ess": 564.1197353820959,
+        "min_tail_ess": 661.9046759404107,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 1,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.05608006531413545,
+          "parameter": "mean",
+          "quantiles": [
+            0.01362796904336487,
+            0.020724856358679076,
+            0.030718671461036944,
+            0.04703042390355004,
+            0.06988944277222332,
+            0.10221673525066428,
+            0.15609336818899117
+          ],
+          "truth": 0.053728862261031816
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.15199230389118218,
+          "parameter": "rho",
+          "quantiles": [
+            0.013251606793677097,
+            0.03287081913760925,
+            0.06349662705979131,
+            0.11769645804326141,
+            0.21317693787861286,
+            0.3176336055265377,
+            0.46809347423335146
+          ],
+          "truth": 0.08792003973105614
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.0,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.05,
+            0.15,
+            0.4
+          ],
+          "log_score": -0.4788594934628767,
+          "randomized_pit": 0.5517732817011359,
+          "squared_error": 0.003144973725637698,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.053615228812165766,
+            "row": {
+              "ac": 0,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.0,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.05,
+            0.15,
+            0.4
+          ],
+          "log_score": -0.4788594934628767,
+          "randomized_pit": 0.5517732817011359,
+          "squared_error": 0.003144973725637698,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.053615228812165766,
+            "row": {
+              "ac": 0,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r0:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          3,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          2,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          1,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 2.6793440340206236e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          410
+        ],
+        [
+          1,
+          269
+        ],
+        [
+          2,
+          97
+        ],
+        [
+          3,
+          64
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 18.871315938,
+        "generation": 0.002002447,
+        "selected_quantities": 0.832977337,
+        "summary-cupy": 1.317225524,
+        "summary-scipy": 18.010051305
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.053728862261031816,
+        "rho": 0.08792003973105614
+      }
+    },
+    {
+      "case": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "case_summed_stage_seconds": 39.298463401999996,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-02-summary-cupy-0016.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-02-summary-scipy-0014.npy"
+        },
+        {
+          "cupy": "arrays/case-02-summary-cupy-0017.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-02-summary-scipy-0015.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": 0.26094184395821546,
+          "cupy_minus_scipy": 4.996003610813204e-16,
+          "path": ".predictive.rows[0].randomized_pit",
+          "scipy": 0.26094184395821496
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0025033433116324,
+        "min_bulk_ess": 865.8202743753942,
+        "min_tail_ess": 865.2712825001574,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 2,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.2107076905277052,
+          "parameter": "mean",
+          "quantiles": [
+            0.14157680003386308,
+            0.16223435459746,
+            0.1827249104042729,
+            0.20753703965082076,
+            0.23449751630175425,
+            0.26477860024095545,
+            0.2977367274760297
+          ],
+          "truth": 0.10000575619296956
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.04965499067290736,
+          "parameter": "rho",
+          "quantiles": [
+            0.005937222514201723,
+            0.01331785890387521,
+            0.0244715810196997,
+            0.04107314278697932,
+            0.0659062375863311,
+            0.09557100568690682,
+            0.13995425956005453
+          ],
+          "truth": 0.0599744203365958
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.1,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.2,
+            0.35,
+            0.5
+          ],
+          "log_score": -1.9697040508029628,
+          "randomized_pit": 0.26094184395821546,
+          "squared_error": 0.012256192741978143,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.14580095745390712,
+            "row": {
+              "ac": 2,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.1,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.2,
+            0.35,
+            0.5
+          ],
+          "log_score": -1.9697040508029628,
+          "randomized_pit": 0.26094184395821496,
+          "squared_error": 0.012256192741978143,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.14580095745390712,
+            "row": {
+              "ac": 2,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 4.9141101414874714e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          159
+        ],
+        [
+          1,
+          229
+        ],
+        [
+          2,
+          466
+        ],
+        [
+          3,
+          24
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 23.649378654,
+        "generation": 0.002074193,
+        "selected_quantities": 0.841170242,
+        "summary-cupy": 0.428591241,
+        "summary-scipy": 14.377249072
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.10000575619296956,
+        "rho": 0.0599744203365958
+      }
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "case_summed_stage_seconds": 38.457256311,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-03-summary-cupy-0022.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-03-summary-scipy-0020.npy"
+        },
+        {
+          "cupy": "arrays/case-03-summary-cupy-0023.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-03-summary-scipy-0021.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0083429854408046,
+        "min_bulk_ess": 644.9440301618184,
+        "min_tail_ess": 694.3570821613173,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 3,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.015799662969213348,
+          "parameter": "mean",
+          "quantiles": [
+            0.0003168873632534999,
+            0.001280995402097181,
+            0.0036711145877555947,
+            0.009264807503385267,
+            0.020876674912263384,
+            0.039048905769148955,
+            0.06961255626339323
+          ],
+          "truth": 0.010837997601946241
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.29425085373774773,
+          "parameter": "rho",
+          "quantiles": [
+            0.02402000632906292,
+            0.06877702190836102,
+            0.13898496692110648,
+            0.26566219044654116,
+            0.4211033689123541,
+            0.5688138857523819,
+            0.7354944168698162
+          ],
+          "truth": 0.28796340436539886
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.0,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "log_score": -0.08433255207633439,
+          "randomized_pit": 0.4207503133579445,
+          "squared_error": 0.0002496293499407315,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.0024221334718953183,
+            "row": {
+              "ac": 0,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.0,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.0,
+            0.0,
+            0.2
+          ],
+          "log_score": -0.08433255207633439,
+          "randomized_pit": 0.4207503133579445,
+          "squared_error": 0.0002496293499407315,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.0024221334718953183,
+            "row": {
+              "ac": 0,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r1:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          2,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          1,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 2.12742907949621e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          146
+        ],
+        [
+          1,
+          313
+        ],
+        [
+          2,
+          134
+        ],
+        [
+          3,
+          131
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 18.746262583,
+        "generation": 0.002306913,
+        "selected_quantities": 0.848798488,
+        "summary-cupy": 0.431283643,
+        "summary-scipy": 18.428604684
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.010837997601946241,
+        "rho": 0.28796340436539886
+      }
+    },
+    {
+      "case": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "case_summed_stage_seconds": 36.220064560000004,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-04-summary-cupy-0028.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-04-summary-scipy-0026.npy"
+        },
+        {
+          "cupy": "arrays/case-04-summary-cupy-0029.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-04-summary-scipy-0027.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": 0.11536398880293927,
+          "cupy_minus_scipy": 4.440892098500626e-16,
+          "path": ".predictive.rows[0].randomized_pit",
+          "scipy": 0.11536398880293883
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0071461315972556,
+        "min_bulk_ess": 745.6936685656206,
+        "min_tail_ess": 712.7769338114156,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 4,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.39550787766788154,
+          "parameter": "mean",
+          "quantiles": [
+            0.30931305087714145,
+            0.33629360353401566,
+            0.3658411408814216,
+            0.39754842094509446,
+            0.42430518125303,
+            0.45063294459840164,
+            0.48118339226491064
+          ],
+          "truth": 0.42879634787120824
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.041925795807510075,
+          "parameter": "rho",
+          "quantiles": [
+            0.0025874793276898975,
+            0.007569118032275554,
+            0.016964985651466043,
+            0.03272411918148341,
+            0.05815182600251777,
+            0.0878038296609273,
+            0.12604798918224483
+          ],
+          "truth": 0.006779856584450026
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.2,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            false,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.2,
+            0.4,
+            0.6
+          ],
+          "log_score": -2.7997324811811684,
+          "randomized_pit": 0.11536398880293927,
+          "squared_error": 0.038223330230199325,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.41218529795362585,
+            "row": {
+              "ac": 4,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.2,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            false,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.2,
+            0.4,
+            0.6
+          ],
+          "log_score": -2.7997324811811684,
+          "randomized_pit": 0.11536398880293883,
+          "squared_error": 0.038223330230199325,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.41218529795362585,
+            "row": {
+              "ac": 4,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          3,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 1.9083837716495103e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          402
+        ],
+        [
+          1,
+          210
+        ],
+        [
+          2,
+          442
+        ],
+        [
+          3,
+          124
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 23.199308683,
+        "generation": 0.00256466,
+        "selected_quantities": 0.824006863,
+        "summary-cupy": 0.374270172,
+        "summary-scipy": 11.819914182
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.42879634787120824,
+        "rho": 0.006779856584450026
+      }
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        2
+      ],
+      "case_summed_stage_seconds": 35.349019711,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-05-summary-cupy-0034.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-05-summary-scipy-0032.npy"
+        },
+        {
+          "cupy": "arrays/case-05-summary-cupy-0035.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-05-summary-scipy-0033.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": 0.9656246830519324,
+          "cupy_minus_scipy": -2.220446049250313e-16,
+          "path": ".predictive.rows[0].randomized_pit",
+          "scipy": 0.9656246830519326
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0059260133414545,
+        "min_bulk_ess": 710.8280472529611,
+        "min_tail_ess": 772.0019749230141,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 5,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.24374019204574512,
+          "parameter": "mean",
+          "quantiles": [
+            0.14899089276769906,
+            0.1801096392192106,
+            0.20749993413215764,
+            0.2397835728265315,
+            0.2755662046347306,
+            0.3141908204857158,
+            0.3579388306187528
+          ],
+          "truth": 0.37156099285806754
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.11347134559273468,
+          "parameter": "rho",
+          "quantiles": [
+            0.025411860975534932,
+            0.04391805870170764,
+            0.06831056300092346,
+            0.10100119168386568,
+            0.1478170529695367,
+            0.1997819236301348,
+            0.26888463628474646
+          ],
+          "truth": 0.12160560829917107
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.45,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            false,
+            false,
+            true
+          ],
+          "interval_width": [
+            0.25,
+            0.45,
+            0.65
+          ],
+          "log_score": -4.398151638585522,
+          "randomized_pit": 0.9656246830519324,
+          "squared_error": 0.16504703155902806,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.5002733123532188,
+            "row": {
+              "ac": 13,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.45,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            false,
+            false,
+            true
+          ],
+          "interval_width": [
+            0.25,
+            0.45,
+            0.65
+          ],
+          "log_score": -4.398151638585522,
+          "randomized_pit": 0.9656246830519326,
+          "squared_error": 0.16504703155902806,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.5002733123532188,
+            "row": {
+              "ac": 13,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r2:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          0,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          1,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          2,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 1.7730869891005403e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          419
+        ],
+        [
+          1,
+          394
+        ],
+        [
+          2,
+          281
+        ],
+        [
+          3,
+          454
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 20.996735682,
+        "generation": 0.002273409,
+        "selected_quantities": 0.823116779,
+        "summary-cupy": 0.430099534,
+        "summary-scipy": 13.096794307
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.37156099285806754,
+        "rho": 0.12160560829917107
+      }
+    },
+    {
+      "case": [
+        0,
+        0,
+        0,
+        3
+      ],
+      "case_summed_stage_seconds": 38.03664415,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-06-summary-cupy-0040.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-06-summary-scipy-0038.npy"
+        },
+        {
+          "cupy": "arrays/case-06-summary-cupy-0041.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-06-summary-scipy-0039.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": 0.4249348297235323,
+          "cupy_minus_scipy": 6.106226635438361e-16,
+          "path": ".predictive.rows[0].randomized_pit",
+          "scipy": 0.4249348297235317
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.00351052577856,
+        "min_bulk_ess": 890.3685674252519,
+        "min_tail_ess": 873.9358812599181,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 6,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.2844546493482561,
+          "parameter": "mean",
+          "quantiles": [
+            0.1862034648615937,
+            0.21811440803004017,
+            0.24842980876200554,
+            0.2834696724777016,
+            0.31767158704119636,
+            0.35105261913379454,
+            0.39461071829422917
+          ],
+          "truth": 0.363382699479548
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.09149999852119962,
+          "parameter": "rho",
+          "quantiles": [
+            0.021438280648892485,
+            0.0346201038352501,
+            0.05410348274310734,
+            0.08233290459823601,
+            0.1176644494515494,
+            0.1613530353953755,
+            0.21794114131492182
+          ],
+          "truth": 0.27295864265390984
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.0,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.25,
+            0.45,
+            0.7
+          ],
+          "log_score": -2.1719778888844212,
+          "randomized_pit": 0.4249348297235323,
+          "squared_error": 0.001187122861711284,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.2695420642368765,
+            "row": {
+              "ac": 5,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.0,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.25,
+            0.45,
+            0.7
+          ],
+          "log_score": -2.1719778888844212,
+          "randomized_pit": 0.4249348297235317,
+          "squared_error": 0.001187122861711284,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.2695420642368765,
+            "row": {
+              "ac": 5,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g0:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          2,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          4,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 2.290022628814752e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          493
+        ],
+        [
+          1,
+          388
+        ],
+        [
+          2,
+          79
+        ],
+        [
+          3,
+          237
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 23.445331179,
+        "generation": 0.002103699,
+        "selected_quantities": 0.832371712,
+        "summary-cupy": 0.452993029,
+        "summary-scipy": 13.303844531
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.363382699479548,
+        "rho": 0.27295864265390984
+      }
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        3
+      ],
+      "case_summed_stage_seconds": 35.875336415,
+      "control_failure": null,
+      "divergences": 0,
+      "entire_summary_leaf_differences": [
+        {
+          "cupy": "cupy",
+          "path": ".predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": "arrays/case-07-summary-cupy-0046.npy",
+          "path": ".predictive.prediction.marginal_predictive.mean_draws.path",
+          "scipy": "arrays/case-07-summary-scipy-0044.npy"
+        },
+        {
+          "cupy": "arrays/case-07-summary-cupy-0047.npy",
+          "path": ".predictive.prediction.marginal_predictive.concentration.path",
+          "scipy": "arrays/case-07-summary-scipy-0045.npy"
+        },
+        {
+          "cupy": "cupy",
+          "path": ".predictive.prediction.marginal_predictive.cdf_backend",
+          "scipy": "scipy"
+        },
+        {
+          "cupy": 0.4255744645604894,
+          "cupy_minus_scipy": 6.661338147750939e-16,
+          "path": ".predictive.rows[0].randomized_pit",
+          "scipy": 0.42557446456048875
+        }
+      ],
+      "fit_diagnostics": {
+        "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+        "max_rhat": 1.0046575191932534,
+        "min_bulk_ess": 1045.63016856032,
+        "min_tail_ess": 921.2625295613657,
+        "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:variant:0"
+      },
+      "fit_error": null,
+      "fit_status": "accepted",
+      "generation_boundary_counts": [
+        0,
+        0
+      ],
+      "identity_mismatches": [],
+      "ordinal": 7,
+      "parameters": [
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.43760966986191613,
+          "parameter": "mean",
+          "quantiles": [
+            0.32316853456665057,
+            0.3666311768008856,
+            0.3999616287731037,
+            0.4391278280598504,
+            0.47647199206982443,
+            0.5082660007391934,
+            0.5416434519453102
+          ],
+          "truth": 0.46993567373125134
+        },
+        {
+          "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+          "draw_count": 2000,
+          "estimate": 0.11050347626080456,
+          "parameter": "rho",
+          "quantiles": [
+            0.02702208963475073,
+            0.04299193279723028,
+            0.06424301075124923,
+            0.09656787437150116,
+            0.14153568401021555,
+            0.19468737380981344,
+            0.26984094325478386
+          ],
+          "truth": 0.11209424270900868
+        }
+      ],
+      "prediction_array_comparison": {
+        "concentration": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        },
+        "mean_draws": {
+          "max_abs_difference": 0.0,
+          "same_bits": true
+        }
+      },
+      "predictive_rows_cupy": [
+        {
+          "absolute_error": 0.04999999999999999,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.3,
+            0.55,
+            0.8
+          ],
+          "log_score": -2.3626188776184334,
+          "randomized_pit": 0.4255744645604894,
+          "squared_error": 0.0014144872671223207,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.42115536284334876,
+            "row": {
+              "ac": 8,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "predictive_rows_scipy": [
+        {
+          "absolute_error": 0.04999999999999999,
+          "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+          "coverage": [
+            true,
+            true,
+            true
+          ],
+          "interval_width": [
+            0.3,
+            0.55,
+            0.8
+          ],
+          "log_score": -2.3626188776184334,
+          "randomized_pit": 0.42557446456048875,
+          "squared_error": 0.0014144872671223207,
+          "target": {
+            "candidate_frequency": null,
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "cluster_frequency": null,
+            "cluster_id": null,
+            "kind": "fresh_population",
+            "latent_frequency": 0.42115536284334876,
+            "row": {
+              "ac": 8,
+              "an": 20,
+              "class": "genomeos.validation.reference_counts.ReferenceCount",
+              "group_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:heldout:group:fresh_population",
+              "record_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:heldout:row:fresh_population",
+              "region_id": "synthetic_nonspatial",
+              "variant_group": "synthetic_single_variant",
+              "variant_id": "synthetic:b0h_sbc_v1:s0:c0:r3:g1:variant:0"
+            },
+            "uses_cluster": null
+          }
+        }
+      ],
+      "ranks": [
+        [
+          0,
+          0,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          1,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          0,
+          2,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          0,
+          4,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          0,
+          5,
+          "ranked",
+          0,
+          "resolved",
+          null
+        ],
+        [
+          1,
+          0,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          1,
+          "ranked",
+          1,
+          null,
+          null
+        ],
+        [
+          1,
+          2,
+          "ranked",
+          0,
+          null,
+          null
+        ],
+        [
+          1,
+          3,
+          "ranked",
+          4,
+          null,
+          null
+        ],
+        [
+          1,
+          4,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          1,
+          5,
+          "ranked",
+          3,
+          "resolved",
+          null
+        ],
+        [
+          2,
+          0,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          1,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          2,
+          2,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          3,
+          "ranked",
+          3,
+          null,
+          null
+        ],
+        [
+          2,
+          4,
+          "ranked",
+          2,
+          null,
+          null
+        ],
+        [
+          2,
+          5,
+          "ranked",
+          2,
+          "resolved",
+          null
+        ]
+      ],
+      "reference_error": null,
+      "reference_max_recorded_error_bound": 2.343234376222358e-12,
+      "reference_orders": [
+        64,
+        128,
+        256
+      ],
+      "reference_point_count": 13,
+      "reference_resolved_count": 13,
+      "scalar_errors": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "scalar_failed_training_rows": [
+        null,
+        null,
+        null,
+        null,
+        null
+      ],
+      "selected_indices": [
+        [
+          0,
+          248
+        ],
+        [
+          1,
+          219
+        ],
+        [
+          2,
+          356
+        ],
+        [
+          3,
+          297
+        ]
+      ],
+      "stage_seconds": {
+        "fit": 23.363157927,
+        "generation": 0.002470172,
+        "selected_quantities": 0.831008213,
+        "summary-cupy": 0.392856291,
+        "summary-scipy": 11.285843812
+      },
+      "summary_error": {
+        "cupy": null,
+        "scipy": null
+      },
+      "summary_status": {
+        "cupy": "complete",
+        "scipy": "complete"
+      },
+      "training_an": [
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64,
+        0,
+        1,
+        2,
+        5,
+        10,
+        20,
+        40,
+        64
+      ],
+      "truth": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "mean": 0.46993567373125134,
+        "rho": 0.11209424270900868
+      }
+    }
+  ],
+  "class_counts": {
+    "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityConfig": 48,
+    "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityFit": 8,
+    "genomeos.surfaces.heterogeneity_types.ReferenceHeterogeneityPrediction": 16,
+    "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics": 8,
+    "genomeos.surfaces.heterogeneity_types.VariantTrainingCounts": 8,
+    "genomeos.validation.heterogeneity_attempts.FitAttemptResult": 8,
+    "genomeos.validation.heterogeneity_attempts.FitAttemptSpec": 40,
+    "genomeos.validation.heterogeneity_dependence.DependenceComparisons": 24,
+    "genomeos.validation.heterogeneity_dependence.DependencePointReference": 104,
+    "genomeos.validation.heterogeneity_dependence.HeterogeneityDependenceReference": 8,
+    "genomeos.validation.heterogeneity_diagnostic_seeds.DiagnosticSeedIdentity": 200,
+    "genomeos.validation.heterogeneity_sbc_controls.PriorControlResult": 8,
+    "genomeos.validation.heterogeneity_sbc_quantity_types.QuantityRankEvidence": 144,
+    "genomeos.validation.heterogeneity_sbc_quantity_types.ScalarQuantityEvidence": 40,
+    "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities": 8,
+    "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset": 8,
+    "genomeos.validation.heterogeneity_simulation_types.GenerationId": 8,
+    "genomeos.validation.heterogeneity_simulation_types.GenerationProvenance": 8,
+    "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget": 40,
+    "genomeos.validation.heterogeneity_simulation_types.ParameterTruth": 8,
+    "genomeos.validation.heterogeneity_simulation_types.SbcCaseId": 248,
+    "genomeos.validation.heterogeneity_simulation_types.SeedIdentity": 72,
+    "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary": 16,
+    "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary": 16,
+    "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary": 32,
+    "genomeos.validation.heterogeneity_summary_types.PredictiveSummaryEvidence": 16,
+    "genomeos.validation.predictive.CountPredictive": 16,
+    "genomeos.validation.reference_counts.ReferenceCount": 168
+  },
+  "class_fields": {
+    "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityConfig": [
+      "mean_prior_alpha",
+      "mean_prior_beta",
+      "rho_prior_alpha",
+      "rho_prior_beta",
+      "draws",
+      "tune",
+      "chains",
+      "target_accept",
+      "seed"
+    ],
+    "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityFit": [
+      "config",
+      "variant_ids",
+      "mean_draws",
+      "rho_draws",
+      "training_record_ids",
+      "training_group_ids",
+      "unavailable_training_ids",
+      "training_counts",
+      "diagnostics",
+      "divergence_count"
+    ],
+    "genomeos.surfaces.heterogeneity_types.ReferenceHeterogeneityPrediction": [
+      "marginal_predictive",
+      "observation_ids",
+      "unavailable_ids"
+    ],
+    "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics": [
+      "variant_id",
+      "max_rhat",
+      "min_bulk_ess",
+      "min_tail_ess"
+    ],
+    "genomeos.surfaces.heterogeneity_types.VariantTrainingCounts": [
+      "variant_id",
+      "training_observation_count",
+      "training_ac",
+      "training_an"
+    ],
+    "genomeos.validation.heterogeneity_attempts.FitAttemptResult": [
+      "spec",
+      "status",
+      "fit",
+      "error",
+      "identity_mismatches",
+      "returned_type"
+    ],
+    "genomeos.validation.heterogeneity_attempts.FitAttemptSpec": [
+      "case",
+      "attempt_id",
+      "seed",
+      "config"
+    ],
+    "genomeos.validation.heterogeneity_dependence.DependenceComparisons": [
+      "status",
+      "comparisons_by_order",
+      "comparisons"
+    ],
+    "genomeos.validation.heterogeneity_dependence.DependencePointReference": [
+      "mean",
+      "rho",
+      "components",
+      "raw_values",
+      "value",
+      "error_bound",
+      "resolved"
+    ],
+    "genomeos.validation.heterogeneity_dependence.HeterogeneityDependenceReference": [
+      "orders",
+      "analytic_separability",
+      "points"
+    ],
+    "genomeos.validation.heterogeneity_diagnostic_seeds.DiagnosticSeedIdentity": [
+      "case",
+      "attempt_id",
+      "purpose_id",
+      "spawn_key"
+    ],
+    "genomeos.validation.heterogeneity_sbc_controls.PriorControlResult": [
+      "seed",
+      "pairs",
+      "failure"
+    ],
+    "genomeos.validation.heterogeneity_sbc_quantity_types.QuantityRankEvidence": [
+      "mode_id",
+      "quantity_id",
+      "seed",
+      "status",
+      "rank",
+      "comparisons",
+      "error"
+    ],
+    "genomeos.validation.heterogeneity_sbc_quantity_types.ScalarQuantityEvidence": [
+      "quantity_id",
+      "values",
+      "error",
+      "failed_training_row"
+    ],
+    "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities": [
+      "spec",
+      "selected_indices",
+      "selection_seeds",
+      "control",
+      "point_slots",
+      "points",
+      "scalar_quantities",
+      "reference",
+      "reference_error",
+      "ranks"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset": [
+      "case_id",
+      "provenance",
+      "truth",
+      "training",
+      "latent_frequencies",
+      "shared_history",
+      "heldouts",
+      "beta_zero_draws",
+      "beta_one_draws"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.GenerationId": [
+      "track_id",
+      "study_id",
+      "case_id",
+      "replicate_id"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.GenerationProvenance": [
+      "generation_id",
+      "seeds"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget": [
+      "kind",
+      "row",
+      "latent_frequency",
+      "cluster_id",
+      "cluster_frequency",
+      "candidate_frequency",
+      "uses_cluster"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.ParameterTruth": [
+      "mean",
+      "rho"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.SbcCaseId": [
+      "track_id",
+      "study_id",
+      "case_id",
+      "replicate_id"
+    ],
+    "genomeos.validation.heterogeneity_simulation_types.SeedIdentity": [
+      "entropy"
+    ],
+    "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary": [
+      "target",
+      "log_score",
+      "absolute_error",
+      "squared_error",
+      "coverage",
+      "interval_width",
+      "randomized_pit"
+    ],
+    "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary": [
+      "spec",
+      "variant_id",
+      "parameters",
+      "predictive"
+    ],
+    "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary": [
+      "parameter",
+      "truth",
+      "estimate",
+      "quantiles",
+      "draw_count"
+    ],
+    "genomeos.validation.heterogeneity_summary_types.PredictiveSummaryEvidence": [
+      "seed",
+      "seed_words",
+      "seed_uint128",
+      "cdf_backend",
+      "draw_count",
+      "targets",
+      "status",
+      "prediction",
+      "rows",
+      "error"
+    ],
+    "genomeos.validation.predictive.CountPredictive": [
+      "mean_draws",
+      "concentration",
+      "cdf_backend"
+    ],
+    "genomeos.validation.reference_counts.ReferenceCount": [
+      "record_id",
+      "variant_id",
+      "group_id",
+      "region_id",
+      "variant_group",
+      "ac",
+      "an"
+    ]
+  },
+  "complete": true,
+  "dataclass_class_count": 28,
+  "dataclass_field_occurrence_count": 6928,
+  "dataclass_instance_count": 1328,
+  "debug_array_reference_count": 48,
+  "debug_file_count": 48,
+  "device_snapshots": {
+    "count": 40,
+    "first": {
+      "stats": {
+        "bytes_in_use": 0,
+        "bytes_limit": 63820529664,
+        "bytes_reserved": 0,
+        "largest_alloc_size": 256,
+        "largest_free_block_bytes": 2097152,
+        "num_allocs": 2,
+        "peak_bytes_in_use": 512,
+        "peak_bytes_reserved": 0,
+        "peak_pool_bytes": 2097152,
+        "pool_bytes": 2097152
+      },
+      "status": "available"
+    },
+    "last": {
+      "stats": {
+        "bytes_in_use": 899840,
+        "bytes_limit": 63820529664,
+        "bytes_reserved": 0,
+        "largest_alloc_size": 33554432,
+        "largest_free_block_bytes": 67108864,
+        "num_allocs": 59173,
+        "peak_bytes_in_use": 134359552,
+        "peak_bytes_reserved": 0,
+        "peak_pool_bytes": 136314880,
+        "pool_bytes": 136314880
+      },
+      "status": "available"
+    },
+    "max_snapshot_bytes_in_use": 1020160,
+    "max_snapshot_jax_peak_bytes_in_use": 134359552,
+    "statuses": {
+      "available": 40
+    }
+  },
+  "files_sha256": {
+    "arrays/case-00-fit-0000.npy": "c945a0e5c5918f99a53a259eadee95acc411ab0a0319ee6329e80591481550ab",
+    "arrays/case-00-fit-0001.npy": "c34bf7746e3c43bac11f3fbc59a935da16142bd8e1f9c6151502fa05ec184ef4",
+    "arrays/case-00-summary-cupy-0004.npy": "6b14ab0d889508cbd32662beb0caf03d630f0836e52cbc41091b50ae3e2dbc0b",
+    "arrays/case-00-summary-cupy-0005.npy": "8938bfcfa36ad72bd805974e4f11e6bdefd9a213f1b3c3e5dda2f3657b08d396",
+    "arrays/case-00-summary-scipy-0002.npy": "6b14ab0d889508cbd32662beb0caf03d630f0836e52cbc41091b50ae3e2dbc0b",
+    "arrays/case-00-summary-scipy-0003.npy": "8938bfcfa36ad72bd805974e4f11e6bdefd9a213f1b3c3e5dda2f3657b08d396",
+    "arrays/case-01-fit-0006.npy": "49de87813118cceb7024fcdb2b303b3d86ced4b062857ca4f0e735b4c41e2a70",
+    "arrays/case-01-fit-0007.npy": "c3b33d3cc933dae6fc60401a6f0644451c054a252254d63d3bf09de5f924795a",
+    "arrays/case-01-summary-cupy-0010.npy": "3ca6e6ebecdab034276073eeaea09eed2c42baee86866bba53a9e8639b33bc49",
+    "arrays/case-01-summary-cupy-0011.npy": "f2a7ca859638396ff6df755d5816d4bbc05b3cf7b270e1b154af01e0c596b830",
+    "arrays/case-01-summary-scipy-0008.npy": "3ca6e6ebecdab034276073eeaea09eed2c42baee86866bba53a9e8639b33bc49",
+    "arrays/case-01-summary-scipy-0009.npy": "f2a7ca859638396ff6df755d5816d4bbc05b3cf7b270e1b154af01e0c596b830",
+    "arrays/case-02-fit-0012.npy": "cc779a02b24dedadeab4bf155071f295b5d07b022cb1980880f9a51639902cdd",
+    "arrays/case-02-fit-0013.npy": "eb5db0fb1272be2a9897048a1f7fcfb49de0a828b8d086112e424c8a92a5600a",
+    "arrays/case-02-summary-cupy-0016.npy": "0af7c915672a367fa9ce6acd27afd1336fc614cbe2e2bfe14ec250abcd6b1935",
+    "arrays/case-02-summary-cupy-0017.npy": "7822b4b1c4a221be422c824fdd04a7443100c87b498854fac3399539d6037292",
+    "arrays/case-02-summary-scipy-0014.npy": "0af7c915672a367fa9ce6acd27afd1336fc614cbe2e2bfe14ec250abcd6b1935",
+    "arrays/case-02-summary-scipy-0015.npy": "7822b4b1c4a221be422c824fdd04a7443100c87b498854fac3399539d6037292",
+    "arrays/case-03-fit-0018.npy": "9d6443792a49bfae5b792e1dbe0d602bdc452f14f69732d88efd7f95934132a3",
+    "arrays/case-03-fit-0019.npy": "245120d2c35b61fc4f748cf7afb92ed83c81e1cc5173813a965929be22a8b92a",
+    "arrays/case-03-summary-cupy-0022.npy": "8be174a2b48b090d48228386fa33457cb533e99f9b3fe9e69e177a5f7c5b7e86",
+    "arrays/case-03-summary-cupy-0023.npy": "efcb317aa9e58ebc16b24058a6d1abe6d652133237b36fe378fcf08503287d68",
+    "arrays/case-03-summary-scipy-0020.npy": "8be174a2b48b090d48228386fa33457cb533e99f9b3fe9e69e177a5f7c5b7e86",
+    "arrays/case-03-summary-scipy-0021.npy": "efcb317aa9e58ebc16b24058a6d1abe6d652133237b36fe378fcf08503287d68",
+    "arrays/case-04-fit-0024.npy": "f33a9121f460c0b1885136abd8a39d1d412210ddd1f94d8ca1b7601c8f67815b",
+    "arrays/case-04-fit-0025.npy": "e80da7dfdce98934d9b596216d9d18a002ab2a168ad6e6c9bd729e9261f7d537",
+    "arrays/case-04-summary-cupy-0028.npy": "94c3283e10107977776466cc4532e96c35f619e47c9962d1b6543d765561d275",
+    "arrays/case-04-summary-cupy-0029.npy": "bcf62224d5d9b60f197a057b807f4c1d33694dd25aeca29e50d43f722b50913b",
+    "arrays/case-04-summary-scipy-0026.npy": "94c3283e10107977776466cc4532e96c35f619e47c9962d1b6543d765561d275",
+    "arrays/case-04-summary-scipy-0027.npy": "bcf62224d5d9b60f197a057b807f4c1d33694dd25aeca29e50d43f722b50913b",
+    "arrays/case-05-fit-0030.npy": "fdd3fa584c2c4d96620f0c2364445fcc2ecf7f82987514056d5dad777e57c2f2",
+    "arrays/case-05-fit-0031.npy": "0645ed1071ed7c3a52b4a03da98addf26c49806df05402bbb5ce78fc7bcf86d5",
+    "arrays/case-05-summary-cupy-0034.npy": "cee8b1a2dae18c21f4bf7a69a191b69577194328fb8ba7abbb22e2a99b7409f6",
+    "arrays/case-05-summary-cupy-0035.npy": "2f93b4cfe945b032d1259a1ca924b835ac4a6983d37fa37d9d25a76e2ce86069",
+    "arrays/case-05-summary-scipy-0032.npy": "cee8b1a2dae18c21f4bf7a69a191b69577194328fb8ba7abbb22e2a99b7409f6",
+    "arrays/case-05-summary-scipy-0033.npy": "2f93b4cfe945b032d1259a1ca924b835ac4a6983d37fa37d9d25a76e2ce86069",
+    "arrays/case-06-fit-0036.npy": "05df4b6d9c04fd00c2e7880a308fee7f0e7c4fcb20c8f16b306aad373c1b742d",
+    "arrays/case-06-fit-0037.npy": "7d6619be9a298786c13d1cc05165ab2253370e362767e66a4dff294984ea8138",
+    "arrays/case-06-summary-cupy-0040.npy": "d86867382154badd92dfa8ff6d9539566ea48cb3076bb9c89d013e88c3f582bf",
+    "arrays/case-06-summary-cupy-0041.npy": "06b7687d1efcabb8d0480414ea71a0fcaedd3bd037d5f0e1a389dbb053dcd9a8",
+    "arrays/case-06-summary-scipy-0038.npy": "d86867382154badd92dfa8ff6d9539566ea48cb3076bb9c89d013e88c3f582bf",
+    "arrays/case-06-summary-scipy-0039.npy": "06b7687d1efcabb8d0480414ea71a0fcaedd3bd037d5f0e1a389dbb053dcd9a8",
+    "arrays/case-07-fit-0042.npy": "cd2e9f4ff4f80da248621e6345c2dc862f836b36501d0768b0646bbd647feba5",
+    "arrays/case-07-fit-0043.npy": "9c7bc14fbd464145422f4bba5b4ec55cba543054cbba618e184d00cb77c28fb3",
+    "arrays/case-07-summary-cupy-0046.npy": "76c34c26f0769324ebb5e88f5373373be76546c6f5c926cff338ed3ace4faac8",
+    "arrays/case-07-summary-cupy-0047.npy": "c0a649fa779bff61270fb30bc3a7dc986781a2a7eee774f2d3652432b763b570",
+    "arrays/case-07-summary-scipy-0044.npy": "76c34c26f0769324ebb5e88f5373373be76546c6f5c926cff338ed3ace4faac8",
+    "arrays/case-07-summary-scipy-0045.npy": "c0a649fa779bff61270fb30bc3a7dc986781a2a7eee774f2d3652432b763b570",
+    "debug/case-00-fit.json": "2f81dd50ad5e21d1b2b6349efa8502dd36b97308caa9c9c576f833fab5560e21",
+    "debug/case-00-generation.json": "0102ba4f124e04d66fae6293c87b3edf487b61b004a2ff95a9748146ec4f924c",
+    "debug/case-00-plan.json": "eed6b303911dec04f9b94c2895f21149103481da613a097b7f121f0fcc71d29b",
+    "debug/case-00-selected_quantities.json": "1a0186294615876a9590ebda27325270f26c2f804166a1252380405ee86c8230",
+    "debug/case-00-summary-cupy.json": "37e9e5cc403204d5b410c6299716d6088b348feeaf7abedefaec545c59f801c1",
+    "debug/case-00-summary-scipy.json": "d81b0220660869b104b4346598f5432acb0a65663e3a4d31236b2d142e539a0d",
+    "debug/case-01-fit.json": "05586fce876d071779f3dd29955ba3ddfebb45778a948e182c6c02c432c5fa18",
+    "debug/case-01-generation.json": "01c8ccc60387e62c684160f79f72e1fbf999adecf0091c80b065bfbaeab4d1f3",
+    "debug/case-01-plan.json": "0e5198e9fbb3a9366e0e2c42c4f8f89c6afbd57c8c71e4b6c4a82d7c7908c251",
+    "debug/case-01-selected_quantities.json": "ab8059bc7d207ecf5d6e2ab2fc4eae9a493bd2b56c8c030d8aa72e4f54060e9b",
+    "debug/case-01-summary-cupy.json": "6880998a77bebb24b3eed4afd92018f74adba86f2e4d0a557db2cc96ba92b647",
+    "debug/case-01-summary-scipy.json": "6378402f749224b3a95bd3a8593d167d3211f2a3c0c3067fbaa2e3af887e86ab",
+    "debug/case-02-fit.json": "898994089c29e21016780982798799336f0c1969daaabb3deb6983977ce95e15",
+    "debug/case-02-generation.json": "bc615a922dca8ce7d01f512c4fa91fca8f82ca6f095e2aa3ebd121a6784d6c1a",
+    "debug/case-02-plan.json": "ab5005680afd06312694c422782b4883629f964570a9411a6f569e7163d72a7b",
+    "debug/case-02-selected_quantities.json": "3cf920d2941d450efa3c937256773715e72e8791b5caa7a6bcd16c20b019150b",
+    "debug/case-02-summary-cupy.json": "4a28939e4e7c92fc1d30885780c9e71bc792f15fe22e9d48331cecd417b8fe36",
+    "debug/case-02-summary-scipy.json": "462cab1aa0ffd695915a022142f5d00f9ca75c16a82b20dc189a5276160082b0",
+    "debug/case-03-fit.json": "453901c3d108c550326b8e71f879ca70e7082b93e23ebac51510769e44881989",
+    "debug/case-03-generation.json": "65c68b8fa817097b7f6d82de8fdc7860be9afad6bdd26c35e7b6f6e431d13b91",
+    "debug/case-03-plan.json": "b37d0143a9f53d8b60557f98193d6a5fcbaf3bc99fca0965cffc3dea45387dc9",
+    "debug/case-03-selected_quantities.json": "24e1d0474dfd43b63882c150a2801149b518a88e57d0c5afc5c5e57fe283f9b5",
+    "debug/case-03-summary-cupy.json": "5c9bc26d102024d1ba61de78a835449c7d41dcf9e7fb6cdfa74046855f40e203",
+    "debug/case-03-summary-scipy.json": "406f8d572e174c29a9901e2955d152f606058b1fe23cd038a14a29ffffa34ef2",
+    "debug/case-04-fit.json": "65c5f50476fb8a22a042549f6a445c7ded13616c2214290d460f7615c9abdeb2",
+    "debug/case-04-generation.json": "b8cf93ca6a74eae37fea7ee9c467dd297b5bb3e0c7f5e8e4ed7d09e1b3136b23",
+    "debug/case-04-plan.json": "3a9fe5e4361f92190f500d5a86f342af0a7f334dd5c59dfa01580c93171dbd73",
+    "debug/case-04-selected_quantities.json": "633c09cb000c38904bd4b06b3d90cc704dc790b46443cdbac0f5b1d0a7b0e578",
+    "debug/case-04-summary-cupy.json": "99b607bcf8da048736841d0f938d114901fbf0e32a4ceb3d837cb398cfe27d9c",
+    "debug/case-04-summary-scipy.json": "4244a84ba7a12022960c56a2fece43fa7d0f87c581e69ccfecc070d752890c21",
+    "debug/case-05-fit.json": "60586adb7b74838b504fa47269f1a7c730ba83ea0f87ff60091670d12abef483",
+    "debug/case-05-generation.json": "fc4fd18cd9c4548fd4ded057ade7cad05b53acc4971ae9bacf367eb232723485",
+    "debug/case-05-plan.json": "c1f06c4e9558acba7aeafb7c4279505801da22039f4509dfd4aeff8cc358ab4e",
+    "debug/case-05-selected_quantities.json": "13a6e722ee6928421011f31036d04f7cfc0504cb69424899ef4fc91506acc3ed",
+    "debug/case-05-summary-cupy.json": "a86b8a3190f2e952094b6af012adc23a1e3c31e02be600a9d8132d6527f16bb4",
+    "debug/case-05-summary-scipy.json": "df7093626fff33b944fc15ea1f6fc09f4438ee3dea442b138575bc2628bb31ef",
+    "debug/case-06-fit.json": "1181a5b55be2ed140d67e7680ad9127ef40e379c3bd2c4e2194fde372d54c7af",
+    "debug/case-06-generation.json": "193dbef4a4cf80c9bf91faad54f66768bccb50baf5cbbc4076717fddc2ce1b63",
+    "debug/case-06-plan.json": "62fc4528f0edfa316d6612f0a42f4bbaf40d1e8dc13a4044e4c12ec86bfe5a8c",
+    "debug/case-06-selected_quantities.json": "49c241a13bbf4d35b3c40101b7c2275d98c1ebe9d94783f6702d1b4c69f95bd3",
+    "debug/case-06-summary-cupy.json": "b54d5c78eb3a92de5ad7bde0b419663ab47c40921c3acf7e622a931c0ab15cde",
+    "debug/case-06-summary-scipy.json": "1b8ff954db98e39df188275e4b907de9320da71cbc3b7ac961203c9c948b1936",
+    "debug/case-07-fit.json": "e579ca92d2d3e385bc2795012374eb945e61681a399105edaec85d30d7a739fd",
+    "debug/case-07-generation.json": "bac89ddae2aac336024501a49b90002428dec6c177dbcdb3e78786003e6e5a8e",
+    "debug/case-07-plan.json": "dd755f0a3b2113945df558bc87fe04809e92534994e80f534f4542277e74651a",
+    "debug/case-07-selected_quantities.json": "82f20c6cfe016524e806f733b9bd66bbebf01837a4ba862413e3b0734abfc60b",
+    "debug/case-07-summary-cupy.json": "5936c22ea002e3dfcddf14a3674a5309d3d05871d13ec6dd369b354480c286a6",
+    "debug/case-07-summary-scipy.json": "88a3fc59aefb95fc14f618713fb79d88480017dbca3cc5d5b4d3496cc9d4f257",
+    "progress.log": "f9fa11dc843fd429970544da0d4689cc84d9d1924210d6828a82d8dfdd6fa2e4",
+    "report.json": "91abea1b1f41a3fa58b0be7cdfa1ca31139dcc17805592f5d66366ab450e9666"
+  },
+  "heavy_import_seconds": 9.237041015,
+  "inspection_protocol": "ordinary JSON/primitive parsing and NumPy file inspection only; no scientific dataclasses imported or reconstructed",
+  "preflight_seconds": 3.84188983,
+  "rss_highwater_kib": {
+    "after_preflight": 802428,
+    "final": 2152848,
+    "max_observed": 2152848
+  },
+  "source_sha": "df0b71dfca1edd2c209abe8f9829cd103feaffdd",
+  "sum_of_recorded_phase_seconds": 363.692992781,
+  "summed_public_call_seconds": 350.614061936,
+  "timings": {
+    "fit": {
+      "all": {
+        "max_s": 33.203659406,
+        "mean_s": 23.1843937565,
+        "median_s": 23.281233305,
+        "min_s": 18.746262583,
+        "n": 8,
+        "sum_s": 185.475150052
+      },
+      "first_call_s": 33.203659406,
+      "subsequent": {
+        "max_s": 23.649378654,
+        "mean_s": 21.753070092285714,
+        "median_s": 23.199308683,
+        "min_s": 18.746262583,
+        "n": 7,
+        "sum_s": 152.271490646
+      }
+    },
+    "generation": {
+      "all": {
+        "max_s": 0.00256466,
+        "mean_s": 0.0022748285,
+        "median_s": 0.0022901609999999998,
+        "min_s": 0.002002447,
+        "n": 8,
+        "sum_s": 0.018198628
+      },
+      "first_call_s": 0.002403135,
+      "subsequent": {
+        "max_s": 0.00256466,
+        "mean_s": 0.002256499,
+        "median_s": 0.002273409,
+        "min_s": 0.002002447,
+        "n": 7,
+        "sum_s": 0.015795493
+      }
+    },
+    "selected_quantities": {
+      "all": {
+        "max_s": 0.848798488,
+        "mean_s": 0.8327184802500001,
+        "median_s": 0.8316899625,
+        "min_s": 0.823116779,
+        "n": 8,
+        "sum_s": 6.6617478420000005
+      },
+      "first_call_s": 0.828298208,
+      "subsequent": {
+        "max_s": 0.848798488,
+        "mean_s": 0.8333499477142857,
+        "median_s": 0.832371712,
+        "min_s": 0.823116779,
+        "n": 7,
+        "sum_s": 5.833449634
+      }
+    },
+    "summary-cupy": {
+      "all": {
+        "max_s": 43.608658989,
+        "mean_s": 5.929497302875,
+        "median_s": 0.4306915885,
+        "min_s": 0.374270172,
+        "n": 8,
+        "sum_s": 47.435978423
+      },
+      "first_call_s": 43.608658989,
+      "subsequent": {
+        "max_s": 1.317225524,
+        "mean_s": 0.5467599191428572,
+        "median_s": 0.430099534,
+        "min_s": 0.374270172,
+        "n": 7,
+        "sum_s": 3.827319434
+      }
+    },
+    "summary-scipy": {
+      "all": {
+        "max_s": 18.428604684,
+        "mean_s": 13.877873373875,
+        "median_s": 13.200319419,
+        "min_s": 10.700685098,
+        "n": 8,
+        "sum_s": 111.022986991
+      },
+      "first_call_s": 10.700685098,
+      "subsequent": {
+        "max_s": 18.428604684,
+        "mean_s": 14.331757413285715,
+        "median_s": 13.303844531,
+        "min_s": 11.285843812,
+        "n": 7,
+        "sum_s": 100.322301893
+      }
+    }
+  }
+}
