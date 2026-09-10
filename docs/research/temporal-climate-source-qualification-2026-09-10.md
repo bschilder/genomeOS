@@ -107,6 +107,10 @@ native grid and reproducible transformations. This ordinary public subset work
 is within the existing research authorization; no new approval gate is added.
 Source qualification must finish before those values enter a genetic benchmark.
 
+The subsequent [bounded 20CR decoding checks](20cr-decoding-checks-2026-09-10.md)
+resolve the declared calendar and precipitation-interval interpretation, but
+retain a January 1806 aggregation discrepancy. They do not admit a climate feature.
+
 Next compare historical anomaly summaries over actual overlapping source intervals,
 keeping reference periods explicit. ModE-RA recommends anomalies rather than
 unqualified absolute fields; source disagreements become a sensitivity analysis,
