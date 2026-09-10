@@ -101,7 +101,59 @@ python -m pytest tests/test_heterogeneity_dependence.py -q
 ```
 
 A bounded read-only measurement over the specified node moments, rational
-components, separability points and complement pair reported:
+components, separability points and complement pair produced the results below.
+
+The initial note revision recorded the resulting table but omitted the
+executable calculation body. This docs-only correction recovers the following
+exact invocation from the implementation session's execution record:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -c '
+import math
+import numpy as np
+from genomeos.validation.heterogeneity_oracle import beta_prior_quadrature
+from genomeos.validation.heterogeneity_dependence import heterogeneity_dependence_reference
+node_errors=[]
+for order in (2,32):
+    for a,b in ((1.,1.),(2.,3.),(3.,2.)):
+        x,w=beta_prior_quadrature((a,b),order=order)
+        expected=(1.,a/(a+b),a*(a+1)/((a+b)*(a+b+1)))
+        measured=(float(np.sum(w)),float(np.sum(w*x)),float(np.sum(w*x*x)))
+        node_errors.extend(abs(left-right) for left,right in zip(measured,expected,strict=True))
+anchor_errors=[]
+anchor_gaps=[]
+for mp,rp,z,ratios,fm,fr in (((1.,1.),(1.,1.),5/12,(65/63,13/11,75/77),(21/32,5/32,21/32),(3/8,11/24,11/24)),((2.,3.),(3.,2.),13/25,(169/162,169/154,65/66),(27/40,7/40,27/40),(9/20,11/20,11/20))):
+    result=heterogeneity_dependence_reference(((0,2),),mean_prior=mp,rho_prior=rp,points=((.25,.25),(.75,.75),(.25,.75)))
+    likelihoods=(39/64,13/64,45/64)
+    for i,point in enumerate(result.points):
+        anchor_errors.append(abs(point.value-math.log(ratios[i])))
+        anchor_gaps.extend((abs(point.raw_values[1]-point.raw_values[0]),abs(point.raw_values[2]-point.raw_values[1])))
+        for row in point.components:
+            anchor_errors.extend((abs(row[0]-math.log(likelihoods[i])),abs(row[1]-math.log(z)),abs(row[2]-math.log(fm[i])),abs(row[3]-math.log(fr[i]))))
+separable=heterogeneity_dependence_reference(((0,1),(1,1),(1,2),(1,2),(0,0)),mean_prior=(2.,3.),rho_prior=(3.,2.),points=((.21,.13),(.79,.87)))
+left=heterogeneity_dependence_reference(((0,2),(1,3)),mean_prior=(2.,3.),rho_prior=(3.,2.),points=((.23,.17),(.68,.71)))
+right=heterogeneity_dependence_reference(((2,2),(2,3)),mean_prior=(3.,2.),rho_prior=(3.,2.),points=((.77,.17),(.32,.71)))
+symmetry_errors=[]
+for p,q in zip(left.points,right.points,strict=True):
+    symmetry_errors.extend(abs(a-b) for rows in zip(p.components,q.components,strict=True) for a,b in zip(*rows,strict=True))
+    symmetry_errors.extend(abs(a-b) for a,b in zip(p.raw_values,q.raw_values,strict=True))
+print(f"node_max_abs_error={max(node_errors):.17g}")
+print(f"anchor_max_abs_error={max(anchor_errors):.17g}")
+print(f"anchor_max_adjacent_gap={max(anchor_gaps):.17g}")
+print(f"separable_max_abs_raw_h={max(abs(v) for p in separable.points for v in p.raw_values):.17g}")
+print(f"complement_max_abs_error={max(symmetry_errors):.17g}")
+'
+```
+
+Its output was:
+
+```text
+node_max_abs_error=3.3306690738754696e-16
+anchor_max_abs_error=9.7699626167013776e-15
+anchor_max_adjacent_gap=4.4408920985006262e-15
+separable_max_abs_raw_h=8.8817841970012523e-16
+complement_max_abs_error=8.8817841970012523e-16
+```
 
 | Check | Maximum absolute error |
 | --- | ---: |
