@@ -95,8 +95,12 @@ class B0HSqlReader:
         ).fetchone()
         lost = self._db.execute("SELECT digest FROM losses WHERE start_digest=?", (digest,)).fetchone()
         loss = None if lost is None else self.record(lost[0], OwnerLoss)
+        if loss is not None and (loss.start_sha256 != digest or loss.previous_owner_id != start.owner_id):
+            raise StoreIntegrityError("owner loss START identity mismatch")
         if completed is None:
             return StoredStage(start, None, None, None, loss, None, None)
+        if completed[0] is None or (completed[1] is None) == (completed[2] is None):
+            raise StoreIntegrityError("completion has NULL or unmatched references")
         if loss is not None:
             raise StoreIntegrityError("completed stage also declares owner loss")
         completion = self.record(completed[0], StageCompletion)
@@ -179,9 +183,23 @@ class B0HSqlReader:
                 or start.key.campaign_sha256 != self.campaign_sha256
             ):
                 raise StoreIntegrityError("stored START index/campaign mismatch")
-        for row in self._db.execute("SELECT digest,receipt,failure FROM completions"):
+        for row in self._db.execute("SELECT start_digest,digest,receipt,failure FROM completions"):
+            if row[0] is None:
+                raise StoreIntegrityError("completion has NULL START reference")
+            if self._db.execute("SELECT 1 FROM starts WHERE digest=?", (row[0],)).fetchone() is None:
+                raise StoreIntegrityError("completion references unmatched START")
             used.update(value for value in row if value is not None)
-        used.update(row[0] for row in self._db.execute("SELECT digest FROM losses"))
+        for start_digest, loss_digest in self._db.execute("SELECT start_digest,digest FROM losses"):
+            if (
+                start_digest is None
+                or self._db.execute("SELECT 1 FROM starts WHERE digest=?", (start_digest,)).fetchone() is None
+            ):
+                raise StoreIntegrityError("loss references unmatched START")
+            loss = self.record(loss_digest, OwnerLoss)
+            indexed = self.record(start_digest, StageStart)
+            if loss.start_sha256 != start_digest or loss.previous_owner_id != indexed.owner_id:
+                raise StoreIntegrityError("owner loss START identity mismatch")
+            used.add(loss_digest)
         if used != {row[0] for row in self._db.execute("SELECT digest FROM objects")}:
             raise StoreIntegrityError("orphan operational evidence; no receipt-only repair")
         receipts = {

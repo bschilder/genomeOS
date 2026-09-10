@@ -340,3 +340,98 @@ def test_corrupt_exact_evidence_is_never_absence(tmp_path, mutation):
             )
         with pytest.raises(ValueError):
             store.stages(data.case_id)
+
+
+def test_start_rejects_unmet_case_dependency(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    generation = start_record(manifest, data)
+    fit = generation.model_copy(
+        update={
+            "key": StageKey(
+                campaign_sha256=record_digest(manifest), case=data.case_id, stage="fit", attempt_id=0
+            ),
+        }
+    )
+    with storage.LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        store.start(generation)
+        with pytest.raises(storage.StoreIntegrityError):
+            store.start(fit)
+
+
+def test_orphan_null_completion_is_refused(tmp_path):
+
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    retained = packet(manifest, start, data)
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+        store._put_object(retained.completion)
+        store._put_object(retained.receipt)
+        store._db.execute("PRAGMA foreign_keys=OFF")
+        store._db.execute(
+            "INSERT INTO completions VALUES(NULL,?,?,NULL)",
+            (record_digest(retained.completion), record_digest(retained.receipt)),
+        )
+        store._db.execute("PRAGMA foreign_keys=ON")
+        with pytest.raises(storage.StoreIntegrityError):
+            store.inventory()
+
+
+def test_transaction_corruption_during_inspection_is_not_retryable(tmp_path):
+    import sqlite3
+
+    from genomeos.validation.heterogeneity_runner_store import LocalB0HStore
+
+    manifest, admission, null = campaign(tmp_path)
+    with LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+
+        def write():
+            error = sqlite3.OperationalError("original I/O")
+            error.sqlite_errorcode = sqlite3.SQLITE_IOERR
+            raise error
+
+        def matches():
+            error = sqlite3.DatabaseError("corrupt inspection")
+            error.sqlite_errorcode = sqlite3.SQLITE_CORRUPT
+            raise error
+
+        with pytest.raises(sqlite3.DatabaseError, match="corrupt inspection"):
+            store._transaction(write, matches)
+
+
+def test_receipt_only_publication_is_refused_before_mutation(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    retained = packet(manifest, start, data)
+    with storage.LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        store.start(start)
+        store._put_object(retained.receipt)
+        with pytest.raises(storage.StoreIntegrityError):
+            publish(store, retained)

@@ -222,9 +222,10 @@ class LocalB0HStore:
                 if matches():
                     return
             except sqlite3.Error as inspection_error:
-                if retryable:
+                inspection_retryable = getattr(inspection_error, "sqlite_errorcode", -1) & 255 in _RETRYABLE
+                if inspection_retryable:
                     raise StoreUnavailable("transaction cannot be inspected") from inspection_error
-                raise
+                raise inspection_error
             if retryable:
                 raise StoreUnavailable("publication absent after storage failure") from error
             raise
@@ -253,6 +254,18 @@ class LocalB0HStore:
         ).fetchone()
         if prior is not None:
             raise StoreIntegrityError("stage already has one START")
+        from genomeos.validation.heterogeneity_runner_binding import validate_case_evidence
+        from genomeos.validation.heterogeneity_runner_records import CaseEvidence
+
+        try:
+            existing = self.stages(key.case)
+            validate_case_evidence(self.manifest, CaseEvidence(self.campaign_sha256, key.case, existing))
+            prospective = StoredStage(record, None, None, None, None, None, None)
+            validate_case_evidence(
+                self.manifest, CaseEvidence(self.campaign_sha256, key.case, existing + (prospective,))
+            )
+        except (ValueError, sqlite3.Error) as error:
+            raise StoreIntegrityError("START case-bound admission mismatch") from error
         digest = record_digest(record)
 
         def write():
@@ -343,6 +356,7 @@ class LocalB0HStore:
             return
         if start.owner_id != self.owner_id:
             raise StoreIntegrityError("only live START owner publishes new evidence")
+        self._check_publication_relationships(digest, receipt, encoded, failure)
 
         def write():
             result_digest = self._put_object(receipt if receipt is not None else failure)
@@ -367,6 +381,53 @@ class LocalB0HStore:
         except StoreUnavailable as error:
             raise PendingPublication(packet, error) from error
 
+    def _check_publication_relationships(self, start_digest, receipt, encoded, failure) -> None:
+        """Reject retained partial evidence before adding publication rows."""
+        if receipt is not None:
+            receipt_digest = record_digest(receipt)
+            if (
+                self._db.execute("SELECT 1 FROM objects WHERE digest=?", (receipt_digest,)).fetchone()
+                is not None
+                and self._db.execute(
+                    "SELECT 1 FROM completions WHERE start_digest=?", (start_digest,)
+                ).fetchone()
+                is None
+            ):
+                raise StoreIntegrityError("orphan receipt; no receipt-only repair")
+        if failure is not None:
+            failure_digest = record_digest(failure)
+            if (
+                self._db.execute("SELECT 1 FROM objects WHERE digest=?", (failure_digest,)).fetchone()
+                is not None
+                and self._db.execute(
+                    "SELECT 1 FROM completions WHERE start_digest=?", (start_digest,)
+                ).fetchone()
+                is None
+            ):
+                raise StoreIntegrityError("orphan failure; no receipt-only repair")
+        if self._db.execute(
+            "SELECT count(*) FROM metadata WHERE receipt NOT IN "
+            "(SELECT receipt FROM completions WHERE receipt IS NOT NULL)"
+        ).fetchone()[0]:
+            raise StoreIntegrityError("orphan metadata; no receipt-only repair")
+        if self._db.execute(
+            "SELECT count(*) FROM payload_links WHERE receipt NOT IN (SELECT receipt FROM metadata)"
+        ).fetchone()[0]:
+            raise StoreIntegrityError("orphan payload link; no receipt-only repair")
+        if self._db.execute(
+            "SELECT count(*) FROM payloads WHERE digest NOT IN (SELECT payload FROM payload_links)"
+        ).fetchone()[0]:
+            raise StoreIntegrityError("orphan payload; no receipt-only repair")
+        if self._db.execute(
+            "SELECT count(*) FROM objects WHERE digest NOT IN ("
+            "SELECT manifest FROM campaign UNION SELECT admission FROM campaign "
+            "UNION SELECT null_reference FROM campaign UNION SELECT digest FROM starts "
+            "UNION SELECT start_digest FROM completions UNION SELECT digest FROM completions "
+            "UNION SELECT receipt FROM completions UNION SELECT failure FROM completions "
+            "UNION SELECT start_digest FROM losses UNION SELECT digest FROM losses)"
+        ).fetchone()[0]:
+            raise StoreIntegrityError("orphan operational object; no receipt-only repair")
+
     def publish_pending(self, packet: PublicationPacket) -> None:
         self.complete(
             packet.start,
@@ -381,7 +442,10 @@ class LocalB0HStore:
         digest = record_digest(start)
         prior = self._db.execute("SELECT digest FROM losses WHERE start_digest=?", (digest,)).fetchone()
         if prior is not None:
-            return self._object(prior[0], OwnerLoss)
+            loss = self._object(prior[0], OwnerLoss)
+            if loss.start_sha256 != digest or loss.previous_owner_id != start.owner_id:
+                raise StoreIntegrityError("owner loss START identity mismatch")
+            return loss
         if (
             start.owner_id == self.owner_id
             or self._db.execute("SELECT 1 FROM completions WHERE start_digest=?", (digest,)).fetchone()
@@ -403,7 +467,10 @@ class LocalB0HStore:
 
         def matches():
             row = self._db.execute("SELECT digest FROM losses WHERE start_digest=?", (digest,)).fetchone()
-            return row == (record_digest(loss),)
+            if row != (record_digest(loss),):
+                return False
+            actual = self._object(row[0], OwnerLoss)
+            return actual.start_sha256 == digest and actual.previous_owner_id == start.owner_id
 
         self._transaction(write, matches)
         return loss
