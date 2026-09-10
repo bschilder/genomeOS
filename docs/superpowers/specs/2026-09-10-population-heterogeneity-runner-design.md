@@ -79,6 +79,7 @@ wire grammar and signatures before code, not after actual study execution.
 | `StageCompletion` | START digest, exactly one receipt or execution-failure digest, actual whole-call elapsed nanoseconds and labeled observations if obtained; completion means accounted outcome, not scientific acceptance |
 | `OwnerLoss` | START digest, actually observed loss/exclusion evidence and surviving receipt references; unresolved attribution, never proof a call did not return |
 | `CaseEvidence` | Manifest case plus ordered validated stage records and existing public evidence roots; missing/unstarted/lost stages explicit |
+| `read_collected_b0h_snapshot` | Read-only consumption of a closed collected database with explicitly supplied, independently retained database/inventory digests; returns immutable manifest/null/case evidence, never execution authority |
 | `StudyReduction` | Manifest/snapshot identities, case/attempt/status accounting, twelve correct tests, four control decisions, all other control results, descriptive rows and claim eligibility reasons |
 
 `execute_b0h_case(manifest, case, store)` owns admission, public calls and receipts;
@@ -213,6 +214,25 @@ Never copy a live database without a supported consistent snapshot mechanism;
 the first campaign needs only closed-store collection, not online backup support.
 Rerunning pure reduction has no scientific-call effects. Self-consistent hashes
 do not authenticate an invocation or protect against rewriting the entire store.
+
+Collected evidence must remain readable on a different machine or directory
+without relaxing the execution store's original parent/device admission. A narrow
+`read_collected_b0h_snapshot` accepts the collection directory plus explicit,
+independently retained expected database and inventory digests. It checks the
+collection receipt and inventory against those expectations, validates all exact
+records and bindings, and returns immutable manifest/null/case inputs for pure
+reduction. It cannot create a database, publish START/completion/loss, acquire
+execution ownership or call science. Share only the concrete read-only decoding
+and inventory logic with the execution adapter; add no general recovery layer.
+
+Use SQLite URI `mode=ro` within a stable read transaction, refuse unexpected
+journal/WAL sidecars, and verify the full database checksum before and after
+reading. Do not assert `immutable=1`: that setting disables locking and change
+detection and assumes the file cannot change, which an ordinary collected copy
+does not establish. See [SQLite URI parameters](https://www.sqlite.org/uri.html).
+Copied evidence is historical provenance, not a new platform-admission receipt.
+This permits independent evidence consumption after pod cleanup, not cross-Pod
+continuation of scientific execution.
 
 ## 6. Full-study reduction and meaning of decisions
 
