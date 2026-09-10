@@ -127,6 +127,9 @@ The primary resident target, qualified spatial-footprint buffers, external seale
 count calibration and unchanged scientific publication gates remain required. CuGen/LD is an
 independent optional workstream, not a prerequisite for these AF experiments.
 
+The subsequent [fixed-interval count pilot](hgdp-count-pilot-2026-09-09.md) records that next
+acquisition separately; the no-genotype-read statements above describe this metadata milestone.
+
 ## Verification and limitations
 
 The complete acquisition, actual-row kinship audit and exact outlier-list reconciliation each
