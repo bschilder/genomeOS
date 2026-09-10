@@ -9,8 +9,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
+from pandera.errors import SchemaError
 
 from genomeos.validation.baseline import B0InfeasibleError, fit_pooled_b0
 from genomeos.validation.benchmark import validate_allele_observations
@@ -135,6 +137,7 @@ def test_successful_runner_writes_explicit_b0_nonpublication_record(tmp_path):
         "genomeos/observations/schema.py",
         "genomeos/validation/baseline.py",
         "genomeos/validation/benchmark.py",
+        "genomeos/validation/count_baseline.py",
         "genomeos/validation/predictive.py",
         "genomeos/validation/splits.py",
         "scripts/benchmark_allele_frequency.py",
@@ -197,6 +200,13 @@ def test_runner_bootstraps_its_checkout_under_conflicting_pythonpath(tmp_path):
         (ROOT / "genomeos" / "validation" / "baseline.py").read_bytes()
     ).hexdigest()
     assert manifest["science_source_sha256"]["genomeos/validation/baseline.py"] == expected
+    expected_kernel = hashlib.sha256(
+        (ROOT / "genomeos" / "validation" / "count_baseline.py").read_bytes()
+    ).hexdigest()
+    assert (
+        manifest["science_source_sha256"]["genomeos/validation/count_baseline.py"]
+        == expected_kernel
+    )
 
 
 def test_pooled_fit_uses_training_counts_only_and_shares_variant_draws():
@@ -248,6 +258,54 @@ def test_pooled_fit_uses_training_counts_only_and_shares_variant_draws():
         if positions.sum() > 1:
             variant_draws = original.predictive.mean_draws[:, positions]
             assert (variant_draws == variant_draws[:, :1]).all()
+
+
+def test_pooled_fit_preserves_pre_extraction_draw_sequence():
+    observations = _read_observations(FIXTURES / "observations.tsv")
+    training = observations[observations["source_record_id"].str.startswith("east")]
+    one_variant = observations.loc[
+        observations["source_record_id"] == "west-v1"
+    ].copy()
+    repeated = one_variant.copy()
+    repeated.loc[:, "source_record_id"] = "west-v1-repeat"
+    repeated.loc[:, "cohort_id"] = "cohort-west-repeat"
+    testing = pd.concat([one_variant, repeated], ignore_index=True)
+
+    fit = fit_pooled_b0(
+        training,
+        testing,
+        prior_alpha=1.0,
+        prior_beta=1.0,
+        posterior_draws=32,
+        seed=42,
+    )
+    train_ac = int(training.loc[training["variant_id"] == "chr1-100-A-G", "ac"].sum())
+    train_an = int(training.loc[training["variant_id"] == "chr1-100-A-G", "an"].sum())
+    rng = np.random.default_rng(42)
+    expected = rng.beta(1.0 + train_ac, 1.0 + train_an - train_ac, size=32)
+
+    np.testing.assert_array_equal(fit.predictive.mean_draws[:, 0], expected)
+    np.testing.assert_array_equal(
+        fit.predictive.mean_draws[:, 0], fit.predictive.mean_draws[:, 1]
+    )
+
+
+def test_pooled_fit_keeps_p1_missing_ascertainment_as_hard_error():
+    observations = _read_observations(FIXTURES / "observations.tsv")
+    training = observations[observations["source_record_id"].str.startswith("east")].drop(
+        columns="sampling_design"
+    )
+    testing = observations[observations["source_record_id"].str.startswith("west")]
+
+    with pytest.raises(SchemaError, match="sampling_design"):
+        fit_pooled_b0(
+            training,
+            testing,
+            prior_alpha=1.0,
+            prior_beta=1.0,
+            posterior_draws=32,
+            seed=42,
+        )
 
 
 def test_missing_training_variant_uses_typed_scientific_infeasibility():

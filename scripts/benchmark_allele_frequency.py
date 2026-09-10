@@ -29,6 +29,7 @@ sys.path.insert(0, str(ROOT))
 import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.validation.baseline as baseline_module  # noqa: E402
 import genomeos.validation.benchmark as benchmark_module  # noqa: E402
+import genomeos.validation.count_baseline as count_baseline_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.splits as splits_module  # noqa: E402
 from genomeos.validation.baseline import B0InfeasibleError, fit_pooled_b0  # noqa: E402
@@ -101,6 +102,7 @@ SCIENCE_SOURCE_FILES = {
     "genomeos/observations/schema.py": Path(observations_schema_module.__file__).resolve(),
     "genomeos/validation/baseline.py": Path(baseline_module.__file__).resolve(),
     "genomeos/validation/benchmark.py": Path(benchmark_module.__file__).resolve(),
+    "genomeos/validation/count_baseline.py": Path(count_baseline_module.__file__).resolve(),
     "genomeos/validation/predictive.py": Path(predictive_module.__file__).resolve(),
     "genomeos/validation/splits.py": Path(splits_module.__file__).resolve(),
     "scripts/benchmark_allele_frequency.py": Path(__file__).resolve(),
