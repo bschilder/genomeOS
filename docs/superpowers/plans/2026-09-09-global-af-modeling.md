@@ -56,6 +56,15 @@ Prediction accepts survey design and cohort identity, preserving shared new-coho
 
 Acquire terrain/elevation/water, then demographics, climate normals, locus-relevant pathogens, modern migration/displacement, and finally qualified historical/paleoclimate layers. Biodiversity and historical events need narrow hypotheses and qualified support; exotic environmental signals are not mandatory inputs.
 
+**Owner clarification, September 10:** climate includes three distinct tracks:
+present-day, historical and ancient, with ancient spanning human divergence from
+non-human primates through the present. Modern normals are only a first bounded
+candidate, not completion of this scope; a last-glacial-cycle reconstruction does
+not cover the entire evolutionary interval. Audit the actual spatial/temporal
+support, uncertainty and gaps of each source family before selecting experiments.
+Never infer continuous high-resolution coverage by stitching incompatible products.
+See the [climate qualification note](../../research/climate-covariate-qualification-2026-09-10.md).
+
 Version source, checksum, units, support, valid/available time, uncertainty, missingness, upstream dependencies, and terms. Cesium display assets are not a scientific covariate store. Offline extraction needs scientific semantics and asset-specific permission.
 
 Compare baseline, added family, missingness-only, structured negative control, and incremental value after genomic structure, on unchanged evaluation populations. Record rejected layers.
@@ -91,6 +100,14 @@ Validate CuGen counts and declared LD definitions against an independent CPU ref
 Qualified regional LCT/MCM6 plus neutral controls. Stochastic migration/drift first; selection separately ablated. Demographic variables are uncertain priors, not reproductive migration or effective population size. Ancient likelihoods preserve pseudohaploidy, damage/contamination, date distributions, kin/site effects, and cross-panel deduplication.
 
 Introduce explicit calendar time; legacy modern=0 remains date-unspecified, not today's survey date. Infer history by probabilistic smoothing, never deterministic reverse migration or relocation of diaspora counts. An FNO forward-simulator surrogate is optional only after exact reference and surrogate-error checks.
+
+Historical and ancient climate features must integrate uncertainty in climate,
+dating and population location; present coordinates are not ancestral trajectories.
+Use time-appropriate paleogeography and keep source time slices distinct from
+interpolated model output. Do not assume a present-day variant existed throughout
+the evolutionary interval. Separate retrospective reconstruction with later data
+from forward prediction using only information available at its declared cutoff;
+test independent sites/time windows and climate-family ablations accordingly.
 
 **Exit:** independent site/time validation and modern-prediction ablation; regional feasibility is not a global historical claim.
 
