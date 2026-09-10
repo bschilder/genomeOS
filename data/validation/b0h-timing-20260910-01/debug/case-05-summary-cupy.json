@@ -1,0 +1,904 @@
+{
+  "class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+  "fields": [
+    {
+      "name": "spec",
+      "value": {
+        "class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "fields": [
+          {
+            "name": "case",
+            "value": {
+              "class": "genomeos.validation.heterogeneity_simulation_types.SbcCaseId",
+              "fields": [
+                {
+                  "name": "track_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x1",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "study_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "case_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "replicate_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x2",
+                    "tag": "int"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "attempt_id",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x0",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "seed",
+            "value": {
+              "class": "genomeos.validation.heterogeneity_simulation_types.SeedIdentity",
+              "fields": [
+                {
+                  "name": "entropy",
+                  "value": {
+                    "items": [
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x2a",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0xd3",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x1",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x1",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x0",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x0",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x2",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x4",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x0",
+                        "tag": "int"
+                      }
+                    ],
+                    "tag": "tuple"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "config",
+            "value": {
+              "class": "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityConfig",
+              "fields": [
+                {
+                  "name": "mean_prior_alpha",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "mean_prior_beta",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "rho_prior_alpha",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "rho_prior_beta",
+                  "value": {
+                    "binary64_be_hex": "4010000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "draws",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x1f4",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "tune",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x3e8",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "chains",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x4",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "target_accept",
+                  "value": {
+                    "binary64_be_hex": "3feccccccccccccd",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "seed",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0xe6a706a1",
+                    "tag": "int"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    },
+    {
+      "name": "variant_id",
+      "value": {
+        "tag": "string",
+        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a76617269616e743a30"
+      }
+    },
+    {
+      "name": "parameters",
+      "value": {
+        "items": [
+          {
+            "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+            "fields": [
+              {
+                "name": "parameter",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "6d65616e"
+                }
+              },
+              {
+                "name": "truth",
+                "value": {
+                  "binary64_be_hex": "3fd7c7a7c232dc32",
+                  "class": "builtins.float",
+                  "tag": "float"
+                }
+              },
+              {
+                "name": "estimate",
+                "value": {
+                  "binary64_be_hex": "3fcf32e0ecc75377",
+                  "class": "builtins.float",
+                  "tag": "float"
+                }
+              },
+              {
+                "name": "quantiles",
+                "value": {
+                  "items": [
+                    {
+                      "binary64_be_hex": "3fc3122231eb67f8",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fc70dd5291207fb",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fca8f5b9b8287dd",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fceb13a65b438ec",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fd1a2e06f327f2a",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fd41bb3d0ac21b0",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fd6e87844de7739",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    }
+                  ],
+                  "tag": "tuple"
+                }
+              },
+              {
+                "name": "draw_count",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x7d0",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.heterogeneity_summary_types.ParameterPosteriorSummary",
+            "fields": [
+              {
+                "name": "parameter",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "72686f"
+                }
+              },
+              {
+                "name": "truth",
+                "value": {
+                  "binary64_be_hex": "3fbf218b8ea7b655",
+                  "class": "builtins.float",
+                  "tag": "float"
+                }
+              },
+              {
+                "name": "estimate",
+                "value": {
+                  "binary64_be_hex": "3fbd0c75465a99cb",
+                  "class": "builtins.float",
+                  "tag": "float"
+                }
+              },
+              {
+                "name": "quantiles",
+                "value": {
+                  "items": [
+                    {
+                      "binary64_be_hex": "3f9a05911f481c7e",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fa67c6d83a7c0c3",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fb17ccd120f70bb",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fb9db36cf23a498",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fc2ebab5025cb13",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fc992743e296520",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    },
+                    {
+                      "binary64_be_hex": "3fd13567e7cf598e",
+                      "class": "builtins.float",
+                      "tag": "float"
+                    }
+                  ],
+                  "tag": "tuple"
+                }
+              },
+              {
+                "name": "draw_count",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x7d0",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          }
+        ],
+        "tag": "tuple"
+      }
+    },
+    {
+      "name": "predictive",
+      "value": {
+        "class": "genomeos.validation.heterogeneity_summary_types.PredictiveSummaryEvidence",
+        "fields": [
+          {
+            "name": "seed",
+            "value": {
+              "class": "genomeos.validation.heterogeneity_diagnostic_seeds.DiagnosticSeedIdentity",
+              "fields": [
+                {
+                  "name": "case",
+                  "value": {
+                    "class": "genomeos.validation.heterogeneity_simulation_types.SbcCaseId",
+                    "fields": [
+                      {
+                        "name": "track_id",
+                        "value": {
+                          "class": "builtins.int",
+                          "hex": "0x1",
+                          "tag": "int"
+                        }
+                      },
+                      {
+                        "name": "study_id",
+                        "value": {
+                          "class": "builtins.int",
+                          "hex": "0x0",
+                          "tag": "int"
+                        }
+                      },
+                      {
+                        "name": "case_id",
+                        "value": {
+                          "class": "builtins.int",
+                          "hex": "0x0",
+                          "tag": "int"
+                        }
+                      },
+                      {
+                        "name": "replicate_id",
+                        "value": {
+                          "class": "builtins.int",
+                          "hex": "0x2",
+                          "tag": "int"
+                        }
+                      }
+                    ],
+                    "tag": "dataclass"
+                  }
+                },
+                {
+                  "name": "attempt_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "purpose_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x7",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "spawn_key",
+                  "value": {
+                    "items": [],
+                    "tag": "tuple"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "seed_words",
+            "value": {
+              "items": [
+                {
+                  "class": "builtins.int",
+                  "hex": "0x56c95b5a",
+                  "tag": "int"
+                },
+                {
+                  "class": "builtins.int",
+                  "hex": "0x309e1535",
+                  "tag": "int"
+                },
+                {
+                  "class": "builtins.int",
+                  "hex": "0x1e282f7e",
+                  "tag": "int"
+                },
+                {
+                  "class": "builtins.int",
+                  "hex": "0xfa51f3aa",
+                  "tag": "int"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "seed_uint128",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0xfa51f3aa1e282f7e309e153556c95b5a",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "cdf_backend",
+            "value": {
+              "tag": "string",
+              "utf8_surrogatepass_hex": "63757079"
+            }
+          },
+          {
+            "name": "draw_count",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x7d0",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "targets",
+            "value": {
+              "items": [
+                {
+                  "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+                  "fields": [
+                    {
+                      "name": "kind",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "66726573685f706f70756c6174696f6e"
+                      }
+                    },
+                    {
+                      "name": "row",
+                      "value": {
+                        "class": "genomeos.validation.reference_counts.ReferenceCount",
+                        "fields": [
+                          {
+                            "name": "record_id",
+                            "value": {
+                              "tag": "string",
+                              "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a68656c646f75743a726f773a66726573685f706f70756c6174696f6e"
+                            }
+                          },
+                          {
+                            "name": "variant_id",
+                            "value": {
+                              "tag": "string",
+                              "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a76617269616e743a30"
+                            }
+                          },
+                          {
+                            "name": "group_id",
+                            "value": {
+                              "tag": "string",
+                              "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a68656c646f75743a67726f75703a66726573685f706f70756c6174696f6e"
+                            }
+                          },
+                          {
+                            "name": "region_id",
+                            "value": {
+                              "tag": "string",
+                              "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                            }
+                          },
+                          {
+                            "name": "variant_group",
+                            "value": {
+                              "tag": "string",
+                              "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                            }
+                          },
+                          {
+                            "name": "ac",
+                            "value": {
+                              "class": "builtins.int",
+                              "hex": "0xd",
+                              "tag": "int"
+                            }
+                          },
+                          {
+                            "name": "an",
+                            "value": {
+                              "class": "builtins.int",
+                              "hex": "0x14",
+                              "tag": "int"
+                            }
+                          }
+                        ],
+                        "tag": "dataclass"
+                      }
+                    },
+                    {
+                      "name": "latent_frequency",
+                      "value": {
+                        "binary64_be_hex": "3fe0023d2d73cc20",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    },
+                    {
+                      "name": "cluster_id",
+                      "value": {
+                        "tag": "none"
+                      }
+                    },
+                    {
+                      "name": "cluster_frequency",
+                      "value": {
+                        "tag": "none"
+                      }
+                    },
+                    {
+                      "name": "candidate_frequency",
+                      "value": {
+                        "tag": "none"
+                      }
+                    },
+                    {
+                      "name": "uses_cluster",
+                      "value": {
+                        "tag": "none"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "status",
+            "value": {
+              "tag": "string",
+              "utf8_surrogatepass_hex": "636f6d706c657465"
+            }
+          },
+          {
+            "name": "prediction",
+            "value": {
+              "class": "genomeos.surfaces.heterogeneity_types.ReferenceHeterogeneityPrediction",
+              "fields": [
+                {
+                  "name": "marginal_predictive",
+                  "value": {
+                    "class": "genomeos.validation.predictive.CountPredictive",
+                    "fields": [
+                      {
+                        "name": "mean_draws",
+                        "value": {
+                          "path": "arrays/case-05-summary-cupy-0034.npy",
+                          "shape": [
+                            2000,
+                            1
+                          ],
+                          "tag": "float64_ndarray"
+                        }
+                      },
+                      {
+                        "name": "concentration",
+                        "value": {
+                          "path": "arrays/case-05-summary-cupy-0035.npy",
+                          "shape": [
+                            2000,
+                            1
+                          ],
+                          "tag": "float64_ndarray"
+                        }
+                      },
+                      {
+                        "name": "cdf_backend",
+                        "value": {
+                          "tag": "string",
+                          "utf8_surrogatepass_hex": "63757079"
+                        }
+                      }
+                    ],
+                    "tag": "dataclass"
+                  }
+                },
+                {
+                  "name": "observation_ids",
+                  "value": {
+                    "items": [
+                      {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a68656c646f75743a726f773a66726573685f706f70756c6174696f6e"
+                      }
+                    ],
+                    "tag": "tuple"
+                  }
+                },
+                {
+                  "name": "unavailable_ids",
+                  "value": {
+                    "items": [],
+                    "tag": "tuple"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "rows",
+            "value": {
+              "items": [
+                {
+                  "class": "genomeos.validation.heterogeneity_summary_types.HeldoutPredictiveSummary",
+                  "fields": [
+                    {
+                      "name": "target",
+                      "value": {
+                        "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+                        "fields": [
+                          {
+                            "name": "kind",
+                            "value": {
+                              "tag": "string",
+                              "utf8_surrogatepass_hex": "66726573685f706f70756c6174696f6e"
+                            }
+                          },
+                          {
+                            "name": "row",
+                            "value": {
+                              "class": "genomeos.validation.reference_counts.ReferenceCount",
+                              "fields": [
+                                {
+                                  "name": "record_id",
+                                  "value": {
+                                    "tag": "string",
+                                    "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a68656c646f75743a726f773a66726573685f706f70756c6174696f6e"
+                                  }
+                                },
+                                {
+                                  "name": "variant_id",
+                                  "value": {
+                                    "tag": "string",
+                                    "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a76617269616e743a30"
+                                  }
+                                },
+                                {
+                                  "name": "group_id",
+                                  "value": {
+                                    "tag": "string",
+                                    "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67313a68656c646f75743a67726f75703a66726573685f706f70756c6174696f6e"
+                                  }
+                                },
+                                {
+                                  "name": "region_id",
+                                  "value": {
+                                    "tag": "string",
+                                    "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                                  }
+                                },
+                                {
+                                  "name": "variant_group",
+                                  "value": {
+                                    "tag": "string",
+                                    "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                                  }
+                                },
+                                {
+                                  "name": "ac",
+                                  "value": {
+                                    "class": "builtins.int",
+                                    "hex": "0xd",
+                                    "tag": "int"
+                                  }
+                                },
+                                {
+                                  "name": "an",
+                                  "value": {
+                                    "class": "builtins.int",
+                                    "hex": "0x14",
+                                    "tag": "int"
+                                  }
+                                }
+                              ],
+                              "tag": "dataclass"
+                            }
+                          },
+                          {
+                            "name": "latent_frequency",
+                            "value": {
+                              "binary64_be_hex": "3fe0023d2d73cc20",
+                              "class": "builtins.float",
+                              "tag": "float"
+                            }
+                          },
+                          {
+                            "name": "cluster_id",
+                            "value": {
+                              "tag": "none"
+                            }
+                          },
+                          {
+                            "name": "cluster_frequency",
+                            "value": {
+                              "tag": "none"
+                            }
+                          },
+                          {
+                            "name": "candidate_frequency",
+                            "value": {
+                              "tag": "none"
+                            }
+                          },
+                          {
+                            "name": "uses_cluster",
+                            "value": {
+                              "tag": "none"
+                            }
+                          }
+                        ],
+                        "tag": "dataclass"
+                      }
+                    },
+                    {
+                      "name": "log_score",
+                      "value": {
+                        "binary64_be_hex": "c01197b5102a4b65",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    },
+                    {
+                      "name": "absolute_error",
+                      "value": {
+                        "binary64_be_hex": "3fdccccccccccccd",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    },
+                    {
+                      "name": "squared_error",
+                      "value": {
+                        "binary64_be_hex": "3fc52042d96c882a",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    },
+                    {
+                      "name": "coverage",
+                      "value": {
+                        "items": [
+                          {
+                            "tag": "bool",
+                            "value": false
+                          },
+                          {
+                            "tag": "bool",
+                            "value": false
+                          },
+                          {
+                            "tag": "bool",
+                            "value": true
+                          }
+                        ],
+                        "tag": "tuple"
+                      }
+                    },
+                    {
+                      "name": "interval_width",
+                      "value": {
+                        "items": [
+                          {
+                            "binary64_be_hex": "3fd0000000000000",
+                            "class": "builtins.float",
+                            "tag": "float"
+                          },
+                          {
+                            "binary64_be_hex": "3fdccccccccccccd",
+                            "class": "builtins.float",
+                            "tag": "float"
+                          },
+                          {
+                            "binary64_be_hex": "3fe4cccccccccccd",
+                            "class": "builtins.float",
+                            "tag": "float"
+                          }
+                        ],
+                        "tag": "tuple"
+                      }
+                    },
+                    {
+                      "name": "randomized_pit",
+                      "value": {
+                        "binary64_be_hex": "3feee665bc3d63a8",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "error",
+            "value": {
+              "tag": "none"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    }
+  ],
+  "tag": "dataclass"
+}
