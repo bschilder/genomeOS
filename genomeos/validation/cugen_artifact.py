@@ -41,7 +41,7 @@ _REVISION = re.compile(r"[0-9a-f]{40}")
 _GENOMEOS_SOURCE_PATHS = frozenset(
     {
         "genomeos/validation/cugen_pilot.py",
-        "genomeos/validation/cugen_artifact.py",
+        "genomeos/validation/cugen_artifact.py", "genomeos/validation/cugen_backend.py",
         "genomeos/validation/cugen_format.py",
         "genomeos/validation/cugen_source.json",
         "genomeos/validation/ld_comparison.py",
@@ -512,7 +512,7 @@ def _verify_source_provenance(value: object) -> None:
         or cugen["allowlist_files"] != expected_files
     ):
         raise ValueError("CuGen source provenance does not match the pinned allowlist")
-    imported_paths = {"cugen/__init__.py", "cugen/subset.py", "cugen/ld.py"}
+    imported_paths = {"cugen/__init__.py", "cugen/write.py", "cugen/subset.py", "cugen/ld.py"}
     if set(cugen["imported_files"]) != imported_paths or any(
         cugen["imported_files"][path] != expected_files[path] for path in imported_paths
     ):

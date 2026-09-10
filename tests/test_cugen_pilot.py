@@ -8,6 +8,7 @@ import importlib.util
 import json
 import shutil
 import struct
+from dataclasses import FrozenInstanceError
 from pathlib import Path
 from typing import Any
 
@@ -119,15 +120,11 @@ def _install_boundary_double(
     *,
     gpu_result: pd.DataFrame | BaseException | None = None,
 ) -> None:
-    allowlist = pilot._source_manifest()
+    backend = importlib.import_module("genomeos.validation.cugen_backend")
+    allowlist = json.loads(
+        Path(pilot.__file__).with_name("cugen_source.json").read_text(encoding="utf-8")
+    )
     source_files = {item["path"]: item["sha256"] for item in allowlist["files"]}
-
-    def validated_source(_root: Path) -> dict[str, object]:
-        return {
-            "repository": allowlist["repository"],
-            "revision": allowlist["revision"],
-            "files": source_files,
-        }
 
     def subset(
         input_path: Path,
@@ -195,18 +192,20 @@ def _install_boundary_double(
             return gpu_result.copy()
         return _pair_frame()
 
-    monkeypatch.setattr(pilot, "_validate_cugen_source_root", validated_source)
     monkeypatch.setattr(
         pilot,
-        "_load_cugen_api",
-        lambda _root: (
-            subset,
-            ld_matrix,
-            {
-                "cugen/__init__.py": source_files["cugen/__init__.py"],
-                "cugen/subset.py": source_files["cugen/subset.py"],
-                "cugen/ld.py": source_files["cugen/ld.py"],
-            },
+        "load_verified_cugen_api",
+        lambda _root: backend.VerifiedCuGenAPI(
+            repository=allowlist["repository"],
+            revision=allowlist["revision"],
+            allowlist_files=tuple(sorted(source_files.items())),
+            imported_files=tuple(
+                (path, source_files[path])
+                for path in ("cugen/__init__.py", "cugen/write.py", "cugen/subset.py", "cugen/ld.py")
+            ),
+            write_cugen=lambda *_args, **_kwargs: None,
+            subset_cugen_file=subset,
+            ld_matrix=ld_matrix,
         ),
     )
 
@@ -395,25 +394,21 @@ def test_run_and_verify_cugen_pilot_recompute_completed_artifact(
     assert verified["joint_covariance_admitted"] is False
     assert verified["sources"]["genomeos"]["revision"] == REVISION
     assert verified["sources"]["genomeos"]["provenance"] == "supplied"
+    assert set(verified["sources"]["cugen"]["imported_files"]) == {
+        "cugen/__init__.py",
+        "cugen/write.py",
+        "cugen/subset.py",
+        "cugen/ld.py",
+    }
     assert verified["validation"]["cpu"]["passed"] is True
     assert verified["validation"]["gpu"]["passed"] is True
 
 
 def _forbid_import(monkeypatch: pytest.MonkeyPatch, pilot: Any) -> None:
-    monkeypatch.setattr(
-        pilot,
-        "_validate_cugen_source_root",
-        lambda _root: {
-            "repository": "https://github.com/bschilder/cugen",
-            "revision": "b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1",
-            "files": {"cugen/__init__.py": "0" * 64},
-        },
-    )
-
     def forbidden(_root: Path) -> object:
         raise AssertionError("invalid input reached CuGen import/device boundary")
 
-    monkeypatch.setattr(pilot, "_load_cugen_api", forbidden)
+    monkeypatch.setattr(pilot, "load_verified_cugen_api", forbidden)
 
 
 @pytest.mark.parametrize("evidence_kind", ["", "real_data", None, True])
@@ -543,14 +538,15 @@ def test_cugen_source_allowlist_matches_the_pinned_public_checkout() -> None:
     root = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
     if not root.is_dir():
         pytest.skip("controller-qualified pinned CuGen source is unavailable")
-    pilot, _ = _pilot_modules()
+    backend = importlib.import_module("genomeos.validation.cugen_backend")
 
-    result = pilot._validate_cugen_source_root(root)
+    result = backend.load_verified_cugen_api(root)
 
-    assert result["revision"] == "b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1"
-    assert len(result["files"]) == 37
+    assert result.revision == "b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1"
+    assert len(result.allowlist_files) == 37
     assert (
-        result["files"]["cugen/ld.py"] == "1a692f73109699b69840079b0ce28010dcc8a041d5be1e0893c449f34259ecab"
+        dict(result.allowlist_files)["cugen/ld.py"]
+        == "1a692f73109699b69840079b0ce28010dcc8a041d5be1e0893c449f34259ecab"
     )
 
 
@@ -559,16 +555,122 @@ def test_validated_pinned_root_resolves_actual_public_function_sources() -> None
     root = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
     if not root.is_dir():
         pytest.skip("controller-qualified pinned CuGen source is unavailable")
-    pilot, _ = _pilot_modules()
-    admitted = pilot._validate_cugen_source_root(root)
+    backend = importlib.import_module("genomeos.validation.cugen_backend")
+    admitted = backend.load_verified_cugen_api(root)
 
-    subset, ld_matrix, imported = pilot._load_cugen_api(root)
-
-    assert subset.__module__ == "cugen.subset"
-    assert ld_matrix.__module__ == "cugen.ld"
-    assert imported == {
-        path: admitted["files"][path] for path in ("cugen/__init__.py", "cugen/subset.py", "cugen/ld.py")
+    assert admitted.subset_cugen_file.__module__ == "cugen.subset"
+    assert admitted.ld_matrix.__module__ == "cugen.ld"
+    assert dict(admitted.imported_files) == {
+        path: dict(admitted.allowlist_files)[path]
+        for path in ("cugen/__init__.py", "cugen/write.py", "cugen/subset.py", "cugen/ld.py")
     }
+
+
+def test_public_source_loader_returns_frozen_writer_and_complete_public_provenance() -> None:
+    """Catch omitting the checked writer or exposing mutable source-hash provenance."""
+    root = Path("/private/tmp/genomeos-cugen-precision.jfAGjg/source")
+    assert root.is_dir(), "controller-qualified pinned CuGen source is required for Task 4"
+    backend_spec = importlib.util.find_spec("genomeos.validation.cugen_backend")
+    assert backend_spec is not None, "public checked CuGen source loader module must exist"
+    backend = importlib.import_module("genomeos.validation.cugen_backend")
+
+    api = backend.load_verified_cugen_api(root)
+
+    assert api.repository == "https://github.com/bschilder/cugen"
+    assert api.revision == "b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1"
+    assert isinstance(api.allowlist_files, tuple)
+    assert isinstance(api.imported_files, tuple)
+    assert dict(api.imported_files) == {
+        path: dict(api.allowlist_files)[path]
+        for path in ("cugen/__init__.py", "cugen/write.py", "cugen/subset.py", "cugen/ld.py")
+    }
+    assert api.write_cugen.__module__ == "cugen.write"
+    assert api.subset_cugen_file.__module__ == "cugen.subset"
+    assert api.ld_matrix.__module__ == "cugen.ld"
+    with pytest.raises(FrozenInstanceError):
+        api.revision = "0" * 40
+
+
+def test_adapter_emits_each_ordered_stage_boundary_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catch missing, duplicated, reordered, or incomplete observer stage boundaries."""
+    pilot, _ = _pilot_modules()
+    _install_boundary_double(monkeypatch, pilot)
+    observed: list[tuple[str, str]] = []
+    stages = (
+        "input_validation",
+        "source_snapshot",
+        "cugen_import",
+        "subset",
+        "training_validation",
+        "reference",
+        "cpu_ld",
+        "cpu_reconciliation",
+        "gpu_ld",
+        "gpu_reconciliation",
+        "artifact_write",
+        "artifact_verification",
+    )
+
+    pilot.run_cugen_pilot(
+        **_pilot_kwargs(tmp_path),
+        observer=lambda stage, event: observed.append((stage, event)),
+    )
+
+    assert observed == [(stage, event) for stage in stages for event in ("start", "end")]
+
+
+@pytest.mark.parametrize(
+    ("failed_stage", "failed_event"),
+    [("cpu_reconciliation", "start"), ("artifact_verification", "end")],
+)
+def test_observer_failure_leaves_active_stage_incomplete_and_removes_completion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failed_stage: str,
+    failed_event: str,
+) -> None:
+    """Catch observer exceptions being hidden or leaving a completed manifest behind."""
+    pilot, _ = _pilot_modules()
+    _install_boundary_double(monkeypatch, pilot)
+    observed: list[tuple[str, str]] = []
+
+    def observer(stage: str, event: str) -> None:
+        observed.append((stage, event))
+        if (stage, event) == (failed_stage, failed_event):
+            raise RuntimeError("controlled observer failure")
+
+    with pytest.raises(RuntimeError, match="controlled observer failure"):
+        pilot.run_cugen_pilot(**_pilot_kwargs(tmp_path), observer=observer)
+
+    output = tmp_path / "artifact"
+    failure = json.loads((output / "failure.json").read_text(encoding="utf-8"))
+    assert failure["stage"] == failed_stage
+    assert observed[-1] == (failed_stage, failed_event)
+    assert not (output / "manifest.json").exists()
+
+
+def test_passive_observer_cannot_change_scientific_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Catch measurement observation altering calls, pair results, or scientific identity."""
+    pilot, _ = _pilot_modules()
+    _install_boundary_double(monkeypatch, pilot)
+    first_args = _pilot_kwargs(tmp_path)
+    first_args["out"] = tmp_path / "without-observer"
+    first = json.loads(pilot.run_cugen_pilot(**first_args).read_text(encoding="utf-8"))
+    second_args = _pilot_kwargs(tmp_path)
+    second_args["out"] = tmp_path / "with-observer"
+    second = json.loads(
+        pilot.run_cugen_pilot(**second_args, observer=lambda _stage, _event: None).read_text(
+            encoding="utf-8"
+        )
+    )
+
+    assert first["scientific_identity_sha256"] == second["scientific_identity_sha256"]
+    for name in ("training.cugen", "reference.json", "cpu.tsv", "gpu.tsv", "validation.json"):
+        assert first["files"][name] == second["files"][name]
 
 
 def test_source_hash_mismatch_refuses_before_cugen_import(
@@ -585,11 +687,12 @@ def test_source_hash_mismatch_refuses_before_cugen_import(
     target.write_bytes(target.read_bytes() + b"\n")
     arguments = _pilot_kwargs(tmp_path)
     arguments["cugen_root"] = copied
+    backend = importlib.import_module("genomeos.validation.cugen_backend")
 
     def forbidden(_root: Path) -> object:
         raise AssertionError("source mismatch reached CuGen import")
 
-    monkeypatch.setattr(pilot, "_load_cugen_api", forbidden)
+    monkeypatch.setattr(backend, "_import_from_root", forbidden)
     with pytest.raises(ValueError, match="source hash mismatch"):
         pilot.run_cugen_pilot(**arguments)
     assert not (tmp_path / "artifact" / "manifest.json").exists()
@@ -671,13 +774,25 @@ def test_partial_subset_write_retains_failure_without_completion(
     """Catch a partial external write being mistaken for a completed training snapshot."""
     pilot, _ = _pilot_modules()
     _install_boundary_double(monkeypatch, pilot)
-    _subset, ld_matrix, imported = pilot._load_cugen_api(tmp_path)
+    admitted = pilot.load_verified_cugen_api(tmp_path)
 
     def partial_subset(_input: Path, output: Path, _indices: np.ndarray, **_kwargs: object) -> float:
         output.write_bytes(b"partial")
         raise RuntimeError("controlled partial subset failure")
 
-    monkeypatch.setattr(pilot, "_load_cugen_api", lambda _root: (partial_subset, ld_matrix, imported))
+    monkeypatch.setattr(
+        pilot,
+        "load_verified_cugen_api",
+        lambda _root: type(admitted)(
+            repository=admitted.repository,
+            revision=admitted.revision,
+            allowlist_files=admitted.allowlist_files,
+            imported_files=admitted.imported_files,
+            write_cugen=admitted.write_cugen,
+            subset_cugen_file=partial_subset,
+            ld_matrix=admitted.ld_matrix,
+        ),
+    )
     with pytest.raises(RuntimeError, match="partial subset"):
         pilot.run_cugen_pilot(**_pilot_kwargs(tmp_path))
     output = tmp_path / "artifact"
