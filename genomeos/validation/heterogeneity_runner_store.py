@@ -342,6 +342,7 @@ class LocalB0HStore:
                 return False
             if row != wanted:
                 raise StoreIntegrityError("immutable completion conflict")
+            self._check_publication_relationships(digest, receipt, encoded, failure)
             stage = self._stage(digest)
             if (
                 stage.completion != completion
@@ -419,12 +420,12 @@ class LocalB0HStore:
         ).fetchone()[0]:
             raise StoreIntegrityError("orphan payload; no receipt-only repair")
         if self._db.execute(
-            "SELECT count(*) FROM objects WHERE digest NOT IN ("
-            "SELECT manifest FROM campaign UNION SELECT admission FROM campaign "
-            "UNION SELECT null_reference FROM campaign UNION SELECT digest FROM starts "
-            "UNION SELECT start_digest FROM completions UNION SELECT digest FROM completions "
-            "UNION SELECT receipt FROM completions UNION SELECT failure FROM completions "
-            "UNION SELECT start_digest FROM losses UNION SELECT digest FROM losses)"
+            "SELECT count(*) FROM objects o WHERE NOT EXISTS ("
+            "SELECT 1 FROM campaign c WHERE o.digest IN (c.manifest,c.admission,c.null_reference)) "
+            "AND NOT EXISTS (SELECT 1 FROM starts s WHERE o.digest=s.digest) "
+            "AND NOT EXISTS (SELECT 1 FROM completions c WHERE o.digest IN "
+            "(c.start_digest,c.digest,c.receipt,c.failure)) "
+            "AND NOT EXISTS (SELECT 1 FROM losses l WHERE o.digest IN (l.start_digest,l.digest))"
         ).fetchone()[0]:
             raise StoreIntegrityError("orphan operational object; no receipt-only repair")
 
@@ -440,6 +441,17 @@ class LocalB0HStore:
     def record_owner_loss(self, start: StageStart) -> OwnerLoss:
         self._require_open()
         digest = record_digest(start)
+        retained = self._reader.record(digest, StageStart)
+        indexed = self._db.execute(
+            "SELECT case_id,stage,attempt FROM starts WHERE digest=?", (digest,)
+        ).fetchone()
+        expected_index = (
+            retained.key.case.canonical_id,
+            retained.key.stage,
+            -1 if retained.key.attempt_id is None else retained.key.attempt_id,
+        )
+        if retained != start or indexed != expected_index:
+            raise StoreIntegrityError("retained START differs from caller or index")
         prior = self._db.execute("SELECT digest FROM losses WHERE start_digest=?", (digest,)).fetchone()
         if prior is not None:
             loss = self._object(prior[0], OwnerLoss)

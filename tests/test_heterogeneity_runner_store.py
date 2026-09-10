@@ -435,3 +435,138 @@ def test_receipt_only_publication_is_refused_before_mutation(tmp_path):
         store._put_object(retained.receipt)
         with pytest.raises(storage.StoreIntegrityError):
             publish(store, retained)
+
+
+def test_loss_creation_refuses_corrupt_retained_start_index(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+        store._db.execute("UPDATE starts SET case_id=? WHERE digest=?", ("wrong-case", record_digest(start)))
+        with pytest.raises(storage.StoreIntegrityError):
+            store.record_owner_loss(start)
+
+
+def test_loss_null_and_unmatched_start_references_are_refused(tmp_path):
+    from genomeos.validation.heterogeneity_runner_records import OwnerLoss
+
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    loss = OwnerLoss(
+        format="b0h_owner_loss",
+        version="1",
+        start_sha256=record_digest(start),
+        previous_owner_id=start.owner_id,
+        observing_owner_id="new-owner",
+        observed_unix_ns=1,
+        evidence="prior_process_exclusion_released",
+        surviving_receipts=(),
+    )
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start)
+        loss_digest = store._put_object(loss)
+        store._db.execute("PRAGMA foreign_keys=OFF")
+        store._db.execute("INSERT INTO losses VALUES(NULL,?)", (loss_digest,))
+        store._db.execute("PRAGMA foreign_keys=ON")
+        with pytest.raises(storage.StoreIntegrityError):
+            store.inventory()
+
+
+def test_loss_unmatched_start_reference_is_refused(tmp_path):
+    from genomeos.validation.heterogeneity_runner_records import OwnerLoss
+
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    loss = OwnerLoss(
+        format="b0h_owner_loss",
+        version="1",
+        start_sha256=record_digest(start),
+        previous_owner_id=start.owner_id,
+        observing_owner_id="new-owner",
+        observed_unix_ns=1,
+        evidence="prior_process_exclusion_released",
+        surviving_receipts=(),
+    )
+    with storage.LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        store.start(start)
+        loss_digest = store._put_object(loss)
+        store._db.execute("PRAGMA foreign_keys=OFF")
+        store._db.execute("INSERT INTO losses VALUES(?,?)", ("missing-start", loss_digest))
+        store._db.execute("PRAGMA foreign_keys=ON")
+        with pytest.raises(storage.StoreIntegrityError):
+            store.inventory()
+
+
+def test_loss_stage_read_binds_indexed_start(tmp_path):
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    first, second = dataset(study=0, case_index=0), dataset(study=1, case_index=0)
+    start1, start2 = start_record(manifest, first), start_record(manifest, second)
+    path = tmp_path / "study.sqlite3"
+    with storage.LocalB0HStore.create(
+        path, manifest=manifest, admission=admission, null=null, owner_id="fixture-owner"
+    ) as store:
+        store.start(start1)
+        store.start(start2)
+    with storage.LocalB0HStore(
+        path, manifest=manifest, admission=admission, null=null, owner_id="new-owner"
+    ) as store:
+        loss = store.record_owner_loss(start1)
+        store._db.execute(
+            "UPDATE losses SET start_digest=? WHERE start_digest=?",
+            (record_digest(start2), record_digest(start1)),
+        )
+        with pytest.raises(storage.StoreIntegrityError):
+            store.stages(second.case_id)
+        assert loss.start_sha256 == record_digest(start1)
+
+
+def test_orphan_object_rejected_on_completed_reuse(tmp_path):
+    from genomeos.validation.heterogeneity_runner_records import OwnerLoss
+
+    storage = importlib.import_module("genomeos.validation.heterogeneity_runner_store")
+    manifest, admission, null = campaign(tmp_path)
+    data = dataset()
+    start = start_record(manifest, data)
+    retained = packet(manifest, start, data)
+    with storage.LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        store.start(start)
+        publish(store, retained)
+        store._put_object(
+            OwnerLoss(
+                format="b0h_owner_loss",
+                version="1",
+                start_sha256=record_digest(start),
+                previous_owner_id="other-owner",
+                observing_owner_id="third-owner",
+                observed_unix_ns=1,
+                evidence="prior_process_exclusion_released",
+                surviving_receipts=(),
+            )
+        )
+        with pytest.raises(storage.StoreIntegrityError):
+            publish(store, retained)
