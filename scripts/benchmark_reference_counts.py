@@ -8,8 +8,10 @@ Beta-binomial predictions are marginal and must never be interpreted as joint dr
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import importlib.metadata
+import io
 import json
 import re
 import subprocess
@@ -103,16 +105,27 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _sha(path: Path) -> dict[str, object]:
-    data = path.read_bytes()
+    return _bytes_record(path.read_bytes())
+
+
+def _bytes_record(data: bytes) -> dict[str, object]:
     return {"sha256": hashlib.sha256(data).hexdigest(), "size_bytes": len(data)}
 
 
-def _read_counts(path: Path) -> tuple[ReferenceCount, ...]:
-    raw = pd.read_csv(path, sep="\t", dtype=str, keep_default_na=False, na_filter=False)
-    if raw.columns.duplicated().any() or tuple(raw.columns) != COUNT_COLUMNS:
+def _read_counts(data: bytes) -> tuple[ReferenceCount, ...]:
+    text = data.decode("utf-8")
+    records = csv.reader(io.StringIO(text, newline=""), delimiter="\t", strict=True)
+    try:
+        header = next(records)
+    except StopIteration as error:
+        raise ValueError("count TSV must contain a header") from error
+    if tuple(header) != COUNT_COLUMNS:
         raise ValueError(f"count TSV columns must be exactly {list(COUNT_COLUMNS)}")
     rows = []
-    for source in raw.to_dict(orient="records"):
+    for line_number, record in enumerate(records, start=2):
+        if len(record) != len(COUNT_COLUMNS):
+            raise ValueError(f"count TSV logical record {line_number} must contain exactly 7 fields")
+        source = dict(zip(COUNT_COLUMNS, record, strict=True))
         for column in ("ac", "an"):
             token = source[column]
             if not INTEGER_TOKEN.fullmatch(token):
@@ -122,8 +135,8 @@ def _read_counts(path: Path) -> tuple[ReferenceCount, ...]:
     return validate_reference_counts(rows)
 
 
-def _read_dependencies(path: Path) -> tuple[tuple[tuple[str, str], ...], str]:
-    document = json.loads(path.read_text())
+def _read_dependencies(data: bytes) -> tuple[tuple[tuple[str, str], ...], str]:
+    document = json.loads(data)
     if not isinstance(document, dict) or set(document) != {"edges", "qualification"}:
         raise ValueError("dependency JSON must contain exactly edges and qualification")
     qualification = document["qualification"]
@@ -201,8 +214,14 @@ def run(args: argparse.Namespace) -> int:
     sources = _science_hashes()
     git_record = _git_record()
     package_versions = _package_versions()
-    rows = _read_counts(args.counts)
-    edges, qualification = _read_dependencies(args.dependencies)
+    counts_bytes = args.counts.read_bytes()
+    dependency_bytes = args.dependencies.read_bytes()
+    input_files = {
+        "counts": _bytes_record(counts_bytes),
+        "dependencies": _bytes_record(dependency_bytes),
+    }
+    rows = _read_counts(counts_bytes)
+    edges, qualification = _read_dependencies(dependency_bytes)
     split_seed, pit_seeds = _seeds(args.seed, args.folds)
     folds = reference_group_folds(rows, dependency_edges=edges, n_folds=args.folds, seed=split_seed)
 
@@ -315,7 +334,7 @@ def run(args: argparse.Namespace) -> int:
         ],
         "configuration": configuration,
         "dependency_qualification": qualification,
-        "input_files": {"counts": _sha(args.counts), "dependencies": _sha(args.dependencies)},
+        "input_files": input_files,
         "seeds": {
             "root": args.seed,
             "split": split_seed,

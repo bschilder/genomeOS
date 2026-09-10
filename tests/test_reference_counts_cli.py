@@ -190,6 +190,46 @@ def test_invalid_count_structure_publishes_no_artifacts(tmp_path, contents, mess
 
 
 @pytest.mark.parametrize(
+    "row",
+    [
+        "discarded\ta:v\tv\ta\tr\tblock\t1\t4",
+        "a:v\tv\ta\tr\tblock\t1",
+    ],
+)
+def test_count_rows_require_exact_quote_aware_field_count(tmp_path, row):
+    counts = tmp_path / "bad.tsv"
+    counts.write_text(
+        "record_id\tvariant_id\tgroup_id\tregion_id\tvariant_group\tac\tan\n"
+        f"{row}\n"
+    )
+    out = tmp_path / "out"
+
+    completed = _run(_command(out, counts=counts))
+
+    assert completed.returncode != 0
+    assert "exactly 7 fields" in completed.stderr
+    assert not out.exists()
+
+
+def test_quoted_literal_tokens_are_parsed_as_one_logical_field(tmp_path):
+    counts = tmp_path / "quoted.tsv"
+    counts.write_text(
+        "record_id\tvariant_id\tgroup_id\tregion_id\tvariant_group\tac\tan\n"
+        '"a:v"\tv\ta\t"r\t1"\tblock\t1\t4\n'
+        "b:v\tv\tb\tr2\tblock\t2\t4\n"
+    )
+    dependencies = tmp_path / "dependencies.json"
+    dependencies.write_text('{"edges": [], "qualification": "synthetic"}\n')
+    out = tmp_path / "out"
+
+    completed = _run(_command(out, counts=counts, dependencies=dependencies))
+
+    assert completed.returncode == 0, completed.stderr
+    predictions = pd.read_csv(out / "predictions.tsv", sep="\t", keep_default_na=False)
+    assert "r\t1" in set(predictions.region_id)
+
+
+@pytest.mark.parametrize(
     "document",
     [
         {"edges": [["a", "unknown"]], "qualification": "synthetic"},
@@ -298,3 +338,45 @@ def test_provenance_failure_publishes_no_output_directory(tmp_path, monkeypatch,
     with pytest.raises(ValueError, match="injected provenance failure"):
         runner.run(args)
     assert not out.exists()
+
+
+def test_inputs_are_hashed_from_consumed_snapshot_when_paths_change(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("reference_runner", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    counts = tmp_path / "counts.tsv"
+    dependencies = tmp_path / "dependencies.json"
+    original_counts = (FIXTURES / "counts.tsv").read_bytes()
+    original_dependencies = (FIXTURES / "dependencies.json").read_bytes()
+    counts.write_bytes(original_counts)
+    dependencies.write_bytes(original_dependencies)
+    out = tmp_path / "run"
+    args = runner._parser().parse_args(
+        _command(out, counts=counts, dependencies=dependencies)[2:]
+    )
+    real_fit = runner.fit_reference_b0
+    changed = False
+
+    def replace_inputs(*fit_args, **fit_kwargs):
+        nonlocal changed
+        if not changed:
+            counts.write_text("replacement bytes that were not consumed\n")
+            dependencies.unlink()
+            changed = True
+        return real_fit(*fit_args, **fit_kwargs)
+
+    monkeypatch.setattr(runner, "fit_reference_b0", replace_inputs)
+
+    assert runner.run(args) == 0
+    manifest = _json(out / "manifest.json")
+    assert manifest["input_files"] == {
+        "counts": {
+            "sha256": hashlib.sha256(original_counts).hexdigest(),
+            "size_bytes": len(original_counts),
+        },
+        "dependencies": {
+            "sha256": hashlib.sha256(original_dependencies).hexdigest(),
+            "size_bytes": len(original_dependencies),
+        },
+    }
