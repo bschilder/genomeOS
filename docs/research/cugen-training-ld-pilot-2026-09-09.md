@@ -49,7 +49,7 @@ The experiment report now records these separately scoped top-level intervals:
 | Field | Scope |
 |---|---|
 | `startup_seconds` | `main()` entry through argument parsing, in-main imports, case construction, planning and output/report initialization; excludes interpreter-before-main time |
-| `source_load_seconds` | verification and import of the exact qualified CuGen source plus executing-source provenance collection |
+| `source_load_seconds` | verification and import of the exact qualified CuGen source; later genomeOS revision and executing-file hash collection is outside this interval |
 | `cuda_preflight_seconds` | CuPy/device discovery, selection, synchronization and recorded hardware/environment identity |
 
 The corrected `measurement_scope.startup` value is

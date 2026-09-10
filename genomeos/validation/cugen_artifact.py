@@ -22,16 +22,17 @@ import pandas as pd
 from genomeos.validation.cugen_format import decode_cugen_bytes, estimate_ld_workspace
 from genomeos.validation.ld_comparison import LD_OUTPUT_COLUMNS, reconcile_ld_output
 from genomeos.validation.ld_contract import LDVariant, validate_training_selection
-from genomeos.validation.ld_reference import LDPair, VariantMoments, reference_ld, variant_moments
+from genomeos.validation.ld_reference import (
+    LDPair,
+    VariantMoments,
+    reference_ld,
+    validate_ld_evidence,
+    variant_moments,
+)
 
 DATA_FILES = (
-    "source.cugen",
-    "training.cugen",
-    "reference.json",
-    "cpu.tsv",
-    "gpu.tsv",
-    "validation.json",
-    "runtime.json",
+    "source.cugen", "training.cugen", "reference.json", "cpu.tsv", "gpu.tsv",
+    "validation.json", "runtime.json",
 )
 COMPLETE_MEMBERS = frozenset((*DATA_FILES, "manifest.json"))
 _INTEGER_COLUMNS = frozenset({"CHR_A", "POS_A", "CHR_B", "POS_B", "N_OBS", "gidx_a", "gidx_b"})
@@ -42,10 +43,8 @@ _GENOMEOS_SOURCE_PATHS = frozenset(
     {
         "genomeos/validation/cugen_pilot.py",
         "genomeos/validation/cugen_artifact.py", "genomeos/validation/cugen_backend.py",
-        "genomeos/validation/cugen_format.py",
-        "genomeos/validation/cugen_source.json",
-        "genomeos/validation/ld_comparison.py",
-        "genomeos/validation/ld_contract.py",
+        "genomeos/validation/cugen_format.py", "genomeos/validation/cugen_source.json",
+        "genomeos/validation/ld_comparison.py", "genomeos/validation/ld_contract.py",
         "genomeos/validation/ld_reference.py",
     }
 )
@@ -204,14 +203,9 @@ def write_completed_cugen_artifact(
     _require_data_version(data_version)
     _verify_runtime(runtime)
     reference_document = {
-        "schema_version": 1,
-        "genome_build": genome_build,
-        "ploidy": ploidy,
-        "data_version": data_version,
-        "window_variants": window_variants,
-        "window_bp": window_bp,
-        "chunk_size": chunk_size,
-        "tile_size": tile_size,
+        "schema_version": 1, "genome_build": genome_build, "ploidy": ploidy,
+        "data_version": data_version, "window_variants": window_variants,
+        "window_bp": window_bp, "chunk_size": chunk_size, "tile_size": tile_size,
         "variants": [_variant_record(item) for item in variants],
         "partition": _partition_record(selection),
         "workspace": asdict(workspace),  # type: ignore[arg-type]
@@ -222,32 +216,21 @@ def write_completed_cugen_artifact(
     _write_ld_tsv(out / "cpu.tsv", cpu)
     _write_ld_tsv(out / "gpu.tsv", gpu)
     validation = {
-        "schema_version": 1,
-        "subset_calls_exact": True,
-        "cpu": cpu_validation,
-        "gpu": gpu_validation,
+        "schema_version": 1, "subset_calls_exact": True,
+        "cpu": cpu_validation, "gpu": gpu_validation,
         "workspace": asdict(workspace),  # type: ignore[arg-type]
     }
     _write_exclusive(out / "validation.json", _canonical_json(validation))
     _write_exclusive(out / "runtime.json", _canonical_json(runtime))
     files = {name: _sha256_file(out / name) for name in DATA_FILES}
     manifest: dict[str, Any] = {
-        "schema_version": 1,
-        "status": "completed",
-        "evidence_kind": "synthetic_fixture",
-        "publication_eligible": False,
-        "joint_covariance_admitted": False,
-        "genome_build": genome_build,
-        "ploidy": ploidy,
-        "data_version": data_version,
-        "variants": reference_document["variants"],
-        "partition": reference_document["partition"],
+        "schema_version": 1, "status": "completed", "evidence_kind": "synthetic_fixture",
+        "publication_eligible": False, "joint_covariance_admitted": False,
+        "genome_build": genome_build, "ploidy": ploidy, "data_version": data_version,
+        "variants": reference_document["variants"], "partition": reference_document["partition"],
         "windows": {"window_variants": window_variants, "window_bp": window_bp},
-        "chunk_size": chunk_size,
-        "tile_size": tile_size,
-        "input": {"sha256": files["source.cugen"]},
-        "sources": sources,
-        "execution": execution,
+        "chunk_size": chunk_size, "tile_size": tile_size,
+        "input": {"sha256": files["source.cugen"]}, "sources": sources, "execution": execution,
         "validation": {"cpu": cpu_validation, "gpu": gpu_validation},
         "files": files,
     }
@@ -299,7 +282,19 @@ def _verify_runtime(runtime: object) -> None:
 
 
 def _records_equal(actual: object, expected: object, name: str) -> None:
-    if actual != expected:
+    if type(actual) is not type(expected):
+        raise ValueError(f"stored {name} has a substituted JSON value type")
+    if isinstance(actual, dict):
+        if actual.keys() != expected.keys():  # type: ignore[union-attr]
+            raise ValueError(f"stored {name} disagrees with independently recomputed evidence")
+        for key in actual:
+            _records_equal(actual[key], expected[key], f"{name}.{key}")  # type: ignore[index]
+    elif isinstance(actual, list):
+        if len(actual) != len(expected):  # type: ignore[arg-type]
+            raise ValueError(f"stored {name} disagrees with independently recomputed evidence")
+        for index, (actual_item, expected_item) in enumerate(zip(actual, expected, strict=True)):  # type: ignore[arg-type]
+            _records_equal(actual_item, expected_item, f"{name}[{index}]")
+    elif actual != expected:
         raise ValueError(f"stored {name} disagrees with independently recomputed evidence")
 
 
@@ -317,25 +312,10 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
     manifest = _require_keys(
         _json_file(root / "manifest.json"),
         {
-            "schema_version",
-            "status",
-            "evidence_kind",
-            "publication_eligible",
-            "joint_covariance_admitted",
-            "genome_build",
-            "ploidy",
-            "data_version",
-            "variants",
-            "partition",
-            "windows",
-            "chunk_size",
-            "tile_size",
-            "input",
-            "sources",
-            "execution",
-            "validation",
-            "files",
-            "scientific_identity_sha256",
+            "schema_version", "status", "evidence_kind", "publication_eligible",
+            "joint_covariance_admitted", "genome_build", "ploidy", "data_version", "variants",
+            "partition", "windows", "chunk_size", "tile_size", "input", "sources", "execution",
+            "validation", "files", "scientific_identity_sha256",
         },
         "manifest",
     )
@@ -365,25 +345,28 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
     reference_document = _require_keys(
         _json_file(root / "reference.json"),
         {
-            "schema_version",
-            "genome_build",
-            "ploidy",
-            "data_version",
-            "window_variants",
-            "window_bp",
-            "chunk_size",
-            "tile_size",
-            "variants",
-            "partition",
-            "workspace",
-            "moments",
-            "pairs",
+            "schema_version", "genome_build", "ploidy", "data_version", "window_variants",
+            "window_bp", "chunk_size", "tile_size", "variants", "partition", "workspace",
+            "moments", "pairs",
         },
         "reference.json",
     )
     _require_schema_version(reference_document, "reference.json")
     _require_data_version(reference_document["data_version"])
     variants = tuple(LDVariant(**item) for item in reference_document["variants"])
+    stored_moments = tuple(VariantMoments(**item) for item in reference_document["moments"])
+    stored_pairs = tuple(
+        LDPair(**{**item, "counts": tuple(item["counts"])})
+        for item in reference_document["pairs"]
+    )
+    try:
+        validate_ld_evidence(
+            stored_pairs, variants, stored_moments,
+            genome_build=reference_document["genome_build"],
+            ploidy=reference_document["ploidy"],
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"stored LD reference disagrees with recomputed evidence: {error}") from error
     partition = _require_keys(
         reference_document["partition"],
         {"sample_ids", "training_indices", "training_ids", "held_out_ids", "excluded_ids"},
@@ -411,8 +394,7 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
         "tile_size": reference_document["tile_size"],
     }
     for name, value in identity_checks.items():
-        if manifest[name] != value:
-            raise ValueError(f"manifest {name} disagrees with reference.json")
+        _records_equal(manifest[name], value, f"manifest {name}")
 
     source = decode_cugen_bytes(
         _bounded_cugen_member(root / "source.cugen"),
@@ -436,6 +418,12 @@ def verify_cugen_pilot(out: Path) -> dict[str, Any]:
         window_variants=reference_document["window_variants"],
         window_bp=reference_document["window_bp"],
     )
+    if not pairs:
+        raise ValueError("no_requested_pairs")
+    window_bp = reference_document["window_bp"]
+    window_kb = None if window_bp is None else window_bp / 1000.0
+    if window_bp is not None and round(window_kb * 1000) != window_bp:
+        raise ValueError("window_bp cannot round-trip exactly through CuGen window_kb")
     _records_equal(reference_document["moments"], [_moment_record(x) for x in moments], "moments")
     _records_equal(reference_document["pairs"], [_pair_record(x) for x in pairs], "LD reference")
     workspace = estimate_ld_workspace(
@@ -556,5 +544,4 @@ def _verify_execution(manifest: dict[str, Any]) -> None:
         {"path": "cugen.ld_matrix", "arguments": {**common, "backend": "numpy"}},
         {"path": "cugen.ld_matrix", "arguments": {**common, "backend": "gpu"}},
     ]
-    if manifest["execution"] != {"requested": expected, "executed": expected}:
-        raise ValueError("manifest public execution paths or arguments are invalid")
+    _records_equal(manifest["execution"], {"requested": expected, "executed": expected}, "execution")
