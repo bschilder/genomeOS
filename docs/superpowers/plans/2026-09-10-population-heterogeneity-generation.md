@@ -173,7 +173,12 @@ contextual bounds to callers. Case helpers validate before decoding. Row helper
 requires valid GenerationId, literaltrain/heldout, canonical string index0..15
 or permitted target kind, matching AN and valid integerAC. Structural cases have
 no heldout. Keep generation-only provenance/evidence wrappers local/private.
-Both production modules target500logical lines and retain the hard800/50KiB gate.
+The types module may exceed the preferred500logical-line target to keep result
+constructors with their defining joint validation; its readable post-split draft
+is about623lines, sampling about403. This documented target exception retains
+the hard800/50KiB gate. Record actual final sizes and the cohesion rationale in
+the evidence note/module docstring. Do not add a third support module or compress
+formatting/drop checks solely to hit500.
 Test original facade exports/import order plus supporting helper refusals; no
 random call, seed, scientific field or original interface is changed by the split.
 

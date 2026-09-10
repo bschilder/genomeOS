@@ -49,6 +49,14 @@ the original public API; supporting scalar/metadata helpers remain in the types
 module and are shared by constructor validation and sampling. This changes no
 scientific rule, random call order, seed, result field or facade signature.
 
+After the split, readable constructor and joint-result validation still requires
+about623 logical lines in the types module, while sampling is about403. Retain
+this cohesive contract file as a documented exception to the preferred500-line
+target, below the800-line/50KiB hard gate. A third module would separate result
+types from their defining cross-field validation and add another import boundary;
+neither dropping checks nor compressing formatting is acceptable. Record the
+actual final size in the evidence note and the rationale in the module docstring.
+
 Supporting typed interfaces in `heterogeneity_simulation_types`:
 
 ```python
