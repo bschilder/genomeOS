@@ -7,13 +7,16 @@ issue #151: exact AA/AS/SS genotype counts from Salih et al. 2010 Table 1
 (map to GRCh38 chr11-5227002-T-A, counted ALT A = HbS), origin is
 automated_proposal, reuse is no_restriction_found (CC BY 2.0 checked on the
 BMC and PMC surfaces), verification pending on every row, and the search
-manifest is reproducible.
+manifest is reproducible. The builder replay test at the bottom proves the
+committed payload fixtures regenerate the committed corpus files exactly.
 
 Run: pytest tests/test_literature_corpus_hbb_rs334_salih.py
 """
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +26,7 @@ from genomeos.observations.evidence import (
     validate_search_manifest,
 )
 
+REPO_ROOT = Path(__file__).parents[1]
 CORPUS = Path("tests/fixtures/literature/hbb-rs334-salih-2010")
 
 
@@ -111,3 +115,44 @@ def test_corpus_derived_counts_recompute_from_genotypes() -> None:
         payload = json.loads(raw)
         assert all(set(k) <= {"A", "C", "G", "T"} and len(k) == 2 for k in payload)
         assert "S" not in raw
+
+
+CRLF = bytes([13, 10])
+LF = bytes([10])
+
+
+def _normalised(path: Path) -> bytes:
+    """Read file bytes with line endings normalised to LF.
+
+    The repository stores the corpus TSVs with LF and the index agrees, but a
+    Windows checkout with core.autocrlf rewrites the working copy to CRLF, which
+    would otherwise fail the replay comparison for a reason unrelated to evidence.
+    """
+    return path.read_bytes().replace(CRLF, LF)
+
+
+def test_builder_replay_reproduces_the_committed_fixture(tmp_path: Path) -> None:
+    """Replaying the committed PubMed payloads must regenerate the shipped corpus.
+
+    This is what makes the builder's reproducibility claim checkable instead of
+    asserted: the committed ESearch payload fixtures are the only source, the builder
+    takes every timestamp from their capture metadata rather than the wall clock, and
+    the three corpus TSVs must come back identical.
+    """
+    out = tmp_path / "replay"
+    subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "scripts" / "build_hbb_salih_fixture.py"),
+            "--out",
+            str(out),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    for name in ("evidence.tsv", "field_evidence.tsv", "searches.tsv"):
+        replayed = _normalised(out / name)
+        committed = _normalised(REPO_ROOT / CORPUS / name)
+        assert replayed == committed, f"{name} does not replay from the committed payloads"

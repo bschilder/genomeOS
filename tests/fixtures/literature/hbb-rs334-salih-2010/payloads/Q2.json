@@ -1,0 +1,53 @@
+{
+ "database": "pubmed",
+ "query": "(\"sickle cell\"[Title] OR \"haemoglobin S\"[Title] OR \"hemoglobin S\"[Title]) AND (\"gene frequency\"[Title/Abstract] OR \"allele frequency\"[Title/Abstract]) AND (population[Title/Abstract] OR survey[Title/Abstract] OR community[Title/Abstract])",
+ "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+ "retmode": "json",
+ "retmax": "200",
+ "captured_at": "2026-09-09T04:23:22Z",
+ "response": {
+  "header": {
+   "type": "esearch",
+   "version": "0.3"
+  },
+  "esearchresult": {
+   "count": "30",
+   "retmax": "30",
+   "retstart": "0",
+   "idlist": [
+    "41290096",
+    "40141459",
+    "38965406",
+    "35300055",
+    "35193898",
+    "32924542",
+    "32384541",
+    "31631427",
+    "30523337",
+    "30216683",
+    "27028397",
+    "24558976",
+    "22595275",
+    "22183944",
+    "20113291",
+    "11924103",
+    "11767218",
+    "9209006",
+    "8980255",
+    "9049618",
+    "8854129",
+    "7563275",
+    "17587956",
+    "2004023",
+    "2050379",
+    "2010268",
+    "1750111",
+    "2892784",
+    "6510910",
+    "315213"
+   ],
+   "translationset": [],
+   "querytranslation": "(\"sickle cell\"[Title] OR \"haemoglobin S\"[Title] OR \"hemoglobin S\"[Title]) AND (\"gene frequency\"[Title/Abstract] OR \"allele frequency\"[Title/Abstract]) AND (\"population\"[Title/Abstract] OR \"survey\"[Title/Abstract] OR \"community\"[Title/Abstract])"
+  }
+ }
+}

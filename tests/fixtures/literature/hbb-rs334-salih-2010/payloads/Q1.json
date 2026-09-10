@@ -1,0 +1,32 @@
+{
+ "database": "pubmed",
+ "query": "rs334[All Fields] AND (population[Title/Abstract] OR frequency[Title/Abstract])",
+ "endpoint": "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi",
+ "retmode": "json",
+ "retmax": "200",
+ "captured_at": "2026-09-09T04:23:22Z",
+ "response": {
+  "header": {
+   "type": "esearch",
+   "version": "0.3"
+  },
+  "esearchresult": {
+   "count": "9",
+   "retmax": "9",
+   "retstart": "0",
+   "idlist": [
+    "42355421",
+    "38378484",
+    "35934714",
+    "35811813",
+    "35785794",
+    "35759254",
+    "33399855",
+    "29526279",
+    "20128890"
+   ],
+   "translationset": [],
+   "querytranslation": "\"rs334\"[All Fields] AND (\"population\"[Title/Abstract] OR \"frequency\"[Title/Abstract])"
+  }
+ }
+}
