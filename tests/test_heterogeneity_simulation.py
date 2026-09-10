@@ -754,6 +754,85 @@ def test_failure_constructor_rejects_impossible_operation_and_exception_states()
         )
 
 
+def test_failure_constructor_rejects_scalars_accepted_by_downstream_operation() -> None:
+    mixed = sim.generate_sbc_case(sim.SbcCaseId(0, 1, 0, 0))
+    ordinary = sim.generate_sbc_case(sim.SbcCaseId(0, 1, 13, 0))
+    shared = sim.generate_sbc_case(sim.SbcCaseId(0, 2, 3, 0))
+    assert isinstance(mixed, sim.GeneratedDataset)
+    assert isinstance(ordinary, sim.GeneratedDataset)
+    assert isinstance(shared, sim.GeneratedDataset)
+
+    accepted_returns = (
+        (ordinary, "training_population", 0, 0),
+        (ordinary, "heldout_population", 0, 0.5),
+        (shared, "training_cluster", 0, 1),
+        (shared, "heldout_cluster", 1, 1.0),
+        (shared, "training_switch", 0, 0.5),
+        (shared, "heldout_switch", 0, 0),
+        (ordinary, "training_count", 0, 10),
+        (ordinary, "heldout_count", 0, 20),
+        (mixed, "training_count", 0, 0),
+    )
+    for source, stage, index, offending in accepted_returns:
+        with pytest.raises(ValueError):
+            sim.GenerationFailure(
+                source.case_id,
+                source.provenance,
+                stage,
+                index,
+                "invalid_rng_scalar",
+                source.truth,
+                None,
+                None,
+                offending,
+                None,
+                None,
+            )
+
+
+def test_failure_constructor_preserves_scalars_refused_by_downstream_operation() -> None:
+    mixed = sim.generate_sbc_case(sim.SbcCaseId(0, 1, 0, 0))
+    ordinary = sim.generate_sbc_case(sim.SbcCaseId(0, 1, 13, 0))
+    shared = sim.generate_sbc_case(sim.SbcCaseId(0, 2, 3, 0))
+    assert isinstance(mixed, sim.GeneratedDataset)
+    assert isinstance(ordinary, sim.GeneratedDataset)
+    assert isinstance(shared, sim.GeneratedDataset)
+    huge = 10**10000
+
+    refused_returns = (
+        (ordinary, "training_population", 0, math.nan),
+        (ordinary, "heldout_population", 0, math.inf),
+        (shared, "training_cluster", 0, -0.1),
+        (shared, "heldout_cluster", 1, huge),
+        (shared, "training_switch", 0, 1.0),
+        (shared, "heldout_switch", 0, -0.1),
+        (ordinary, "training_count", 0, 10.0),
+        (ordinary, "heldout_count", 0, 21),
+        (mixed, "training_count", 0, 1),
+        (ordinary, "training_count", 0, huge),
+    )
+    for source, stage, index, offending in refused_returns:
+        failure = sim.GenerationFailure(
+            source.case_id,
+            source.provenance,
+            stage,
+            index,
+            "invalid_rng_scalar",
+            source.truth,
+            None,
+            None,
+            offending,
+            None,
+            None,
+        )
+        if isinstance(offending, float) and math.isnan(offending):
+            assert math.isnan(failure.offending_value)  # type: ignore[arg-type]
+        else:
+            assert failure.offending_value == offending
+        if offending is huge:
+            assert type(failure.offending_value) is int
+
+
 @pytest.mark.parametrize(
     "args",
     (

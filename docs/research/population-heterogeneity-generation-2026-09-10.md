@@ -19,8 +19,8 @@ The first readable single-module draft was about 610 logical lines/37 KiB. The
 controller ruled that sampling and contracts should be split, then retained the
 cohesive contract module as a documented exception to the preferred 500-line
 target rather than compress or drop joint validation. After fix review, the
-sampling module is 418 logical lines/16,449 bytes; the contract module is 725
-logical lines/34,855 bytes. Both remain below the hard 800-line/50-KiB gate.
+sampling module is 418 logical lines/16,449 bytes; the final contract module is
+764 logical lines/36,493 bytes. Both remain below the hard 800-line/50-KiB gate.
 
 Protocol is `b0h_sbc_v1`; algorithm is `b0h_generation_v1`; the bit generator is
 PCG64 with float64 arithmetic and `SEED = 42`. Entropy is exactly
@@ -66,7 +66,12 @@ to resolve. Failure construction enforces the exact case/truth/stage/index
 table, closed exception names, and mutually exclusive exception/scalar shape
 evidence. Invalid prior integer returns remain exact `float | int | None`
 candidate evidence, including integers beyond binary64 precision or range.
-There is no redraw or successful-subset path.
+For downstream `invalid_rng_scalar` artifacts, non-null evidence must also fail
+the actual operation domain: Beta values use finite supported `[0,1]`, switches
+use `[0,1)`, and counts use the index-specific integral Binomial range. Thus a
+float count such as `10.0`, switch value `1.0`, nonfinite or out-of-range value,
+and huge exact integer remain valid failure evidence, while a valid return may
+not certify a numerical refusal. There is no redraw or successful-subset path.
 
 ## Shared-history derivation
 
@@ -121,6 +126,15 @@ all 16 training plus one rho-zero/boundary heldout Binomial calls, preserve huge
 integer evidence, enforce the failure-state table, and check endpoint accounting,
 AN=0 behavior, all failure stages, immutability, paired-track reuse, and order
 independence.
+
+Final-review TDD added two constructor tests. The targeted RED command reported
+`1 failed, 1 passed in 0.58s`: contradictory valid downstream evidence was
+accepted while legitimate invalid evidence already remained accepted. Targeted
+GREEN reported `2 passed in 0.55s`; the complete focused generator file then
+reported `69 passed in 0.57s`. Final smoke again reported current contracts, 40
+dots and `smoke checks passed`; Ruff, module-size, privacy and whitespace gates
+all exited zero. The controller's earlier `1389 passed, 17 skipped` full-suite
+run predates this final-fix commit and is not evidence for the corrected head.
 
 These checks do not establish exact mathematical continuous draws from NumPy,
 sampler calibration, convergence, timing, demographic realism, biological

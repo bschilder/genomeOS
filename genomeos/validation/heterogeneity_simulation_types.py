@@ -707,6 +707,8 @@ class GenerationFailure:
                 and not self._same_scalar(candidate, offending)
             ):
                 raise ValueError("invalid prior candidate must match offending evidence")
+            if offending is not None:
+                self._validate_invalid_scalar_evidence(case, index, offending)
         if self.reason == "rounded_prior_boundary":
             expected = mean if mean in (0.0, 1.0) else rho
             if offending is None or not self._same_scalar(expected, offending):
@@ -789,6 +791,44 @@ class GenerationFailure:
         if index not in allowed:
             raise ValueError("failure index is outside its case and stage domain")
         return index
+
+    def _validate_invalid_scalar_evidence(
+        self, case: SbcCaseId, index: int | None, offending: float | int
+    ) -> None:
+        beta_stages = {
+            "truth_mean",
+            "truth_rho",
+            "training_cluster",
+            "training_population",
+            "heldout_cluster",
+            "heldout_population",
+        }
+        if self.stage in beta_stages:
+            try:
+                simulation_probability(offending, "offending_value")
+            except ValueError:
+                return
+            raise ValueError("invalid Beta evidence must be outside the accepted probability domain")
+        if self.stage in {"training_switch", "heldout_switch"}:
+            try:
+                uniform = simulation_probability(offending, "offending_value")
+            except ValueError:
+                return
+            if uniform < 1.0:
+                raise ValueError("invalid switch evidence must be outside [0, 1)")
+            return
+        try:
+            count = simulation_integer(offending, "offending_value")
+        except ValueError:
+            return
+        if self.stage == "training_count":
+            if index is None:  # pragma: no cover - operation validation establishes this
+                raise ValueError("training count evidence requires an index")
+            an = simulation_training_an(case)[index]
+        else:
+            an = 20
+        if 0 <= count <= an:
+            raise ValueError("invalid count evidence must fail its exact Binomial domain")
 
     @staticmethod
     def _same_scalar(left: float | int | None, right: float | int | None) -> bool:
