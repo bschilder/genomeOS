@@ -90,6 +90,40 @@ by summing every independently verified parent interval may be testable. It must
 carry its own provenance and complete-support checks, not overwrite or silently
 repair the monthly product. Temperature and other months require their own checks.
 
+## Complete-year and temperature follow-up
+
+A subsequent bounded check compared all three-hour values with all twelve
+monthly means at the returned grid coordinate 30° N, 31° E for 1980 (SI) and
+1981 (MO). Both temperature and precipitation had complete, finite half-open
+year windows: 2,928 intervals in the leap year and 2,920 in the common year.
+The temperature parents were the catalogue-linked `2mSI/air.2m.1980.nc` and
+`2mMO/air.2m.1981.nc`; monthly temperature was
+`Monthlies/2mSI-MO/air.2m.mon.mean.nc`. No genetic site or land-support identity
+is assigned to this nominal grid coordinate.
+
+Duration-weighted annual temperature and summed annual precipitation differed
+from the corresponding monthly-derived diagnostics by amounts small when
+expressed in stored-value Float32 ULPs. However, some monthly differences exceeded one stored-value ULP, reaching
+about 1.83 ULP. Opposite-signed monthly residuals partly cancel annually: annual
+agreement does not establish that each month agrees. The one-ULP and accumulated
+annual thresholds are **report-declared diagnostic scales**; retained evidence
+does not establish prospective declaration. They are not environmental-error
+models or acceptance thresholds for predictive performance.
+
+For January 1806 temperature at the three original cells, the all-248 means
+differed from the monthly values by approximately -1.61, -0.83 and +10.28 ULP.
+Removing the first eight intervals worsened every comparison. Temperature thus
+does not support the closer 240-interval pattern seen in precipitation. Even
+the latter pattern is approximate: after explicit Float32 decoding, its residuals
+were about 1.23–2.49 ULP, not exact equality or a confirmed omission mechanism.
+
+An independent retained-data check reproduced the annual arithmetic and matched
+all 12,491 field values bitwise between eight ASCII/DODS subset pairs after
+decoding the declared Float32 representation. This excludes decimal-printing
+differences for those pairs, not unknown upstream aggregation/rounding effects.
+There is no new claim about global coverage, actual environmental accuracy,
+uncertainty calibration, or usefulness for predicting allele frequency.
+
 ## Reproduction and boundaries
 
 The parent check used the provider's OPeNDAP ASCII response with the literal
@@ -102,9 +136,10 @@ These are response hashes, not whole-NetCDF checksums. Raw responses, exact
 retrievals and arithmetic transcripts remain local source-inspection evidence;
 no climate arrays or genetic records are committed by this note.
 
-The next bounded check compares a complete leap/common-year pair and tests
-whether the early-month discrepancy also affects temperature. It is not yet
-completed here. Provider CC0 terms were inspected in the preceding qualification;
+The leap/common-year and temperature follow-up above is complete at its stated
+small scope; it does not admit an extractor or climate feature. Its additional
+retained captures total 968,446 bytes, not complete NetCDF assets. Provider CC0
+terms were inspected in the preceding qualification;
 asset identity, decoding and genetic utility remain distinct gates. Later model
 experiments must use unchanged outcome rows, dependency-aware held-out partitions
 and source-family controls, with failed coverage and folds retained explicitly.
