@@ -10,6 +10,7 @@ import numpy as np
 import pymc as pm
 import xarray as xr
 
+from genomeos.surfaces.heterogeneity_likelihood import beta_binomial_logp
 from genomeos.surfaces.heterogeneity_types import (
     MAX_RHAT,
     MIN_ESS,
@@ -215,13 +216,14 @@ def fit_reference_population_heterogeneity(
             "mean", config.mean_prior_alpha, config.mean_prior_beta, dims="variant"
         )
         rho = pm.Beta("rho", config.rho_prior_alpha, config.rho_prior_beta, dims="variant")
-        kappa = (1.0 - rho) / rho
-        pm.BetaBinomial(
+        pm.CustomDist(
             "obs",
-            n=an,
-            alpha=mean[index] * kappa[index],
-            beta=(1.0 - mean[index]) * kappa[index],
+            an,
+            mean[index],
+            rho[index],
+            logp=beta_binomial_logp,
             observed=ac,
+            dtype="int64",
         )
         idata = pm.sample(
             draws=config.draws,
