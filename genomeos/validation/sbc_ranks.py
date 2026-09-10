@@ -37,6 +37,19 @@ def _finite_real(value: object, name: str) -> float:
     return normalized
 
 
+def _rank_scalar(value: object, name: str) -> int | float:
+    """Preserve exact integers and normalize only binary64-or-narrower floats."""
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer or binary64 float scalar")
+    if isinstance(value, Integral):
+        return int(value)
+    if isinstance(value, float):
+        return _finite_real(value, name)
+    if type(value) in (np.float16, np.float32, np.float64):
+        return _finite_real(value, name)
+    raise ValueError(f"{name} must be an integer or binary64 float scalar")
+
+
 def _sequence(value: object, name: str) -> tuple[object, ...]:
     try:
         return tuple(value)  # type: ignore[arg-type]
@@ -65,13 +78,13 @@ def _ranks(value: object) -> tuple[int, ...]:
 
 
 def randomized_rank(truth: float, draws: Sequence[float], *, seed: int) -> int:
-    """Rank a literal truth among exactly four draws, randomizing exact ties."""
-    normalized_truth = _finite_real(truth, "truth")
+    """Rank an exact integer or binary64 float among four values with literal ties."""
+    normalized_truth = _rank_scalar(truth, "truth")
     consumed_draws = _sequence(draws, "draws")
     if len(consumed_draws) != _DRAW_COUNT:
         raise ValueError("draws must contain exactly four values")
     normalized_draws = tuple(
-        _finite_real(draw, f"draws[{index}]")
+        _rank_scalar(draw, f"draws[{index}]")
         for index, draw in enumerate(consumed_draws)
     )
     normalized_seed = _integer(seed, "seed")

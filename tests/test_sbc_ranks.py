@@ -6,6 +6,7 @@ import itertools
 import math
 from collections import Counter
 from dataclasses import FrozenInstanceError
+from fractions import Fraction
 
 import numpy as np
 import pytest
@@ -35,6 +36,28 @@ def test_randomized_rank_has_exact_endpoints_and_partial_ties() -> None:
     assert sbc.randomized_rank(2.0, (1.0, 2.0, 2.0, 2.0), seed=73) == 4
 
 
+@pytest.mark.parametrize(
+    ("truth", "draws", "expected"),
+    [
+        (2**53, tuple(2**53 + offset for offset in range(1, 5)), 0),
+        (
+            np.int64(2**53 + 4),
+            tuple(np.int64(2**53 + offset) for offset in range(4)),
+            4,
+        ),
+        (
+            float(2**53),
+            tuple(np.int64(2**53 + offset) for offset in range(1, 5)),
+            0,
+        ),
+    ],
+)
+def test_randomized_rank_preserves_integer_order_at_binary64_boundary(
+    truth: object, draws: tuple[object, ...], expected: int
+) -> None:
+    assert sbc.randomized_rank(truth, draws, seed=0) == expected  # type: ignore[arg-type]
+
+
 def test_randomized_rank_ties_are_literal_and_seeded() -> None:
     truth = 1.0
     just_above = math.nextafter(truth, math.inf)
@@ -54,6 +77,14 @@ def test_randomized_rank_ties_are_literal_and_seeded() -> None:
 def test_randomized_rank_rejects_invalid_truth(truth: object) -> None:
     with pytest.raises(ValueError):
         sbc.randomized_rank(truth, (0.0, 1.0, 2.0, 3.0), seed=0)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("unsupported", [Fraction(1, 2), np.longdouble("0.5")])
+def test_randomized_rank_rejects_non_binary64_real_domains(unsupported: object) -> None:
+    with pytest.raises(ValueError):
+        sbc.randomized_rank(unsupported, (0.0, 1.0, 2.0, 3.0), seed=0)  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        sbc.randomized_rank(0.0, (0.0, 1.0, 2.0, unsupported), seed=0)  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
