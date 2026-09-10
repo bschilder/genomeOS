@@ -503,3 +503,149 @@ a 0.003 bound.
 This corrected synthetic result supports computational fidelity for the declared bounded
 checks only. It does not establish empirical improvement, broad calibration, robustness to
 misspecification, geographic validity, or a real-data advantage over B0.
+
+### Exact post-correction commands and outcomes
+
+The implementation agent executed the following commands from the repository root with the
+locked Python 3.12 environment. The sampler inputs, seeds, draws, chains, thresholds, and frozen
+tests were unchanged. `JAX_ENABLE_X64=true` was present for the unchanged sampler matrix and the
+combined regression run:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest \
+tests/test_reference_heterogeneity_sampling.py -s
+```
+
+Outcome: `1 passed in 7.77s`, exit 0. The original, identical-seed repeat, and complement fits
+had zero divergences; the identical-seed arrays were exactly equal; all 24 exact
+moment/predictive comparisons passed.
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest \
+tests/test_reference_heterogeneity_quadrature.py -s
+```
+
+Outcome: `6 passed in 23.90s`, exit 0. Both quadrature-refinement nodes and all four actual NUTS
+tracks passed; all 132 bounded comparisons passed and all tracks had zero divergences. Pytest's
+elapsed time combines compilation and sampling, so no component timing is inferred.
+
+After that complete successful run, the implementation agent made this same-seed, same-config
+evidence-capture invocation solely to retain the complete per-quantity JSON printed by the four
+already-passing actual NUTS nodes. It was not a retry or favorable seed selection:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest \
+tests/test_reference_heterogeneity_quadrature.py -s -q -k actual_nuts
+```
+
+Outcome: exit 0; all four selected actual NUTS nodes passed and two nonselected refinement nodes
+were deselected.
+
+The combined focused regression command was:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest \
+tests/test_heterogeneity_likelihood.py tests/test_heterogeneity_oracle.py \
+tests/test_reference_heterogeneity.py tests/test_reference_heterogeneity_sampling.py \
+tests/test_reference_heterogeneity_quadrature.py tests/test_reference_counts.py -q
+```
+
+Outcome: `230 passed`, exit 0.
+
+After the numerical tests' x64 setting was scoped to a restoring per-test fixture, the complete
+standalone numerical file was rerun without an ambient `JAX_ENABLE_X64` override:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest \
+tests/test_heterogeneity_likelihood.py -q
+```
+
+Outcome: `32 passed`, exit 0. This confirms that those tests establish and restore their required
+JAX precision instead of depending on process-wide ambient state.
+
+The implementation-agent repository gates were:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/ruff check .
+
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_module_size.py
+
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
+
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+JAX_ENABLE_X64=true \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/smoke.py
+
+git diff --cached --check
+git diff --cached --name-only
+```
+
+Outcomes: Ruff passed; the module-size check passed for 71 modules; the staged privacy check
+passed for 690 tracked files; smoke reported the contract up to date and 40 tests passing;
+`git diff --cached --check` exited 0; and the staged-path listing contained exactly the five
+implementation files recorded in the likelihood note.
+
+### Separate root full-CI validation
+
+At clean commit `625e08405ee8a2eb7e2082734f50a7a48b7f378d`, the root controller—not the
+implementation agent—ran the full suite without an ambient `JAX_ENABLE_X64` override:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
+PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor \
+MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib \
+/private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python -m pytest
+```
+
+Outcome: `1139 passed, 17 skipped, 15 existing Rasterio warnings in 392.30s`, exit 0.
+
+The root controller also ran these gates with the same prefix and locked environment, again
+without an ambient `JAX_ENABLE_X64` override:
+
+```bash
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/ruff check .
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/freeze_contract.py --check
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_module_size.py
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/check_private_files.py
+PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib /private/tmp/genomeos-af-locked.vIVN0z/venv/bin/python scripts/smoke.py
+git diff --check
+git diff --cached --name-only
+```
+
+All commands exited 0: Ruff and the frozen-contract check passed, module size covered 71 modules,
+privacy covered 690 files, and smoke passed 40 tests. `git diff --check` passed,
+`git diff --cached --name-only` was empty, and no tracked changes were present throughout this
+root validation.
