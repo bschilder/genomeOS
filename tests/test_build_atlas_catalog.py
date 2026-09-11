@@ -23,6 +23,7 @@ def _source(root: Path, *, declared_rows: int = 1) -> Path:
                 "variant_id": VARIANT,
                 "post_mean": 0.1,
                 "post_sd": 0.01,
+                "prior_frequency_sd": 0.05000000000000001,
                 "q025": 0.08,
                 "q975": 0.12,
                 "support": "observed",
@@ -84,6 +85,8 @@ def test_builds_a_catalog_the_api_can_query(tmp_path):
     assert rows[0]["h3_resolution"] == 3
     assert rows[0]["lat"] == pytest.approx(5.56, abs=1.0)
     assert manifest.variant(VARIANT).observations is None
+    stored = pd.read_parquet(out / manifest.variant(VARIANT).surface.path)
+    assert stored["prior_frequency_sd"].iloc[0] == 0.05000000000000001
 
 
 def test_refuses_implicit_metadata_bad_counts_and_overwrite(tmp_path):

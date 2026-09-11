@@ -26,7 +26,7 @@ export const metricDomainsSchema = z.strictObject({
 });
 
 const artifactIdentityFields = {
-  artifact_format: z.union([z.literal(1), z.literal(2)]),
+  artifact_format: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   data_version: nonEmpty,
   entity_type: z.enum(['variant', 'allele', 'gene', 'phenotype']),
   hf_dataset: nonEmpty,
@@ -47,28 +47,28 @@ const artifactIdentityFields = {
   target_grid_version: nonEmpty.optional(),
 };
 
-function requireFormat2TargetGrid(
+function requireVersionedTargetGrid(
   value: {
-    artifact_format: 1 | 2;
+    artifact_format: 1 | 2 | 3;
     target_grid_source?: string;
     target_grid_version?: string;
   },
   context: z.RefinementCtx,
 ): void {
   if (
-    value.artifact_format === 2 &&
+    value.artifact_format >= 2 &&
     (!value.target_grid_source || !value.target_grid_version)
   ) {
     context.addIssue({
       code: 'custom',
-      message: 'artifact format 2 requires target-grid source and version',
+      message: 'artifact formats 2 and 3 require target-grid source and version',
     });
   }
 }
 
 export const artifactIdentitySchema = z
   .strictObject(artifactIdentityFields)
-  .superRefine(requireFormat2TargetGrid);
+  .superRefine(requireVersionedTargetGrid);
 
 const supportCountsSchema = z.partialRecord(
   supportSchema,
@@ -161,7 +161,7 @@ export const artifactRefSchema = z
     }),
   ])
   .superRefine((value, context) => {
-    requireFormat2TargetGrid(value, context);
+    requireVersionedTargetGrid(value, context);
     if (
       (value.downloads.observations === null) !==
       !value.observations_available

@@ -40,8 +40,9 @@ from genomeos.observations.sources import (  # noqa: E402
     map_g6pd,
     map_surveys,
 )
-from genomeos.surfaces.fit import FitConfig, fit_surface, load_fit, save_fit  # noqa: E402
+from genomeos.surfaces.fit import SEED, FitConfig, fit_surface, load_fit, save_fit  # noqa: E402
 from genomeos.surfaces.mask import MaskConfig, classify_support  # noqa: E402
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION  # noqa: E402
 from genomeos.viz.basemap import draw_countries, h3_land_cells, h3_polygons  # noqa: E402
 
 MASKED = ("unknown", "prior_dominated", "unpopulated")
@@ -108,6 +109,124 @@ def display_name(variant_id: str) -> str:
 # A different family for uncertainty: two panels drawn in one palette invite reading a
 # standard deviation as a frequency.
 UNCERTAINTY_CMAP = "magma"
+
+
+def _validated_cache_arrays(
+    *,
+    h3_index,
+    lat,
+    lon,
+    central,
+    sd,
+    prior_sd,
+) -> dict[str, np.ndarray]:
+    cells = np.asarray(h3_index, dtype=str)
+    arrays = {
+        "h3_index": cells,
+        "lat": np.asarray(lat, dtype=float),
+        "lon": np.asarray(lon, dtype=float),
+        "central": np.asarray(central, dtype=float),
+        "sd": np.asarray(sd, dtype=float),
+        "prior_sd": np.asarray(prior_sd, dtype=float),
+    }
+    expected = (len(cells),)
+    if not cells.ndim == 1 or len(cells) == 0 or any(a.shape != expected for a in arrays.values()):
+        raise ValueError("plot cache arrays must be aligned nonempty one-dimensional vectors")
+    for name in ("lat", "lon", "central", "sd", "prior_sd"):
+        if not np.isfinite(arrays[name]).all():
+            raise ValueError(f"plot cache {name} must be finite")
+    if (arrays["prior_sd"] <= 0).any():
+        raise ValueError("plot cache prior_sd must be positive")
+    return arrays
+
+
+def write_prediction_cache(
+    path: Path,
+    *,
+    h3_index,
+    lat,
+    lon,
+    central,
+    sd,
+    prior_sd,
+    range_km: float,
+    prior_seed: int,
+) -> Path:
+    """Write a format-2 plot cache whose cell identities bind every per-cell value."""
+    path = Path(path)
+    if path.exists():
+        raise FileExistsError(f"{path} already exists; keep it and choose a new cache path")
+    arrays = _validated_cache_arrays(
+        h3_index=h3_index, lat=lat, lon=lon, central=central, sd=sd, prior_sd=prior_sd
+    )
+    if not np.isfinite(range_km) or range_km <= 0:
+        raise ValueError("plot cache range_km must be finite and positive")
+    if isinstance(prior_seed, bool) or not isinstance(prior_seed, int) or prior_seed < 0:
+        raise ValueError("plot cache prior_seed must be a nonnegative integer")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez(
+        path,
+        cache_format=2,
+        prior_normalization=PRIOR_NORMALIZATION,
+        prior_draws=PRIOR_DRAWS,
+        prior_seed=prior_seed,
+        range_km=range_km,
+        **arrays,
+    )
+    return path
+
+
+def read_prediction_cache(
+    path: Path, *, h3_index, lat, lon, prior_seed: int
+) -> dict[str, np.ndarray | float]:
+    """Read a plot cache only when its protocol and ordered query grid match exactly."""
+    path = Path(path)
+    message = f"{path}: incompatible plot cache; keep it and choose a new cache path"
+    with np.load(path, allow_pickle=False) as cached:
+        required = {
+            "cache_format", "prior_normalization", "prior_draws", "prior_seed", "range_km",
+            "h3_index", "lat", "lon", "central", "sd", "prior_sd",
+        }
+        if required - set(cached.files):
+            raise ValueError(message)
+        stored_draws = cached["prior_draws"].item()
+        stored_seed = cached["prior_seed"].item()
+        if (
+            int(cached["cache_format"]) != 2
+            or str(cached["prior_normalization"]) != PRIOR_NORMALIZATION
+            or isinstance(stored_draws, (bool, np.bool_))
+            or not isinstance(stored_draws, (int, np.integer))
+            or stored_draws != PRIOR_DRAWS
+            or isinstance(stored_seed, (bool, np.bool_))
+            or not isinstance(stored_seed, (int, np.integer))
+            or stored_seed < 0
+            or stored_seed != prior_seed
+        ):
+            raise ValueError(message)
+        try:
+            arrays = _validated_cache_arrays(
+                h3_index=cached["h3_index"],
+                lat=cached["lat"],
+                lon=cached["lon"],
+                central=cached["central"],
+                sd=cached["sd"],
+                prior_sd=cached["prior_sd"],
+            )
+        except ValueError as error:
+            raise ValueError(f"{message}: {error}") from error
+        expected_cells = np.asarray(h3_index, dtype=str)
+        expected_lat = np.asarray(lat, dtype=float)
+        expected_lon = np.asarray(lon, dtype=float)
+        if (
+            not np.array_equal(arrays["h3_index"], expected_cells)
+            or not np.array_equal(arrays["lat"], expected_lat)
+            or not np.array_equal(arrays["lon"], expected_lon)
+        ):
+            raise ValueError(f"{message}; grid identity or coordinates changed")
+        range_km = float(cached["range_km"])
+    if not np.isfinite(range_km) or range_km <= 0:
+        raise ValueError(message)
+    return {**arrays, "range_km": range_km}
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
@@ -342,14 +461,15 @@ def main() -> None:
     print(f"H3 res {args.h3_res}: {len(cells)} land cells, {len(polygons)} drawable")
 
     if args.cache and args.cache.exists():
-        cached = np.load(args.cache, allow_pickle=False)
-        if len(cached["central"]) != len(cell_lat):
-            raise SystemExit(
-                f"{args.cache} holds {len(cached['central'])} cells but H3 res {args.h3_res} "
-                f"has {len(cell_lat)}; delete the cache or match the resolution"
-            )
+        cached = read_prediction_cache(
+            args.cache,
+            h3_index=np.asarray(cells)[kept],
+            lat=cell_lat,
+            lon=cell_lon,
+            prior_seed=SEED,
+        )
         central, sd = cached["central"], cached["sd"]
-        correlation_range_km, prior_sd = float(cached["range_km"]), float(cached["prior_sd"])
+        correlation_range_km, prior_sd = cached["range_km"], cached["prior_sd"]
         print(f"reused predictions from {args.cache} (no refit)")
     else:
         if args.fit and args.fit.exists():
@@ -371,15 +491,25 @@ def main() -> None:
         predicted = fit.predict(lat=cell_lat, lon=cell_lon)
         central = predicted["post_median"].to_numpy()
         sd = predicted["post_sd"].to_numpy()
-        correlation_range_km, prior_sd = fit.correlation_range_km, fit.prior_frequency_sd
+        correlation_range_km = fit.correlation_range_km
+        prior_sd = fit.prior_frequency_sd_at(lat=cell_lat, lon=cell_lon)
         if args.cache:
-            args.cache.parent.mkdir(parents=True, exist_ok=True)
-            np.savez(
-                args.cache, central=central, sd=sd,
-                range_km=correlation_range_km, prior_sd=prior_sd,
+            write_prediction_cache(
+                args.cache,
+                h3_index=np.asarray(cells)[kept],
+                lat=cell_lat,
+                lon=cell_lon,
+                central=central,
+                sd=sd,
+                range_km=correlation_range_km,
+                prior_sd=prior_sd,
+                prior_seed=fit.config.seed,
             )
             print(f"cached predictions to {args.cache}")
-    print(f"correlation range {correlation_range_km:.0f} km, prior sd {prior_sd:.3f}")
+    print(
+        f"correlation range {correlation_range_km:.0f} km, "
+        f"local prior sd min {np.min(prior_sd):.3f}, max {np.max(prior_sd):.3f}"
+    )
 
     obs_lat = observations["lat"].to_numpy()
     obs_lon = observations["lon"].to_numpy()

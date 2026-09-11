@@ -105,6 +105,26 @@ const discoveryGroups = [
 ];
 
 describe('atlas browser contracts', () => {
+  it('accepts format 3 with target-grid identity and refuses it without provenance', () => {
+    const format3 = {
+      ...artifact,
+      artifact_format: 3,
+      target_grid_source: 'worldpop-1km-unconstrained',
+      target_grid_version: 'fixture-2020',
+    };
+    expect(
+      surfaceArtifactSchema.parse({ artifact: format3, cells: [cell], schema_version: 1 })
+        .artifact.artifact_format,
+    ).toBe(3);
+    expect(() =>
+      surfaceArtifactSchema.parse({
+        artifact: { ...artifact, artifact_format: 3 },
+        cells: [cell],
+        schema_version: 1,
+      }),
+    ).toThrow(/target-grid/);
+  });
+
   it('accepts a complete source-backed observation', () => {
     const parsed = observationArtifactSchema.parse({
       artifact,

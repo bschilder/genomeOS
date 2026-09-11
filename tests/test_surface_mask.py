@@ -1,5 +1,6 @@
 """Data-support mask tests (design §7, §7.1b, §10)."""
 
+import h3
 import numpy as np
 import pandas as pd
 import pytest
@@ -121,7 +122,8 @@ def test_evaluate_cells_produces_the_spec_columns(fitted):
     frame = evaluate_cells(fit, obs, cells[:12], MaskConfig())
     assert set(frame.columns) == {
         "h3_index", "lat", "lon", "post_mean", "post_sd", "q025", "q975",
-        "posterior_contraction", "dist_nearest_obs_km", "eff_n_in_range", "support",
+        "prior_frequency_sd", "posterior_contraction", "dist_nearest_obs_km",
+        "eff_n_in_range", "support",
     }
     assert len(frame) == 12
     assert set(frame["support"]) <= set(SUPPORT_STATES)
@@ -131,7 +133,12 @@ def test_posterior_contraction_is_a_ratio_against_the_prior(fitted):
     fit, obs = fitted
     frame = evaluate_cells(fit, obs, candidate_cells(obs, MaskConfig())[:12], MaskConfig())
     assert (frame["posterior_contraction"] > 0).all()
-    assert fit.prior_frequency_sd > 0
+    np.testing.assert_allclose(
+        frame["posterior_contraction"],
+        frame["post_sd"] / frame["prior_frequency_sd"],
+        rtol=0,
+        atol=0,
+    )
 
 
 def test_cells_near_observations_carry_effective_sample_size(fitted):
@@ -139,3 +146,68 @@ def test_cells_near_observations_carry_effective_sample_size(fitted):
     frame = evaluate_cells(fit, obs, candidate_cells(obs, MaskConfig())[:12], MaskConfig())
     assert (frame["eff_n_in_range"] >= 0).all()
     assert frame["eff_n_in_range"].max() > 0, "some cell must be within range of an observation"
+
+
+class _LocalPriorFit:
+    correlation_range_km = 1000.0
+
+    def __init__(self, ratio: np.ndarray | None = None):
+        self.ratio = ratio
+
+    def prior_frequency_sd_at(self, lat, lon):
+        return np.array([0.05, 0.08, 0.11], dtype=float)
+
+    def predict(self, lat, lon):
+        prior = self.prior_frequency_sd_at(lat, lon)
+        ratio = np.ones(3) if self.ratio is None else self.ratio
+        sd = prior * ratio
+        return pd.DataFrame(
+            {
+                "post_mean": [0.10, 0.20, 0.30],
+                "post_sd": sd,
+                "q025": [0.01, 0.02, 0.03],
+                "q975": [0.20, 0.30, 0.40],
+            }
+        )
+
+
+def _local_prior_case():
+    observed = h3.latlng_to_cell(0.0, 0.0, 4)
+    in_range = h3.latlng_to_cell(0.0, 4.0, 4)
+    far = h3.latlng_to_cell(50.0, 120.0, 4)
+    observations = pd.DataFrame({"lat": [0.0], "lon": [0.0], "an": [200]})
+    return [observed, in_range, far], observations
+
+
+def test_evaluate_cells_normalizes_by_each_cells_own_prior_sd():
+    cells, observations = _local_prior_case()
+    frame = evaluate_cells(_LocalPriorFit(), observations, cells, MaskConfig(resolution=4))
+
+    np.testing.assert_array_equal(frame["prior_frequency_sd"], [0.05, 0.08, 0.11])
+    np.testing.assert_allclose(frame["posterior_contraction"], 1.0, rtol=0, atol=0)
+    assert frame.loc[0, "support"] == "observed"
+    assert frame.loc[1, "support"] == "prior_dominated"
+    assert frame.loc[2, "support"] == "unknown"
+
+
+def test_local_contraction_changes_only_the_supported_unobserved_cell():
+    cells, observations = _local_prior_case()
+    frame = evaluate_cells(
+        _LocalPriorFit(np.array([1.0, 0.8, 1.0])),
+        observations,
+        cells,
+        MaskConfig(resolution=4),
+    )
+    assert frame.loc[1, "support"] == "interpolated"
+    result = aggregate_cells(frame)
+    assert result.value == pytest.approx(0.15)
+    assert result.unmapped_fraction == pytest.approx(1 / 3)
+
+
+@pytest.mark.parametrize("bad", [[0.05, 0.0, 0.11], [0.05, np.nan, 0.11]])
+def test_evaluate_cells_refuses_malformed_local_prior_sd(bad):
+    cells, observations = _local_prior_case()
+    fit = _LocalPriorFit()
+    fit.prior_frequency_sd_at = lambda lat, lon: np.asarray(bad)
+    with pytest.raises(ValueError, match="prior.*positive.*finite|finite.*positive"):
+        evaluate_cells(fit, observations, cells, MaskConfig(resolution=4))
