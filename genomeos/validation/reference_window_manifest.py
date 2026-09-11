@@ -270,6 +270,12 @@ def _config_payload(config: WindowConfig) -> dict[str, object]:
     }
 
 
+def encode_window_config(config: WindowConfig) -> bytes:
+    """Encode window-selection configuration as canonical provenance bytes."""
+    _require(type(config) is WindowConfig, "config must be WindowConfig")
+    return _canonical(_config_payload(config))
+
+
 def _object_payload(value: PublicObject) -> dict[str, object]:
     return {
         "uri": value.uri,
@@ -467,6 +473,11 @@ def decode_manifest(raw: bytes, *, windows_bytes: bytes) -> WindowManifest:
     )
     _require(manifest.schema_version == MANIFEST_SCHEMA_VERSION, "unsupported manifest schema_version")
     _require(manifest.config.schema_version == CONFIG_SCHEMA_VERSION, "unsupported config schema_version")
+    config_hash = dict(manifest.provenance.input_sha256)["selection_config"]
+    _require(
+        config_hash == hashlib.sha256(encode_window_config(manifest.config)).hexdigest(),
+        "selection_config hash does not match configuration",
+    )
     _require(
         manifest.windows == select_reference_windows(manifest.contig_lengths, manifest.config),
         "window geometry does not match deterministic selection",

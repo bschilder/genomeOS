@@ -10,6 +10,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from genomeos.validation.reference_window_manifest import decode_manifest, encode_window_config
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "freeze_reference_windows.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "reference_windows"
@@ -57,6 +59,9 @@ def test_freeze_is_byte_reproducible_and_records_bounded_provenance(tmp_path):
     assert (first / "manifest.json").read_bytes() == (second / "manifest.json").read_bytes()
 
     manifest = json.loads((first / "manifest.json").read_bytes())
+    decoded = decode_manifest(
+        (first / "manifest.json").read_bytes(), windows_bytes=(first / "windows.tsv").read_bytes()
+    )
     assert manifest["schema_version"] == "reference_windows_v1"
     assert manifest["omitted_source_chromosomes"] == ["chrX", "chrY"]
     assert manifest["contig_evidence"] == "saved_pilot_header_declarations"
@@ -79,6 +84,9 @@ def test_freeze_is_byte_reproducible_and_records_bounded_provenance(tmp_path):
         "scripts/freeze_reference_windows.py",
     }
     assert len(manifest["provenance"]["source_revision"]) == 40
+    assert manifest["provenance"]["input_sha256"]["selection_config"] == hashlib.sha256(
+        encode_window_config(decoded.config)
+    ).hexdigest()
     assert manifest["windows_sha256"] == hashlib.sha256((first / "windows.tsv").read_bytes()).hexdigest()
     assert manifest["windows_sha256"] == "73cc7af1f6b5b0d3811cf3f659a3ba7cd6173db9c73376227d4d90ce60958032"
 

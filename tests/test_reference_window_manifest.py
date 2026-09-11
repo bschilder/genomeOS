@@ -224,6 +224,15 @@ def test_manifest_rejects_noncanonical_json_bytes(valid_manifest_payload, window
         decode_manifest(raw, windows_bytes=window_bytes)
 
 
+def test_manifest_rejects_inconsistent_selection_config_hash(valid_manifest_payload, window_bytes):
+    original = valid_manifest_payload["provenance"]["input_sha256"]["selection_config"]
+    replacement = "0" * 64 if original != "0" * 64 else "1" * 64
+    valid_manifest_payload["provenance"]["input_sha256"]["selection_config"] = replacement
+
+    with pytest.raises(ValueError, match="selection_config"):
+        decode_manifest(_canonical(valid_manifest_payload), windows_bytes=window_bytes)
+
+
 @pytest.mark.parametrize("value", [True, 1.5, "10000"])
 def test_width_requires_integer(valid_manifest_payload, window_bytes, value):
     valid_manifest_payload["config"]["width"] = value

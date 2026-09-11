@@ -5,11 +5,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import platform
 import subprocess
 import sys
-from dataclasses import asdict
 from pathlib import Path
 
 import numpy as np
@@ -24,6 +22,7 @@ import genomeos.validation.reference_window_types as types_module  # noqa: E402
 import genomeos.validation.reference_windows as windows_module  # noqa: E402
 from genomeos.validation.reference_window_manifest import (  # noqa: E402
     encode_manifest,
+    encode_window_config,
     parse_contig_declarations,
     parse_source_listing,
     windows_tsv,
@@ -84,12 +83,6 @@ def _read_bounded(path: Path, limit: int, description: str) -> bytes:
 
 def _sha256(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
-
-
-def _canonical(value: object) -> bytes:
-    return (
-        json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False) + "\n"
-    ).encode("utf-8")
 
 
 def _source_revision() -> str:
@@ -170,7 +163,7 @@ def _build(args: argparse.Namespace) -> tuple[bytes, bytes]:
                 "source_metadata": _sha256(source_raw),
                 "contigs": _sha256(contig_raw),
                 "source_audit": _sha256(audit_raw),
-                "selection_config": _sha256(_canonical(asdict(config))),
+                "selection_config": _sha256(encode_window_config(config)),
             }.items()
         )
     )
