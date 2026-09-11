@@ -203,6 +203,18 @@ def test_an_artifact_from_an_unknown_format_is_refused_not_misread(tmp_path):
         read(directory)
 
 
+@pytest.mark.parametrize("bad_format", [True, 2.0, 3.0, "3", 2.9])
+def test_artifact_read_refuses_noninteger_or_boolean_format(tmp_path, bad_format):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "manifest.json"
+    payload = json.loads(path.read_text())
+    payload["artifact_format"] = bad_format
+    path.write_text(json.dumps(payload))
+
+    with pytest.raises(ValueError, match="artifact_format"):
+        read(directory)
+
+
 def test_a_phenotype_composite_round_trips(tmp_path):
     """`phenotype:g6pd-deficiency` contains a colon, which is not a safe path component
     everywhere; the directory name must be sanitised without losing the id in the data."""
@@ -323,6 +335,38 @@ def test_format_three_refuses_malformed_per_cell_prior_before_creating_directory
     assert not list(tmp_path.iterdir())
 
 
+@pytest.mark.parametrize("column", ["prior_frequency_sd", "post_sd", "posterior_contraction"])
+@pytest.mark.parametrize("bad_kind", ["numeric_strings", "booleans"])
+def test_format_three_publish_refuses_nonnumeric_sd_columns_before_creating_directory(
+    tmp_path, column, bad_kind
+):
+    frame = _frame()
+    if bad_kind == "numeric_strings":
+        frame[column] = frame[column].map(str)
+    else:
+        frame[column] = True
+
+    with pytest.raises(ValueError, match="numeric.*Boolean"):
+        publish(frame, tmp_path, manifest=_manifest())
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("column", ["prior_frequency_sd", "post_sd", "posterior_contraction"])
+@pytest.mark.parametrize("bad_kind", ["numeric_strings", "booleans"])
+def test_format_three_read_refuses_nonnumeric_sd_columns(tmp_path, column, bad_kind):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "cells.parquet"
+    frame = pd.read_parquet(path)
+    if bad_kind == "numeric_strings":
+        frame[column] = frame[column].map(str)
+    else:
+        frame[column] = True
+    frame.to_parquet(path, index=False)
+
+    with pytest.raises(ValueError, match="numeric.*Boolean"):
+        read(directory)
+
+
 def test_format_three_refuses_inconsistent_contraction(tmp_path):
     frame = _frame()
     frame.loc[0, "posterior_contraction"] += 1e-6
@@ -349,35 +393,85 @@ def test_format_three_round_trips_nontrivial_binary64_prior_values(tmp_path):
     np.testing.assert_array_equal(restored["prior_frequency_sd"].to_numpy(), values)
 
 
-def test_cell_table_normalizes_by_aligned_local_prior_sd():
+def test_cell_table_normalizes_by_aligned_local_prior_sd_and_preserves_support_rules():
+    class Fit:
+        correlation_range_km = 1000.0
+
+        def __init__(self, post_sd):
+            self.post_sd = post_sd
+
+        def predict(self, lat, lon):
+            return pd.DataFrame(
+                {
+                    "post_median": [0.1, 0.2, 0.3],
+                    "post_mean": [0.1, 0.2, 0.3],
+                    "post_sd": self.post_sd,
+                    "q025": [0.01, 0.02, 0.03],
+                    "q975": [0.2, 0.3, 0.4],
+                    "q25": [0.05, 0.1, 0.15],
+                    "q75": [0.15, 0.25, 0.35],
+                }
+            )
+
+        def prior_frequency_sd_at(self, lat, lon):
+            return np.array([0.05, 0.10, 0.20])
+
+    frame = cell_table(
+        Fit([0.05, 0.10, 0.20]),
+        h3_index=["83754efffffffff", "837541fffffffff", "837543fffffffff"],
+        lat=np.array([0.0, 0.0, 0.0]),
+        lon=np.array([0.0, 4.0, 30.0]),
+        observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
+        variant_id="chr11-5227002-T-A",
+        model_version="v2",
+        data_version="test",
+    )
+    np.testing.assert_array_equal(frame["prior_frequency_sd"], [0.05, 0.10, 0.20])
+    np.testing.assert_allclose(frame["posterior_contraction"], 1.0, rtol=0, atol=0)
+    assert frame["support"].tolist() == ["observed", "prior_dominated", "unknown"]
+
+    contracted = cell_table(
+        Fit([0.05, 0.08, 0.20]),
+        h3_index=frame["h3_index"].tolist(),
+        lat=np.array([0.0, 0.0, 0.0]),
+        lon=np.array([0.0, 4.0, 30.0]),
+        observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
+        variant_id="chr11-5227002-T-A",
+        model_version="v2",
+        data_version="test",
+    )
+    assert contracted.loc[1, "posterior_contraction"] == pytest.approx(0.8)
+    assert contracted.loc[1, "support"] == "interpolated"
+
+
+@pytest.mark.parametrize(
+    "bad_prior",
+    [np.array([0.0]), np.array([np.nan]), 0.05, np.array([0.05, 0.06])],
+    ids=["zero", "nan", "scalar", "misaligned"],
+)
+def test_cell_table_refuses_malformed_local_prior_provider(bad_prior):
     class Fit:
         correlation_range_km = 1000.0
 
         def predict(self, lat, lon):
             return pd.DataFrame(
                 {
-                    "post_median": [0.1, 0.2],
-                    "post_mean": [0.1, 0.2],
-                    "post_sd": [0.05, 0.08],
-                    "q025": [0.01, 0.02],
-                    "q975": [0.2, 0.3],
-                    "q25": [0.05, 0.1],
-                    "q75": [0.15, 0.25],
+                    "post_median": [0.1], "post_mean": [0.1], "post_sd": [0.05],
+                    "q025": [0.01], "q975": [0.2], "q25": [0.05], "q75": [0.15],
                 }
             )
 
         def prior_frequency_sd_at(self, lat, lon):
-            return np.array([0.05, 0.08])
+            return bad_prior
 
-    frame = cell_table(
-        Fit(),
-        h3_index=["83754efffffffff", "837541fffffffff"],
-        lat=np.array([0.0, 0.0]),
-        lon=np.array([0.0, 4.0]),
-        observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
-        variant_id="chr11-5227002-T-A",
-        model_version="v2",
-        data_version="test",
-    )
-    np.testing.assert_array_equal(frame["prior_frequency_sd"], [0.05, 0.08])
-    np.testing.assert_allclose(frame["posterior_contraction"], 1.0, rtol=0, atol=0)
+    with pytest.raises(ValueError, match="finite positive vector"):
+        cell_table(
+            Fit(),
+            h3_index=["83754efffffffff"],
+            lat=np.array([0.0]),
+            lon=np.array([0.0]),
+            observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
+            variant_id="chr11-5227002-T-A",
+            model_version="v2",
+            data_version="test",
+        )

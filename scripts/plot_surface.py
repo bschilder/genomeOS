@@ -40,7 +40,7 @@ from genomeos.observations.sources import (  # noqa: E402
     map_g6pd,
     map_surveys,
 )
-from genomeos.surfaces.fit import SEED, FitConfig, fit_surface, load_fit, save_fit  # noqa: E402
+from genomeos.surfaces.fit import FitConfig, fit_surface, load_fit, save_fit  # noqa: E402
 from genomeos.surfaces.mask import MaskConfig, classify_support  # noqa: E402
 from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION  # noqa: E402
 from genomeos.viz.basemap import draw_countries, h3_land_cells, h3_polygons  # noqa: E402
@@ -164,24 +164,34 @@ def write_prediction_cache(
     if isinstance(prior_seed, bool) or not isinstance(prior_seed, int) or prior_seed < 0:
         raise ValueError("plot cache prior_seed must be a nonnegative integer")
     path.parent.mkdir(parents=True, exist_ok=True)
-    np.savez(
-        path,
-        cache_format=2,
-        prior_normalization=PRIOR_NORMALIZATION,
-        prior_draws=PRIOR_DRAWS,
-        prior_seed=prior_seed,
-        range_km=range_km,
-        **arrays,
-    )
+    try:
+        with path.open("xb") as stream:
+            np.savez(
+                stream,
+                cache_format=2,
+                prior_normalization=PRIOR_NORMALIZATION,
+                prior_draws=PRIOR_DRAWS,
+                prior_seed=prior_seed,
+                range_km=range_km,
+                **arrays,
+            )
+    except FileExistsError as error:
+        raise FileExistsError(
+            f"{path} already exists; keep it and choose a new cache path"
+        ) from error
     return path
 
 
 def read_prediction_cache(
-    path: Path, *, h3_index, lat, lon, prior_seed: int
-) -> dict[str, np.ndarray | float]:
+    path: Path, *, h3_index, lat, lon, prior_seed: int | None = None
+) -> dict[str, np.ndarray | float | int]:
     """Read a plot cache only when its protocol and ordered query grid match exactly."""
     path = Path(path)
     message = f"{path}: incompatible plot cache; keep it and choose a new cache path"
+    if prior_seed is not None and (
+        isinstance(prior_seed, bool) or not isinstance(prior_seed, int) or prior_seed < 0
+    ):
+        raise ValueError("expected plot cache prior_seed must be a nonnegative integer")
     with np.load(path, allow_pickle=False) as cached:
         required = {
             "cache_format", "prior_normalization", "prior_draws", "prior_seed", "range_km",
@@ -189,18 +199,23 @@ def read_prediction_cache(
         }
         if required - set(cached.files):
             raise ValueError(message)
+        stored_format = cached["cache_format"].item()
+        stored_normalization = cached["prior_normalization"].item()
         stored_draws = cached["prior_draws"].item()
         stored_seed = cached["prior_seed"].item()
         if (
-            int(cached["cache_format"]) != 2
-            or str(cached["prior_normalization"]) != PRIOR_NORMALIZATION
+            isinstance(stored_format, (bool, np.bool_))
+            or not isinstance(stored_format, (int, np.integer))
+            or stored_format != 2
+            or not isinstance(stored_normalization, str)
+            or stored_normalization != PRIOR_NORMALIZATION
             or isinstance(stored_draws, (bool, np.bool_))
             or not isinstance(stored_draws, (int, np.integer))
             or stored_draws != PRIOR_DRAWS
             or isinstance(stored_seed, (bool, np.bool_))
             or not isinstance(stored_seed, (int, np.integer))
             or stored_seed < 0
-            or stored_seed != prior_seed
+            or (prior_seed is not None and stored_seed != prior_seed)
         ):
             raise ValueError(message)
         try:
@@ -226,7 +241,7 @@ def read_prediction_cache(
         range_km = float(cached["range_km"])
     if not np.isfinite(range_km) or range_km <= 0:
         raise ValueError(message)
-    return {**arrays, "range_km": range_km}
+    return {**arrays, "range_km": range_km, "prior_seed": int(stored_seed)}
 
 
 def _haversine_km(lat1, lon1, lat2, lon2):
@@ -461,12 +476,16 @@ def main() -> None:
     print(f"H3 res {args.h3_res}: {len(cells)} land cells, {len(polygons)} drawable")
 
     if args.cache and args.cache.exists():
+        expected_prior_seed = None
+        if args.fit and args.fit.exists():
+            retained_fit = load_fit(args.fit)
+            expected_prior_seed = retained_fit.config.seed
         cached = read_prediction_cache(
             args.cache,
             h3_index=np.asarray(cells)[kept],
             lat=cell_lat,
             lon=cell_lon,
-            prior_seed=SEED,
+            prior_seed=expected_prior_seed,
         )
         central, sd = cached["central"], cached["sd"]
         correlation_range_km, prior_sd = cached["range_km"], cached["prior_sd"]

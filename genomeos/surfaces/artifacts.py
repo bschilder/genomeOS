@@ -29,6 +29,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from genomeos.surfaces.fit import SurfaceFit
 from genomeos.surfaces.mask import MaskConfig, classify_support
@@ -105,7 +106,11 @@ class ArtifactManifest:
     artifact_format: int = ARTIFACT_FORMAT
 
     def __post_init__(self) -> None:
-        if self.artifact_format != ARTIFACT_FORMAT:
+        if (
+            isinstance(self.artifact_format, bool)
+            or not isinstance(self.artifact_format, int)
+            or self.artifact_format != ARTIFACT_FORMAT
+        ):
             raise ValueError(f"new manifests must use artifact_format {ARTIFACT_FORMAT}")
         if self.measurement not in MEASUREMENTS:
             raise ValueError(
@@ -223,7 +228,11 @@ def read(directory: Path) -> tuple[pd.DataFrame, dict]:
     directory = Path(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
     artifact_format = manifest.get("artifact_format")
-    if artifact_format not in READABLE_ARTIFACT_FORMATS:
+    if (
+        isinstance(artifact_format, bool)
+        or not isinstance(artifact_format, int)
+        or artifact_format not in READABLE_ARTIFACT_FORMATS
+    ):
         raise ValueError(
             f"{directory} is artifact_format {artifact_format!r}; "
             f"this build reads {sorted(READABLE_ARTIFACT_FORMATS)}"
@@ -264,9 +273,19 @@ def _validate_current(frame: pd.DataFrame, manifest: dict, *, context: str) -> N
     missing = set(ARTIFACT_COLUMNS) - set(frame.columns)
     if missing:
         raise ValueError(f"{context}: missing format-3 columns {sorted(missing)}")
-    prior_sd = pd.to_numeric(frame["prior_frequency_sd"], errors="coerce").to_numpy()
-    post_sd = pd.to_numeric(frame["post_sd"], errors="coerce").to_numpy()
-    contraction = pd.to_numeric(frame["posterior_contraction"], errors="coerce").to_numpy()
+    values: dict[str, np.ndarray] = {}
+    for field in ("prior_frequency_sd", "post_sd", "posterior_contraction"):
+        series = frame[field]
+        if (
+            is_bool_dtype(series.dtype)
+            or is_complex_dtype(series.dtype)
+            or not is_numeric_dtype(series.dtype)
+        ):
+            raise ValueError(f"{context}: {field} must have a numeric, non-Boolean dtype")
+        values[field] = series.to_numpy(dtype=np.float64, na_value=np.nan)
+    prior_sd = values["prior_frequency_sd"]
+    post_sd = values["post_sd"]
+    contraction = values["posterior_contraction"]
     if prior_sd.shape != (len(frame),) or not np.isfinite(prior_sd).all() or (prior_sd <= 0).any():
         raise ValueError(f"{context}: prior_frequency_sd must be finite and positive per cell")
     if (

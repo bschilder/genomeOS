@@ -415,6 +415,20 @@ def test_export_refuses_malformed_format_three_and_unknown_versions(
         _export(export_inputs)
 
 
+@pytest.mark.parametrize("bad_format", [True, 2.0, 3.0, "3", 2.9])
+def test_export_refuses_noninteger_or_boolean_artifact_format(
+    export_inputs: dict[str, Path], bad_format
+) -> None:
+    artifact = _upgrade_fixture_to_format_three(export_inputs)
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["artifact_format"] = bad_format
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match="artifact_format"):
+        _export(export_inputs)
+
+
 def test_export_refuses_variant_mismatch(export_inputs: dict[str, Path]) -> None:
     artifact = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test"
     cells = pd.read_parquet(artifact / "cells.parquet")
