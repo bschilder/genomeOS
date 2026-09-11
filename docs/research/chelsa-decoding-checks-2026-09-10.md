@@ -115,10 +115,49 @@ that Rasterio/GDAL and Pillow load distinct LibTIFF binaries, with distinct
 install names and hashes, and recalculated the saved arithmetic.
 
 No fixed point was a valid zero or source nodata cell: both real-cell checks
-remain **unmet**. Synthetic zero/sentinel guard examples test software behavior
-only; they do not replace those observations. No replacement coordinates were
-searched. Validity near nominal (0,0) further illustrates why a nodata mask
+were **unmet in that fixed-point audit**. Synthetic zero/sentinel guard examples
+test software behavior only; they do not replace those observations. No replacement
+coordinates were searched for that audit. Validity near nominal (0,0) illustrates why a nodata mask
 cannot serve as a land mask. Land, ocean and coastal support remain unqualified.
+
+## Subsequent source-zero and nodata control
+
+A separate control on September 11, 2026 (UTC), froze a deterministic search rule
+before pixel access: base TIFF blocks in block-row/block-column order, then cells
+in local row/column order, retaining at most the first valid raw zero and first
+raw `65535` per raster. This new source-inspection control does not replace or
+expand the earlier six-point acceptance set. It used the same unchanged files,
+checked by size and SHA-256 before and after execution, with no downloads.
+
+| Asset | Base blocks inspected | Result |
+|---|---:|---|
+| `tas` | 3,485 of 3,485 | Neither raw `0` nor `65535` occurred; no real temperature zero/sentinel cell was available to check independently. |
+| `pr` | 3,434 of 3,485 | Valid raw zero at row 7,428, column 24,063; raw `65535` at row 20,877, column 16,950. |
+
+The precipitation zero has native mask 255 and decodes to `0.0` under the stored
+packing. The sentinel has mask 0 and remains unavailable, rather than being scaled
+into a climate value. Pillow-bundled LibTIFF independently reproduced both packed
+values; Pillow's TIFF-directory tags and manual affine arithmetic reproduced both
+pixel centers within 1e-12 degrees. The edge tile was clipped to the actual raster
+height for selection, so the sentinel is an in-image source cell. Both paths
+decoded individual tiles without allocating a full raster array.
+
+The frozen rule SHA-256 is
+`1892e32f9a6158f41882fafc1b1e30f0dc8cc448d2ba2f6a152f295b82ddd35c`;
+the result SHA-256 is
+`860ae54b8f83fa670ce8ca38b03f3f2341d053cd9c1223f31affbf5628943d6a`.
+The same Python/NumPy/Rasterio/GDAL/Pillow versions listed below were used, with
+LibTIFF 4.7.1 on the recorded little-endian runtime. An independent automated
+review approved the bounded results and checked the distinct decoder binaries,
+selection arithmetic, edge handling, hashes and missing-value refusal. Portable
+native-buffer byte-order behavior beyond this runtime is not qualified. Local code
+order and timestamps support the prospective sequence; they are not a tamper-evident
+preregistration. Scripts, results and review evidence remain preserved locally.
+
+This resolves the two precipitation packed-value/missingness controls. It does not
+establish land support, precipitation temporal semantics, climate accuracy or
+suitability as a genetic feature. Evidence remains `automated_proposal` / `pending`,
+with P1, publication and model eligibility false.
 
 ## Precipitation semantics remain ambiguous
 
@@ -154,8 +193,8 @@ approved the bounded claims and requested the precise CF-version citation used
 above. Neither independent reader paths nor automated review make this human-
 verified source evidence.
 
-The remaining boundary includes real source-zero/nodata point checks, land/coast
-support, exact temporal semantics, the other 22 current monthly assets, legacy
+The remaining boundary includes the unavailable temperature zero/sentinel controls,
+land/coast support, exact temporal semantics, the other 22 current monthly assets, legacy
 equivalence, full COG validation and climate accuracy/uncertainty. Feature use
 still requires qualified genetic footprints and unchanged-population ablations.
 No raster, genetic observations, model, production schema, denominator, serving

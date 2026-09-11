@@ -85,8 +85,10 @@ bytes 0–1048575, against full sizes 149,078,236 and 346,942,826 respectively.
 Such segments can contain compressed pixel payload; that initial inspection decoded
 no pixel array and established no valid mask or global coverage. A subsequent
 [complete-file decoding audit](chelsa-decoding-checks-2026-09-10.md) verifies the two
-current January bodies and nodata-derived masks, while retaining the unresolved
-land/coast, real zero/nodata point and precipitation-time checks.
+current January bodies and nodata-derived masks. Its subsequent, separately selected
+source-cell control verifies a real precipitation zero and nodata sentinel;
+temperature had neither value. Land/coast and precipitation-time checks remain
+unresolved, and neither control admits a climate feature.
 [Current January temperature](https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/climatologies/tas/1981-2010/CHELSA_tas_01_1981-2010_V.2.1.tif),
 [current January precipitation](https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/climatologies/pr/1981-2010/CHELSA_pr_01_1981-2010_V.2.1.tif),
 [legacy temperature](https://os.zhdk.cloud.switch.ch/chelsav2/GLOBAL/climatologies/1981-2010/tas/CHELSA_tas_01_1981-2010_V.2.1.tif),
