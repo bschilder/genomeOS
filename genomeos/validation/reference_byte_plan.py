@@ -21,6 +21,9 @@ from genomeos.validation.reference_tbi import (
 )
 from genomeos.validation.reference_window_types import (
     AUTOSOMES,
+    EOF_BYTES,
+    HEADER_PREFIX_BYTES,
+    MAX_TRANSFER_BYTES,
     Provenance,
     ReferenceWindow,
     SourcePair,
@@ -255,40 +258,91 @@ class BytePreflight:
     p1_eligible: Literal[False]
 
     def __post_init__(self) -> None:
-        _require(self.schema_version == PREFLIGHT_SCHEMA_VERSION, "unsupported preflight schema_version")
-        _sha(self.manifest_sha256, "manifest")
-        _sha(self.windows_sha256, "windows")
+        _validate_preflight(self)
+
+
+def _validate_policy(value: object) -> None:
+    _require(type(value) is tuple and len(value) == len(POLICY), "unsupported preflight policy")
+    for actual, expected in zip(value, POLICY, strict=True):
+        _require(type(actual) is tuple and len(actual) == 2, "invalid preflight policy entry")
+        _require(actual[0] == expected[0], "unsupported preflight policy")
+        _require(type(actual[1]) is type(expected[1]), "invalid preflight policy value type")
+        _require(actual[1] == expected[1], "unsupported preflight policy")
+
+
+def _known_planned_bytes(sources: tuple[SourceBytePlan, ...]) -> int:
+    return sum(
+        plan.source.tbi.size_bytes + sum(item.last - item.first + 1 for item in plan.merged_vcf_ranges)
+        for plan in sources
+    )
+
+
+def _receipts_complete(sources: tuple[SourceBytePlan, ...]) -> bool:
+    return all(plan.receipt.state == "verified" for plan in sources)
+
+
+def _expected_budget_status(complete: bool, known: int) -> BudgetStatus:
+    if not complete:
+        return "incomplete"
+    return "within_cap" if known <= MAX_TRANSFER_BYTES else "over_cap"
+
+
+def _validate_preflight(value: BytePreflight) -> None:
+    _require(type(value) is BytePreflight, "preflight must be BytePreflight")
+    _require(value.schema_version == PREFLIGHT_SCHEMA_VERSION, "unsupported preflight schema_version")
+    _sha(value.manifest_sha256, "manifest")
+    _sha(value.windows_sha256, "windows")
+    _require(
+        type(value.sources) is tuple and all(type(item) is SourceBytePlan for item in value.sources),
+        "preflight sources must be SourceBytePlan records",
+    )
+    _require(
+        tuple(item.source.chrom for item in value.sources) == AUTOSOMES,
+        "preflight sources must be natural autosomes",
+    )
+    for plan in value.sources:
         _require(
-            type(self.sources) is tuple and all(type(item) is SourceBytePlan for item in self.sources),
-            "preflight sources must be SourceBytePlan records",
+            tuple(window.window_id for window in plan.windows)
+            == tuple(f"{plan.source.chrom}-s{stratum}" for stratum in range(1, 4)),
+            "source window plans are incomplete",
         )
+        required = fixed_vcf_ranges(
+            plan.source.vcf.size_bytes,
+            header_prefix_bytes=HEADER_PREFIX_BYTES,
+            eof_bytes=EOF_BYTES,
+        ) + tuple(byte_range for window in plan.windows for byte_range in window.ranges)
         _require(
-            tuple(item.source.chrom for item in self.sources) == AUTOSOMES,
-            "preflight sources must be natural autosomes",
+            plan.merged_vcf_ranges
+            == merge_byte_ranges(required, source_size_bytes=plan.source.vcf.size_bytes),
+            "source ranges do not match planned bytes",
         )
-        _require(type(self.complete) is bool, "complete must be bool")
-        _require(self.budget_status in ("within_cap", "over_cap", "incomplete"), "invalid budget status")
-        _integer(self.known_planned_bytes, "known_planned_bytes")
-        _require(
-            self.total_planned_bytes is None or type(self.total_planned_bytes) is int,
-            "invalid total_planned_bytes",
-        )
-        _integer(self.max_transfer_bytes, "max_transfer_bytes", minimum=1)
-        _require(type(self.provenance) is Provenance, "invalid provenance")
-        _require(self.policy == POLICY, "unsupported preflight policy")
-        _require(self.publication_eligible is False, "publication_eligible must be false")
-        _require(self.p1_eligible is False, "p1_eligible must be false")
-        if self.complete:
-            _require(
-                self.total_planned_bytes == self.known_planned_bytes, "complete total must equal known bytes"
-            )
-            expected = "within_cap" if self.known_planned_bytes <= self.max_transfer_bytes else "over_cap"
-            _require(self.budget_status == expected, "budget status disagrees with total")
-        else:
-            _require(
-                self.total_planned_bytes is None and self.budget_status == "incomplete",
-                "incomplete total must be null",
-            )
+    _require(type(value.complete) is bool, "complete must be bool")
+    _require(
+        isinstance(value.budget_status, str)
+        and value.budget_status in ("within_cap", "over_cap", "incomplete"),
+        "invalid budget status",
+    )
+    known = _known_planned_bytes(value.sources)
+    _integer(value.known_planned_bytes, "known_planned_bytes")
+    _require(value.known_planned_bytes == known, "known planned bytes disagree with sources")
+    _require(
+        value.total_planned_bytes is None or type(value.total_planned_bytes) is int,
+        "invalid total_planned_bytes",
+    )
+    _integer(value.max_transfer_bytes, "max_transfer_bytes", minimum=1)
+    _require(value.max_transfer_bytes == MAX_TRANSFER_BYTES, "preflight must use the fixed transfer cap")
+    complete = _receipts_complete(value.sources)
+    _require(value.complete is complete, "preflight receipt completeness disagrees with complete")
+    expected_total = known if complete else None
+    _require(value.total_planned_bytes == expected_total, "total planned bytes disagree with completeness")
+    _require(
+        value.budget_status == _expected_budget_status(complete, known),
+        "budget status disagrees with total",
+    )
+    _require(type(value.provenance) is Provenance, "invalid provenance")
+    _validate_policy(value.policy)
+    _require(value.publication_eligible is False, "publication_eligible must be false")
+    _require(value.p1_eligible is False, "p1_eligible must be false")
 
 
 def chunk_byte_range(chunk: VirtualChunk, *, source_size_bytes: int) -> ByteRange:
@@ -389,31 +443,10 @@ def assemble_preflight(
             tuple(window.window_id for window in plan.windows) == expected_by_chrom[plan.source.chrom],
             "window plans do not match manifest windows",
         )
-        _require(
-            plan.merged_vcf_ranges
-            == merge_byte_ranges(plan.merged_vcf_ranges, source_size_bytes=plan.source.vcf.size_bytes),
-            "source ranges must already be merged",
-        )
-        required = fixed_vcf_ranges(
-            plan.source.vcf.size_bytes,
-            header_prefix_bytes=manifest.config.header_prefix_bytes,
-            eof_bytes=manifest.config.eof_bytes,
-        ) + tuple(byte_range for window in plan.windows for byte_range in window.ranges)
-        expected_ranges = merge_byte_ranges(required, source_size_bytes=plan.source.vcf.size_bytes)
-        _require(plan.merged_vcf_ranges == expected_ranges, "source ranges do not match planned bytes")
-    known = sum(
-        plan.source.tbi.size_bytes + sum(item.last - item.first + 1 for item in plan.merged_vcf_ranges)
-        for plan in source_plans
-    )
-    complete = all(plan.receipt.state == "verified" for plan in source_plans)
+    known = _known_planned_bytes(source_plans)
+    complete = _receipts_complete(source_plans)
     total = known if complete else None
-    status: BudgetStatus
-    if not complete:
-        status = "incomplete"
-    elif known <= manifest.config.max_transfer_bytes:
-        status = "within_cap"
-    else:
-        status = "over_cap"
+    status = _expected_budget_status(complete, known)
     return BytePreflight(
         schema_version=PREFLIGHT_SCHEMA_VERSION,
         manifest_sha256=manifest_sha256,
@@ -480,7 +513,7 @@ def _object_payload(value: object) -> object:
 
 def encode_preflight(preflight: BytePreflight) -> bytes:
     """Encode validated preflight evidence as canonical timestamp-free JSON."""
-    _require(type(preflight) is BytePreflight, "preflight must be BytePreflight")
+    _validate_preflight(preflight)
     provenance = preflight.provenance
     payload = {
         "schema_version": preflight.schema_version,

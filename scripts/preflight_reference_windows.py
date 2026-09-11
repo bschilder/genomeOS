@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import inspect
 import json
 import os
 import platform
@@ -135,6 +136,10 @@ def _run_bounded(argv: list[str], *, limit: int) -> tuple[bytes, int, bool, bool
         _terminate(process)
         process.wait()
         return bytes(result), process.returncode, False, len(result) > limit
+    if len(result) > limit:
+        _terminate(process)
+        returncode = process.wait()
+        return bytes(result), returncode, False, True
     remaining = max(0.001, REQUEST_TIMEOUT_SECONDS - (time.monotonic() - started))
     try:
         returncode = process.wait(timeout=remaining)
@@ -176,10 +181,10 @@ def _metadata(object_: PublicObject, *, wrapper: Path) -> tuple[str | None, str 
         )
     except OSError:
         return "generation_unavailable", None
-    if timed_out or returncode != 0:
-        return "generation_unavailable", None
     if oversized:
         return "limit_exceeded", None
+    if timed_out or returncode != 0:
+        return "generation_unavailable", None
     try:
         value = json.loads(
             raw.decode("utf-8"), object_pairs_hook=_unique_pairs, parse_constant=_reject_constant
@@ -240,6 +245,15 @@ def fetch_public_index(source: SourcePair, *, wrapper: Path) -> tuple[bytes | No
         )
     except OSError:
         return _refusal(source, "transfer_failed", vcf_attempts=1, tbi_attempts=1, body_attempts=1)
+    if oversized:
+        return _refusal(
+            source,
+            "size_mismatch",
+            vcf_attempts=1,
+            tbi_attempts=1,
+            body_attempts=1,
+            received_bytes=len(body),
+        )
     if timed_out or returncode != 0:
         return _refusal(
             source,
@@ -249,7 +263,7 @@ def fetch_public_index(source: SourcePair, *, wrapper: Path) -> tuple[bytes | No
             body_attempts=1,
             received_bytes=len(body),
         )
-    if oversized or len(body) != source.tbi.size_bytes:
+    if len(body) != source.tbi.size_bytes:
         return _refusal(
             source,
             "size_mismatch",
@@ -329,11 +343,20 @@ def _source_revision() -> str:
 
 
 def _imported_source_hashes() -> tuple[tuple[str, str], ...]:
+    geometry_module = inspect.getmodule(manifest_module.select_reference_windows)
+    geometry_file = getattr(geometry_module, "__file__", None)
+    if geometry_file is None:
+        raise ValueError("unable to resolve executed geometry module")
+    geometry_path = Path(geometry_file).resolve()
+    geometry_relative = "genomeos/validation/reference_windows.py"
+    if geometry_path != (ROOT / geometry_relative).resolve():
+        raise ValueError("executed geometry module is not the expected checkout file")
     paths = {
         "genomeos/validation/reference_byte_plan.py": Path(byte_plan_module.__file__).resolve(),
         "genomeos/validation/reference_tbi.py": Path(tbi_module.__file__).resolve(),
         "genomeos/validation/reference_window_manifest.py": Path(manifest_module.__file__).resolve(),
         "genomeos/validation/reference_window_types.py": Path(types_module.__file__).resolve(),
+        geometry_relative: geometry_path,
         "scripts/gcloud_repo.py": WRAPPER.resolve(),
         "scripts/preflight_reference_windows.py": Path(__file__).resolve(),
     }

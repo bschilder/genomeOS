@@ -10,6 +10,7 @@ import pytest
 
 from genomeos.validation.reference_byte_plan import (
     POLICY,
+    BytePreflight,
     ByteRange,
     IndexReceipt,
     SourceBytePlan,
@@ -133,6 +134,91 @@ def test_complete_two_source_style_accounting_includes_all_index_fees_and_range_
     assert preflight.total_planned_bytes == expected
     assert preflight.budget_status == "within_cap"
     assert encode_preflight(preflight).endswith(b"\n")
+
+
+def _construct_preflight(value, **updates):
+    fields = {
+        name: getattr(value, name)
+        for name in (
+            "schema_version",
+            "manifest_sha256",
+            "windows_sha256",
+            "sources",
+            "complete",
+            "budget_status",
+            "known_planned_bytes",
+            "total_planned_bytes",
+            "max_transfer_bytes",
+            "provenance",
+            "policy",
+            "publication_eligible",
+            "p1_eligible",
+        )
+    }
+    fields.update(updates)
+    return BytePreflight(**fields)
+
+
+@pytest.mark.parametrize(
+    "updates,match",
+    [
+        ({"max_transfer_bytes": 10**30}, "fixed transfer cap"),
+        ({"known_planned_bytes": 0, "total_planned_bytes": 0}, "known planned bytes"),
+        (
+            {
+                "policy": tuple(
+                    (key, True if key == "request_attempts_per_object" else item)
+                    for key, item in POLICY
+                )
+            },
+            "policy value type",
+        ),
+    ],
+)
+def test_public_preflight_direct_construction_rejects_false_accounting(tmp_path, updates, match):
+    manifest = _manifest(tmp_path)
+    valid = assemble_preflight(
+        manifest,
+        tuple(_source_plan(manifest, index) for index in range(22)),
+        manifest_sha256="4" * 64,
+        provenance=_provenance(manifest),
+    )
+    with pytest.raises(ValueError, match=match):
+        _construct_preflight(valid, **updates)
+
+
+def test_public_preflight_replace_rejects_completeness_disagreeing_with_refused_receipt(tmp_path):
+    manifest = _manifest(tmp_path)
+    plans = tuple(
+        _source_plan(manifest, index, receipt_state="refused", refused=True)
+        if index == 1
+        else _source_plan(manifest, index)
+        for index in range(22)
+    )
+    incomplete = assemble_preflight(
+        manifest, plans, manifest_sha256="4" * 64, provenance=_provenance(manifest)
+    )
+    with pytest.raises(ValueError, match="receipt completeness"):
+        replace(
+            incomplete,
+            complete=True,
+            budget_status="within_cap",
+            total_planned_bytes=incomplete.known_planned_bytes,
+        )
+
+
+def test_encode_revalidates_public_preflight_accounting(tmp_path):
+    manifest = _manifest(tmp_path)
+    preflight = assemble_preflight(
+        manifest,
+        tuple(_source_plan(manifest, index) for index in range(22)),
+        manifest_sha256="4" * 64,
+        provenance=_provenance(manifest),
+    )
+    object.__setattr__(preflight, "known_planned_bytes", 0)
+    object.__setattr__(preflight, "total_planned_bytes", 0)
+    with pytest.raises(ValueError, match="known planned bytes"):
+        encode_preflight(preflight)
 
 
 def test_unknown_source_ranges_make_total_null_and_preserve_known_partial_accounting(tmp_path):

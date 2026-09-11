@@ -155,6 +155,32 @@ def test_metadata_failures_are_fixed_and_stop_before_body(monkeypatch, tmp_path,
     ) == attempts
 
 
+def test_output_overflow_terminates_and_reaps_before_timed_wait(monkeypatch):
+    script = _load_script()
+    events = []
+
+    class RunningProcess(_Process):
+        def __init__(self):
+            super().__init__(b"12345", returncode=None)
+
+        def wait(self, timeout=None):
+            events.append(("wait", timeout))
+            return self.returncode
+
+    process = RunningProcess()
+    monkeypatch.setattr(script.subprocess, "Popen", lambda *args, **kwargs: process)
+
+    def terminate(value):
+        assert value is process
+        events.append(("terminate", None))
+        process.returncode = -9
+
+    monkeypatch.setattr(script, "_terminate", terminate)
+    raw, returncode, timed_out, oversized = script._run_bounded(["synthetic"], limit=4)
+    assert (raw, returncode, timed_out, oversized) == (b"12345", -9, False, True)
+    assert events == [("terminate", None), ("wait", None)]
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -242,13 +268,15 @@ def test_body_timeout_is_bounded_and_refused(monkeypatch, tmp_path):
     assert receipt.tbi_body_attempts == 1
 
 
-@pytest.mark.parametrize("case", ["partial", "oversized", "checksum", "transfer"])
+@pytest.mark.parametrize("case", ["partial", "body_overflow", "oversized", "checksum", "transfer"])
 def test_body_failures_do_not_return_cacheable_bytes(monkeypatch, tmp_path, case):
     script = _load_script()
     source, body = _source_and_body(tmp_path)
     supplied, status, reason = body, 0, None
     if case == "partial":
         supplied, reason = body[:-1], "size_mismatch"
+    elif case == "body_overflow":
+        supplied, reason = body + b"x", "size_mismatch"
     elif case == "oversized":
         source = replace(source, tbi=replace(source.tbi, size_bytes=16 * 1024 * 1024 + 1))
         reason = "limit_exceeded"
@@ -266,6 +294,20 @@ def test_body_failures_do_not_return_cacheable_bytes(monkeypatch, tmp_path, case
     assert receipt.reason == reason
     assert receipt.sha256 is None
     assert receipt.tbi_body_attempts == (0 if case == "oversized" else 1)
+
+
+def test_preflight_provenance_hashes_the_executed_geometry_module(monkeypatch):
+    script = _load_script()
+    relative = "genomeos/validation/reference_windows.py"
+    geometry_path = Path(script.manifest_module.select_reference_windows.__code__.co_filename).resolve()
+    assert geometry_path == (ROOT / relative).resolve()
+    assert dict(script._imported_source_hashes())[relative] == hashlib.sha256(
+        geometry_path.read_bytes()
+    ).hexdigest()
+
+    monkeypatch.setattr(script.manifest_module, "select_reference_windows", lambda *_: ())
+    with pytest.raises(ValueError, match="geometry module"):
+        script._imported_source_hashes()
 
 
 def test_cli_rejects_malformed_manifest_before_any_process(monkeypatch, tmp_path):
