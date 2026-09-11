@@ -89,6 +89,49 @@ This is a source reading, not a simulation reproduction or dataset promotion.
   These analyses do not justify silently changing observed alleles or treating
   a chosen dominance value as independently measured.
 
+## Pinned-source equation and stopping-rule audit
+
+A September 11 audit inspected six author files at commit
+`b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b`, with retained content hashes.
+This identifies the inspected implementation; it does not establish the source
+version used for any published figure. Author scripts were read, not executed.
+
+- **The unexplained frequency symbol has a supported interpretation.** Both
+  inspected Wright–Fisher scripts assign `p = currentfreq` before the forward
+  update. This supports reading the supplement's page 7 `p` as current frequency,
+  not an author-confirmed erratum. Algebra shows that the forward expression
+  matches the genotype-fitness-weighted frequency `F(p)`; the inference mean is
+  `2p-F(p)`, a reflection about `p`, not the inverse function of `F` or a formally
+  reversed process. At dominance `h=1/2`, it reduces to the printed supplementary
+  expression. This identity does not restore the omitted ascertainment normalizer.
+  [Forward source](https://github.com/avaughn271/CLUES2/blob/b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b/SimulationStudy/AncientGenotypes/WrightFisherFreqMax.R#L20-L22),
+  [inference transition](https://github.com/avaughn271/CLUES2/blob/b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b/hmm_utils.py#L29-L53).
+- **The traced population-size conversion is consistent.** External `N` is
+  documented as haploid size; `inference.py` halves it before the internal
+  diploid-size transition. Its variance `p(1-p)/(2N)` therefore becomes
+  `p(1-p)/N_haploid`. This checks that boundary, not every population-size
+  convention in the repository.
+  [Input convention](https://github.com/avaughn271/CLUES2/blob/b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b/README.md#L35),
+  [conversion](https://github.com/avaughn271/CLUES2/blob/b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b/inference.py#L312).
+- **The inspected simulator can accept after its original endpoint.**
+  `PlotA.sh` calls `WrightFisherFreqMax.R` with a minimum frequency of 0.05;
+  the script also requires frequency below 0.995. If the original endpoint
+  fails this filter while still segregating, the loop can continue, extend its
+  R vector and accept a later passing frequency. A deterministic native-R replay
+  with three initial slots and successive counts 2, 3, 4, 10 out of 100 accepted at
+  length 5. The original endpoint, at frequency 0.03, had failed. On-time, loss and
+  fixation controls also passed. This differs from fixed-horizon rejection;
+  its effect on estimates and attribution to published simulations remain open.
+  [Caller](https://github.com/avaughn271/CLUES2/blob/b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b/SimulationStudy/AncientGenotypes/PlotA.sh),
+  [reproduction qualification #261](https://github.com/bschilder/genomeOS/issues/261).
+
+Independent review confirmed the algebra, source trace and deterministic replay.
+Exact-rational checks passed 75 frequency/selection/dominance combinations and 15
+population-size variance cases; all four native-R stopping controls passed.
+These check transcription and control flow, not stochastic calibration or the
+paper's numerical results. Copied source and local diagnostics remain untracked;
+the article's licence is not assumed to license the author code.
+
 ## Proposed genomeOS tests—not results of CLUES2
 
 Scientific objective: test whether past genetic observations improve held-out
@@ -127,10 +170,11 @@ ascertainment-conditioned reference under matched simulation settings. Keep
 fixed-topology, uncertain-topology and direct-likelihood controls distinct.
 Require likelihood profiles and uncertainty checks before interpreting large
 selection maxima. Audit haploid/diploid population-size and selection conventions
-at every simulator boundary. The supplement's page7 binomial expression contains
-an unexplained `p` where page6 uses the current frequency: resolve the formula
-against its derivation and versioned author code before reproducing it; do not
-silently transcribe a guessed correction.
+at every simulator boundary. Apply the supported equation interpretation above
+without presenting it as an author correction. Before a reproduction, resolve
+#261's fixed-endpoint versus stopping-time distinction, origin distribution,
+frequency filter and time indexing in the experiment contract. Retain original
+and accepted horizons; never silently change ascertainment to obtain a result.
 
 Refuse temporal/origin claims when date, assay, ancestry/geography or dependency
 evidence is insufficient. The consumers are a qualified regional WP7 pilot and

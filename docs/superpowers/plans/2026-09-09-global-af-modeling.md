@@ -114,7 +114,10 @@ test independent sites/time windows and climate-family ablations accordingly.
 The [CLUES2 main-article and supplement methods note](../../research/temporal-genetics-methods-2026-09-10.md)
 records the direct-likelihood/genealogy tradeoff, ascertainment approximation,
 fixed-topology validation limits and proposed temporal controls. The supplement
-has been read; numerical reproduction remains open and no temporal implementation
+has been read. A pinned-source audit supports its frequency-symbol interpretation
+and traced population-size conversion, while [#261](https://github.com/bschilder/genomeOS/issues/261)
+requires reconciling simulator endpoint and frequency ascertainment before
+reproduction. Numerical reproduction remains open and no temporal implementation
 is admitted by the note.
 
 ## Public interfaces and publication
