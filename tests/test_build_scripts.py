@@ -88,7 +88,7 @@ def _command(registry: Path, out: Path) -> list[str]:
         "--gnomad",
         str(FIXTURES / "gnomad_hgdp_1kg_freqs.tsv"),
         "--map-surveys",
-        str(FIXTURES / "map_hbs_surveys.csv"),
+        str(FIXTURES / "map_hbs_curated_synthetic.csv"),
         "--literature-evidence",
         str(LITERATURE / "evidence.tsv"),
         "--literature-field-evidence",
@@ -406,4 +406,20 @@ def test_build_observations_refuses_incomplete_registry_before_output(tmp_path):
 
     assert completed.returncode != 0
     assert "manifest" in completed.stderr
+    assert not out.exists()
+
+
+def test_build_observations_refuses_raw_map_export_without_creating_store(tmp_path):
+    registry = tmp_path / "registry"
+    out = tmp_path / "observations"
+    _write_registry(registry)
+    command = _command(registry, out)
+    map_flag = command.index("--map-surveys")
+    command[map_flag + 1] = str(FIXTURES / "map_hbs_surveys.csv")
+
+    completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+
+    assert completed.returncode != 0
+    assert "explicit spatial support" in completed.stderr
+    assert "curated MAP CSV" in completed.stderr
     assert not out.exists()

@@ -6,7 +6,7 @@ local approximate-prior SD at every query, so any apparent contraction under a s
 comes only from comparing different locations.
 
     python scripts/plot_prior_normalization.py \
-        --observations data/raw/map_hbs_surveys.csv \
+        --observations data/curated/map_hbs_surveys.csv \
         --out docs/figures/prior_normalization.png
 """
 

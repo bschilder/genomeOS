@@ -9,7 +9,7 @@ and cells whose posterior never moved off the prior, are left as bare grey land 
 coloured. A version of this figure without the mask would be exactly the persuasive-but-unfounded
 cline the design exists to avoid.
 
-    python scripts/plot_surface.py --observations data/raw/map_hbs_surveys.csv \
+    python scripts/plot_surface.py --observations data/curated/map_hbs_surveys.csv \
         --out docs/figures/hbs_surface.png
 
 Evaluated and drawn on **H3 cells**, the same geodesic tessellation §6 specifies for the product
@@ -365,7 +365,12 @@ def _panel(ax, polygons, values, masked, obs, *, cmap, label, title, vmax=None, 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--layer", choices=("hbs", "g6pd", "afnd", "cyt", "kir"), default="hbs")
-    ap.add_argument("--observations", type=Path, required=True)
+    ap.add_argument(
+        "--observations",
+        type=Path,
+        required=True,
+        help="source CSV; HbS requires curated MAP data with explicit spatial support",
+    )
     # AFND ships one file holding every allele, so a surface needs to be told which one.
     ap.add_argument("--populations", type=Path, help="AFND population table (--layer afnd)")
     ap.add_argument("--variant", help="AFND variant_id, e.g. hla:drb1-15-01 (--layer afnd)")

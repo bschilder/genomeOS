@@ -13,6 +13,8 @@ data/
     map_g6pd_surveys.csv                scripts/fetch_map_hbs.py --layer g6pd
     afnd_populations.tsv                scripts/fetch_afnd.py
     afnd_cache/                         one HTML page per AFND population, so a re-run is free
+  curated/                              immutable, versioned operator-reviewed inputs
+    map_hbs_surveys.csv                 HbS rows plus explicit bounding-disc support evidence
   store/
     fits/       <variant>.fit.pkl       trained models — a CACHE, not an artifact (see below)
     artifacts/  <variant>__<model>__<data>/
@@ -85,12 +87,20 @@ python scripts/fetch_map_hbs.py --layer hbs  --out data/raw/map_hbs_surveys.csv
 python scripts/fetch_map_hbs.py --layer g6pd --out data/raw/map_g6pd_surveys.csv
 python scripts/fetch_afnd.py --out data/raw/afnd_populations.tsv --cache data/raw/afnd_cache
 
-python scripts/build_surfaces.py --hbs data/raw/map_hbs_surveys.csv \
+python scripts/build_surfaces.py --hbs data/curated/map_hbs_surveys.csv \
     --g6pd data/raw/map_g6pd_surveys.csv --out data/store/fits --draws 1200
 python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
-    --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv
+    --hbs data/curated/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv
 python scripts/store_inventory.py --root data --out data/store/INVENTORY.json
 ```
+
+The HbS fetch command retains the untouched vendor export as raw evidence. That area-only export
+intentionally fails the HbS adapter: an area class cannot establish a bounding radius from the
+reported coordinate. A separately retained, immutable and versioned curated CSV must supply the
+four fields defined in [the MAP spatial-support contract](map-spatial-support.md). There is no
+automatic raw-to-curated conversion, and this repository does not currently contain or claim a
+qualified real curated MAP source. For a runnable synthetic demonstration, use
+`tests/fixtures/map_hbs_curated_synthetic.csv`.
 
 Fitting is ~20 min per variant on a laptop. **Do not run it on a pod expecting the output back**:
 nothing copies `/workspace` off a pod, and that is how three runs' fits were lost. A pod can render

@@ -1,6 +1,6 @@
 """What each cross-validation fold strategy does to the studies it splits (#127).
 
-    python scripts/plot_fold_strategies.py --observations data/raw/map_hbs_surveys.csv \
+    python scripts/plot_fold_strategies.py --observations data/curated/map_hbs_surveys.csv \
         --out docs/figures/fold_strategies.png
 
 `cohort_id` is the contributing study, and a study effect is identified by *within-study
@@ -47,7 +47,12 @@ _BLURB = {
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--observations", type=Path, required=True)
+    ap.add_argument(
+        "--observations",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--n-folds", type=int, default=5)
     ap.add_argument("--dpi", type=int, default=170)

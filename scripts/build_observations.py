@@ -2,7 +2,7 @@
 
     python scripts/build_observations.py \
         --registry data/registry --gnomad data/raw/gnomad_hgdp_1kg_freqs.tsv \
-        --map-surveys data/raw/map_hbs_surveys.tsv \
+        --map-surveys data/curated/map_hbs_surveys.csv \
         --literature-evidence data/raw/literature_evidence.tsv \
         --literature-field-evidence data/raw/literature_field_evidence.tsv \
         --out data/observations
@@ -27,7 +27,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--registry", type=Path, required=True)
     ap.add_argument("--gnomad", type=Path, required=True)
-    ap.add_argument("--map-surveys", type=Path, required=True)
+    ap.add_argument(
+        "--map-surveys",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     ap.add_argument("--literature-evidence", type=Path)
     ap.add_argument("--literature-field-evidence", type=Path)
     ap.add_argument("--out", type=Path, required=True)
