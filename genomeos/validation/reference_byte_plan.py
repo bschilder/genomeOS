@@ -44,7 +44,10 @@ PolicyEntries = tuple[tuple[str, str | int], ...]
 PREFLIGHT_SCHEMA_VERSION = "reference_index_preflight_v1"
 METADATA_LIMIT_BYTES = 1_048_576
 REQUEST_ATTEMPTS_PER_OBJECT = 1
+REQUEST_ATTEMPT_ACCOUNTING = "wrapper_invocations"
 REQUEST_TIMEOUT_SECONDS = 120
+STORAGE_BODY_MAX_RETRIES = 0
+METADATA_HTTP_ATTEMPTS = "unobserved"
 REFUSAL_CODES = frozenset(
     {
         "metadata_mismatch",
@@ -63,12 +66,15 @@ POLICY: PolicyEntries = (
     ("decompressed_tbi_limit_bytes", MAX_DECOMPRESSED_BYTES),
     ("distinct_bin_limit", MAX_DISTINCT_BINS),
     ("linear_offset_limit", MAX_LINEAR_OFFSETS),
+    ("metadata_http_attempts", METADATA_HTTP_ATTEMPTS),
     ("metadata_limit_bytes", METADATA_LIMIT_BYTES),
     ("range_policy", "conservative_reg2bins_v1"),
     ("reference_count", 1),
     ("reference_name_limit_bytes", MAX_REFERENCE_NAME_BYTES),
+    ("request_attempt_accounting", REQUEST_ATTEMPT_ACCOUNTING),
     ("request_attempts_per_object", REQUEST_ATTEMPTS_PER_OBJECT),
     ("request_timeout_seconds", REQUEST_TIMEOUT_SECONDS),
+    ("storage_body_max_retries", STORAGE_BODY_MAX_RETRIES),
 )
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -137,6 +143,8 @@ class WindowBytePlan:
 
 @dataclass(frozen=True)
 class IndexReceipt:
+    """Index result whose ``*_attempts`` fields count adapter wrapper invocations."""
+
     chrom: str
     state: ReceiptState
     reason: RefusalCode | None

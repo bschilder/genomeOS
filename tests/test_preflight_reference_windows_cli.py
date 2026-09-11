@@ -87,6 +87,7 @@ def _metadata(value):
 
 def test_fetch_uses_pinned_wrapper_raw_metadata_and_only_tbi_body(monkeypatch, tmp_path):
     script = _load_script()
+    monkeypatch.setenv("CLOUDSDK_STORAGE_MAX_RETRIES", "23")
     source, body = _source_and_body(tmp_path)
     factory = _Factory([(_metadata(source.vcf), 0), (_metadata(source.tbi), 0), (body, 0)])
     monkeypatch.setattr(script.subprocess, "Popen", factory)
@@ -106,6 +107,7 @@ def test_fetch_uses_pinned_wrapper_raw_metadata_and_only_tbi_body(monkeypatch, t
         assert options["env"]["CLOUDSDK_AUTH_DISABLE_CREDENTIALS"] == "true"
         assert options["env"]["CLOUDSDK_CORE_DISABLE_FILE_LOGGING"] == "true"
         assert options["env"]["CLOUDSDK_CORE_DISABLE_PROMPTS"] == "true"
+        assert options["env"]["CLOUDSDK_STORAGE_MAX_RETRIES"] == "0"
         assert "ANTHROPIC_API_KEY" not in options["env"]
     assert factory.calls[0][0][3:] == [
         "storage",

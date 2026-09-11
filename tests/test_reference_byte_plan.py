@@ -9,6 +9,7 @@ from dataclasses import replace
 import pytest
 
 from genomeos.validation.reference_byte_plan import (
+    POLICY,
     ByteRange,
     IndexReceipt,
     SourceBytePlan,
@@ -38,6 +39,15 @@ def test_physical_end_boundary_and_final_block_clamp():
 
 def test_crc32c_published_check_value():
     assert crc32c(b"123456789") == 0xE3069283
+
+
+def test_policy_records_adapter_attempt_accounting_and_unobserved_metadata_activity():
+    policy = dict(POLICY)
+    assert POLICY == tuple(sorted(POLICY))
+    assert policy["request_attempt_accounting"] == "wrapper_invocations"
+    assert policy["request_attempts_per_object"] == 1
+    assert policy["storage_body_max_retries"] == 0
+    assert policy["metadata_http_attempts"] == "unobserved"
 
 
 def test_virtual_offsets_reject_out_of_source_and_accept_exclusive_terminal_end():

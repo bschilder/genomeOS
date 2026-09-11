@@ -30,6 +30,7 @@ import genomeos.validation.reference_window_types as types_module  # noqa: E402
 from genomeos.validation.reference_byte_plan import (  # noqa: E402
     METADATA_LIMIT_BYTES,
     REQUEST_TIMEOUT_SECONDS,
+    STORAGE_BODY_MAX_RETRIES,
     IndexReceipt,
     SourceBytePlan,
     WindowBytePlan,
@@ -89,6 +90,7 @@ def _environment() -> dict[str, str]:
     environment["CLOUDSDK_AUTH_DISABLE_CREDENTIALS"] = "true"
     environment["CLOUDSDK_CORE_DISABLE_FILE_LOGGING"] = "true"
     environment["CLOUDSDK_CORE_DISABLE_PROMPTS"] = "true"
+    environment["CLOUDSDK_STORAGE_MAX_RETRIES"] = str(STORAGE_BODY_MAX_RETRIES)
     return environment
 
 
