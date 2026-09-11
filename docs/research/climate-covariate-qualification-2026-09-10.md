@@ -79,11 +79,14 @@ The EnviDat catalogue explicitly names resource
 catalogue reports version 2.1 and CC0-1.0; this is provider linkage, not a guess
 from matching filenames. [Provider catalogue API](https://www.envidat.ch/api/3/action/package_show?id=chelsa-climatologies).
 
-Only January `tas` and `pr` were sampled from each delivery: four retained 1 MiB
+The initial inspection sampled only January `tas` and `pr` from each delivery: four retained 1 MiB
 prefixes in total, not complete rasters. Current-object responses were HTTP 206,
 bytes 0–1048575, against full sizes 149,078,236 and 346,942,826 respectively.
-Such segments can contain compressed pixel payload; no pixel array was decoded,
-valid mask established or global coverage tested.
+Such segments can contain compressed pixel payload; that initial inspection decoded
+no pixel array and established no valid mask or global coverage. A subsequent
+[complete-file decoding audit](chelsa-decoding-checks-2026-09-10.md) verifies the two
+current January bodies and nodata-derived masks, while retaining the unresolved
+land/coast, real zero/nodata point and precipitation-time checks.
 [Current January temperature](https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/climatologies/tas/1981-2010/CHELSA_tas_01_1981-2010_V.2.1.tif),
 [current January precipitation](https://os.unil.cloud.switch.ch/chelsa02/chelsa/global/climatologies/pr/1981-2010/CHELSA_pr_01_1981-2010_V.2.1.tif),
 [legacy temperature](https://os.zhdk.cloud.switch.ch/chelsav2/GLOBAL/climatologies/1981-2010/tas/CHELSA_tas_01_1981-2010_V.2.1.tif),
@@ -104,9 +107,10 @@ the former Celsius transform; §4 prints 20,800 rows, unlike all four inspected
 headers. Native spacing is approximately 1/120 degree with a half-arcsecond grid
 offset and northern edge near 84°N. Use exact inspected geometry, not a guessed
 standard grid. Representable nodata does not prove correct masks, and valid zero
-precipitation must remain distinct from missingness. Full-file checksums, decoded
-values, the other 22 current assets, land/ocean support and full COG compliance
-remain unverified. The complete specification was read; its grid and climatology
+precipitation must remain distinct from missingness. The follow-up records full-file
+SHA-256 and decoded values for these two current assets; the other 22 assets,
+land/ocean support, legacy equivalence and full COG compliance remain unverified.
+The complete specification was read; its grid and climatology
 tables were also visually inspected. [CHELSA V2.1 technical specification,
 document v1.2, §§3–4 and 7.1](https://www.envidat.ch/dataset/2adb0c83-4653-4337-af28-f75c63ab7c74/resource/61fff0a7-6abb-45f7-a5f6-48f6e2c24851/download/chelsa_file_specification.pdf).
 
