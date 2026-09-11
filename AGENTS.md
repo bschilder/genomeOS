@@ -209,8 +209,9 @@ never be presented as scientific results.
 Rebuild the Atlas stores from fixtures (the end-to-end check):
 
 ```bash
-python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv --out data/registry
-python scripts/build_observations.py --registry data/registry \
+python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv \
+  --release-version 0.1.0 --out data/registry-fixture-v1
+python scripts/build_observations.py --registry data/registry-fixture-v1 \
   --gnomad tests/fixtures/gnomad_hgdp_1kg_freqs.tsv \
   --map-surveys tests/fixtures/map_hbs_surveys.csv \
   --literature-evidence tests/fixtures/literature/promotable/evidence.tsv \

@@ -498,6 +498,12 @@ git commit -m "feat(P0): HGDP registry adapter establishing the source-adapter c
 
 ## Task 4: Registry build with alias-collision detection
 
+> Historical implementation record: the mutable writer and invocation examples in this task were
+> superseded by [the immutable registry publication design](../specs/2026-09-11-registry-publication-design.md)
+> and [implementation plan](2026-09-11-registry-publication.md). Current builds require
+> `--release-version`, a fresh output path, and a verified completion manifest. The original code
+> below is preserved to document Task 4 as implemented at the time.
+
 **Files:**
 - Create: `src/genomeos/registry/build.py`
 - Create: `scripts/build_registry.py`
