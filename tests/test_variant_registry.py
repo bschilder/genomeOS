@@ -66,6 +66,27 @@ def test_a_duplicate_variant_id_is_refused():
 
 
 @pytest.mark.parametrize(
+    ("normalized_variant_id", "printed_alleles"),
+    [
+        ("chr1-100-AT-GC", "AT/GC"),
+        ("chr1-100-A-G", "AT/GC"),
+        ("chr1-100-AT-GC", "A/G"),
+    ],
+)
+def test_a_multi_base_allele_is_refused(normalized_variant_id, printed_alleles):
+    """`complement()` complements per base but does not reverse, so a multi-base allele pair on
+    the minus strand round-trips against the wrong (un-reversed) complement — it would wrongly
+    accept a transposed pair and wrongly refuse the correct one (I4). Rather than implement
+    reverse-complement for a case no consumer needs yet, the schema refuses any multi-base allele
+    loudly at the door instead of silently mishandling strand for it."""
+    frame = pd.DataFrame(
+        [_row(normalized_variant_id=normalized_variant_id, printed_alleles=printed_alleles)]
+    )
+    with pytest.raises(pandera.errors.SchemaError):
+        VARIANT_NORMALIZATION_SCHEMA.validate(frame)
+
+
+@pytest.mark.parametrize(
     ("alleles", "expected"),
     [("A/T", True), ("T/A", True), ("C/G", True), ("G/C", True), ("A/G", False), ("C/T", False)],
 )
@@ -118,6 +139,14 @@ def test_a_resolved_row_without_a_naming_citation_is_refused():
         validate_rows(bad)
 
 
+def test_a_resolved_row_with_a_refusal_reason_is_refused():
+    """A resolved row must not carry a refusal_reason — that field means something only when
+    status is unresolved, and carrying one alongside a resolution is a contradiction (m2)."""
+    bad = pd.DataFrame([_row(refusal_reason="no candidate rsID found")])
+    with pytest.raises(ValueError, match="must not carry a refusal_reason"):
+        validate_rows(bad)
+
+
 def test_an_unresolved_row_needs_a_reason_and_no_coordinate():
     missing_reason = pd.DataFrame(
         [_row(status="unresolved", rsid="", normalized_variant_id="", strand="", refusal_reason="")]
@@ -135,7 +164,7 @@ def test_an_unresolved_row_needs_a_reason_and_no_coordinate():
 @pytest.mark.parametrize("field", ["rsid", "normalized_variant_id", "strand", "reference_resource"])
 def test_a_resolved_row_missing_a_required_field_is_refused(field):
     """The `raise` in validate_rows is the sole enforcement here — the schema itself admits ""
-    for rsid, normalized_variant_id, and strand (design §6, §7.1)."""
+    for rsid, normalized_variant_id, and strand (design §5, contract table)."""
     bad = pd.DataFrame([_row(**{field: ""})])
     with pytest.raises(ValueError, match=field):
         validate_rows(bad)
@@ -230,18 +259,16 @@ REGISTRY_PATH = Path(__file__).resolve().parents[1] / "data" / "registry" / "var
 
 
 def test_the_committed_registry_validates():
-    """The checked-in file is the artifact; `load` runs every invariant over it."""
+    """The checked-in file is the artifact; `load` runs every invariant over it.
+
+    (m1) There used to be two further assertions here — that every resolved row's
+    `naming_citation` is non-empty, and every unresolved row's `refusal_reason` is non-empty —
+    checked against the already-`load`ed committed registry. Both were vacuous: `validate_rows`
+    (called by `load`) already raises `ValueError` for exactly those conditions, so if `load`
+    above returns at all, both assertions are already guaranteed true and can never fail. That
+    behavior is covered on crafted rows by `test_a_resolved_row_without_a_naming_citation_is_refused`
+    and `test_an_unresolved_row_needs_a_reason_and_no_coordinate`, so the two were deleted rather
+    than kept as tests named for an acceptance criterion that could not fail.
+    """
     registry = load(REGISTRY_PATH)
     assert len(registry) >= 1
-
-
-def test_every_resolved_row_cites_its_naming_source():
-    registry = load(REGISTRY_PATH)
-    resolved = registry[registry["status"] == "resolved"]
-    assert (resolved["naming_citation"].str.strip() != "").all()
-
-
-def test_every_unresolved_row_states_what_was_attempted():
-    registry = load(REGISTRY_PATH)
-    unresolved = registry[registry["status"] == "unresolved"]
-    assert (unresolved["refusal_reason"].str.strip() != "").all()

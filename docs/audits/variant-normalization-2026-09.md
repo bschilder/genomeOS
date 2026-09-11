@@ -9,8 +9,11 @@ service in that session; nothing was recalled. All four rows are `verification_s
 and stay that way until [#242](https://github.com/bschilder/genomeOS/issues/242) decides who may
 verify an agent-resolved row. **Until they are verified the four loci are not eligible for a
 coordinate-keyed external resource** (spec §9). That is enforced, not merely stated:
-`normalized_identity` returns `None` unless a row is both `resolved` and `verified`, so the
-exporter gate refuses these four today.
+`normalized_identity` returns `None` for a **mapping** row — one whose `variant_id` differs from
+its `normalized_variant_id` — unless it is both `resolved` and `verified`; an **identity** row is
+exempt from that verification requirement (see "What verification is required of, and what it is
+not," below), so the exporter gate refuses these four mapping rows today without also blocking the
+already-published HbS identity row.
 
 ## Counts
 
@@ -116,9 +119,11 @@ from Ensembl 116 `lookup/symbol`, `lookup/id?expand=1` and VEP
     the strand argument self-consistent rather than alarming, but it is worth a reviewer's eye.
   - The legacy numbering is not internally consistent to the base: VEP distance is 174 for −174 but
     **598** for −597. The offset arithmetic was therefore used as corroboration, never as proof.
-  - `pmid:22839439` writes the same locus as "G(-174)A of IL6 gene (rs1800795)" — an allele pair
-    that contradicts every other source. It was not used, and it is a reminder that a single
-    abstract is not sufficient.
+  - `pmid:22839439` writes the same locus as "G(-174)A of IL6 gene (rs1800795)" elsewhere in the
+    same abstract as "G(-174)C of IL-6 gene" — it contradicts **itself**, not just every other
+    source, which is a strictly better reason to exclude it than disagreement with the rest of the
+    literature would be. It was not used, and it is a reminder that a single abstract is not
+    sufficient.
 
 ### `cyt:il-10-1082-g` — IL-10 −1082, printed `A/G` — **resolved**
 
@@ -227,6 +232,46 @@ now joins the real allowlist to the real registry, so the next time a declared r
 resolvable row — or a resource is declared for a locus still pending — a test fails rather than an
 export.
 
+## A boundary this branch gates but does not yet close
+
+**Verifying a cytokine row will not, by itself, make that locus publishable with a gnomAD or
+dbSNP resource.** The branch only ever consumes the registry as a gate, never as a source of the
+coordinate it resolves to:
+
+- `scripts/export_atlas_web.py`'s `_external_resources` calls
+  `normalized_identity(variant_id, variant_registry)` solely to check `is None` — the
+  `NormalizedIdentity.normalized_variant_id` and `.rsid` it returns on success are discarded, never
+  read.
+- The same function separately requires (`scripts/export_atlas_web.py`, the `if normalized !=
+  variant_id:` check just below the registry gate) that the external resource's own declared
+  `normalized_variant_id` equal the artifact's **internal** `variant_id` — e.g. `cyt:il-6-174-c` —
+  verbatim. `website/src/atlas/contracts.ts:174-184` encodes the identical requirement client-side
+  (`resource.normalized_variant_id !== value.variant_id`).
+
+For an identity row such as HbS this is invisible, because `variant_id` already *is* the GRCh38
+coordinate (`chr11-5227002-T-A`), so "matches the artifact" and "is a coordinate gnomAD/dbSNP can
+be queried by" are the same requirement. For a cytokine row they are not: `variant_id` is the
+internal locus id (`cyt:il-6-174-c`), not a coordinate, and the registry's resolved coordinate
+(`chr7-22727026-C-G`, once `cyt:il-6-174-c` is `verified`) is a *different* string. So an allowlist
+entry for that locus is stuck between two requirements that cannot both be satisfied at once:
+declaring the registry's coordinate as the resource's `normalized_variant_id` fails the line-466
+match against `variant_id`, and declaring the internal id instead to satisfy line 466 produces a
+`normalized_variant_id` that is not a GRCh38 coordinate gnomAD or dbSNP (or their cached-payload
+query identity check a few lines further down) will accept.
+
+**What works today:** the registry gate refuses a declared external resource for any variant
+lacking a usable — resolved, and (for a mapping row) verified — registry row. Identity rows such as
+HbS attach external resources today because their `variant_id` already is the coordinate.
+
+**What does not work today, even after #242 lands and a cytokine row is marked `verified`:** that
+locus still cannot carry a gnomAD or dbSNP resource, because the exporter's `normalized !=
+variant_id` check and its TypeScript twin key the match on the artifact's own `variant_id`, not on
+the registry's resolved `normalized_variant_id`. Making a verified mapping row usable requires
+changing both `scripts/export_atlas_web.py`'s `_external_resources` and
+`website/src/atlas/contracts.ts:174-184` to check the resource against the *registry's* resolved
+identity instead of (or as well as) the artifact's own `variant_id`. **That change is not made
+here** — it is follow-on work, to be filed as a separate issue.
+
 ## What a verifier should check
 
 1. ~~That Terry 2000 prints the IL-6 promoter sequence in the sense orientation.~~ **Retired.**
@@ -235,6 +280,9 @@ export.
 2. That `pmid:29802545` is an acceptable naming citation for both IL-10 rows, given it is a single
    paper carrying both.
 3. That the alternate-allele choice is right where the rsID is multi-allelic — rs1800795 (`C>G` vs
-   `C>T`), rs1800896 (`T>C` vs `T>A`/`T>G`), rs1800871 (`A>G` vs `A>C`/`A>T`).
+   `C>T`), rs1800896 (`T>C` vs `T>A`/`T>G`), rs1800871 (`A>G` vs `A>C`/`A>T`), and rs1800797 — the
+   −597 anchor locus, not itself a row in this batch — which dbSNP build 157 also reports as
+   multi-allelic (`A:C`, `A:G`, `A:T`); the strand argument above needs only its plus-strand
+   reference allele (`A`), which holds regardless of which alternate is considered.
 4. That the legacy-offset discrepancies (IL-10 −24 bp, TNF +3 bp, IL-6 −597 off by one) are
    acceptable as annotation drift rather than a sign that a different locus is meant.

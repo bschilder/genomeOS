@@ -82,7 +82,11 @@ NATURAL_EARTH_PLACES_SOURCE = (
 )
 #: The reviewed variant-normalization registry (design 2026-09-10 §5, §7). A coordinate-keyed
 #: external resource may only attach to an artifact whose variant_id has a resolved row here.
-VARIANT_REGISTRY_PATH = Path("data/registry/variant_normalization.tsv")
+#: Anchored to the repository root rather than the CWD (matching scripts/freeze_contract.py and
+#: tests/test_variant_registry.py) so this script works when invoked from any directory (I5).
+VARIANT_REGISTRY_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "registry" / "variant_normalization.tsv"
+)
 
 
 def _read_json(path: Path) -> dict[str, Any]:

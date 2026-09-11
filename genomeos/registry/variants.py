@@ -29,8 +29,14 @@ STRANDS: tuple[str, ...] = ("plus", "minus")
 VERIFICATION_STATUSES: tuple[str, ...] = ("verified", "pending")
 
 _RSID = r"^rs[1-9][0-9]*$"
-_NORMALIZED_VARIANT = r"^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$"
-_PRINTED_ALLELES = r"^[ACGT]+/[ACGT]+$"
+# Exactly one base per allele, not [ACGT]+: complement() complements per base without reversing,
+# so a multi-base allele on the minus strand would round-trip against the un-reversed complement
+# and silently accept a transposed pair (e.g. "AT/GC") while refusing the correct one. Spec §2 and
+# §7 scope this registry to single-base substitutions, so a multi-base allele is refused here
+# rather than handled by adding reverse-complement — no consumer needs multi-base support yet, and
+# an untested reverse-complement path would be worse than a loud refusal (I4).
+_NORMALIZED_VARIANT = r"^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]-[ACGT]$"
+_PRINTED_ALLELES = r"^[ACGT]/[ACGT]$"
 # Built from STRANDS rather than hardcoded: the column must also admit "" on an unresolved row,
 # which a bare pa.Check.isin(STRANDS) cannot express.
 _STRAND = rf"^(?:{'|'.join(STRANDS)})$|^$"
