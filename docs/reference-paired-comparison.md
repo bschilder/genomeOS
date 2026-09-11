@@ -58,7 +58,8 @@ finite-axis marker; two negative-infinite log scores produce
 linked variants as independent observations.
 
 The plotting CLI produces `comparison.png` and `receipt.json`. The receipt
-records the exact report and plotting source hashes, package versions, PNG hash,
+records `input_report` (exact file bytes), `decoded_report` (JSON bytes),
+`input_encoding` (`json` or `gzip`), plotting source hash, package versions, PNG hash,
 all identities/statuses, and each plotted value, unit, and artist identifier.
 Neither CLI overwrites an existing output directory. Retain private reports and
 receipts locally; never commit real counts, posteriors, predictions, or private
@@ -66,10 +67,13 @@ research paths.
 
 ## Synthetic demonstration and regeneration
 
-The committed [report](figures/reference_comparison_synthetic_report.json) is
-exact output from the matrix CLI over tiny hand-set synthetic publications.
-Its full provenance and fold/cell ledgers are intentionally retained. It contains
-17 complete pairs, four conditional pairs, two wholly failed pairs, and one
+The committed [report](figures/reference_comparison_synthetic_report.json.gz) is
+an 87,238-byte deterministic gzip representation of the exact matrix-CLI JSON
+from tiny hand-set synthetic publications. Decoding preserves every byte of the
+full provenance and fold/cell ledgers; no scientific fields are projected away.
+The plotting CLI accepts ordinary JSON and explicitly decompresses `.gz` inputs
+before validation. Corrupt gzip input is refused before any output is written.
+The example contains 17 complete pairs, four conditional pairs, two wholly failed pairs, and one
 absent pair. No real data or model fitting produced these examples.
 
 ![Synthetic reporting demonstration, not a model-performance result](https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/reference_comparison_synthetic.png)
@@ -79,13 +83,13 @@ directory each time:
 
 ```bash
 python scripts/plot_reference_comparison.py \
-  --report docs/figures/reference_comparison_synthetic_report.json \
+  --report docs/figures/reference_comparison_synthetic_report.json.gz \
   --out /tmp/genomeos-paired-synthetic-figure
 ```
 
 The committed [receipt](figures/reference_comparison_synthetic_receipt.json)
-links that report to the PNG and source bytes. To regenerate the underlying
-synthetic publications and report as well:
+binds both the compressed-file and decoded-report fingerprints to the PNG and
+source bytes. To regenerate the underlying synthetic publications and report:
 
 ```bash
 PYTHONPATH=.:tests python tests/reference_comparison_figure_synthetic.py \
@@ -97,10 +101,31 @@ python scripts/compare_reference_counts.py \
 
 The latter command deliberately returns 2 because one requested directory is
 absent. The test below rebuilds these synthetic inputs, checks exact committed
-report bytes, independently replays all 192 plotted values/states and all24
-identity labels against actual Matplotlib artists, and checks output hashes and
+compressed metadata and decoded report bytes, independently replays all 192
+plotted values/states and all24 identity labels against actual Matplotlib artists, and checks output hashes and
 input/overwrite refusals:
 
 ```bash
 python -m pytest tests/test_plot_reference_comparison.py
 ```
+
+To reproduce the compact representation from the generated report, use gzip
+level 9, modification time 0, and an empty filename. This excludes timestamps and
+local paths from the header. The code uses an exclusive new output file:
+
+```bash
+python - <<'PYCODE'
+import gzip
+from pathlib import Path
+
+report = Path("/tmp/genomeos-paired-synthetic-report/report.json")
+with report.with_suffix(".json.gz").open("xb") as output:
+    with gzip.GzipFile(filename="", mode="wb", fileobj=output, compresslevel=9, mtime=0) as stream:
+        stream.write(report.read_bytes())
+PYCODE
+```
+
+The original plaintext report can be inspected locally after decompression; the
+committed gzip contains the exact original schema-valid JSON, not an alternative
+scientific summary. The tests compare decoded bytes to freshly generated CLI
+output and verify byte-identical figures from plain and compressed inputs.

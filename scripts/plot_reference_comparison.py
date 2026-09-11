@@ -9,11 +9,13 @@ metrics are explicitly labelled; no confidence bars, ranking, or promotion.
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import importlib.metadata
 import itertools
 import json
 import math
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -262,12 +264,19 @@ def run(report_path: Path, out: Path) -> None:
     """Write a new PNG and receipt, retaining partial output if a write fails."""
     _require(not out.exists(), f"output directory already exists: {out}")
     data = report_path.read_bytes()
-    figure, receipt = build_figure(_strict_json(data))
+    encoding = "gzip" if report_path.suffix == ".gz" else "json"
+    try:
+        decoded = gzip.decompress(data) if encoding == "gzip" else data
+    except (OSError, EOFError, zlib.error) as error:
+        raise ValueError(f"invalid gzip report: {error}") from error
+    figure, receipt = build_figure(_strict_json(decoded))
     try:
         out.mkdir(parents=True, exist_ok=False)
         figure.savefig(out / "comparison.png", dpi=110, metadata={"Software": "genomeOS paired comparison"})
         receipt.update(
             input_report=_fingerprint(data),
+            input_encoding=encoding,
+            decoded_report=_fingerprint(decoded),
             executed_source=_fingerprint(Path(__file__).read_bytes()),
             package_versions={name: importlib.metadata.version(name) for name in ("matplotlib", "numpy")},
             output_files={"comparison.png": _fingerprint((out / "comparison.png").read_bytes())},

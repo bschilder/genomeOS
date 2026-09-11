@@ -1,12 +1,17 @@
 {
-  "difference_direction": "B0H_minus_B0",
-  "executed_source": {
-    "sha256": "a5a1694b1c1bef71598fe146c4a00e4521c14ec7e09a1ccc14db307b3234ebda",
-    "size_bytes": 13145
-  },
-  "input_report": {
+  "decoded_report": {
     "sha256": "d59428aa8d03673cdec6f8a75a24dd36cb7ec573ddca4607e623f05c3a34e372",
     "size_bytes": 1914078
+  },
+  "difference_direction": "B0H_minus_B0",
+  "executed_source": {
+    "sha256": "c268c0b0cc2ab47f27a7c23033fbf9eed70d2f415822c87c152bc3370b735b39",
+    "size_bytes": 13527
+  },
+  "input_encoding": "gzip",
+  "input_report": {
+    "sha256": "1e389cc92dc10dff30aaed8d51a0f644c60ab95e3597bfe8f98808b7241330ea",
+    "size_bytes": 87238
   },
   "output_files": {
     "comparison.png": {

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import importlib.util
+import io
 import itertools
 import json
 import subprocess
@@ -180,11 +182,73 @@ def test_malformed_plot_input_is_refused(report_path, tmp_path, mutation):
 
 
 def test_committed_report_is_exact_synthetic_cli_output(report_path):
-    committed = ROOT / "docs/figures/reference_comparison_synthetic_report.json"
-    assert committed.read_bytes() == report_path.read_bytes()
-    report = json.loads(committed.read_bytes())
+    committed = ROOT / "docs/figures/reference_comparison_synthetic_report.json.gz"
+    data = committed.read_bytes()
+    assert len(data) < 100_000
+    assert data[:10] == b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff"
+    assert data == _gzip_bytes(report_path.read_bytes())
+    decoded = gzip.decompress(data)
+    assert decoded == report_path.read_bytes()
+    report = json.loads(decoded)
     differences = report["pairs"][0]["comparison"]["full_pair"]["differences"]
     assert differences["mae"]["value"] == pytest.approx(-0.025)
     assert differences["mean_log_score"]["value"] == 0
     assert differences["coverage_95"]["value"] == 100
     assert differences["interval_width_95"]["value"] == pytest.approx(0.2)
+
+
+def _gzip_bytes(data):
+    buffer = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=buffer, compresslevel=9, mtime=0) as stream:
+        stream.write(data)
+    return buffer.getvalue()
+
+
+def test_gzip_and_plain_reports_render_identically_and_bind_both_byte_forms(report_path, tmp_path):
+    compressed = tmp_path / "report.json.gz"
+    compressed.write_bytes(_gzip_bytes(report_path.read_bytes()))
+    receipts = []
+    for name, source in (("plain", report_path), ("gzip", compressed)):
+        out = tmp_path / name
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--report", str(source), "--out", str(out)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        receipt = json.loads((out / "receipt.json").read_bytes())
+        assert receipt["input_encoding"] == ("gzip" if name == "gzip" else "json")
+        assert receipt["input_report"] == {
+            "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "size_bytes": source.stat().st_size,
+        }
+        assert receipt["decoded_report"] == {
+            "sha256": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+            "size_bytes": report_path.stat().st_size,
+        }
+        receipts.append(receipt)
+    assert receipts[0]["rows"] == receipts[1]["rows"]
+    assert (tmp_path / "plain/comparison.png").read_bytes() == (tmp_path / "gzip/comparison.png").read_bytes()
+
+
+@pytest.mark.parametrize("corruption", ["header", "truncated", "checksum"])
+def test_corrupt_gzip_report_is_refused_before_output(report_path, tmp_path, corruption):
+    data = _gzip_bytes(report_path.read_bytes())
+    if corruption == "header":
+        data = b"not gzip"
+    elif corruption == "truncated":
+        data = data[:-8]
+    else:
+        data = data[:-8] + bytes([data[-8] ^ 1]) + data[-7:]
+    source = tmp_path / "report.json.gz"
+    source.write_bytes(data)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--report", str(source), "--out", str(tmp_path / "out")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "invalid gzip report" in result.stderr
+    assert not (tmp_path / "out").exists()

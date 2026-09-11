@@ -125,4 +125,10 @@ No fabricated uncertainty bars. Plot values must be independently replayed from
 the report, and retained PNG plus source/receipt hashes must be reviewable.
 Commit a tiny deterministic synthetic report and its PNG under docs/figures,
 visually inspect it, and label it as a reporting demonstration rather than a
-model-performance result. Real publication artifacts remain private and unchanged.
+model-performance result. The report may use deterministic gzip (`.json.gz`)
+with zero modification time and no stored filename, preserving the exact decoded
+matrix-CLI JSON bytes and all schema/provenance fields. The plotting I/O boundary
+explicitly decodes `.gz` input, retains ordinary JSON support, and refuses corrupt
+compressed input. Its receipt identifies encoding and binds both input-file bytes
+and decoded-report bytes, as well as executed source and PNG bytes. Real
+publication artifacts remain private and unchanged.
