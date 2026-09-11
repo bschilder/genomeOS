@@ -2,6 +2,9 @@
 
     python scripts/build_registry.py --hgdp data/raw/hgdp_populations.tsv --out data/registry
 
+HGDP input must follow the curated five-column contract documented in
+`docs/hgdp-registry-input.md`.
+
 `--afnd` takes an AFND population export in the format documented in
 `genomeos.registry.sources.afnd`. AFND publishes no licence and no bulk download, so this
 repository ships no fetcher for it and the file has to be obtained by agreement with AFND; the
@@ -23,7 +26,12 @@ VERSION = "0.1.0"
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hgdp", type=Path, required=True)
+    ap.add_argument(
+        "--hgdp",
+        type=Path,
+        required=True,
+        help="curated HGDP TSV; see docs/hgdp-registry-input.md",
+    )
     ap.add_argument("--afnd", type=Path)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()

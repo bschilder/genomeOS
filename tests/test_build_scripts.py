@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -15,6 +16,23 @@ from genomeos.registry.sources import hgdp
 FIXTURES = Path(__file__).parent / "fixtures"
 LITERATURE = FIXTURES / "literature" / "promotable"
 ROOT = Path(__file__).parents[1]
+
+
+def _run(command: list[str]) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(ROOT)
+    return subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
+
+
+def _registry_command(hgdp_input: Path, out: Path) -> list[str]:
+    return [
+        sys.executable,
+        str(ROOT / "scripts" / "build_registry.py"),
+        "--hgdp",
+        str(hgdp_input),
+        "--out",
+        str(out),
+    ]
 
 
 def _write_registry(path: Path) -> None:
@@ -87,3 +105,54 @@ def test_literature_build_options_are_all_or_neither(tmp_path):
 
     assert completed.returncode != 0
     assert "must be supplied together" in completed.stderr
+
+
+def test_registry_build_refuses_legacy_hgdp_input_without_creating_output(tmp_path):
+    legacy = tmp_path / "legacy-hgdp.tsv"
+    legacy.write_text(
+        "population\tlatitude\tlongitude\tregion\nExample\t1\t2\tSynthetic\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "registry"
+
+    completed = _run(_registry_command(legacy, out))
+
+    assert completed.returncode != 0
+    assert "provenance" in completed.stderr
+    assert "uncertainty_radius_km" in completed.stderr
+    assert not out.exists()
+
+
+def test_registry_build_preserves_explicit_hgdp_support_in_parquet(tmp_path):
+    out = tmp_path / "registry"
+
+    completed = _run(_registry_command(FIXTURES / "hgdp_populations.tsv", out))
+
+    assert completed.returncode == 0, completed.stderr
+    populations = pd.read_parquet(out / "populations.parquet")
+    aliases = pd.read_parquet(out / "population_aliases.parquet")
+    assert len(populations) == 6
+    assert populations["uncertainty_radius_km"].tolist() == [
+        2.5,
+        5.0,
+        25.0,
+        75.0,
+        125.0,
+        250.0,
+    ]
+    assert populations["provenance"].tolist() == [
+        "synthetic:hgdp-fixture-v1#row-1",
+        "synthetic:hgdp-fixture-v1#row-2",
+        "synthetic:hgdp-fixture-v1#row-3",
+        "synthetic:hgdp-fixture-v1#row-4",
+        "synthetic:hgdp-fixture-v1#row-5",
+        "synthetic:hgdp-fixture-v1#row-6",
+    ]
+    assert aliases["label"].tolist() == [
+        "Yoruba",
+        "Biaka",
+        "Han",
+        "Sardinian",
+        "Karitiana",
+        "Papuan",
+    ]
