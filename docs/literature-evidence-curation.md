@@ -162,6 +162,15 @@ If a value requires another operation or a chain of operations, leave it unresol
 new tested method through an issue. Reviewer approval cannot turn a free-text calculation in a data
 cell into an allowed derivation.
 
+`variant_normalization` here resolves one printed variant mention, inline in a single evidence row,
+against the reference build and strand that row's source actually printed. A second place applies
+the same discipline once per adapter-minted `variant_id` instead of once per record: the registry
+at [`genomeos/registry/variants.py`](../genomeos/registry/variants.py) and
+[`data/registry/variant_normalization.tsv`](../data/registry/variant_normalization.tsv), designed in
+[`variant-normalization-registry-design.md`](superpowers/specs/2026-09-10-variant-normalization-registry-design.md).
+Use this derivation for a value seen in a paper; use the registry when an adapter or the web
+exporter needs a coordinate for a `variant_id` it already mints.
+
 ## Discovery is one existing tool, and it is not optional
 
 **Use `scripts/fetch_pubmed_manifest.py`. Do not write your own fetcher.** Two corpus slices have

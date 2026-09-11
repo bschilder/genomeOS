@@ -6,6 +6,12 @@ replaces it, so no published identity moves (§3A).
 
 Every row is hand-authored and reviewed. Nothing here resolves a variant automatically, and a
 `variant_id` with no row is a refusal at every consumer, never a fallback (§7).
+
+This is not the `variant_normalization` derivation in `docs/literature-evidence-curation.md`,
+which resolves one printed variant mention inline, per literature evidence row. This registry
+instead resolves each adapter-minted `variant_id` exactly once, in a table reviewed independently
+of any one paper, and is consulted by source adapters and the web exporter rather than by the
+ledger's promotion gate.
 """
 
 from __future__ import annotations
