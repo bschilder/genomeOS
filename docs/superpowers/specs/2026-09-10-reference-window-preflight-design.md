@@ -46,7 +46,7 @@ Task 1 immutable dataclasses live in `reference_window_types.py`; geometry, byte
 
 `PublicObject` fields are `uri`, `generation`, `size_bytes`, `md5_b64`, `crc32c_b64`. Generation is a positive decimal string, size a positive integer, checksums strict base64 of 16/4 bytes. URI has no embedded generation/query and must exactly match the audited public family `gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrN.vcf.bgz[.tbi]`. Reject credentials, traversal, encoded separators, whitespace, wildcards and other schemes/buckets/releases. Source-pair chromosome, suffixes and VCF/index associations must match exactly. Build pinned requests from these fields, never from arbitrary metadata `mediaLink`.
 
-The raw listing importer accepts the audited `[{url,type,metadata}]` shape, validates used metadata field types, URL/generation/bucket/name/size consistency and 24 complete distinct pairs, preserves the input byte hash, then explicitly projects the five fields above. Recognized metadata-only fields are `contentType,etag,id,kind,mediaLink,metageneration,selfLink,storageClass,timeCreated,timeFinalized,timeStorageClassUpdated,updated`; require strings, check `id` consistency, and reject unknown keys. These fields remain traceable through the raw hash but are explicitly omitted by projection; this is not permissive normalized-manifest parsing. The importer may explicitly omit chrX/Y, with an exclusion ledger, but cannot silently discard unexpected objects. The contig importer accepts only exact contig declaration lines; retain X/Y/M declarations as out-of-scope provenance and require each autosome once with the declared assembly. Never read a VCF or sample header to make these inputs.
+The raw listing importer accepts the audited `[{url,type,metadata}]` shape with `type="cloud_object"` for both VCF and TBI (an object kind, not MIME), validates used metadata field types, URL/generation/bucket/name/size consistency and 24 complete distinct pairs, preserves the input byte hash, then explicitly projects the five fields above. Recognized metadata-only fields are `contentType,etag,id,kind,mediaLink,metageneration,selfLink,storageClass,timeCreated,timeFinalized,timeStorageClassUpdated,updated`; require strings, check `id` consistency, and reject unknown keys. These fields remain traceable through the raw hash but are explicitly omitted by projection; this is not permissive normalized-manifest parsing. The importer may explicitly omit chrX/Y, with an exclusion ledger, but cannot silently discard unexpected objects. The contig importer accepts only exact contig declaration lines; retain X/Y/M declarations as out-of-scope provenance and require each autosome once with the declared assembly. Never read a VCF or sample header to make these inputs.
 
 Canonical JSON is `json.dumps(payload, sort_keys=True, separators=(",",":"), ensure_ascii=True, allow_nan=False) + "\n"`, UTF-8. Arrays have explicit natural chromosome/window or URI+generation/range order. Label source evidence `supplied_audit_not_reperformed`; an input audit/hash is not a new inspector due-diligence claim. Hash exact emitted bytes with SHA-256; the artifact's own hash is computed externally, avoiding self-reference. Scientific artifacts contain no timestamps, elapsed durations, absolute workstation paths or command environment. Runtime attempt timings belong in a separate log. Hashes bind raw inputs as well as normalized content.
 
@@ -81,5 +81,22 @@ Refused source receipts record a fixed reason (`metadata_mismatch`, `generation_
 ## 7. Acceptance and handoff
 
 Task 1 can be accepted independently from deterministic geometry and strict local artifacts. Task 2 requires bounded parser/adapter refusal tests, exact range-accounting controls and a native synthetic coverage oracle. Check in tiny synthetic BGZF/TBI files with saved native query stdout, tool versions and fixture hashes; standard CI must run those fixture/block-coverage tests without native tools. A separate live native regeneration/query test may skip when tools are absent from CI, but must pass locally with zero skips before real index preflight. Use repetitive long INFO data to keep compressed fixtures tiny while testing long records, including a long VCF record crossing BGZF blocks and a query beyond the last indexed record. Native comparison verifies that candidate byte ranges cover independently queried variants; it does not demand byte-minimal equivalence. No passing parser self-roundtrip alone counts as the native oracle.
+
+Freeze Task 1 from the repository root with caller-supplied, previously saved local inputs:
+
+```bash
+PYTHONPATH=. python scripts/freeze_reference_windows.py \
+    --source-metadata /path/to/public-object-metadata.json \
+    --contigs /path/to/pilot-contigs.txt \
+    --source-audit /path/to/report.md \
+    --data-version YOUR_IMMUTABLE_DATA_VERSION \
+    --evidence-kind public_reference_development \
+    --out /path/to/new-reference-window-directory
+```
+
+The output directory must not exist. The command validates and hashes every input before creating
+it, writes `windows.tsv`, and writes the completion artifact `manifest.json` last. This local freeze
+does not fetch an index or VCF byte, inspect genotypes, extract counts, or make either artifact
+eligible for P1 or publication.
 
 Run focused tests and mandatory smoke after each implementation task, then lint, contract drift, module-size, privacy and full pytest before PR. Record exact commands/results, including pre-existing failures or missing native tools. Review source generation binding, compressed/decompressed limits, final-block coverage, full-window failure retention and budget equality independently before real index preflight. Successful #254 closes only this preflight issue and advances #189. Actual genotype acquisition/count extraction and any new real-model run remain separately specified and gated.
