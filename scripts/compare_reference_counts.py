@@ -183,14 +183,20 @@ def _evaluate(
         b0 = _publication_files(b0_path, heterogeneity=False)
         b0h = _publication_files(b0h_path, heterogeneity=True)
         fingerprints = {}
-        if b0 is not None:
-            left = decode_reference_publication(b0, heterogeneity=False)
-            _bind_configuration(left.manifest["configuration"], identity, heterogeneity=False)
-            fingerprints["b0"] = fingerprint(b0["manifest.json"])
-        if b0h is not None:
-            right = decode_reference_publication(b0h, heterogeneity=True)
-            _bind_configuration(right.manifest["configuration"], identity, heterogeneity=True)
-            fingerprints["b0h"] = fingerprint(b0h["manifest.json"])
+        comparison = None
+        if b0 is not None and b0h is not None:
+            comparison = compare_reference_publications(b0, b0h)
+            for side, heterogeneity in (("b0", False), ("b0h", True)):
+                _bind_configuration(comparison["configurations"][side], identity, heterogeneity=heterogeneity)
+            fingerprints = comparison["publication_fingerprints"]
+        else:
+            for side, files, heterogeneity in (("b0", b0, False), ("b0h", b0h, True)):
+                if files is not None:
+                    publication = decode_reference_publication(files, heterogeneity=heterogeneity)
+                    _bind_configuration(
+                        publication.manifest["configuration"], identity, heterogeneity=heterogeneity
+                    )
+                    fingerprints[side] = fingerprint(files["manifest.json"])
         stage, kind, seed, rho = identity
         row = {
             "cohort_stage": stage,
@@ -203,7 +209,6 @@ def _evaluate(
         if b0 is None or b0h is None:
             row.update(status="not_available", reason=_not_available_reason(b0, b0h), comparison=None)
         else:
-            comparison = compare_reference_publications(b0, b0h)
             row.update(status="available", reason=None, comparison=comparison)
         rows.append(row)
         if fingerprints:
@@ -233,11 +238,12 @@ def run(args: argparse.Namespace) -> int:
     sources = _source_hashes()
     versions = _package_versions()
     available = sum(row["status"] == "available" for row in rows)
+    complete = available == len(MATRIX) and all(row["comparison"]["comparison_complete"] for row in rows)
     report = {
         "schema_version": 1,
         "evidence_kind": "descriptive_paired_comparison_matrix",
         "publication_eligible": False,
-        "matrix_complete": available == len(MATRIX),
+        "matrix_complete": complete,
         "difference_direction": "B0H_minus_B0",
         "available_pair_count": available,
         "not_available_pair_count": len(MATRIX) - available,

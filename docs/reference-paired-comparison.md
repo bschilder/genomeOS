@@ -32,10 +32,14 @@ python scripts/plot_reference_comparison.py --report paired-report/report.json -
 ```
 
 The comparison CLI writes `report.json` and a manifest containing input, source,
-package, and output fingerprints. Exit 0 means all24 publication pairs are
-available; exit 2 can mean a valid matrix with absent directories, or an input
-error (consult stderr and whether a report was produced). A present partial or
-corrupt publication is a hard error. Scientific fold failures remain valid
+package, and output fingerprints. Exit 0 and `matrix_complete: true` in both the
+report and manifest require all24 publication pairs to be available **and** all
+five folds completed in both models for every pair. `available_pair_count`
+separately records validated publication availability; it can be24 while the
+matrix remains scientifically incomplete. Exit 2 can mean a valid incomplete
+matrix (absent directories, failed/infeasible folds, or no common completed
+folds), or an input error (consult stderr and whether a report was produced).
+A present partial or corrupt publication is a hard error. Scientific fold failures remain valid
 reported evidence and are distinct from absent publications. Availability of all
 publications does not mean all folds succeeded: inspect each comparison's
 `comparison_complete`, `full_pair`, and `completed_fold_conditional` fields.
@@ -61,6 +65,8 @@ The plotting CLI produces `comparison.png` and `receipt.json`. The receipt
 records `input_report` (exact file bytes), `decoded_report` (JSON bytes),
 `input_encoding` (`json` or `gzip`), plotting source hash, package versions, PNG hash,
 all identities/statuses, and each plotted value, unit, and artist identifier.
+Full fold membership ledgers remain in the source report; the receipt binds them
+through the decoded-report fingerprint without duplicating them.
 Neither CLI overwrites an existing output directory. Retain private reports and
 receipts locally; never commit real counts, posteriors, predictions, or private
 research paths.

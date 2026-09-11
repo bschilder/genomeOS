@@ -119,7 +119,6 @@ def _display_rows(report: dict[str, Any]) -> list[dict[str, Any]]:
                 label += ": no common completed folds"
             if row["status"] != "complete":
                 label += "; " + "; ".join(f"{side} failed/infeasible={n}" for side, n in failures.items())
-            row["fold_outcomes"] = folds
         row["label"] = label
         for _, metrics, unit in PANELS:
             for metric in metrics:

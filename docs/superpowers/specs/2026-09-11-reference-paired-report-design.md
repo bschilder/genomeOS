@@ -110,9 +110,13 @@ No fitting, acquisition, remote transfer, watch/restart loop or acceptance overr
 Write deterministic report.json for all24 identities and a manifest last, with
 input specification, every consumed publication fingerprint, report fingerprint,
 executed source hashes and actual relevant package versions. Use exclusive new
-output directories. Exit0 only when all24 complete pairs are available; exit2
-for a valid incomplete matrix. No publication output for corrupt input; preserve
-any partial output after an I/O failure. No stochastic statistics or threshold.
+output directories. Availability means both publication directories validated;
+retain its count independently of scientific completion. `matrix_complete` in
+both report and manifest and exit0 require all24 pairs available **and** every
+nested `comparison_complete` true (all five folds completed in both models).
+Exit2 for a valid incomplete matrix, including present publications with failed
+or infeasible folds or no common completed folds. No publication output for
+corrupt input; preserve any partial output after an I/O failure. No stochastic statistics or threshold.
 
 ## Figure
 

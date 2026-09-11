@@ -25,8 +25,10 @@ RHOS = (9, 4)
 MATRIX = tuple(itertools.product(STAGES, KINDS, SEEDS, RHOS))
 
 
-def _configured_publication(*, stage: str, kind: str, seed: int, rho: int | None = None):
-    files = publication(heterogeneity=rho is not None, rho=rho or 9)
+def _configured_publication(
+    *, stage: str, kind: str, seed: int, rho: int | None = None, failed=(), infeasible=()
+):
+    files = publication(heterogeneity=rho is not None, rho=rho or 9, failed=failed, infeasible=infeasible)
     manifest = json.loads(files["manifest.json"])
     manifest["configuration"].update(cohort_stage=stage, count_kind=kind, seed=seed)
     manifest["seeds"]["root"] = seed
@@ -138,8 +140,7 @@ def test_complete_matrix_resolves_relative_paths_and_writes_deterministic_report
     }
     assert len(manifest["consumed_publications"]) == 24
     assert all(
-        set(row["publication_fingerprints"]) == {"b0", "b0h"}
-        for row in manifest["consumed_publications"]
+        set(row["publication_fingerprints"]) == {"b0", "b0h"} for row in manifest["consumed_publications"]
     )
     assert manifest["package_versions"]["numpy"]
     assert manifest["package_versions"]["pandas"]
@@ -153,9 +154,13 @@ def test_complete_matrix_resolves_relative_paths_and_writes_deterministic_report
     assert specification["pairs"][0]["b0_directory"].startswith("publications/")
 
 
-def test_absent_directory_retains_expected_identity_and_exits_two(tmp_path):
+@pytest.mark.parametrize("absent", ["b0", "b0h", "both"])
+def test_absent_directory_retains_expected_identity_and_exits_two(tmp_path, absent):
     missing = ("paper_ancestry_exclusion_4094", "quality", 44, 4)
-    pairs, _ = _matrix_spec(tmp_path, unavailable=missing)
+    pairs, specification = _matrix_spec(tmp_path, unavailable=missing if absent != "b0" else None)
+    declaration = specification["pairs"][-1]
+    if absent != "b0h":
+        (tmp_path / declaration["b0_directory"]).rename(tmp_path / "retained-b0")
     out = tmp_path / "out"
 
     completed = _run(pairs, out)
@@ -163,25 +168,104 @@ def test_absent_directory_retains_expected_identity_and_exits_two(tmp_path):
     assert completed.returncode == 2, completed.stderr
     report = json.loads((out / "report.json").read_bytes())
     assert report["matrix_complete"] is False
-    assert report["available_pair_count"] == 23
-    assert report["not_available_pair_count"] == 1
-    row = next(row for row in report["pairs"] if row["status"] == "not_available")
-    assert {key: row[key] for key in ("cohort_stage", "count_kind", "seed", "rho_prior_beta")} == {
-        "cohort_stage": missing[0],
-        "count_kind": missing[1],
-        "seed": missing[2],
-        "rho_prior_beta": missing[3],
-    }
+    # B0 is reused by both rho tracks; its absence affects two requested pairs.
+    unavailable = 1 if absent == "b0h" else 2
+    assert report["available_pair_count"] == 24 - unavailable
+    assert report["not_available_pair_count"] == unavailable
+    identity_fields = ("cohort_stage", "count_kind", "seed", "rho_prior_beta")
+    row = next(row for row in report["pairs"] if tuple(row[k] for k in identity_fields) == missing)
+    assert row["status"] == "not_available"
     assert row["comparison"] is None
-    assert row["reason"] == "b0h publication directory is absent"
-    manifest = json.loads((out / "manifest.json").read_bytes())
-    assert len(manifest["consumed_publications"]) == 24
-    retained = next(
-        row
-        for row in manifest["consumed_publications"]
-        if tuple(row[key] for key in ("cohort_stage", "count_kind", "seed", "rho_prior_beta")) == missing
+    assert (
+        row["reason"]
+        == {
+            "b0": "b0 publication directory is absent",
+            "b0h": "b0h publication directory is absent",
+            "both": "b0 and b0h publication directories are absent",
+        }[absent]
     )
-    assert set(retained["publication_fingerprints"]) == {"b0"}
+    manifest = json.loads((out / "manifest.json").read_bytes())
+    assert manifest["matrix_complete"] is False
+    assert len(manifest["consumed_publications"]) == (23 if absent == "both" else 24)
+    retained = [
+        row for row in manifest["consumed_publications"] if tuple(row[k] for k in identity_fields) == missing
+    ]
+    if absent == "both":
+        assert retained == []
+    else:
+        present = "b0h" if absent == "b0" else "b0"
+        source = (tmp_path / declaration[present + "_directory"] / "manifest.json").read_bytes()
+        assert retained[0]["publication_fingerprints"] == {
+            present: {"sha256": hashlib.sha256(source).hexdigest(), "size_bytes": len(source)},
+        }
+
+
+@pytest.mark.parametrize("state", ["failed", "infeasible", "no_common_completed"])
+def test_all_present_incomplete_comparison_publishes_evidence_and_exits_two(tmp_path, state):
+    pairs, specification = _matrix_spec(tmp_path)
+    declaration = specification["pairs"][-1]
+    directory = tmp_path / declaration["b0h_directory"]
+    directory.rename(tmp_path / "retained-complete-b0h")
+    failed = tuple(range(5)) if state == "no_common_completed" else ((4,) if state == "failed" else ())
+    files = _configured_publication(
+        stage="paper_ancestry_exclusion_4094",
+        kind="quality",
+        seed=44,
+        rho=4,
+        failed=failed,
+        infeasible=(4,) if state == "infeasible" else (),
+    )
+    _write_publication(directory, files)
+    out = tmp_path / "out"
+    result = _run(pairs, out)
+    assert result.returncode == 2, result.stderr
+    report = json.loads((out / "report.json").read_bytes())
+    manifest = json.loads((out / "manifest.json").read_bytes())
+    assert report["available_pair_count"] == 24
+    assert report["not_available_pair_count"] == 0
+    assert all(row["status"] == "available" for row in report["pairs"])
+    assert report["matrix_complete"] is manifest["matrix_complete"] is False
+    comparison = report["pairs"][-1]["comparison"]
+    assert comparison["comparison_complete"] is False
+    assert comparison["full_pair"]["available"] is False
+    assert comparison["full_pair"]["differences"] is None
+    conditional = comparison["completed_fold_conditional"]
+    assert conditional["available"] is (state != "no_common_completed")
+    assert len(conditional["split_ids"]) == (0 if state == "no_common_completed" else 4)
+    if state != "no_common_completed":
+        assert conditional["differences"]["mae"]["value"] == pytest.approx(-0.025)
+    else:
+        assert conditional["reason"] == "no_common_completed_folds"
+    final_fold = comparison["fold_outcomes"][-1]["b0h"]
+    assert final_fold["status"] == ("infeasible" if state == "infeasible" else "failed")
+    assert final_fold["failure_reason"] == (
+        "synthetic preflight refusal" if state == "infeasible" else "ValueError: synthetic scoring failure"
+    )
+    assert len(comparison["fold_outcomes"]) == 5
+    assert comparison["counts"]["failed_rows_b0h"] == (7 if state == "no_common_completed" else 1)
+    assert len(manifest["consumed_publications"]) == 24
+
+
+@pytest.mark.parametrize("present", ["b0", "b0h"])
+@pytest.mark.parametrize("problem", ["corrupt", "identity"])
+def test_present_publication_is_still_validated_without_counterpart(tmp_path, present, problem):
+    pairs, specification = _matrix_spec(tmp_path)
+    declaration = specification["pairs"][-1]
+    absent = "b0h" if present == "b0" else "b0"
+    (tmp_path / declaration[absent + "_directory"]).rename(tmp_path / "retained-counterpart")
+    if present == "b0":
+        # Both B0H tracks share this B0; isolate the absent-counterpart path in both.
+        (tmp_path / specification["pairs"][-2]["b0h_directory"]).rename(tmp_path / "retained-other-track")
+    directory = tmp_path / declaration[present + "_directory"]
+    if problem == "corrupt":
+        (directory / "predictions.tsv").write_bytes(b"corrupt\n")
+    else:
+        _update_configuration(directory, count_kind="called")
+    out = tmp_path / "out"
+    result = _run(pairs, out)
+    assert result.returncode == 2
+    assert ("publication" if problem == "corrupt" else "configuration") in result.stderr
+    assert not out.exists()
 
 
 @pytest.mark.parametrize("mode", ["duplicate", "missing"])

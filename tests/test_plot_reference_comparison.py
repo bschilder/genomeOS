@@ -67,6 +67,7 @@ def test_all24_artists_replay_report_values_states_and_units(report_path):
         )
     )
     assert len(receipt["rows"]) == 24
+    assert all("fold_outcomes" not in row for row in receipt["rows"])
     assert {
         tuple(row[k] for k in ("cohort_stage", "count_kind", "seed", "rho_prior_beta"))
         for row in receipt["rows"]
