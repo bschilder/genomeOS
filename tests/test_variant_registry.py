@@ -192,3 +192,24 @@ def test_an_unresolved_variant_returns_none(tmp_path):
         )
     )
     assert normalized_identity("cyt:example-1-a", registry) is None
+
+
+REGISTRY_PATH = Path(__file__).resolve().parents[1] / "data" / "registry" / "variant_normalization.tsv"
+
+
+def test_the_committed_registry_validates():
+    """The checked-in file is the artifact; `load` runs every invariant over it."""
+    registry = load(REGISTRY_PATH)
+    assert len(registry) >= 1
+
+
+def test_every_resolved_row_cites_its_naming_source():
+    registry = load(REGISTRY_PATH)
+    resolved = registry[registry["status"] == "resolved"]
+    assert (resolved["naming_citation"].str.strip() != "").all()
+
+
+def test_every_unresolved_row_states_what_was_attempted():
+    registry = load(REGISTRY_PATH)
+    unresolved = registry[registry["status"] == "unresolved"]
+    assert (unresolved["refusal_reason"].str.strip() != "").all()
