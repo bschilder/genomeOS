@@ -187,16 +187,50 @@ def _write_allowlist(path: Path) -> None:
     )
 
 
+def _write_variant_registry(path: Path) -> None:
+    """A one-row registry whose HbS identity is *verified*.
+
+    `normalized_identity` only returns an identity for a verified row (design §9), so the gate
+    at `_external_resources` needs one to exercise its accepting path. The committed registry
+    deliberately holds this same row as `pending` — an agent may not verify on a human's behalf —
+    so the fixture states the verified case rather than the real file being relaxed to provide it.
+    """
+    pd.DataFrame(
+        [
+            {
+                "variant_id": VARIANT_ID,
+                "status": "resolved",
+                "rsid": "rs334",
+                "normalized_variant_id": VARIANT_ID,
+                "printed_alleles": "T/A",
+                "printed_convention": "already a GRCh38 coordinate identity",
+                "strand": "plus",
+                "strand_evidence": "self-identity: the alleles are read from the variant_id",
+                "reference_resource": "identity row; no external resolution required",
+                "naming_citation": "identity row; the internal id is already the normalized id",
+                "resolved_at": "2026-09-10T00:00:00Z",
+                "reviewed_by": "human:reviewer",
+                "verification_status": "verified",
+                "refusal_reason": "",
+                "notes": "",
+            }
+        ]
+    ).to_csv(path, sep="\t", index=False)
+
+
 @pytest.fixture
-def export_inputs(tmp_path: Path) -> dict[str, Path]:
+def export_inputs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     store = tmp_path / "store"
     _write_source_tree(store)
     hbs = tmp_path / "map_hbs_surveys.csv"
     g6pd = tmp_path / "map_g6pd_surveys.csv"
     allowlist = tmp_path / "allowlist.json"
+    registry = tmp_path / "variant_normalization.tsv"
     _write_hbs_csv(hbs)
     g6pd.write_text("id,latitude,longitude\n")
     _write_allowlist(allowlist)
+    _write_variant_registry(registry)
+    monkeypatch.setattr(export_atlas_web, "VARIANT_REGISTRY_PATH", registry)
     return {
         "store": store,
         "hbs": hbs,

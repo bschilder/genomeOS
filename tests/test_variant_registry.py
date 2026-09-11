@@ -159,8 +159,26 @@ def test_load_refuses_an_invalid_file(tmp_path):
 
 
 def test_a_resolved_variant_returns_its_identity(tmp_path):
-    registry = load(_write(tmp_path, [_row()]))
+    registry = load(_write(tmp_path, [_row(verification_status="verified")]))
     assert normalized_identity("cyt:example-1-a", registry) == NormalizedIdentity(
+        variant_id="cyt:example-1-a",
+        rsid="rs1",
+        normalized_variant_id="chr1-100-A-G",
+        strand="plus",
+    )
+
+
+def test_a_resolved_but_unverified_variant_returns_none(tmp_path):
+    """Resolution is a proposal; eligibility waits on verification (design §9, #242).
+
+    The same row differs only in `verification_status`, so this pins the gate to that field
+    rather than to anything else about the row.
+    """
+    pending = load(_write(tmp_path, [_row(verification_status="pending")]))
+    assert normalized_identity("cyt:example-1-a", pending) is None
+
+    verified = load(_write(tmp_path, [_row(verification_status="verified")]))
+    assert normalized_identity("cyt:example-1-a", verified) == NormalizedIdentity(
         variant_id="cyt:example-1-a",
         rsid="rs1",
         normalized_variant_id="chr1-100-A-G",
@@ -170,7 +188,7 @@ def test_a_resolved_variant_returns_its_identity(tmp_path):
 
 def test_an_absent_variant_returns_none(tmp_path):
     """Absence is a refusal for the caller, not a blank to fill (§7)."""
-    registry = load(_write(tmp_path, [_row()]))
+    registry = load(_write(tmp_path, [_row(verification_status="verified")]))
     assert normalized_identity("cyt:not-in-the-registry", registry) is None
 
 

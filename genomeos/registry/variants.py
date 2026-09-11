@@ -135,13 +135,23 @@ def load(path: Path) -> pd.DataFrame:
 
 
 def normalized_identity(variant_id: str, registry: pd.DataFrame) -> NormalizedIdentity | None:
-    """The reviewed identity for `variant_id`, or `None` if there is not one.
+    """The *verified* reviewed identity for `variant_id`, or `None` if there is not one.
 
-    `None` covers both "no row" and "recorded as unresolvable". Callers must treat it as a
-    refusal — there is no fallback, and in particular no inferring a coordinate from the shape of
-    the identifier (§7).
+    A row must be both `status == "resolved"` and `verification_status == "verified"`. A resolved
+    but still `pending` row deliberately returns `None`: it is a proposal that no one has checked,
+    and design §9 makes eligibility for a coordinate-keyed external resource depend on
+    verification, not on resolution. Deciding that here keeps one place answering "is there a
+    usable reviewed identity" rather than leaving each consumer to remember the second condition.
+
+    `None` therefore covers "no row", "recorded as unresolvable", and "resolved but unverified".
+    Callers must treat all three as a refusal — there is no fallback, and in particular no
+    inferring a coordinate from the shape of the identifier (§7).
     """
-    matches = registry[(registry["variant_id"] == variant_id) & (registry["status"] == "resolved")]
+    matches = registry[
+        (registry["variant_id"] == variant_id)
+        & (registry["status"] == "resolved")
+        & (registry["verification_status"] == "verified")
+    ]
     if matches.empty:
         return None
     row = matches.iloc[0]

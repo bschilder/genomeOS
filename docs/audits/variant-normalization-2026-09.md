@@ -8,7 +8,9 @@ Design: [`2026-09-10-variant-normalization-registry-design.md`](../superpowers/s
 service in that session; nothing was recalled. All four rows are `verification_status: pending`
 and stay that way until [#242](https://github.com/bschilder/genomeOS/issues/242) decides who may
 verify an agent-resolved row. **Until they are verified the four loci are not eligible for a
-coordinate-keyed external resource** (spec §9).
+coordinate-keyed external resource** (spec §9). That is enforced, not merely stated:
+`normalized_identity` returns `None` unless a row is both `resolved` and `verified`, so the
+exporter gate refuses these four today.
 
 ## Counts
 
@@ -90,10 +92,24 @@ from Ensembl 116 `lookup/symbol`, `lookup/id?expand=1` and VEP
   - Independently: Ensembl 116 annotates IL6 (`ENSG00000136244`) on **strand +1**, and VEP reports
     rs1800795 as an `upstream_gene_variant` at **distance 174** from the canonical transcript
     `ENST00000258743` — the legacy offset measured along the plus strand.
-- **What this evidence does not establish.** It does not verify the letters against a published
-  promoter sequence; no full text was retrieved. The residual assumption is the ordinary one — that
-  a promoter offset and its allele letters are quoted on the same (sense) strand. A human verifier
-  should check that assumption against the Terry 2000 sequence figure before this row is promoted.
+- **The orientation is also settled without the naming convention**, using only data already in
+  this repository plus the reference resource, which is what retires the convention as an open
+  question. Under a minus-strand reading the allele the internal id calls minor — the `-c` suffix,
+  assigned by `MINOR_ALLELE_RULE` in `genomeos/observations/sources/afnd_cytokines.py` — would map
+  to plus-strand **G**, whose global frequency dbSNP 157 reports as **0.750** (TOPMED) and **0.859**
+  (1000Genomes). The Atlas's own published observations for `cyt:il-6-174-c` give a median of
+  **0.304** across **83** populations, with 1 of 83 above 0.6. A minus reading is irreconcilable
+  with both figures; plus is the only orientation consistent with the data this project already
+  publishes.
+  - Spec §6 rejects frequency concordance as the **step-1** method, on the ground that it has no
+    discriminating power near 0.5. That objection does not bite here: the two hypotheses sit at
+    0.30 against 0.75–0.86, far from 0.5, so the comparison genuinely discriminates. It is used to
+    corroborate **strand**, never to choose the rsID, and the citation-based argument above stands
+    on its own regardless.
+- **What this evidence still does not establish.** The letters were never checked against a
+  published promoter sequence; no full text was retrieved. That is now a completeness gap rather
+  than the load-bearing assumption it was, because two independent arguments — the −597 anchor and
+  the frequency check — agree on plus.
 - **Two honest wrinkles, recorded rather than smoothed over:**
   - GRCh38 carries **C** at chr7:22727026, so the literature's leading "G" is *not* the reference
     allele. The identical pattern holds at −597 (literature "G>A", reference A), which is what makes
@@ -178,11 +194,39 @@ Had any of those failed, the row would have been written as `unresolved` with `r
 records that state as a row precisely so the same dead end is not re-investigated; there is simply
 nothing to record for these four.
 
+## Operational consequence — HbS is currently blocked, and that needs a human
+
+Making `normalized_identity` require `verified` (design §9) has a consequence beyond this batch,
+recorded here rather than discovered at the next release.
+
+`website/src/atlas/public-artifacts.json` declares `gnomad` and `dbsnp` external resources for
+`hbs-rs334` (`chr11-5227002-T-A`), and the published `website/public/data/atlas/catalog.json`
+carries them. That artifact's registry row is a **self-identity** row — the internal `variant_id`
+*is* the GRCh38 coordinate — and it is `verification_status: pending`, because an agent authored it
+and an agent may not verify on a human's behalf.
+
+So **`scripts/export_atlas_web.py` would now refuse to regenerate the published HbS artifact.** The
+committed catalogue is untouched and this branch changes no published byte, but the next real export
+fails until someone acts.
+
+This is a decision for a person, not for an implementer, and it is not decided here:
+
+1. **Verify the HbS row.** A maintainer inspects it and flips `verification_status` to `verified` —
+   a distinct, attributable act, which is exactly what the two-state field is for.
+2. **Decide self-identity rows do not need verification** and narrow the gate to rows that assert a
+   *legacy-name-to-coordinate* claim, which is the claim verification actually exists to check. A
+   self-identity row asserts nothing an external resource could contradict.
+3. **Accept the refusal** and drop HbS's external resources until #242 settles.
+
+Option 2 is the most defensible on the design's own logic and the most invasive; option 1 is the
+smallest. It belongs in [#242](https://github.com/bschilder/genomeOS/issues/242) or an issue that
+cites it.
+
 ## What a verifier should check
 
-1. That Terry 2000 (`pmid:10747905`) prints the IL-6 promoter sequence in the sense orientation, so
-   the `cyt:il-6-174-c` strand argument rests on a printed sequence rather than on the naming
-   convention alone. **This is the weakest link in the batch.**
+1. ~~That Terry 2000 prints the IL-6 promoter sequence in the sense orientation.~~ **Retired.**
+   The `cyt:il-6-174-c` strand no longer rests on the naming convention: the −597 anchor and the
+   allele-frequency check above agree on plus independently of it.
 2. That `pmid:29802545` is an acceptable naming citation for both IL-10 rows, given it is a single
    paper carrying both.
 3. That the alternate-allele choice is right where the rsID is multi-allelic — rs1800795 (`C>G` vs
