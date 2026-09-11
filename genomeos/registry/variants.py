@@ -135,26 +135,35 @@ def load(path: Path) -> pd.DataFrame:
 
 
 def normalized_identity(variant_id: str, registry: pd.DataFrame) -> NormalizedIdentity | None:
-    """The *verified* reviewed identity for `variant_id`, or `None` if there is not one.
+    """The usable reviewed identity for `variant_id`, or `None` if there is not one.
 
-    A row must be both `status == "resolved"` and `verification_status == "verified"`. A resolved
-    but still `pending` row deliberately returns `None`: it is a proposal that no one has checked,
-    and design §9 makes eligibility for a coordinate-keyed external resource depend on
-    verification, not on resolution. Deciding that here keeps one place answering "is there a
-    usable reviewed identity" rather than leaving each consumer to remember the second condition.
+    `None` covers three cases: no row, a row recorded as `unresolved`, and a **mapping** row that
+    is resolved but not yet `verified`. Callers must treat all three as a refusal — there is no
+    fallback, and in particular no inferring a coordinate from the shape of the identifier (§7).
 
-    `None` therefore covers "no row", "recorded as unresolvable", and "resolved but unverified".
-    Callers must treat all three as a refusal — there is no fallback, and in particular no
-    inferring a coordinate from the shape of the identifier (§7).
+    An **identity** row — one whose internal `variant_id` already *is* the normalized coordinate —
+    needs no verification and resolves while `pending`. See the comment below for why.
     """
-    matches = registry[
-        (registry["variant_id"] == variant_id)
-        & (registry["status"] == "resolved")
-        & (registry["verification_status"] == "verified")
-    ]
+    matches = registry[(registry["variant_id"] == variant_id) & (registry["status"] == "resolved")]
     if matches.empty:
         return None
     row = matches.iloc[0]
+    # Verification is required of a row that *asserts* something, and only of such a row.
+    #
+    # A mapping row claims that a legacy name denotes this coordinate: a name was translated, a
+    # strand was chosen, and either could be wrong in a way an external annotation would then
+    # inherit. Design §9 makes that claim wait for verification, and #242 decides who may give it.
+    #
+    # An identity row claims nothing. Its `variant_id` is already the GRCh38 coordinate the
+    # adapter minted, so there is no translation to get wrong and no strand ambiguity that could
+    # matter; a coordinate-keyed annotation cannot contradict a claim the row never made.
+    #
+    # Do not collapse the two cases. Requiring verification of an identity row blocks artifacts
+    # that are already published, for no scientific gain; exempting a mapping row publishes an
+    # unreviewed legacy-name translation, which is the whole failure this registry exists to stop.
+    asserts_a_mapping = row["normalized_variant_id"] != variant_id
+    if asserts_a_mapping and row["verification_status"] != "verified":
+        return None
     return NormalizedIdentity(
         variant_id=variant_id,
         rsid=row["rsid"],

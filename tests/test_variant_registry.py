@@ -158,7 +158,8 @@ def test_load_refuses_an_invalid_file(tmp_path):
         load(path)
 
 
-def test_a_resolved_variant_returns_its_identity(tmp_path):
+def test_a_verified_mapping_row_returns_its_identity(tmp_path):
+    """A row asserting a legacy-name-to-coordinate mapping resolves once it is verified."""
     registry = load(_write(tmp_path, [_row(verification_status="verified")]))
     assert normalized_identity("cyt:example-1-a", registry) == NormalizedIdentity(
         variant_id="cyt:example-1-a",
@@ -168,18 +169,31 @@ def test_a_resolved_variant_returns_its_identity(tmp_path):
     )
 
 
-def test_a_resolved_but_unverified_variant_returns_none(tmp_path):
-    """Resolution is a proposal; eligibility waits on verification (design §9, #242).
+def test_a_pending_mapping_row_returns_none(tmp_path):
+    """Resolution is a proposal; a mapping claim waits on verification (design §9, #242).
 
-    The same row differs only in `verification_status`, so this pins the gate to that field
-    rather than to anything else about the row.
+    This row differs from the one above only in `verification_status`, so the pair pins the gate
+    to that field and to nothing else about the row.
     """
-    pending = load(_write(tmp_path, [_row(verification_status="pending")]))
-    assert normalized_identity("cyt:example-1-a", pending) is None
+    registry = load(_write(tmp_path, [_row(verification_status="pending")]))
+    assert normalized_identity("cyt:example-1-a", registry) is None
 
-    verified = load(_write(tmp_path, [_row(verification_status="verified")]))
-    assert normalized_identity("cyt:example-1-a", verified) == NormalizedIdentity(
-        variant_id="cyt:example-1-a",
+
+def test_a_pending_identity_row_still_resolves(tmp_path):
+    """An identity row asserts no mapping, so there is nothing for verification to check.
+
+    Its `variant_id` already *is* the normalized coordinate: no legacy name was translated and no
+    strand was chosen, so an external annotation keyed by that coordinate cannot contradict it.
+    Requiring verification here would block already-published artifacts for no scientific gain.
+    """
+    identity = _row(
+        variant_id="chr1-100-A-G",
+        normalized_variant_id="chr1-100-A-G",
+        verification_status="pending",
+    )
+    registry = load(_write(tmp_path, [identity]))
+    assert normalized_identity("chr1-100-A-G", registry) == NormalizedIdentity(
+        variant_id="chr1-100-A-G",
         rsid="rs1",
         normalized_variant_id="chr1-100-A-G",
         strand="plus",

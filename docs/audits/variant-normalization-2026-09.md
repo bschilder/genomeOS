@@ -194,33 +194,38 @@ Had any of those failed, the row would have been written as `unresolved` with `r
 records that state as a row precisely so the same dead end is not re-investigated; there is simply
 nothing to record for these four.
 
-## Operational consequence — HbS is currently blocked, and that needs a human
+## What verification is required of, and what it is not
 
-Making `normalized_identity` require `verified` (design §9) has a consequence beyond this batch,
-recorded here rather than discovered at the next release.
+Design §9 makes eligibility for a coordinate-keyed external resource depend on verification. Applied
+to *every* row that reads as "no row may be used until a human signs it", which would have blocked
+the already-published HbS artifact: `website/src/atlas/public-artifacts.json` declares `gnomad` and
+`dbsnp` resources for `hbs-rs334`, whose row is `pending` because an agent authored it and an agent
+may not verify on a human's behalf.
 
-`website/src/atlas/public-artifacts.json` declares `gnomad` and `dbsnp` external resources for
-`hbs-rs334` (`chr11-5227002-T-A`), and the published `website/public/data/atlas/catalog.json`
-carries them. That artifact's registry row is a **self-identity** row — the internal `variant_id`
-*is* the GRCh38 coordinate — and it is `verification_status: pending`, because an agent authored it
-and an agent may not verify on a human's behalf.
+**Decided (maintainer, 2026-09-11): the verification requirement is scoped to rows that assert a
+mapping.** `normalized_identity` requires `verification_status == "verified"` only when
+`variant_id != normalized_variant_id`.
 
-So **`scripts/export_atlas_web.py` would now refuse to regenerate the published HbS artifact.** The
-committed catalogue is untouched and this branch changes no published byte, but the next real export
-fails until someone acts.
+The distinction is about what the row claims, not about convenience:
 
-This is a decision for a person, not for an implementer, and it is not decided here:
+- A **mapping** row — every cytokine row in this batch — claims that a legacy promoter name denotes
+  a particular coordinate. A name was translated and a strand was chosen, and either can be wrong in
+  a way an external annotation would silently inherit. That claim waits for verification.
+- An **identity** row — `chr11-5227002-T-A` — claims nothing. Its `variant_id` already *is* the
+  GRCh38 coordinate the adapter minted. There is no legacy name to mistranslate and no strand
+  ambiguity that could matter, so there is nothing verification could check and nothing an external
+  annotation could contradict.
 
-1. **Verify the HbS row.** A maintainer inspects it and flips `verification_status` to `verified` —
-   a distinct, attributable act, which is exactly what the two-state field is for.
-2. **Decide self-identity rows do not need verification** and narrow the gate to rows that assert a
-   *legacy-name-to-coordinate* claim, which is the claim verification actually exists to check. A
-   self-identity row asserts nothing an external resource could contradict.
-3. **Accept the refusal** and drop HbS's external resources until #242 settles.
+Two alternatives were considered and **rejected**: marking the HbS row `verified` (re-commits the
+exact violation corrected one round earlier — an agent asserting a human's inspection), and dropping
+HbS's external resources (a user-visible regression to already-published output).
 
-Option 2 is the most defensible on the design's own logic and the most invasive; option 1 is the
-smallest. It belongs in [#242](https://github.com/bschilder/genomeOS/issues/242) or an issue that
-cites it.
+The four cytokine rows are unaffected: they are mapping rows, they are `pending`, and they remain
+ineligible until [#242](https://github.com/bschilder/genomeOS/issues/242) settles who may verify
+them. `tests/test_export_atlas_web.py::test_every_declared_external_resource_resolves_against_the_real_registry`
+now joins the real allowlist to the real registry, so the next time a declared resource loses its
+resolvable row — or a resource is declared for a locus still pending — a test fails rather than an
+export.
 
 ## What a verifier should check
 
