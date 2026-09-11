@@ -111,9 +111,11 @@ test independent sites/time windows and climate-family ablations accordingly.
 
 **Exit:** independent site/time validation and modern-prediction ablation; regional feasibility is not a global historical claim.
 
-The [CLUES2 full-main-text methods note](../../research/temporal-genetics-methods-2026-09-10.md)
-records the direct-likelihood/genealogy tradeoff and proposed temporal controls;
-its supplement remains unread and no temporal implementation is admitted by it.
+The [CLUES2 main-article and supplement methods note](../../research/temporal-genetics-methods-2026-09-10.md)
+records the direct-likelihood/genealogy tradeoff, ascertainment approximation,
+fixed-topology validation limits and proposed temporal controls. The supplement
+has been read; numerical reproduction remains open and no temporal implementation
+is admitted by the note.
 
 ## Public interfaces and publication
 
