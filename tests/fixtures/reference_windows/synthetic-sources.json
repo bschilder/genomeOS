@@ -1,0 +1,674 @@
+[
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr1.vcf.bgz#9000000000000",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr1.vcf.bgz",
+      "generation": "9000000000000",
+      "size": "1000000",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr1.vcf.bgz/9000000000000",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr1.vcf.bgz.tbi#9000000000001",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr1.vcf.bgz.tbi",
+      "generation": "9000000000001",
+      "size": "1000",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr1.vcf.bgz.tbi/9000000000001",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr2.vcf.bgz#9000000000002",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr2.vcf.bgz",
+      "generation": "9000000000002",
+      "size": "1000001",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr2.vcf.bgz/9000000000002",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr2.vcf.bgz.tbi#9000000000003",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr2.vcf.bgz.tbi",
+      "generation": "9000000000003",
+      "size": "1001",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr2.vcf.bgz.tbi/9000000000003",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr3.vcf.bgz#9000000000004",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr3.vcf.bgz",
+      "generation": "9000000000004",
+      "size": "1000002",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr3.vcf.bgz/9000000000004",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr3.vcf.bgz.tbi#9000000000005",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr3.vcf.bgz.tbi",
+      "generation": "9000000000005",
+      "size": "1002",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr3.vcf.bgz.tbi/9000000000005",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr4.vcf.bgz#9000000000006",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr4.vcf.bgz",
+      "generation": "9000000000006",
+      "size": "1000003",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr4.vcf.bgz/9000000000006",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr4.vcf.bgz.tbi#9000000000007",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr4.vcf.bgz.tbi",
+      "generation": "9000000000007",
+      "size": "1003",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr4.vcf.bgz.tbi/9000000000007",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr5.vcf.bgz#9000000000008",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr5.vcf.bgz",
+      "generation": "9000000000008",
+      "size": "1000004",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr5.vcf.bgz/9000000000008",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr5.vcf.bgz.tbi#9000000000009",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr5.vcf.bgz.tbi",
+      "generation": "9000000000009",
+      "size": "1004",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr5.vcf.bgz.tbi/9000000000009",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr6.vcf.bgz#9000000000010",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr6.vcf.bgz",
+      "generation": "9000000000010",
+      "size": "1000005",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr6.vcf.bgz/9000000000010",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr6.vcf.bgz.tbi#9000000000011",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr6.vcf.bgz.tbi",
+      "generation": "9000000000011",
+      "size": "1005",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr6.vcf.bgz.tbi/9000000000011",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr7.vcf.bgz#9000000000012",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr7.vcf.bgz",
+      "generation": "9000000000012",
+      "size": "1000006",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr7.vcf.bgz/9000000000012",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr7.vcf.bgz.tbi#9000000000013",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr7.vcf.bgz.tbi",
+      "generation": "9000000000013",
+      "size": "1006",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr7.vcf.bgz.tbi/9000000000013",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr8.vcf.bgz#9000000000014",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr8.vcf.bgz",
+      "generation": "9000000000014",
+      "size": "1000007",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr8.vcf.bgz/9000000000014",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr8.vcf.bgz.tbi#9000000000015",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr8.vcf.bgz.tbi",
+      "generation": "9000000000015",
+      "size": "1007",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr8.vcf.bgz.tbi/9000000000015",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr9.vcf.bgz#9000000000016",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr9.vcf.bgz",
+      "generation": "9000000000016",
+      "size": "1000008",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr9.vcf.bgz/9000000000016",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr9.vcf.bgz.tbi#9000000000017",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr9.vcf.bgz.tbi",
+      "generation": "9000000000017",
+      "size": "1008",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr9.vcf.bgz.tbi/9000000000017",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr10.vcf.bgz#9000000000018",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr10.vcf.bgz",
+      "generation": "9000000000018",
+      "size": "1000009",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr10.vcf.bgz/9000000000018",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr10.vcf.bgz.tbi#9000000000019",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr10.vcf.bgz.tbi",
+      "generation": "9000000000019",
+      "size": "1009",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr10.vcf.bgz.tbi/9000000000019",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr11.vcf.bgz#9000000000020",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr11.vcf.bgz",
+      "generation": "9000000000020",
+      "size": "1000010",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr11.vcf.bgz/9000000000020",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr11.vcf.bgz.tbi#9000000000021",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr11.vcf.bgz.tbi",
+      "generation": "9000000000021",
+      "size": "1010",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr11.vcf.bgz.tbi/9000000000021",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr12.vcf.bgz#9000000000022",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr12.vcf.bgz",
+      "generation": "9000000000022",
+      "size": "1000011",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr12.vcf.bgz/9000000000022",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr12.vcf.bgz.tbi#9000000000023",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr12.vcf.bgz.tbi",
+      "generation": "9000000000023",
+      "size": "1011",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr12.vcf.bgz.tbi/9000000000023",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr13.vcf.bgz#9000000000024",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr13.vcf.bgz",
+      "generation": "9000000000024",
+      "size": "1000012",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr13.vcf.bgz/9000000000024",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr13.vcf.bgz.tbi#9000000000025",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr13.vcf.bgz.tbi",
+      "generation": "9000000000025",
+      "size": "1012",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr13.vcf.bgz.tbi/9000000000025",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr14.vcf.bgz#9000000000026",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr14.vcf.bgz",
+      "generation": "9000000000026",
+      "size": "1000013",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr14.vcf.bgz/9000000000026",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr14.vcf.bgz.tbi#9000000000027",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr14.vcf.bgz.tbi",
+      "generation": "9000000000027",
+      "size": "1013",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr14.vcf.bgz.tbi/9000000000027",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr15.vcf.bgz#9000000000028",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr15.vcf.bgz",
+      "generation": "9000000000028",
+      "size": "1000014",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr15.vcf.bgz/9000000000028",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr15.vcf.bgz.tbi#9000000000029",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr15.vcf.bgz.tbi",
+      "generation": "9000000000029",
+      "size": "1014",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr15.vcf.bgz.tbi/9000000000029",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr16.vcf.bgz#9000000000030",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr16.vcf.bgz",
+      "generation": "9000000000030",
+      "size": "1000015",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr16.vcf.bgz/9000000000030",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr16.vcf.bgz.tbi#9000000000031",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr16.vcf.bgz.tbi",
+      "generation": "9000000000031",
+      "size": "1015",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr16.vcf.bgz.tbi/9000000000031",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr17.vcf.bgz#9000000000032",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr17.vcf.bgz",
+      "generation": "9000000000032",
+      "size": "1000016",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr17.vcf.bgz/9000000000032",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr17.vcf.bgz.tbi#9000000000033",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr17.vcf.bgz.tbi",
+      "generation": "9000000000033",
+      "size": "1016",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr17.vcf.bgz.tbi/9000000000033",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr18.vcf.bgz#9000000000034",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr18.vcf.bgz",
+      "generation": "9000000000034",
+      "size": "1000017",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr18.vcf.bgz/9000000000034",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr18.vcf.bgz.tbi#9000000000035",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr18.vcf.bgz.tbi",
+      "generation": "9000000000035",
+      "size": "1017",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr18.vcf.bgz.tbi/9000000000035",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr19.vcf.bgz#9000000000036",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr19.vcf.bgz",
+      "generation": "9000000000036",
+      "size": "1000018",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr19.vcf.bgz/9000000000036",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr19.vcf.bgz.tbi#9000000000037",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr19.vcf.bgz.tbi",
+      "generation": "9000000000037",
+      "size": "1018",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr19.vcf.bgz.tbi/9000000000037",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr20.vcf.bgz#9000000000038",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr20.vcf.bgz",
+      "generation": "9000000000038",
+      "size": "1000019",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr20.vcf.bgz/9000000000038",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr20.vcf.bgz.tbi#9000000000039",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr20.vcf.bgz.tbi",
+      "generation": "9000000000039",
+      "size": "1019",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr20.vcf.bgz.tbi/9000000000039",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr21.vcf.bgz#9000000000040",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr21.vcf.bgz",
+      "generation": "9000000000040",
+      "size": "1000020",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr21.vcf.bgz/9000000000040",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr21.vcf.bgz.tbi#9000000000041",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr21.vcf.bgz.tbi",
+      "generation": "9000000000041",
+      "size": "1020",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr21.vcf.bgz.tbi/9000000000041",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr22.vcf.bgz#9000000000042",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr22.vcf.bgz",
+      "generation": "9000000000042",
+      "size": "1000021",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr22.vcf.bgz/9000000000042",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr22.vcf.bgz.tbi#9000000000043",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr22.vcf.bgz.tbi",
+      "generation": "9000000000043",
+      "size": "1021",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chr22.vcf.bgz.tbi/9000000000043",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrX.vcf.bgz#9000000000044",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrX.vcf.bgz",
+      "generation": "9000000000044",
+      "size": "1000022",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrX.vcf.bgz/9000000000044",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrX.vcf.bgz.tbi#9000000000045",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrX.vcf.bgz.tbi",
+      "generation": "9000000000045",
+      "size": "1022",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrX.vcf.bgz.tbi/9000000000045",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrY.vcf.bgz#9000000000046",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrY.vcf.bgz",
+      "generation": "9000000000046",
+      "size": "1000023",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrY.vcf.bgz/9000000000046",
+      "contentType": "application/octet-stream"
+    }
+  },
+  {
+    "url": "gs://gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrY.vcf.bgz.tbi#9000000000047",
+    "type": "cloud_object",
+    "metadata": {
+      "bucket": "gcp-public-data--gnomad",
+      "name": "release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrY.vcf.bgz.tbi",
+      "generation": "9000000000047",
+      "size": "1023",
+      "md5Hash": "AAAAAAAAAAAAAAAAAAAAAA==",
+      "crc32c": "AAAAAA==",
+      "id": "gcp-public-data--gnomad/release/3.1.2/vcf/genomes/gnomad.genomes.v3.1.2.hgdp_tgp.chrY.vcf.bgz.tbi/9000000000047",
+      "contentType": "application/octet-stream"
+    }
+  }
+]
