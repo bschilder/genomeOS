@@ -7,6 +7,7 @@ the format is convenience; those two are what make a published surface citable a
 
 from __future__ import annotations
 
+import hashlib
 import json
 
 import numpy as np
@@ -17,26 +18,31 @@ from genomeos.surfaces.artifacts import (
     ARTIFACT_COLUMNS,
     ARTIFACT_FORMAT,
     ArtifactManifest,
+    cell_table,
     publish,
     read,
 )
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
 
 
 def _frame(n: int = 5, variant_id: str = "chr11-5227002-T-A") -> pd.DataFrame:
     rng = np.random.default_rng(42)
+    post_sd = rng.uniform(0.001, 0.05, n)
+    prior_sd = rng.uniform(0.06, 0.2, n)
     return pd.DataFrame(
         {
             "h3_index": [f"83{i:04x}fffffffff" for i in range(n)],
             "variant_id": variant_id,
             "post_median": rng.uniform(0, 0.2, n),
             "post_mean": rng.uniform(0, 0.2, n),
-            "post_sd": rng.uniform(0, 0.05, n),
+            "post_sd": post_sd,
+            "prior_frequency_sd": prior_sd,
             "q025": 0.0,
             "q975": 0.3,
             "q25": 0.01,
             "q75": 0.1,
             "support": ["observed", "interpolated", "unknown", "prior_dominated", "observed"][:n],
-            "posterior_contraction": rng.uniform(0, 1, n),
+            "posterior_contraction": post_sd / prior_sd,
             "dist_nearest_obs_km": rng.uniform(0, 3000, n),
             "model_version": "v1",
             "data_version": "map-2026-08",
@@ -53,7 +59,9 @@ def _manifest(variant_id: str = "chr11-5227002-T-A", model_version: str = "v1") 
         resolution=3,
         n_cells=5,
         correlation_range_km=680.0,
-        prior_frequency_sd=0.119,
+        prior_normalization=PRIOR_NORMALIZATION,
+        prior_draws=PRIOR_DRAWS,
+        prior_seed=42,
         likelihood="beta_binomial",
         lengthscale_sigma=0.7,
         n_observations=1071,
@@ -110,6 +118,9 @@ def test_the_manifest_records_what_would_otherwise_be_unrecoverable(tmp_path):
     assert manifest["target_grid_source"] == "worldpop-1km-unconstrained"
     assert manifest["target_grid_version"] == "fixture-2020"
     assert manifest["artifact_format"] == ARTIFACT_FORMAT
+    assert manifest["prior_normalization"] == PRIOR_NORMALIZATION
+    assert manifest["prior_draws"] == PRIOR_DRAWS
+    assert manifest["prior_seed"] == 42
 
 
 def test_a_frozen_format_one_artifact_remains_readable_without_invented_grid_provenance(
@@ -119,14 +130,67 @@ def test_a_frozen_format_one_artifact_remains_readable_without_invented_grid_pro
     path = directory / "manifest.json"
     payload = json.loads(path.read_text())
     payload["artifact_format"] = 1
+    del payload["prior_normalization"]
+    del payload["prior_draws"]
+    del payload["prior_seed"]
     del payload["target_grid_source"]
     del payload["target_grid_version"]
     path.write_text(json.dumps(payload))
 
-    _, manifest = read(directory)
+    legacy_frame = pd.read_parquet(directory / "cells.parquet").drop(columns="prior_frequency_sd")
+    legacy_frame.to_parquet(directory / "cells.parquet", index=False)
+    before = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in directory.iterdir()
+    }
+    frame, manifest = read(directory)
+    after = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest() for path in directory.iterdir()
+    }
     assert manifest["artifact_format"] == 1
+    assert "prior_frequency_sd" not in frame
     assert "target_grid_source" not in manifest
     assert "target_grid_version" not in manifest
+    assert after == before
+
+
+def test_a_frozen_format_two_artifact_remains_readable_without_invented_local_prior(tmp_path):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    manifest_path = directory / "manifest.json"
+    payload = json.loads(manifest_path.read_text())
+    payload["artifact_format"] = 2
+    payload["prior_frequency_sd"] = 0.119
+    for field in ("prior_normalization", "prior_draws", "prior_seed"):
+        del payload[field]
+    manifest_path.write_text(json.dumps(payload))
+    legacy = pd.read_parquet(directory / "cells.parquet").drop(columns="prior_frequency_sd")
+    legacy.to_parquet(directory / "cells.parquet", index=False)
+    before = hashlib.sha256((directory / "cells.parquet").read_bytes()).hexdigest()
+    frame, loaded = read(directory)
+    assert loaded["artifact_format"] == 2
+    assert "prior_frequency_sd" not in frame
+    assert hashlib.sha256((directory / "cells.parquet").read_bytes()).hexdigest() == before
+
+
+def test_format_two_still_requires_target_grid_provenance(tmp_path):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "manifest.json"
+    payload = json.loads(path.read_text())
+    payload["artifact_format"] = 2
+    del payload["target_grid_source"]
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="target_grid_source"):
+        read(directory)
+
+
+@pytest.mark.parametrize("field", ["prior_normalization", "prior_draws", "prior_seed"])
+def test_format_three_requires_every_prior_protocol_field(tmp_path, field):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "manifest.json"
+    payload = json.loads(path.read_text())
+    del payload[field]
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match=field):
+        read(directory)
 
 
 def test_an_artifact_from_an_unknown_format_is_refused_not_misread(tmp_path):
@@ -135,6 +199,18 @@ def test_an_artifact_from_an_unknown_format_is_refused_not_misread(tmp_path):
     payload = json.loads(path.read_text())
     payload["artifact_format"] = 999
     path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="artifact_format"):
+        read(directory)
+
+
+@pytest.mark.parametrize("bad_format", [True, 2.0, 3.0, "3", 2.9])
+def test_artifact_read_refuses_noninteger_or_boolean_format(tmp_path, bad_format):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "manifest.json"
+    payload = json.loads(path.read_text())
+    payload["artifact_format"] = bad_format
+    path.write_text(json.dumps(payload))
+
     with pytest.raises(ValueError, match="artifact_format"):
         read(directory)
 
@@ -164,7 +240,9 @@ def test_a_manifest_must_say_which_quantity_it_holds():
             resolution=3,
             n_cells=1,
             correlation_range_km=1000.0,
-            prior_frequency_sd=0.1,
+            prior_normalization=PRIOR_NORMALIZATION,
+            prior_draws=PRIOR_DRAWS,
+            prior_seed=42,
             likelihood="beta_binomial",
             lengthscale_sigma=0.7,
             n_observations=1,
@@ -184,7 +262,9 @@ def test_a_new_manifest_refuses_blank_target_grid_provenance(field):
         "resolution": 3,
         "n_cells": 1,
         "correlation_range_km": 680.0,
-        "prior_frequency_sd": 0.119,
+        "prior_normalization": PRIOR_NORMALIZATION,
+        "prior_draws": PRIOR_DRAWS,
+        "prior_seed": 42,
         "likelihood": "beta_binomial",
         "lengthscale_sigma": 0.7,
         "n_observations": 1,
@@ -198,16 +278,26 @@ def test_a_new_manifest_refuses_blank_target_grid_provenance(field):
         ArtifactManifest(**values)
 
 
-def test_the_manifest_round_trips_full_float_precision(tmp_path):
-    """A consumer recomputes contraction as `post_sd / prior_frequency_sd`, so the manifest has to
-    carry the value the fit used rather than a readable approximation of it (#234).
+@pytest.mark.parametrize(
+    "field,value,match",
+    [
+        ("artifact_format", 2, "artifact_format"),
+        ("prior_normalization", "scalar", "prior_normalization"),
+        ("prior_draws", 499, "prior_draws"),
+        ("prior_draws", 500.0, "prior_draws"),
+        ("prior_seed", -1, "prior_seed"),
+        ("prior_seed", True, "prior_seed"),
+    ],
+)
+def test_new_manifest_refuses_wrong_prior_protocol(field, value, match):
+    values = _manifest().__dict__.copy()
+    values[field] = value
+    with pytest.raises(ValueError, match=match):
+        ArtifactManifest(**values)
 
-    `publish_artifacts.py` stores both fitted floats unrounded. That is only worth anything if the
-    artifact format preserves them, so this pins the serialisation too: add a float formatter to
-    `ArtifactManifest.to_json` and this fails, instead of every future manifest quietly losing
-    digits that decide a `prior_dominated` verdict near the threshold.
-    """
-    sd = 0.12518374619283746
+
+def test_the_manifest_round_trips_full_float_precision(tmp_path):
+    """Fitted range metadata remains full precision in the versioned manifest."""
     rho = 2149.3847562819374
     manifest = ArtifactManifest(
         variant_id="chr11-5227002-T-A",
@@ -216,7 +306,9 @@ def test_the_manifest_round_trips_full_float_precision(tmp_path):
         resolution=3,
         n_cells=5,
         correlation_range_km=rho,
-        prior_frequency_sd=sd,
+        prior_normalization=PRIOR_NORMALIZATION,
+        prior_draws=PRIOR_DRAWS,
+        prior_seed=42,
         likelihood="beta_binomial",
         lengthscale_sigma=0.7,
         n_observations=1071,
@@ -226,10 +318,160 @@ def test_the_manifest_round_trips_full_float_precision(tmp_path):
         measurement="allele_frequency",
     )
     published = json.loads(manifest.to_json())
-    assert published["prior_frequency_sd"] == sd
+    assert published["prior_normalization"] == PRIOR_NORMALIZATION
     assert published["correlation_range_km"] == rho
 
     directory = publish(_frame(), tmp_path, manifest=manifest)
     on_disk = json.loads((directory / "manifest.json").read_text())
-    assert on_disk["prior_frequency_sd"] == sd, "a published manifest lost precision on disk"
     assert on_disk["correlation_range_km"] == rho
+
+
+@pytest.mark.parametrize("bad", [0.0, np.nan])
+def test_format_three_refuses_malformed_per_cell_prior_before_creating_directory(tmp_path, bad):
+    frame = _frame()
+    frame.loc[2, "prior_frequency_sd"] = bad
+    with pytest.raises(ValueError, match="prior_frequency_sd"):
+        publish(frame, tmp_path, manifest=_manifest())
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("column", ["prior_frequency_sd", "post_sd", "posterior_contraction"])
+@pytest.mark.parametrize("bad_kind", ["numeric_strings", "booleans"])
+def test_format_three_publish_refuses_nonnumeric_sd_columns_before_creating_directory(
+    tmp_path, column, bad_kind
+):
+    frame = _frame()
+    if bad_kind == "numeric_strings":
+        frame[column] = frame[column].map(str)
+    else:
+        frame[column] = True
+
+    with pytest.raises(ValueError, match="numeric.*Boolean"):
+        publish(frame, tmp_path, manifest=_manifest())
+    assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.parametrize("column", ["prior_frequency_sd", "post_sd", "posterior_contraction"])
+@pytest.mark.parametrize("bad_kind", ["numeric_strings", "booleans"])
+def test_format_three_read_refuses_nonnumeric_sd_columns(tmp_path, column, bad_kind):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "cells.parquet"
+    frame = pd.read_parquet(path)
+    if bad_kind == "numeric_strings":
+        frame[column] = frame[column].map(str)
+    else:
+        frame[column] = True
+    frame.to_parquet(path, index=False)
+
+    with pytest.raises(ValueError, match="numeric.*Boolean"):
+        read(directory)
+
+
+def test_format_three_refuses_inconsistent_contraction(tmp_path):
+    frame = _frame()
+    frame.loc[0, "posterior_contraction"] += 1e-6
+    with pytest.raises(ValueError, match="inconsistent"):
+        publish(frame, tmp_path, manifest=_manifest())
+
+
+def test_format_three_read_refuses_invalid_measurement(tmp_path):
+    directory = publish(_frame(), tmp_path, manifest=_manifest())
+    path = directory / "manifest.json"
+    payload = json.loads(path.read_text())
+    payload["measurement"] = "plausible-frequency"
+    path.write_text(json.dumps(payload))
+    with pytest.raises(ValueError, match="measurement"):
+        read(directory)
+
+
+def test_format_three_round_trips_nontrivial_binary64_prior_values(tmp_path):
+    frame = _frame()
+    values = np.array([0.12518374619283746, 0.11900000000000001, 0.13, 0.17, 0.09])
+    frame["prior_frequency_sd"] = values
+    frame["posterior_contraction"] = frame["post_sd"].to_numpy() / values
+    restored, _ = read(publish(frame, tmp_path, manifest=_manifest()))
+    np.testing.assert_array_equal(restored["prior_frequency_sd"].to_numpy(), values)
+
+
+def test_cell_table_normalizes_by_aligned_local_prior_sd_and_preserves_support_rules():
+    class Fit:
+        correlation_range_km = 1000.0
+
+        def __init__(self, post_sd):
+            self.post_sd = post_sd
+
+        def predict(self, lat, lon):
+            return pd.DataFrame(
+                {
+                    "post_median": [0.1, 0.2, 0.3],
+                    "post_mean": [0.1, 0.2, 0.3],
+                    "post_sd": self.post_sd,
+                    "q025": [0.01, 0.02, 0.03],
+                    "q975": [0.2, 0.3, 0.4],
+                    "q25": [0.05, 0.1, 0.15],
+                    "q75": [0.15, 0.25, 0.35],
+                }
+            )
+
+        def prior_frequency_sd_at(self, lat, lon):
+            return np.array([0.05, 0.10, 0.20])
+
+    frame = cell_table(
+        Fit([0.05, 0.10, 0.20]),
+        h3_index=["83754efffffffff", "837541fffffffff", "837543fffffffff"],
+        lat=np.array([0.0, 0.0, 0.0]),
+        lon=np.array([0.0, 4.0, 30.0]),
+        observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
+        variant_id="chr11-5227002-T-A",
+        model_version="v2",
+        data_version="test",
+    )
+    np.testing.assert_array_equal(frame["prior_frequency_sd"], [0.05, 0.10, 0.20])
+    np.testing.assert_allclose(frame["posterior_contraction"], 1.0, rtol=0, atol=0)
+    assert frame["support"].tolist() == ["observed", "prior_dominated", "unknown"]
+
+    contracted = cell_table(
+        Fit([0.05, 0.08, 0.20]),
+        h3_index=frame["h3_index"].tolist(),
+        lat=np.array([0.0, 0.0, 0.0]),
+        lon=np.array([0.0, 4.0, 30.0]),
+        observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
+        variant_id="chr11-5227002-T-A",
+        model_version="v2",
+        data_version="test",
+    )
+    assert contracted.loc[1, "posterior_contraction"] == pytest.approx(0.8)
+    assert contracted.loc[1, "support"] == "interpolated"
+
+
+@pytest.mark.parametrize(
+    "bad_prior",
+    [np.array([0.0]), np.array([np.nan]), 0.05, np.array([0.05, 0.06])],
+    ids=["zero", "nan", "scalar", "misaligned"],
+)
+def test_cell_table_refuses_malformed_local_prior_provider(bad_prior):
+    class Fit:
+        correlation_range_km = 1000.0
+
+        def predict(self, lat, lon):
+            return pd.DataFrame(
+                {
+                    "post_median": [0.1], "post_mean": [0.1], "post_sd": [0.05],
+                    "q025": [0.01], "q975": [0.2], "q25": [0.05], "q75": [0.15],
+                }
+            )
+
+        def prior_frequency_sd_at(self, lat, lon):
+            return bad_prior
+
+    with pytest.raises(ValueError, match="finite positive vector"):
+        cell_table(
+            Fit(),
+            h3_index=["83754efffffffff"],
+            lat=np.array([0.0]),
+            lon=np.array([0.0]),
+            observations=pd.DataFrame({"lat": [0.0], "lon": [0.0]}),
+            variant_id="chr11-5227002-T-A",
+            model_version="v2",
+            data_version="test",
+        )

@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
 from scripts import export_atlas_web
 
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
@@ -359,6 +360,72 @@ def test_export_refuses_missing_manifest_version(export_inputs: dict[str, Path])
     del manifest["model_version"]
     manifest_path.write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match="model_version"):
+        _export(export_inputs)
+
+
+def _upgrade_fixture_to_format_three(export_inputs: dict[str, Path]) -> Path:
+    artifact = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test"
+    cells_path = artifact / "cells.parquet"
+    cells = pd.read_parquet(cells_path)
+    cells["prior_frequency_sd"] = cells["post_sd"] / cells["posterior_contraction"]
+    cells.to_parquet(cells_path, index=False)
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update(
+        {
+            "artifact_format": 3,
+            "prior_normalization": PRIOR_NORMALIZATION,
+            "prior_draws": PRIOR_DRAWS,
+            "prior_seed": 42,
+            "measurement": "allele_frequency",
+            "target_grid_source": "worldpop-1km-unconstrained",
+            "target_grid_version": "fixture-2020",
+        }
+    )
+    manifest.pop("prior_frequency_sd", None)
+    manifest_path.write_text(json.dumps(manifest))
+    return artifact
+
+
+def test_export_accepts_validated_format_three_and_preserves_grid_identity(
+    export_inputs: dict[str, Path],
+) -> None:
+    _upgrade_fixture_to_format_three(export_inputs)
+    _export(export_inputs)
+    surface = json.loads((export_inputs["out"] / "hbs-rs334.surface.json").read_text())
+    assert surface["artifact"]["artifact_format"] == 3
+    assert surface["artifact"]["target_grid_source"] == "worldpop-1km-unconstrained"
+    assert surface["artifact"]["target_grid_version"] == "fixture-2020"
+
+
+def test_export_refuses_malformed_format_three_and_unknown_versions(
+    export_inputs: dict[str, Path],
+) -> None:
+    artifact = _upgrade_fixture_to_format_three(export_inputs)
+    cells = pd.read_parquet(artifact / "cells.parquet").drop(columns="prior_frequency_sd")
+    cells.to_parquet(artifact / "cells.parquet", index=False)
+    with pytest.raises(ValueError, match="prior_frequency_sd|format-3"):
+        _export(export_inputs)
+
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["artifact_format"] = 999
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="artifact_format"):
+        _export(export_inputs)
+
+
+@pytest.mark.parametrize("bad_format", [True, 2.0, 3.0, "3", 2.9])
+def test_export_refuses_noninteger_or_boolean_artifact_format(
+    export_inputs: dict[str, Path], bad_format
+) -> None:
+    artifact = _upgrade_fixture_to_format_three(export_inputs)
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["artifact_format"] = bad_format
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match="artifact_format"):
         _export(export_inputs)
 
 

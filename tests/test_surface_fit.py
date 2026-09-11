@@ -1,11 +1,14 @@
 """Surface fit tests (design §7). Sampling is small and seeded; see FAST_CONFIG."""
 
+import hashlib
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pandera.errors
+import pymc as pm
 import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
@@ -22,6 +25,7 @@ from genomeos.surfaces.fit import (
     save_fit,
     to_unit_sphere,
 )
+from genomeos.surfaces.prior import PRIOR_DRAWS
 
 # Enough draws to actually converge: fit_surface now refuses a fit that has not mixed (§12),
 # so a too-short chain is a failure rather than a fast approximation. numpyro keeps it quick.
@@ -108,6 +112,53 @@ def test_predictions_carry_uncertainty_and_lie_on_the_frequency_scale(fit):
     assert (pred["q25"] <= pred["post_median"]).all()
     assert (pred["post_median"] <= pred["q75"]).all()
     assert (pred["q75"] <= pred["q975"]).all()
+
+
+def _assert_pointwise_prior_protocol(fit):
+    query = np.array([[9.0, 0.0], [20.0, 78.0], [-4.0, 22.0]])
+    original = np.array(fit._model["x_pred"].get_value(), copy=True)
+    sd = fit.prior_frequency_sd_at(query[:, 0], query[:, 1])
+    with fit._model:
+        pm.set_data({"x_pred": to_unit_sphere(query[:, 0], query[:, 1])})
+        direct = pm.sample_prior_predictive(
+            draws=PRIOR_DRAWS, var_names=["freq_pred"], random_seed=fit.config.seed
+        )
+        pm.set_data({"x_pred": original})
+    expected = direct.prior["freq_pred"].to_numpy().reshape(PRIOR_DRAWS, 3).std(axis=0)
+    np.testing.assert_allclose(sd, expected, rtol=0, atol=1e-10)
+    np.testing.assert_allclose(fit.prior_frequency_sd_at(query[:, 0], query[:, 1]), sd, rtol=0, atol=1e-10)
+    order = np.array([2, 0, 1])
+    np.testing.assert_allclose(
+        fit.prior_frequency_sd_at(query[order, 0], query[order, 1]), sd[order], rtol=0, atol=1e-10
+    )
+    split = np.concatenate(
+        [
+            fit.prior_frequency_sd_at(query[:1, 0], query[:1, 1]),
+            fit.prior_frequency_sd_at(query[1:, 0], query[1:, 1]),
+        ]
+    )
+    np.testing.assert_allclose(split, sd, rtol=0, atol=1e-10)
+
+
+def test_hsgp_pointwise_prior_uses_the_retained_predictive_graph(fit):
+    _assert_pointwise_prior_protocol(fit)
+
+
+@pytest.mark.parametrize(
+    "lat,lon,match",
+    [
+        ([], [], "nonempty"),
+        ([0.0], [0.0, 1.0], "same"),
+        ([[0.0]], [[0.0]], "one-dimensional"),
+        ([np.nan], [0.0], "finite"),
+        ([91.0], [0.0], "latitude"),
+        ([0.0], [181.0], "longitude"),
+        ([True], [False], "Boolean"),
+    ],
+)
+def test_pointwise_prior_refuses_invalid_queries(fit, lat, lon, match):
+    with pytest.raises(ValueError, match=match):
+        fit.prior_frequency_sd_at(lat, lon)
 
 
 def test_the_median_is_reported_because_the_mean_is_skewed_where_data_is_thin(fit):
@@ -205,15 +256,24 @@ def test_inducing_placement_is_deterministic_given_the_seed():
     assert np.allclose(inducing_points(x, 25, seed=7), inducing_points(x, 25, seed=7))
 
 
-def test_the_inducing_approximation_fits_and_predicts():
+@pytest.mark.parametrize("placement", ["h3", "kmeans"])
+def test_the_inducing_approximation_fits_and_predicts(placement):
     observations = _observations(n=70)
     fit = fit_surface(
         observations,
-        FitConfig(draws=400, tune=800, chains=4, approximation="inducing", n_inducing=40),
+        FitConfig(
+            draws=400,
+            tune=800,
+            chains=4,
+            approximation="inducing",
+            inducing_placement=placement,
+            n_inducing=40,
+        ),
     )
     pred = fit.predict(lat=[0.0, 0.0], lon=[-8.0, 8.0])
     assert ((pred["post_median"] > 0) & (pred["post_median"] < 1)).all()
     assert pred["post_median"].iloc[0] < pred["post_median"].iloc[1], "must follow the cline"
+    _assert_pointwise_prior_protocol(fit)
 
 
 def test_inducing_resolution_is_set_by_point_count_not_by_a_global_grid():
@@ -307,8 +367,68 @@ def test_a_saved_fit_predicts_identically_to_the_original(fit, tmp_path):
     for column in ("post_median", "post_sd", "q025", "q975"):
         np.testing.assert_allclose(before[column], after[column])
     assert reloaded.correlation_range_km == fit.correlation_range_km
-    assert reloaded.prior_frequency_sd == fit.prior_frequency_sd
+    np.testing.assert_allclose(
+        reloaded.prior_frequency_sd_at(lat, lon),
+        fit.prior_frequency_sd_at(lat, lon),
+        rtol=0,
+        atol=1e-10,
+    )
     assert reloaded.design_levels == fit.design_levels
+
+
+def test_owned_legacy_fit_is_reconstructed_without_refit_or_rewrite(fit, tmp_path):
+    import cloudpickle
+
+    legacy = SimpleNamespace(**fit.__dict__, prior_frequency_sd=9.9e99)
+    path = tmp_path / "legacy.pkl"
+    with path.open("wb") as stream:
+        cloudpickle.dump({"format": 1, "fit": legacy}, stream)
+    before_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    query = np.array([[9.0, 0.0], [20.0, 78.0]])
+    expected_post = fit.predict(query[:, 0], query[:, 1])
+    expected_prior = fit.prior_frequency_sd_at(query[:, 0], query[:, 1])
+
+    migrated = load_fit(path)
+
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before_hash
+    assert not hasattr(migrated, "prior_frequency_sd")
+    np.testing.assert_allclose(
+        migrated.predict(query[:, 0], query[:, 1])[["post_median", "post_sd"]],
+        expected_post[["post_median", "post_sd"]],
+    )
+    np.testing.assert_allclose(
+        migrated.prior_frequency_sd_at(query[:, 0], query[:, 1]),
+        expected_prior,
+        rtol=0,
+        atol=1e-10,
+    )
+
+
+def test_legacy_fit_refuses_missing_fields_invalid_config_and_predictive_nodes(fit, tmp_path):
+    import cloudpickle
+
+    cases = []
+    missing = fit.__dict__.copy()
+    del missing["_scale"]
+    cases.append((SimpleNamespace(**missing), "missing required fields"))
+    cases.append((SimpleNamespace(**{**fit.__dict__, "config": "not-a-config"}), "configuration"))
+    cases.append((SimpleNamespace(**{**fit.__dict__, "_model": pm.Model()}), "predictive nodes"))
+    for index, (legacy, match) in enumerate(cases):
+        path = tmp_path / f"invalid-{index}.pkl"
+        with path.open("wb") as stream:
+            cloudpickle.dump({"format": 1, "fit": legacy}, stream)
+        with pytest.raises(ValueError, match=match):
+            load_fit(path)
+
+
+def test_boolean_fit_format_is_not_misread_as_legacy_format_one(fit, tmp_path):
+    import cloudpickle
+
+    path = tmp_path / "boolean-format.pkl"
+    with path.open("wb") as stream:
+        cloudpickle.dump({"format": True, "fit": fit}, stream)
+    with pytest.raises(ValueError, match="supported format"):
+        load_fit(path)
 
 
 def test_loading_something_that_is_not_a_fit_is_refused(tmp_path):

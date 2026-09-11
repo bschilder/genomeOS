@@ -27,6 +27,7 @@ from genomeos.observations.sources import (
 )
 from genomeos.publication.atlas_discovery import validate_artifact_discovery, validate_discovery_groups
 from genomeos.registry.sources import afnd as afnd_registry
+from genomeos.surfaces.artifacts import read as read_surface_artifact
 
 SCHEMA_VERSION = 1
 SUPPORT_STATES = {"observed", "interpolated", "prior_dominated", "unknown"}
@@ -55,7 +56,7 @@ MANIFEST_FIELDS = {
     "support_counts",
     "variant_id",
 }
-FORMAT_2_MANIFEST_FIELDS = {"target_grid_source", "target_grid_version"}
+GRID_MANIFEST_FIELDS = {"target_grid_source", "target_grid_version"}
 OBSERVATION_FIELDS = {
     "source_record_id",
     "lat",
@@ -121,12 +122,12 @@ def _validated_surface(
     artifact_dir: Path,
     expected_variant_id: str,
 ) -> tuple[dict[str, Any], pd.DataFrame]:
-    manifest = _read_json(artifact_dir / "manifest.json")
+    cells, manifest = read_surface_artifact(artifact_dir)
     _require_fields(manifest, MANIFEST_FIELDS, str(artifact_dir / "manifest.json"))
-    if int(manifest["artifact_format"]) == 2:
+    if int(manifest["artifact_format"]) in {2, 3}:
         _require_fields(
             manifest,
-            FORMAT_2_MANIFEST_FIELDS,
+            GRID_MANIFEST_FIELDS,
             str(artifact_dir / "manifest.json"),
         )
     if manifest["variant_id"] != expected_variant_id:
@@ -135,7 +136,6 @@ def _validated_surface(
             f"allowlist {expected_variant_id!r}"
         )
 
-    cells = pd.read_parquet(artifact_dir / "cells.parquet")
     missing = SURFACE_COLUMNS - set(cells.columns)
     if missing:
         raise ValueError(f"{artifact_dir}: missing surface columns {sorted(missing)}")
@@ -402,7 +402,7 @@ def _surface_payload(
         "resolution": int(manifest["resolution"]),
         "variant_id": str(manifest["variant_id"]),
     }
-    if int(manifest["artifact_format"]) == 2:
+    if int(manifest["artifact_format"]) in {2, 3}:
         identity.update(
             {
                 "target_grid_source": str(manifest["target_grid_source"]),

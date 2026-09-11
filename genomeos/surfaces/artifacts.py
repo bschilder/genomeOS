@@ -1,4 +1,4 @@
-"""Immutable per-cell surface artifacts (design §5, §6).
+"""Immutable per-cell surface artifacts (design §5, §6, §7.1b).
 
 §5 says artifacts are **immutable and keyed by** ``(variant_id, model_version, data_version)``:
 a model change publishes new artifacts and never mutates a map someone has cited. Until now
@@ -29,14 +29,16 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype, is_complex_dtype, is_numeric_dtype
 
 from genomeos.surfaces.fit import SurfaceFit
 from genomeos.surfaces.mask import MaskConfig, classify_support
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
 
 #: Bumped when the columns change. Written into the manifest so a reader can refuse an artifact it
 #: does not understand rather than silently misreading one.
-ARTIFACT_FORMAT = 2
-READABLE_ARTIFACT_FORMATS = frozenset({1, ARTIFACT_FORMAT})
+ARTIFACT_FORMAT = 3
+READABLE_ARTIFACT_FORMATS = frozenset({1, 2, ARTIFACT_FORMAT})
 
 #: The quantity a cell value carries. `allele_frequency` counts chromosomes; `carrier_frequency`
 #: counts individuals and comes from copy-number-variable genes such as KIR, where there is no
@@ -50,6 +52,7 @@ ARTIFACT_COLUMNS: tuple[str, ...] = (
     "post_median",
     "post_mean",
     "post_sd",
+    "prior_frequency_sd",
     "q025",
     "q975",
     "q25",
@@ -83,7 +86,9 @@ class ArtifactManifest:
     resolution: int
     n_cells: int
     correlation_range_km: float
-    prior_frequency_sd: float
+    prior_normalization: str
+    prior_draws: int
+    prior_seed: int
     likelihood: str
     lengthscale_sigma: float
     n_observations: int
@@ -101,6 +106,12 @@ class ArtifactManifest:
     artifact_format: int = ARTIFACT_FORMAT
 
     def __post_init__(self) -> None:
+        if (
+            isinstance(self.artifact_format, bool)
+            or not isinstance(self.artifact_format, int)
+            or self.artifact_format != ARTIFACT_FORMAT
+        ):
+            raise ValueError(f"new manifests must use artifact_format {ARTIFACT_FORMAT}")
         if self.measurement not in MEASUREMENTS:
             raise ValueError(
                 f"unknown measurement {self.measurement!r}; expected one of {MEASUREMENTS}"
@@ -109,6 +120,20 @@ class ArtifactManifest:
             raise ValueError("target_grid_source must be non-empty")
         if not self.target_grid_version.strip():
             raise ValueError("target_grid_version must be non-empty")
+        if self.prior_normalization != PRIOR_NORMALIZATION:
+            raise ValueError(f"prior_normalization must be {PRIOR_NORMALIZATION!r}")
+        if (
+            isinstance(self.prior_draws, bool)
+            or not isinstance(self.prior_draws, int)
+            or self.prior_draws != PRIOR_DRAWS
+        ):
+            raise ValueError(f"prior_draws must be {PRIOR_DRAWS}")
+        if (
+            isinstance(self.prior_seed, bool)
+            or not isinstance(self.prior_seed, int)
+            or self.prior_seed < 0
+        ):
+            raise ValueError("prior_seed must be a nonnegative integer")
 
     def to_json(self) -> str:
         return json.dumps(self.__dict__, indent=2, sort_keys=True) + "\n"
@@ -140,7 +165,10 @@ def cell_table(
         ),
         axis=1,
     )
-    contraction = predicted["post_sd"].to_numpy() / fit.prior_frequency_sd
+    prior_sd = np.asarray(fit.prior_frequency_sd_at(lat=lat, lon=lon), dtype=float)
+    if prior_sd.shape != (len(lat),) or not np.isfinite(prior_sd).all() or (prior_sd <= 0).any():
+        raise ValueError("prior frequency SD must be an aligned finite positive vector")
+    contraction = predicted["post_sd"].to_numpy() / prior_sd
     support = classify_support(
         has_observation_centre=distance < 50.0,
         dist_nearest_obs_km=distance,
@@ -155,6 +183,7 @@ def cell_table(
             "post_median": predicted["post_median"].to_numpy(),
             "post_mean": predicted["post_mean"].to_numpy(),
             "post_sd": predicted["post_sd"].to_numpy(),
+            "prior_frequency_sd": prior_sd,
             "q025": predicted["q025"].to_numpy(),
             "q975": predicted["q975"].to_numpy(),
             "q25": predicted["q25"].to_numpy(),
@@ -179,6 +208,7 @@ def publish(
     artifacts under a new `model_version` rather than replacing a map someone has already cited,
     and a silent overwrite is precisely the failure that guarantee exists to prevent.
     """
+    _validate_current(frame, manifest.__dict__, context="surface artifact")
     root = Path(root)
     stem = manifest.variant_id.replace(":", "__")
     directory = root / f"{stem}__{manifest.model_version}__{manifest.data_version}"
@@ -198,14 +228,74 @@ def read(directory: Path) -> tuple[pd.DataFrame, dict]:
     directory = Path(directory)
     manifest = json.loads((directory / "manifest.json").read_text())
     artifact_format = manifest.get("artifact_format")
-    if artifact_format not in READABLE_ARTIFACT_FORMATS:
+    if (
+        isinstance(artifact_format, bool)
+        or not isinstance(artifact_format, int)
+        or artifact_format not in READABLE_ARTIFACT_FORMATS
+    ):
         raise ValueError(
             f"{directory} is artifact_format {artifact_format!r}; "
             f"this build reads {sorted(READABLE_ARTIFACT_FORMATS)}"
         )
-    if artifact_format == ARTIFACT_FORMAT:
+    frame = pd.read_parquet(directory / "cells.parquet")
+    if artifact_format in {2, ARTIFACT_FORMAT}:
         for field in ("target_grid_source", "target_grid_version"):
             value = manifest.get(field)
             if not isinstance(value, str) or not value.strip():
-                raise ValueError(f"{directory}: artifact_format 2 requires non-empty {field}")
-    return pd.read_parquet(directory / "cells.parquet"), manifest
+                raise ValueError(
+                    f"{directory}: artifact_format {artifact_format} requires non-empty {field}"
+                )
+    if artifact_format == ARTIFACT_FORMAT:
+        _validate_current(frame, manifest, context=str(directory))
+    return frame, manifest
+
+
+def _validate_current(frame: pd.DataFrame, manifest: dict, *, context: str) -> None:
+    """Validate format-3 normalization without changing stored binary64 values."""
+    if "prior_frequency_sd" in manifest:
+        raise ValueError(f"{context}: format 3 stores prior_frequency_sd per cell, not in manifest")
+    for field in ("prior_normalization", "prior_draws", "prior_seed"):
+        if field not in manifest:
+            raise ValueError(f"{context}: artifact_format 3 requires {field}")
+    if manifest["prior_normalization"] != PRIOR_NORMALIZATION:
+        raise ValueError(f"{context}: unsupported prior_normalization")
+    if (
+        isinstance(manifest["prior_draws"], bool)
+        or not isinstance(manifest["prior_draws"], int)
+        or manifest["prior_draws"] != PRIOR_DRAWS
+    ):
+        raise ValueError(f"{context}: prior_draws must be {PRIOR_DRAWS}")
+    seed = manifest["prior_seed"]
+    if isinstance(seed, bool) or not isinstance(seed, int) or seed < 0:
+        raise ValueError(f"{context}: prior_seed must be a nonnegative integer")
+    if manifest.get("measurement") not in MEASUREMENTS:
+        raise ValueError(f"{context}: unknown measurement {manifest.get('measurement')!r}")
+    missing = set(ARTIFACT_COLUMNS) - set(frame.columns)
+    if missing:
+        raise ValueError(f"{context}: missing format-3 columns {sorted(missing)}")
+    values: dict[str, np.ndarray] = {}
+    for field in ("prior_frequency_sd", "post_sd", "posterior_contraction"):
+        series = frame[field]
+        if (
+            is_bool_dtype(series.dtype)
+            or is_complex_dtype(series.dtype)
+            or not is_numeric_dtype(series.dtype)
+        ):
+            raise ValueError(f"{context}: {field} must have a numeric, non-Boolean dtype")
+        values[field] = series.to_numpy(dtype=np.float64, na_value=np.nan)
+    prior_sd = values["prior_frequency_sd"]
+    post_sd = values["post_sd"]
+    contraction = values["posterior_contraction"]
+    if prior_sd.shape != (len(frame),) or not np.isfinite(prior_sd).all() or (prior_sd <= 0).any():
+        raise ValueError(f"{context}: prior_frequency_sd must be finite and positive per cell")
+    if (
+        not np.isfinite(post_sd).all()
+        or not np.isfinite(contraction).all()
+        or (post_sd < 0).any()
+        or (contraction < 0).any()
+    ):
+        raise ValueError(
+            f"{context}: post_sd and posterior_contraction must be finite and nonnegative"
+        )
+    if not np.allclose(contraction, post_sd / prior_sd, rtol=1e-12, atol=0):
+        raise ValueError(f"{context}: posterior_contraction is inconsistent with per-cell SDs")

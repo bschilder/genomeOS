@@ -165,7 +165,10 @@ def evaluate_cells(
         weight = np.clip(1.0 - block / range_km, 0.0, None)
         eff_n[start:stop] = (obs_an[None, :] * weight).sum(axis=1)
 
-    contraction = (predicted["post_sd"] / fit.prior_frequency_sd).to_numpy()
+    prior_sd = np.asarray(fit.prior_frequency_sd_at(lat=lat, lon=lon), dtype=float)
+    if prior_sd.shape != (len(cells),) or not np.isfinite(prior_sd).all() or (prior_sd <= 0).any():
+        raise ValueError("prior frequency SD must be an aligned finite positive vector")
+    contraction = predicted["post_sd"].to_numpy() / prior_sd
 
     return pd.DataFrame(
         {
@@ -174,6 +177,7 @@ def evaluate_cells(
             "lon": lon,
             "post_mean": predicted["post_mean"].to_numpy(),
             "post_sd": predicted["post_sd"].to_numpy(),
+            "prior_frequency_sd": prior_sd,
             "q025": predicted["q025"].to_numpy(),
             "q975": predicted["q975"].to_numpy(),
             "posterior_contraction": contraction,

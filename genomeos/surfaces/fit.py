@@ -42,6 +42,7 @@ import pymc as pm
 import pytensor.tensor as pt
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
+from genomeos.surfaces.prior import latent_prior_frequency_sd
 
 SEED = 42
 
@@ -348,10 +349,6 @@ class SurfaceFit:
     #: — see the note in `fit_surface`.
     beta_cohort_applied: bool
     design_levels: tuple[str, ...]
-    #: Prior sd of allele frequency at a location, the denominator of `posterior_contraction`
-    #: (§7.1b). A single scalar because the GP prior is stationary and the mean function is
-    #: location-independent, so the marginal prior is identical everywhere.
-    prior_frequency_sd: float
     #: Median inducing-point spacing divided by the fitted correlation range. Below
     #: `MIN_SPACING_FRACTION` the inducing set is over-dense for the field it represents.
     inducing_spacing_ratio: float | None
@@ -364,6 +361,36 @@ class SurfaceFit:
     _model: Any = field(repr=False)
     _centre: np.ndarray = field(repr=False)
     _scale: np.ndarray = field(repr=False)
+
+    def prior_frequency_sd_at(self, lat: object, lon: object) -> np.ndarray:
+        """Prior SD of latent frequency at each query coordinate (§7.1b; issue #266)."""
+        raw_lat = np.asarray(lat, dtype=object)
+        raw_lon = np.asarray(lon, dtype=object)
+        if any(isinstance(value, (bool, np.bool_)) for value in raw_lat.flat) or any(
+            isinstance(value, (bool, np.bool_)) for value in raw_lon.flat
+        ):
+            raise ValueError("lat and lon must be numeric coordinates, not Boolean values")
+        lat_arr = np.asarray(lat, dtype=float)
+        lon_arr = np.asarray(lon, dtype=float)
+        if lat_arr.ndim == 0:
+            lat_arr = lat_arr.reshape(1)
+        if lon_arr.ndim == 0:
+            lon_arr = lon_arr.reshape(1)
+        if lat_arr.ndim != 1 or lon_arr.ndim != 1:
+            raise ValueError("lat and lon must be scalar or one-dimensional")
+        if lat_arr.shape != lon_arr.shape:
+            raise ValueError("lat and lon must have the same nonempty shape")
+        if len(lat_arr) == 0:
+            raise ValueError("lat and lon must be nonempty")
+        if not np.isfinite(lat_arr).all() or not np.isfinite(lon_arr).all():
+            raise ValueError("lat and lon must be finite")
+        if ((lat_arr < -90.0) | (lat_arr > 90.0)).any():
+            raise ValueError("latitude must be within [-90, 90]")
+        if ((lon_arr < -180.0) | (lon_arr > 180.0)).any():
+            raise ValueError("longitude must be within [-180, 180]")
+        return latent_prior_frequency_sd(
+            self._model, to_unit_sphere(lat_arr, lon_arr), seed=self.config.seed
+        )
 
     def design_effects(self) -> pd.DataFrame:
         """Posterior summary of β_design per non-reference sampling design.
@@ -813,9 +840,6 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             f_pred_expr = gp.conditional("f_pred", Xnew=x_pred)
         pm.Deterministic("freq_pred", pm.math.invlogit(f_pred_expr))
 
-        prior = pm.sample_prior_predictive(
-            draws=500, var_names=["freq_pred"], random_seed=config.seed
-        )
         sample_kwargs: dict[str, Any] = {
             "draws": config.draws,
             "tune": config.tune,
@@ -849,7 +873,6 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
 
     _check_convergence(idata, config)
 
-    prior_sd = float(np.std(prior.prior["freq_pred"].to_numpy()))
     # Chordal lengthscale on the unit sphere -> great-circle km. Exact for the chord; the
     # great-circle equivalent differs by <1% for ranges under ~1,500 km.
     lengthscale_mean = float(idata.posterior["lengthscale"].mean())
@@ -878,7 +901,6 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
         beta_cohort_applied=beta_cohort_applied,
         lengthscale_prior_km=(anchor_low, anchor_high),
         design_levels=non_reference,
-        prior_frequency_sd=prior_sd,
         inducing_spacing_ratio=spacing_ratio,
         correlation_range_km=correlation_range_km,
         idata=idata,
