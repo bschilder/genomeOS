@@ -27,7 +27,9 @@
 
 ## Files and responsibility
 
-- Create `genomeos/registry/release_contract.py`: strict input/file/manifest types, canonical table hashing and full identity calculation.
+- Create `genomeos/registry/release_contract.py`: strict input/file/manifest types, a typed
+  validated-release result, canonical table hashing, full identity calculation, and checked pure
+  release/manifest operations consumed across module boundaries.
 - Create `genomeos/registry/publication.py`: local publication, implementation/runtime metadata capture, verified reader, byte-level failure boundaries.
 - Modify `scripts/build_registry.py`: argument validation, original-byte snapshots, existing adapter composition, publication call.
 - Modify `scripts/build_observations.py`: verified P0 reader before existing P1 assembly.
@@ -74,6 +76,16 @@ class RegistryManifest(BaseModel):
     files: tuple[RegistryFile, ...]
     software_versions: dict[str, str]
 
+@dataclass(frozen=True)
+class RegistryRelease:
+    populations: pd.DataFrame
+    aliases: pd.DataFrame
+    inputs: tuple[RegistryInput, ...]
+    release_version: str
+    registry_version: str
+    populations_logical_sha256: str
+    aliases_logical_sha256: str
+
 def identify_input(kind: Literal["source", "implementation"], role: str,
                    payload: bytes) -> RegistryInput:
     return RegistryInput(kind=kind, role=role,
@@ -96,6 +108,12 @@ does not contain each fixed filename exactly once. The required software keys ar
 `python`, `pandas`, `pyarrow`, `pandera`, each with a nonblank string. Identity helper
 uses supplied input records; publication adds/validates the four core implementation
 records before computing it. Reader uses recorded input records, not current code.
+The additional reviewed module-boundary operations are `validate_release_version(release_version:
+str) -> str`, `prepare_registry_release(populations, aliases, inputs, release_version) ->
+RegistryRelease`, `verify_registry_manifest(populations, aliases, manifest) -> RegistryRelease`,
+`encode_registry_manifest(manifest) -> bytes`, and `parse_registry_manifest(payload: bytes) ->
+RegistryManifest`. They perform the checks implied by their names; production consumers do not
+import private hashing or already-validated helpers.
 
 - [x] **Step 1 — RED on the real repeat-build bug and new contract.** Add CLI
   regressions before implementation, using the existing `_run` and
@@ -226,3 +244,7 @@ Controller self-review checks spec coverage, file/interface consistency, exact
 canonical JSON fields, literal version marker, pre/post-commit failure behavior,
 P1 enforcement and all failure/identity tests. Any newly discovered requirement
 conflict receives an explicit ledger ruling before implementation changes scope.
+
+Round-1 review fix: the controller authorized the smallest additional typed pure interface needed
+to remove production imports of private `release_contract` helpers. The checked `RegistryRelease`
+and release/manifest operations above preserve all originally mandated signatures and behavior.

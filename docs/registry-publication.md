@@ -41,6 +41,13 @@ The CLI snapshots each source once before adapter parsing, so the input record a
 refer to the same bytes even if the original path changes during a build. Input filenames,
 absolute paths, timestamps, environment values, and Git state are not stored.
 
+Library composition uses the public pure operations in `genomeos.registry.release_contract`:
+`validate_release_version`, `prepare_registry_release`, `verify_registry_manifest`,
+`encode_registry_manifest`, and `parse_registry_manifest`. Preparation and verification return a
+typed `RegistryRelease` containing copied validated tables, sorted inputs, the full identity, and
+both logical hashes. Filesystem code consumes that checked result; canonical encoding and
+already-validated hashing helpers remain private to the pure contract module.
+
 ## Completion and failures
 
 The output path must not already exist. An empty directory, regular file, symlink, or dangling

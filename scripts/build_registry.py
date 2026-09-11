@@ -25,15 +25,15 @@ from genomeos.registry.build import build_registry
 from genomeos.registry.publication import publish_registry
 from genomeos.registry.release_contract import (
     RegistryInput,
-    _validate_release_version,
     identify_input,
+    validate_release_version,
 )
 from genomeos.registry.sources import afnd, hgdp
 
 
 def _release_version(value: str) -> str:
     try:
-        return _validate_release_version(value)
+        return validate_release_version(value)
     except (TypeError, ValueError) as exc:
         raise argparse.ArgumentTypeError(str(exc)) from exc
 

@@ -67,6 +67,13 @@ every nonempty population frame's incoming version to equal RELEASE, computes th
 full identity, and embeds that exact identity in every published population row.
 Empty schema-valid tables remain supported; they do not certify usable geography.
 
+The pure module boundary exposes a typed `RegistryRelease` result plus checked operations to
+validate a release label, prepare a release, verify decoded tables against a manifest, and
+encode/parse strict manifest JSON. These operations own schema, input, identity, row-count,
+embedded-version and logical-hash validation. The filesystem publisher and CLI consume those
+public contracts; canonical encoders, logical hashing and already-validated identity helpers
+remain private implementation details inside `release_contract.py`.
+
 Input records include the exact bytes of the core implementation files
 `genomeos/registry/{release_contract,publication,build,schema}.py`, observed by the
 publisher. CLI composition adds the actual `scripts/build_registry.py` and

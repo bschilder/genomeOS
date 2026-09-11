@@ -6,7 +6,8 @@ import hashlib
 import json
 import math
 import re
-from typing import Literal
+from dataclasses import dataclass
+from typing import Literal, NoReturn
 
 import pandas as pd
 from pydantic import (
@@ -89,6 +90,19 @@ class RegistryManifest(BaseModel):
         return self
 
 
+@dataclass(frozen=True)
+class RegistryRelease:
+    """Validated, copied tables and their complete pure identity result."""
+
+    populations: pd.DataFrame
+    aliases: pd.DataFrame
+    inputs: tuple[RegistryInput, ...]
+    release_version: str
+    registry_version: str
+    populations_logical_sha256: str
+    aliases_logical_sha256: str
+
+
 def identify_input(
     kind: Literal["source", "implementation"], role: str, payload: bytes
 ) -> RegistryInput:
@@ -107,6 +121,11 @@ def _validate_release_version(release_version: str) -> str:
     if _RELEASE_RE.fullmatch(release_version) is None:
         raise ValueError("release_version must be normal semver MAJOR.MINOR.PATCH")
     return release_version
+
+
+def validate_release_version(release_version: str) -> str:
+    """Validate the explicit normal-semver label used by library and CLI callers."""
+    return _validate_release_version(release_version)
 
 
 def _validate_inputs(
@@ -197,6 +216,127 @@ def _identity_from_validated(
     }
     digest = hashlib.sha256(_canonical(payload)).hexdigest()
     return f"{release_version}+sha256.{digest}", populations_sha256, aliases_sha256
+
+
+def prepare_registry_release(
+    populations: pd.DataFrame,
+    aliases: pd.DataFrame,
+    inputs: tuple[RegistryInput, ...],
+    release_version: str,
+) -> RegistryRelease:
+    """Validate and copy release-labelled tables, then embed their full identity."""
+    release_version = validate_release_version(release_version)
+    validated_populations, validated_aliases = _validated_tables(populations, aliases)
+    if not validated_populations.empty and not validated_populations["registry_version"].eq(
+        release_version
+    ).all():
+        raise ValueError("incoming population registry_version must equal release_version")
+    registry_version, populations_hash, aliases_hash = _identity_from_validated(
+        validated_populations,
+        validated_aliases,
+        inputs,
+        release_version,
+    )
+    published_populations = validated_populations.copy(deep=True)
+    published_populations["registry_version"] = registry_version
+    return RegistryRelease(
+        populations=published_populations,
+        aliases=validated_aliases,
+        inputs=_validate_inputs(inputs),
+        release_version=release_version,
+        registry_version=registry_version,
+        populations_logical_sha256=populations_hash,
+        aliases_logical_sha256=aliases_hash,
+    )
+
+
+def verify_registry_manifest(
+    populations: pd.DataFrame,
+    aliases: pd.DataFrame,
+    manifest: RegistryManifest,
+) -> RegistryRelease:
+    """Verify decoded tables against every logical release field in a manifest."""
+    manifest = RegistryManifest.model_validate(manifest.model_dump(mode="python"))
+    if list(populations.columns) != list(POPULATIONS_SCHEMA.columns):
+        raise ValueError("invalid registry column order in populations.parquet")
+    if list(aliases.columns) != list(ALIASES_SCHEMA.columns):
+        raise ValueError("invalid registry column order in population_aliases.parquet")
+    try:
+        validated_populations, validated_aliases = _validated_tables(populations, aliases)
+    except Exception as exc:
+        raise ValueError("invalid registry table contract") from exc
+    records = {record.path: record for record in manifest.files}
+    populations_record = records["populations.parquet"]
+    aliases_record = records["population_aliases.parquet"]
+    if len(validated_populations) != populations_record.row_count:
+        raise ValueError("registry row count mismatch: populations.parquet")
+    if len(validated_aliases) != aliases_record.row_count:
+        raise ValueError("registry row count mismatch: population_aliases.parquet")
+    if not validated_populations.empty and not validated_populations[
+        "registry_version"
+    ].eq(manifest.registry_version).all():
+        raise ValueError("population rows have wrong embedded registry_version")
+    populations_hash = _logical_sha256(
+        validated_populations, omit_registry_version=True
+    )
+    aliases_hash = _logical_sha256(validated_aliases, omit_registry_version=False)
+    if populations_hash != populations_record.logical_sha256:
+        raise ValueError("populations logical hash mismatch")
+    if aliases_hash != aliases_record.logical_sha256:
+        raise ValueError("population aliases logical hash mismatch")
+    computed_version, _, _ = _identity_from_validated(
+        validated_populations,
+        validated_aliases,
+        manifest.inputs,
+        manifest.release_version,
+    )
+    if computed_version != manifest.registry_version:
+        raise ValueError("registry identity mismatch")
+    return RegistryRelease(
+        populations=validated_populations,
+        aliases=validated_aliases,
+        inputs=manifest.inputs,
+        release_version=manifest.release_version,
+        registry_version=manifest.registry_version,
+        populations_logical_sha256=populations_hash,
+        aliases_logical_sha256=aliases_hash,
+    )
+
+
+def encode_registry_manifest(manifest: RegistryManifest) -> bytes:
+    """Encode a validated manifest as canonical UTF-8 JSON without a newline."""
+    validated = RegistryManifest.model_validate(manifest.model_dump(mode="python"))
+    return _canonical(validated.model_dump(mode="json"))
+
+
+def _duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"duplicate JSON key in registry manifest: {key}")
+        result[key] = value
+    return result
+
+
+def _nonfinite_constant(value: str) -> NoReturn:
+    raise ValueError(f"nonfinite JSON constant in registry manifest: {value}")
+
+
+def parse_registry_manifest(payload: bytes) -> RegistryManifest:
+    """Parse strict manifest JSON, rejecting duplicate keys and nonfinite constants."""
+    try:
+        raw = json.loads(
+            payload.decode("utf-8"),
+            object_pairs_hook=_duplicate_keys,
+            parse_constant=_nonfinite_constant,
+        )
+        return RegistryManifest.model_validate(raw)
+    except Exception as exc:
+        if isinstance(exc, ValueError) and (
+            "duplicate JSON key" in str(exc) or "nonfinite JSON constant" in str(exc)
+        ):
+            raise
+        raise ValueError("invalid registry manifest") from exc
 
 
 def registry_identity(

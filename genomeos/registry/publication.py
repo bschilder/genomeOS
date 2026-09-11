@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import io
-import json
 import os
 import platform
 import stat
 from pathlib import Path
-from typing import NoReturn
 
 import pandas as pd
 import pandera
@@ -19,15 +17,12 @@ from genomeos.registry.release_contract import (
     RegistryFile,
     RegistryInput,
     RegistryManifest,
-    _canonical,
-    _identity_from_validated,
-    _logical_sha256,
-    _validate_inputs,
-    _validate_release_version,
-    _validated_tables,
+    encode_registry_manifest,
     identify_input,
+    parse_registry_manifest,
+    prepare_registry_release,
+    verify_registry_manifest,
 )
-from genomeos.registry.schema import ALIASES_SCHEMA, POPULATIONS_SCHEMA
 
 _POPULATIONS = "populations.parquet"
 _ALIASES = "population_aliases.parquet"
@@ -54,15 +49,20 @@ def _core_implementation_inputs() -> tuple[RegistryInput, ...]:
 
 
 def _publication_inputs(inputs: tuple[RegistryInput, ...]) -> tuple[RegistryInput, ...]:
-    supplied = _validate_inputs(inputs)
-    records = {(item.kind, item.role): item for item in supplied}
+    records: dict[tuple[str, str], RegistryInput] = {}
+    for raw_item in inputs:
+        item = RegistryInput.model_validate(raw_item)
+        key = (item.kind, item.role)
+        if key in records:
+            raise ValueError("duplicate registry input kind/role pair")
+        records[key] = item
     for core in _core_implementation_inputs():
         key = (core.kind, core.role)
         existing = records.get(key)
         if existing is not None and existing != core:
             raise ValueError(f"implementation input does not match current bytes: {core.role}")
         records[key] = core
-    return _validate_inputs(tuple(records.values()))
+    return tuple(sorted(records.values(), key=lambda item: (item.kind, item.role)))
 
 
 def _software_versions() -> dict[str, str]:
@@ -112,33 +112,6 @@ def _deserialize_table(payload: bytes, filename: str) -> pd.DataFrame:
         raise ValueError(f"invalid registry Parquet file {filename}") from exc
 
 
-def _verify_retained_tables(
-    population_bytes: bytes,
-    alias_bytes: bytes,
-    *,
-    registry_version: str,
-    populations_logical_sha256: str,
-    aliases_logical_sha256: str,
-) -> tuple[pd.DataFrame, pd.DataFrame]:
-    populations = _deserialize_table(population_bytes, _POPULATIONS)
-    aliases = _deserialize_table(alias_bytes, _ALIASES)
-    if list(populations.columns) != list(POPULATIONS_SCHEMA.columns):
-        raise ValueError(f"invalid registry column order in {_POPULATIONS}")
-    if list(aliases.columns) != list(ALIASES_SCHEMA.columns):
-        raise ValueError(f"invalid registry column order in {_ALIASES}")
-    try:
-        populations, aliases = _validated_tables(populations, aliases)
-    except Exception as exc:
-        raise ValueError("invalid registry table contract") from exc
-    if not populations.empty and not populations["registry_version"].eq(registry_version).all():
-        raise ValueError("population rows have wrong embedded registry_version")
-    if _logical_sha256(populations, omit_registry_version=True) != populations_logical_sha256:
-        raise ValueError("populations logical hash mismatch")
-    if _logical_sha256(aliases, omit_registry_version=False) != aliases_logical_sha256:
-        raise ValueError("population aliases logical hash mismatch")
-    return populations, aliases
-
-
 def publish_registry(
     populations: pd.DataFrame,
     aliases: pd.DataFrame,
@@ -151,62 +124,48 @@ def publish_registry(
     out = Path(out)
     if _path_exists(out):
         raise FileExistsError(f"registry publication destination already exists: {out}")
-    release_version = _validate_release_version(release_version)
-    validated_populations, validated_aliases = _validated_tables(populations, aliases)
-    if not validated_populations.empty and not validated_populations["registry_version"].eq(
-        release_version
-    ).all():
-        raise ValueError("incoming population registry_version must equal release_version")
     publication_inputs = _publication_inputs(inputs)
-    registry_version, populations_logical_sha256, aliases_logical_sha256 = (
-        _identity_from_validated(
-            validated_populations,
-            validated_aliases,
-            publication_inputs,
-            release_version,
-        )
+    release = prepare_registry_release(
+        populations,
+        aliases,
+        publication_inputs,
+        release_version,
     )
-    published_populations = validated_populations.copy(deep=True)
-    published_populations["registry_version"] = registry_version
     software_versions = _software_versions()
 
     out.parent.mkdir(parents=True, exist_ok=True)
     _claim_output_directory(out)
-    population_bytes = _write_parquet_file(published_populations, out / _POPULATIONS)
-    alias_bytes = _write_parquet_file(validated_aliases, out / _ALIASES)
-    retained_populations, retained_aliases = _verify_retained_tables(
-        population_bytes,
-        alias_bytes,
-        registry_version=registry_version,
-        populations_logical_sha256=populations_logical_sha256,
-        aliases_logical_sha256=aliases_logical_sha256,
-    )
+    population_bytes = _write_parquet_file(release.populations, out / _POPULATIONS)
+    alias_bytes = _write_parquet_file(release.aliases, out / _ALIASES)
+    retained_populations = _deserialize_table(population_bytes, _POPULATIONS)
+    retained_aliases = _deserialize_table(alias_bytes, _ALIASES)
     files = (
         RegistryFile(
             path=_POPULATIONS,
             sha256=hashlib.sha256(population_bytes).hexdigest(),
             size_bytes=len(population_bytes),
             row_count=len(retained_populations),
-            logical_sha256=populations_logical_sha256,
+            logical_sha256=release.populations_logical_sha256,
         ),
         RegistryFile(
             path=_ALIASES,
             sha256=hashlib.sha256(alias_bytes).hexdigest(),
             size_bytes=len(alias_bytes),
             row_count=len(retained_aliases),
-            logical_sha256=aliases_logical_sha256,
+            logical_sha256=release.aliases_logical_sha256,
         ),
     )
     manifest = RegistryManifest(
         schema_version="registry-publication-v1",
-        release_version=release_version,
-        registry_version=registry_version,
-        inputs=publication_inputs,
+        release_version=release.release_version,
+        registry_version=release.registry_version,
+        inputs=release.inputs,
         files=files,
         software_versions=software_versions,
     )
+    verify_registry_manifest(retained_populations, retained_aliases, manifest)
     pending = out / _PENDING_MANIFEST
-    _write_pending_manifest(pending, _canonical(manifest.model_dump(mode="json")))
+    _write_pending_manifest(pending, encode_registry_manifest(manifest))
     committed = False
     try:
         os.link(pending, out / _MANIFEST)
@@ -223,19 +182,6 @@ def publish_registry(
     return manifest
 
 
-def _duplicate_keys(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON key in registry manifest: {key}")
-        result[key] = value
-    return result
-
-
-def _nonfinite_constant(value: str) -> NoReturn:
-    raise ValueError(f"nonfinite JSON constant in registry manifest: {value}")
-
-
 def _read_regular_file(path: Path, description: str) -> bytes:
     try:
         metadata = path.lstat()
@@ -247,22 +193,6 @@ def _read_regular_file(path: Path, description: str) -> bytes:
         return path.read_bytes()
     except OSError as exc:
         raise ValueError(f"could not read registry {description}: {path.name}") from exc
-
-
-def _parse_manifest(payload: bytes) -> RegistryManifest:
-    try:
-        raw = json.loads(
-            payload.decode("utf-8"),
-            object_pairs_hook=_duplicate_keys,
-            parse_constant=_nonfinite_constant,
-        )
-        return RegistryManifest.model_validate(raw)
-    except Exception as exc:
-        if isinstance(exc, ValueError) and (
-            "duplicate JSON key" in str(exc) or "nonfinite JSON constant" in str(exc)
-        ):
-            raise
-        raise ValueError("invalid registry manifest") from exc
 
 
 def _verify_file_bytes(path: Path, record: RegistryFile) -> bytes:
@@ -278,31 +208,13 @@ def read_registry(path: Path) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Read a complete registry only after verifying its full publication contract."""
     path = Path(path)
     manifest_bytes = _read_regular_file(path / _MANIFEST, "manifest")
-    manifest = _parse_manifest(manifest_bytes)
+    manifest = parse_registry_manifest(manifest_bytes)
     records = {record.path: record for record in manifest.files}
     population_bytes = _verify_file_bytes(path / _POPULATIONS, records[_POPULATIONS])
     alias_bytes = _verify_file_bytes(path / _ALIASES, records[_ALIASES])
-    populations, aliases = _verify_retained_tables(
-        population_bytes,
-        alias_bytes,
-        registry_version=manifest.registry_version,
-        populations_logical_sha256=records[_POPULATIONS].logical_sha256,
-        aliases_logical_sha256=records[_ALIASES].logical_sha256,
+    release = verify_registry_manifest(
+        _deserialize_table(population_bytes, _POPULATIONS),
+        _deserialize_table(alias_bytes, _ALIASES),
+        manifest,
     )
-    if len(populations) != records[_POPULATIONS].row_count:
-        raise ValueError(f"registry row count mismatch: {_POPULATIONS}")
-    if len(aliases) != records[_ALIASES].row_count:
-        raise ValueError(f"registry row count mismatch: {_ALIASES}")
-    computed_version, populations_hash, aliases_hash = _identity_from_validated(
-        populations,
-        aliases,
-        manifest.inputs,
-        manifest.release_version,
-    )
-    if populations_hash != records[_POPULATIONS].logical_sha256:
-        raise ValueError("registry populations logical hash mismatch")
-    if aliases_hash != records[_ALIASES].logical_sha256:
-        raise ValueError("registry aliases logical hash mismatch")
-    if computed_version != manifest.registry_version:
-        raise ValueError("registry identity mismatch")
-    return populations, aliases
+    return release.populations, release.aliases

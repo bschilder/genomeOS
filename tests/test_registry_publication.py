@@ -17,8 +17,14 @@ from genomeos.registry.release_contract import (
     RegistryFile,
     RegistryInput,
     RegistryManifest,
+    RegistryRelease,
+    encode_registry_manifest,
     identify_input,
+    parse_registry_manifest,
+    prepare_registry_release,
     registry_identity,
+    validate_release_version,
+    verify_registry_manifest,
 )
 
 
@@ -188,6 +194,125 @@ def test_registry_identity_rejects_duplicate_inputs_and_requires_a_source():
         registry_identity(populations, aliases, (source, source), "1.2.3")
     with pytest.raises(ValueError, match="source"):
         registry_identity(populations, aliases, (implementation,), "1.2.3")
+
+
+def test_prepare_registry_release_returns_checked_identity_without_mutating_callers():
+    populations, aliases = _tables()
+    populations_before = populations.copy(deep=True)
+    aliases_before = aliases.copy(deep=True)
+
+    release = prepare_registry_release(
+        populations,
+        aliases,
+        (_source_input(),),
+        "1.2.3",
+    )
+
+    assert isinstance(release, RegistryRelease)
+    assert release.registry_version == registry_identity(
+        populations, aliases, (_source_input(),), "1.2.3"
+    )
+    assert release.populations["registry_version"].tolist() == [release.registry_version]
+    assert release.aliases.to_dict("records") == aliases.to_dict("records")
+    assert populations.equals(populations_before)
+    assert aliases.equals(aliases_before)
+
+
+def test_prepare_registry_release_refuses_wrong_incoming_version_without_mutation():
+    populations, aliases = _tables(release_version="9.9.9")
+    populations_before = populations.copy(deep=True)
+
+    with pytest.raises(ValueError, match="incoming population registry_version"):
+        prepare_registry_release(populations, aliases, (_source_input(),), "1.2.3")
+
+    assert populations.equals(populations_before)
+
+
+def test_verify_registry_manifest_checks_public_release_content_boundary():
+    populations, aliases = _tables()
+    release = prepare_registry_release(populations, aliases, (_source_input(),), "1.2.3")
+    manifest = RegistryManifest(
+        schema_version="registry-publication-v1",
+        release_version=release.release_version,
+        registry_version=release.registry_version,
+        inputs=release.inputs,
+        files=(
+            RegistryFile(
+                path="populations.parquet",
+                sha256="0" * 64,
+                size_bytes=1,
+                row_count=1,
+                logical_sha256=release.populations_logical_sha256,
+            ),
+            RegistryFile(
+                path="population_aliases.parquet",
+                sha256="1" * 64,
+                size_bytes=1,
+                row_count=1,
+                logical_sha256=release.aliases_logical_sha256,
+            ),
+        ),
+        software_versions={
+            "python": "3.12",
+            "pandas": "2.3",
+            "pyarrow": "21",
+            "pandera": "0.26",
+        },
+    )
+
+    verified = verify_registry_manifest(release.populations, release.aliases, manifest)
+    changed = release.populations.copy()
+    changed.loc[0, "lat"] = 1.5
+
+    assert verified.registry_version == release.registry_version
+    with pytest.raises(ValueError, match="logical hash"):
+        verify_registry_manifest(changed, release.aliases, manifest)
+
+
+def test_manifest_encoding_and_parsing_are_strict_public_operations():
+    populations, aliases = _tables()
+    release = prepare_registry_release(populations, aliases, (_source_input(),), "1.2.3")
+    files = (
+        RegistryFile(
+            path="populations.parquet",
+            sha256="0" * 64,
+            size_bytes=1,
+            row_count=1,
+            logical_sha256=release.populations_logical_sha256,
+        ),
+        RegistryFile(
+            path="population_aliases.parquet",
+            sha256="1" * 64,
+            size_bytes=1,
+            row_count=1,
+            logical_sha256=release.aliases_logical_sha256,
+        ),
+    )
+    manifest = RegistryManifest(
+        schema_version="registry-publication-v1",
+        release_version=release.release_version,
+        registry_version=release.registry_version,
+        inputs=release.inputs,
+        files=files,
+        software_versions={
+            "python": "3.12",
+            "pandas": "2.3",
+            "pyarrow": "21",
+            "pandera": "0.26",
+        },
+    )
+
+    assert parse_registry_manifest(encode_registry_manifest(manifest)) == manifest
+    with pytest.raises(ValueError, match="duplicate JSON key"):
+        parse_registry_manifest(
+            b'{"schema_version":"registry-publication-v1","schema_version":"other"}'
+        )
+
+
+def test_validate_release_version_is_the_strict_public_cli_boundary():
+    assert validate_release_version("1.2.3") == "1.2.3"
+    with pytest.raises(ValueError, match="normal semver"):
+        validate_release_version("01.2.3")
 
 
 def test_manifest_rejects_invalid_file_set_versions_and_software():
