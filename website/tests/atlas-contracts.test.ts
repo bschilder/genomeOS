@@ -113,8 +113,11 @@ describe('atlas browser contracts', () => {
       target_grid_version: 'fixture-2020',
     };
     expect(
-      surfaceArtifactSchema.parse({ artifact: format3, cells: [cell], schema_version: 1 })
-        .artifact.artifact_format,
+      surfaceArtifactSchema.parse({
+        artifact: format3,
+        cells: [cell],
+        schema_version: 1,
+      }).artifact.artifact_format,
     ).toBe(3);
     expect(() =>
       surfaceArtifactSchema.parse({

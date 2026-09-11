@@ -61,7 +61,8 @@ function requireVersionedTargetGrid(
   ) {
     context.addIssue({
       code: 'custom',
-      message: 'artifact formats 2 and 3 require target-grid source and version',
+      message:
+        'artifact formats 2 and 3 require target-grid source and version',
     });
   }
 }
