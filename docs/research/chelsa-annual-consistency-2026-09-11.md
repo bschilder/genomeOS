@@ -17,8 +17,9 @@ The public [aggregate JSON](chelsa-annual-consistency-2026-09-11.json) contains
 the complete signed histogram, all 3,485 native-block summaries, thirteen source
 identities, and the bounded provenance needed by the owned
 [plotting CLI](../../scripts/plot_chelsa_annual_consistency.py). It reproduces
-this figure without raster or network access. It does not contain raster pixels
-and cannot independently replicate the full-raster audit by itself.
+this figure without raster or network access. It retains the selected diagnostic
+raw values described below, but contains no complete raster arrays or raster
+bodies and cannot independently replicate the full-raster audit by itself.
 
 ## Scientific contract
 
