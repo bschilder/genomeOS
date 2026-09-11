@@ -287,11 +287,23 @@ def _expected_budget_status(complete: bool, known: int) -> BudgetStatus:
     return "within_cap" if known <= MAX_TRANSFER_BYTES else "over_cap"
 
 
+def _validate_input_binding(value: BytePreflight) -> None:
+    input_hashes = dict(value.provenance.input_sha256)
+    _require(set(input_hashes) == {"manifest", "windows"}, "invalid preflight input hashes")
+    _require(
+        input_hashes
+        == {"manifest": value.manifest_sha256, "windows": value.windows_sha256},
+        "preflight input hashes do not match artifacts",
+    )
+
+
 def _validate_preflight(value: BytePreflight) -> None:
     _require(type(value) is BytePreflight, "preflight must be BytePreflight")
     _require(value.schema_version == PREFLIGHT_SCHEMA_VERSION, "unsupported preflight schema_version")
     _sha(value.manifest_sha256, "manifest")
     _sha(value.windows_sha256, "windows")
+    _require(type(value.provenance) is Provenance, "invalid provenance")
+    _validate_input_binding(value)
     _require(
         type(value.sources) is tuple and all(type(item) is SourceBytePlan for item in value.sources),
         "preflight sources must be SourceBytePlan records",
@@ -339,7 +351,6 @@ def _validate_preflight(value: BytePreflight) -> None:
         value.budget_status == _expected_budget_status(complete, known),
         "budget status disagrees with total",
     )
-    _require(type(value.provenance) is Provenance, "invalid provenance")
     _validate_policy(value.policy)
     _require(value.publication_eligible is False, "publication_eligible must be false")
     _require(value.p1_eligible is False, "p1_eligible must be false")
@@ -422,12 +433,6 @@ def assemble_preflight(
         (provenance.data_version, provenance.evidence_kind)
         == (manifest.provenance.data_version, manifest.provenance.evidence_kind),
         "preflight provenance does not match manifest",
-    )
-    input_hashes = dict(provenance.input_sha256)
-    _require(set(input_hashes) == {"manifest", "windows"}, "invalid preflight input hashes")
-    _require(
-        input_hashes == {"manifest": manifest_sha256, "windows": manifest.windows_sha256},
-        "preflight input hashes do not match artifacts",
     )
     _require(len(source_plans) == len(manifest.sources), "missing source plans")
     _require(

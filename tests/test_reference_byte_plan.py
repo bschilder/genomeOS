@@ -221,6 +221,68 @@ def test_encode_revalidates_public_preflight_accounting(tmp_path):
         encode_preflight(preflight)
 
 
+@pytest.mark.parametrize("field", ["manifest_sha256", "windows_sha256"])
+def test_public_preflight_replace_rejects_changed_top_level_input_hash(tmp_path, field):
+    manifest = _manifest(tmp_path)
+    preflight = assemble_preflight(
+        manifest,
+        tuple(_source_plan(manifest, index) for index in range(22)),
+        manifest_sha256="4" * 64,
+        provenance=_provenance(manifest),
+    )
+    with pytest.raises(ValueError, match="input hashes do not match"):
+        replace(preflight, **{field: "5" * 64})
+
+
+@pytest.mark.parametrize("field", ["manifest", "windows"])
+def test_public_preflight_construction_rejects_changed_provenance_digest(tmp_path, field):
+    manifest = _manifest(tmp_path)
+    preflight = assemble_preflight(
+        manifest,
+        tuple(_source_plan(manifest, index) for index in range(22)),
+        manifest_sha256="4" * 64,
+        provenance=_provenance(manifest),
+    )
+    hashes = dict(preflight.provenance.input_sha256)
+    hashes[field] = "5" * 64
+    provenance = replace(preflight.provenance, input_sha256=tuple(sorted(hashes.items())))
+    with pytest.raises(ValueError, match="input hashes do not match"):
+        _construct_preflight(preflight, provenance=provenance)
+
+
+@pytest.mark.parametrize(
+    "entries",
+    [
+        (("manifest", "4" * 64),),
+        (("extra", "6" * 64), ("manifest", "4" * 64), ("windows", "5" * 64)),
+    ],
+)
+def test_public_preflight_rejects_missing_or_extra_provenance_input_keys(tmp_path, entries):
+    manifest = _manifest(tmp_path)
+    preflight = assemble_preflight(
+        manifest,
+        tuple(_source_plan(manifest, index) for index in range(22)),
+        manifest_sha256="4" * 64,
+        provenance=_provenance(manifest),
+    )
+    provenance = replace(preflight.provenance, input_sha256=entries)
+    with pytest.raises(ValueError, match="invalid preflight input hashes"):
+        replace(preflight, provenance=provenance)
+
+
+def test_encode_revalidates_preflight_provenance_binding(tmp_path):
+    manifest = _manifest(tmp_path)
+    preflight = assemble_preflight(
+        manifest,
+        tuple(_source_plan(manifest, index) for index in range(22)),
+        manifest_sha256="4" * 64,
+        provenance=_provenance(manifest),
+    )
+    object.__setattr__(preflight, "manifest_sha256", "5" * 64)
+    with pytest.raises(ValueError, match="input hashes do not match"):
+        encode_preflight(preflight)
+
+
 def test_unknown_source_ranges_make_total_null_and_preserve_known_partial_accounting(tmp_path):
     manifest = _manifest(tmp_path)
     plans = tuple(

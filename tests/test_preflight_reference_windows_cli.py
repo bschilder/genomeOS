@@ -410,6 +410,14 @@ def test_cli_retains_all_66_windows_after_one_index_failure(monkeypatch, tmp_pat
     assert payload["budget_status"] == "incomplete"
     assert payload["total_planned_bytes"] is None
     assert payload["known_planned_bytes"] > 0
+    manifest_sha256 = hashlib.sha256((frozen / "manifest.json").read_bytes()).hexdigest()
+    windows_sha256 = hashlib.sha256((frozen / "windows.tsv").read_bytes()).hexdigest()
+    assert payload["manifest_sha256"] == manifest_sha256
+    assert payload["windows_sha256"] == windows_sha256
+    assert payload["provenance"]["input_sha256"] == {
+        "manifest": manifest_sha256,
+        "windows": windows_sha256,
+    }
     assert sorted(path.name for path in out.iterdir()) == ["indexes", "preflight.json"]
     cached = sorted((out / "indexes").iterdir(), key=lambda path: int(path.stem[3:]))
     assert [path.name for path in cached] == [f"chr{chrom}.tbi" for chrom in range(1, 23) if chrom != 2]
