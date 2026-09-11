@@ -199,3 +199,20 @@ equivalence, full COG validation and climate accuracy/uncertainty. Feature use
 still requires qualified genetic footprints and unchanged-population ablations.
 No raster, genetic observations, model, production schema, denominator, serving
 path or scientific map is changed by this documentation follow-up.
+
+## September 11, 2026 annual-consistency follow-up
+
+A later, separately frozen audit compared all twelve current 1981–2010 V2.1
+monthly precipitation rasters with the same-release bio12 annual raster. The
+[companion note](chelsa-annual-consistency-2026-09-11.md), public aggregate, and
+reproducible figure retain the exact whole-grid result: the post-hoc stored-integer
+formula `annual_raw == floor(sum(monthly_raw) / 10)` fails at 822,830 of
+902,015,154 comparable cells, and every failure has signed raw residual −10.
+
+This follow-up does not revise the September 10 audit's historical scope or
+resolve its remaining limitations. Monthly binary64 scale 0.1 and rational raw
+division by 10 remain distinct statements; bio12 stores no explicit SCALE/OFFSET,
+and GDAL's 1/0 returns remain unqualified defaults. The exact monthly/annual
+generator, land/coast support, climate accuracy, and held-out genetic gain remain
+unverified. Evidence stays `automated_proposal` / `pending`, with scientific model
+and publication eligibility false.
