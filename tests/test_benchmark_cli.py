@@ -140,6 +140,7 @@ def test_successful_runner_writes_explicit_b0_nonpublication_record(tmp_path):
         "genomeos/validation/benchmark.py",
         "genomeos/validation/count_baseline.py",
         "genomeos/validation/predictive.py",
+        "genomeos/validation/count_recurrence.py",
         "genomeos/validation/splits.py",
         "scripts/benchmark_allele_frequency.py",
     }

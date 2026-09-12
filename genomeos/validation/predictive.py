@@ -9,23 +9,14 @@ Their endpoints lie on the ``1 / AN`` frequency grid and coverage can therefore 
 nominal level, especially for small denominators or boundary-heavy predictions. Width and
 coverage must be interpreted together rather than treating nominal coverage as exactly attainable.
 
-Beta-binomial CDFs are summed exactly in fixed-size chunks, starting with the shorter support
-tail. If that tail has probability above one half, the small complementary tail is summed
-directly. This keeps memory bounded independently of ``AN`` but does not hide the
-computational cost: an exact interior CDF or quantile can still require time proportional to a
-support-tail length.
-
-The supported count domain is ``-1 <= AC <= AN <= 2**31 - 1`` (with ``AC=-1`` reserved for the
-CDF boundary). The upper bound keeps integer successor and floating log-mass arithmetic inside a
-tested domain far beyond any individual survey. Interior beta-binomial concentrations above
-``1 / sqrt(float epsilon)`` are refused because subtracting their log-beta normalizers no longer
-retains reliable probability-scale precision; callers must explicitly select binomial semantics
-rather than obtain that distribution through an unstable finite-concentration approximation.
-Log mass uses finite rising-factorial products instead of subtracting beta normalizers. For
-interior beta-binomial draws, ``log_prob`` (and hence diagnostics) additionally requires
-``AN <= 65_536``: its O(draws * AN) work is bounded to 16 support chunks per draw batch.
-CDF/quantile-only queries retain the larger count domain and their existing tail-sum arithmetic;
-binomial and exactly degenerate draws do not need the product and retain the larger domain too.
+Beta-binomial scoring through AN=65,536 uses complete normalized neighboring-count
+recurrence for every admitted concentration. Interior concentrations through 1e300 are
+supported; above the old 67,108,864 concentration bound all public operations require
+AN<=65,536, including endpoint queries and sampling. Low-concentration CDF and sampling
+retain the existing count domain through 2**31-1. Interior log mass retains AN<=65,536.
+Exactly degenerate means retain the larger count and finite-positive-concentration domain.
+Full-support CDF work is O(draws*AN); binary-search quantiles multiply that by query levels
+and log2(AN). Working arrays are bounded independently of the full support.
 """
 
 from __future__ import annotations
@@ -37,51 +28,20 @@ import pandas as pd
 from scipy.special import betaln, gammaln, logsumexp, xlog1py, xlogy
 from scipy.stats import binom
 
+from genomeos.validation.count_recurrence import (
+    beta_binomial_cdf as recurrence_cdf,
+)
+from genomeos.validation.count_recurrence import (
+    beta_binomial_log_partitions,
+)
+
 SEED = 42
 MAX_COUNT = int(np.iinfo(np.int32).max)
-_MAX_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
+_LEGACY_BETA_CONCENTRATION = 67_108_864.0
+_MAX_BETA_CONCENTRATION = 1e300
 _CDF_CHUNK_SIZE = 4096
 MAX_BETA_SCORING_COUNT = 65_536
-_MASS_DRAW_CHUNK_SIZE = 128
 _LOG_HALF = float(np.log(0.5))
-
-
-def _beta_product_log_mass(k: int, n: int, mean: np.ndarray, c: np.ndarray) -> np.ndarray:
-    """Log[choose(n,k) (p*c)_k ((1-p)*c)_(n-k) / (c)_n], in bounded chunks.
-
-    Pair numerator factors with denominator factors before taking logs. Near-one factors use
-    log1p of the complementary ratio, so a nearly certain endpoint retains its tiny negative
-    log mass. Small factors use log(numerator)-log(denominator) to avoid ratio underflow.
-    """
-    result = np.zeros(mean.shape)
-    smaller = min(k, n - k)
-    log_choose = 0.0
-    for start in range(1, smaller + 1, _CDF_CHUNK_SIZE):
-        index = np.arange(start, min(start + _CDF_CHUNK_SIZE, smaller + 1))
-        log_choose += float(np.sum(np.log1p((n - smaller) / index)))
-    for draw_start in range(0, mean.size, _MASS_DRAW_CHUNK_SIZE):
-        stop = draw_start + _MASS_DRAW_CHUNK_SIZE
-        p = mean[draw_start:stop, None]
-        concentration = c[draw_start:stop, None]
-        alpha, beta = p * concentration, (1.0 - p) * concentration
-        total = np.full(p.shape[0], log_choose)
-        for start in range(0, n, _CDF_CHUNK_SIZE):
-            index = np.arange(start, min(start + _CDF_CHUNK_SIZE, n))[None, :]
-            success = index < k
-            numerator = np.where(success, alpha + index, beta + (index - k))
-            denominator = concentration + index
-            complement = np.where(success, beta, alpha + k) / denominator
-            terms = np.log(numerator) - np.log(denominator)
-            near_one = complement < 0.5
-            terms[near_one] = np.log1p(-complement[near_one])
-            # At the first factor, use p itself before shape multiplication can round it.
-            if start == 0:
-                terms[:, 0] = np.log(p[:, 0]) if k else np.log1p(-p[:, 0])
-            total += np.sum(terms, axis=1)
-        result[draw_start:stop] = total
-    if np.any(~np.isfinite(result)) or np.any(result > 0.0):
-        raise FloatingPointError("beta-binomial log mass is outside the stable numeric domain")
-    return result
 
 
 def _numeric_array(value: object, name: str) -> np.ndarray:
@@ -200,7 +160,9 @@ def _validate_beta_shapes(mean: np.ndarray, concentration: np.ndarray) -> None:
     with np.errstate(over="ignore", under="ignore", invalid="ignore"):
         alpha = mean[interior] * concentration[interior]
         beta = (1.0 - mean[interior]) * concentration[interior]
-        log_normalizer = betaln(alpha, beta)
+        legacy = concentration[interior] <= _LEGACY_BETA_CONCENTRATION
+        log_normalizer = np.zeros(alpha.shape)
+        log_normalizer[legacy] = betaln(alpha[legacy], beta[legacy])
     unusable = (
         (alpha <= 0.0)
         | (beta <= 0.0)
@@ -273,7 +235,20 @@ class CountPredictive:
         count = _validated_ac(
             ac, denominator, self.n_observations, cdf_threshold=allow_cdf_boundary
         )
+        self._validate_count_domain(denominator)
         return count, denominator
+
+    def _validate_count_domain(self, an: np.ndarray) -> None:
+        if self.concentration is None:
+            return
+        high = (
+            (self.mean_draws > 0) & (self.mean_draws < 1)
+            & (self.concentration > _LEGACY_BETA_CONCENTRATION)
+        )
+        if np.any(high & (an[None, :] > MAX_BETA_SCORING_COUNT)):
+            raise ValueError(
+                f"high-concentration beta-binomial operations require AN <= {MAX_BETA_SCORING_COUNT}"
+            )
 
     def _draw_log_mass(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
         count = ac[np.newaxis, :]
@@ -293,15 +268,19 @@ class CountPredictive:
         if np.any(interior & (denominator > MAX_BETA_SCORING_COUNT)):
             raise ValueError(
                 f"interior beta-binomial log_prob requires AN <= {MAX_BETA_SCORING_COUNT}; "
-                "stable finite-product scoring exceeds its supported work budget"
+                "complete-support scoring exceeds its supported work budget"
             )
         for observation, n in enumerate(an):
             selected = interior[:, observation]
             if np.any(selected):
-                result[selected, observation] = _beta_product_log_mass(
-                    int(ac[observation]), int(n), mean[selected, observation],
-                    self.concentration[selected, observation],
+                parts = beta_binomial_log_partitions(
+                    mean[selected, observation], self.concentration[selected, observation],
+                    np.asarray(n), np.asarray(ac[observation]), array_module=np, max_count=int(n),
                 )
+                result[selected, observation] = parts.log_mass(array_module=np)
+                if n == 1:
+                    p = mean[selected, observation]
+                    result[selected, observation] = np.log(p) if ac[observation] else np.log1p(-p)
         return result
 
     def log_prob(self, ac: object, an: object) -> np.ndarray:
@@ -324,6 +303,15 @@ class CountPredictive:
         if self.concentration is None:
             return float(np.mean(binom.cdf(ac, an, means)))
         concentrations = self.concentration[:, observation]
+        if an <= MAX_BETA_SCORING_COUNT:
+            interior = (means > 0) & (means < 1)
+            values = np.where(means == 0, 1.0, 0.0)
+            if np.any(interior):
+                values[interior] = recurrence_cdf(
+                    means[interior], concentrations[interior], np.asarray(an), np.asarray(ac),
+                    array_module=np, max_count=an,
+                )
+            return float(np.mean(values))
         return float(
             np.mean(
                 [
@@ -360,6 +348,7 @@ class CountPredictive:
     def sample_counts(self, an: object, seed: int = SEED) -> np.ndarray:
         """One replicated count for every predictive draw and observation."""
         denominator = _validated_an(an, self.n_observations)
+        self._validate_count_domain(denominator)
         rng = np.random.default_rng(seed)
         probability = self.mean_draws
         if self.concentration is not None:
@@ -373,6 +362,7 @@ class CountPredictive:
     def quantiles(self, an: object, probabilities: object) -> np.ndarray:
         """Exact left-continuous count quantiles without materializing ``0, ..., AN``."""
         denominator = _validated_an(an, self.n_observations)
+        self._validate_count_domain(denominator)
         levels = _float_array(probabilities, "probabilities")
         if levels.ndim != 1 or len(levels) == 0:
             raise ValueError("probabilities must be a nonempty one-dimensional array")

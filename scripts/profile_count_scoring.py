@@ -29,6 +29,7 @@ if str(ROOT) in sys.path:
     sys.path.remove(str(ROOT))
 sys.path.insert(0, str(ROOT))
 
+import genomeos.validation.count_recurrence as count_recurrence_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.predictive_cupy as predictive_cupy_module  # noqa: E402
 from genomeos.validation.predictive import CountPredictive, predictive_diagnostics  # noqa: E402
@@ -45,6 +46,7 @@ QUANTILE_LEVELS = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
 REVISION_PATTERN = re.compile(r"[0-9a-fA-F]{40}")
 SCIENCE_SOURCE_FILES = {
     "genomeos/validation/predictive.py": Path(predictive_module.__file__).resolve(),
+    "genomeos/validation/count_recurrence.py": Path(count_recurrence_module.__file__).resolve(),
     "genomeos/validation/predictive_cupy.py": Path(predictive_cupy_module.__file__).resolve(),
     "scripts/profile_count_scoring.py": Path(__file__).resolve(),
 }

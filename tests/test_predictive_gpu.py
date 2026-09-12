@@ -164,7 +164,7 @@ import sys
 import numpy as np
 from genomeos.validation.predictive import CountPredictive
 assert "cupy" not in sys.modules
-CountPredictive(np.array([[0.2]])).cdf([0], [2])
+CountPredictive(np.array([[0.2]]), np.array([[1e300]])).cdf([0], [2])
 assert "cupy" not in sys.modules
 """
 
@@ -388,7 +388,7 @@ def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch)
     monkeypatch.setattr(evaluator, "_tail_logsum", injected_tail)
 
     with pytest.raises(FloatingPointError, match="component"):
-        evaluator(np.array([[0]]), np.array([2]))
+        evaluator(np.array([[0]]), np.array([65537]))
 
 
 @requires_gpu
@@ -403,7 +403,7 @@ def test_gpu_refuses_nan_cdf_component_before_accumulation(monkeypatch):
     )
 
     with pytest.raises(FloatingPointError, match="component"):
-        evaluator(np.array([[0]]), np.array([2]))
+        evaluator(np.array([[0]]), np.array([65537]))
 
 
 @requires_gpu
@@ -418,7 +418,7 @@ def test_gpu_exact_boundaries_override_irrelevant_invalid_tail_components(monkey
     )
 
     np.testing.assert_array_equal(
-        evaluator(np.array([[-1], [2]]), np.array([2])),
+        evaluator(np.array([[-1], [65537]]), np.array([65537])),
         np.array([[0.0], [1.0]]),
     )
 
@@ -465,3 +465,100 @@ def test_gpu_diagnostics_preserve_stable_near_degenerate_log_score():
     )
     np.testing.assert_allclose(gpu["log_score"], [np.log1p(-1e-16)], rtol=2e-14, atol=0.0)
     pd.testing.assert_frame_equal(cpu, gpu, rtol=1e-9, atol=1e-11)
+
+
+@requires_gpu
+@pytest.mark.parametrize(
+    "n,p,c",
+    [
+        (20, 0.05, 134217728.0),
+        (64, 0.5, 1e300),
+        (1025, 0.001, 1e12),
+        (4097, 0.5, 2.0),
+        (65536, 1e-16, 1e300),
+        (65536, 0.5, np.nextafter(2.0, np.inf)),
+        (1025, 0.5, 1e-10),
+        (1025, np.nextafter(1.0, 0.0), 1e300),
+    ],
+)
+def test_gpu_recurrence_direct_tails_against_independent_decimal(n, p, c):
+    import cupy as cp
+
+    from genomeos.validation.count_recurrence import beta_binomial_log_partitions
+    from tests.count_recurrence_oracle import verified_law
+    from tests.test_count_recurrence import assert_probability, support_queries
+
+    counts = support_queries(n, p)
+    reference = verified_law(n, p, c, counts)
+    parts = beta_binomial_log_partitions(
+        cp.asarray(p), cp.asarray(c), cp.asarray(n), cp.asarray(counts), array_module=cp, max_count=n
+    )
+    logs = cp.asnumpy(parts.log_mass(array_module=cp))
+    lower, upper = (cp.asnumpy(x) for x in parts.tails(array_module=cp))
+    public = CountPredictive(np.full((1, len(counts)), p), np.full((1, len(counts)), c), "cupy")
+    public_cdf = public.cdf(counts, [n] * len(counts))
+    for index, exact in enumerate(reference.log_mass):
+        rounded = float(exact)
+        assert abs(logs[index] - rounded) <= max(5e-10, 4 * abs(np.spacing(rounded)))
+        assert_probability(lower[index], reference.lower[index])
+        assert_probability(upper[index], reference.upper[index])
+        assert_probability(public_cdf[index], reference.lower[index])
+
+
+@requires_gpu
+def test_gpu_high_concentration_mixture_complete_diagnostics_and_ties():
+    means = np.resize([0.0, 1.0, 0.05, 0.5, 0.95], (129, 5))
+    concentrations = np.resize([2.0, 20.0, 134217728.0, 1e300, 1e12], means.shape)
+    an = np.array([1, 2, 20, 64, 1025])
+    ac = an // 2
+    cpu, gpu = (CountPredictive(means, concentrations, backend) for backend in ["scipy", "cupy"])
+    levels = [0.1, 0.25, 0.5, 0.75, 1.0]
+    np.testing.assert_array_equal(cpu.quantiles(an, levels), gpu.quantiles(an, levels))
+    pd.testing.assert_frame_equal(
+        predictive_diagnostics(cpu, ac, an), predictive_diagnostics(gpu, ac, an), rtol=1e-9, atol=1e-11
+    )
+    for c in [1e-10, 2.0, 1e300]:
+        law = CountPredictive(np.array([[0.5]]), np.array([[c]]), "cupy")
+        assert law.cdf([512], [1025])[0] == 0.5
+        assert law.quantiles([1025], [0.5])[0, 0] == 512
+    p = np.nextafter(1.0, 0.0)
+    bernoulli = CountPredictive(np.array([[p]]), np.array([[1e300]]), "cupy")
+    np.testing.assert_array_equal(
+        bernoulli.quantiles([1], [1 - p, np.nextafter(1 - p, 1), 1]), [[0], [1], [1]]
+    )
+
+
+@requires_gpu
+@pytest.mark.parametrize("invalid", [np.nan, -0.25, 1.25])
+def test_gpu_recurrence_refuses_invalid_components_before_mixture(monkeypatch, invalid):
+    import genomeos.validation.predictive_cupy as backend
+
+    evaluator = CuPyCDF(np.array([[0.2], [0.3]]), np.full((2, 1), 1e300))
+    cp = evaluator._cp
+    monkeypatch.setattr(backend, "recurrence_cdf", lambda *a, **k: cp.asarray([[0.25, invalid]]))
+    with pytest.raises(FloatingPointError, match="component"):
+        evaluator(np.array([[0]]), np.array([2]))
+
+
+def test_profiler_binds_the_executed_recurrence_source_digest():
+    import hashlib
+
+    relative = "genomeos/validation/count_recurrence.py"
+    sources = PROFILE_MODULE._resolved_sources()
+    assert sources[relative] == hashlib.sha256((ROOT / relative).read_bytes()).hexdigest()
+
+
+def test_profiler_rejects_recurrence_import_outside_checkout(monkeypatch, tmp_path):
+    monkeypatch.setitem(
+        PROFILE_MODULE.SCIENCE_SOURCE_FILES,
+        "genomeos/validation/count_recurrence.py",
+        tmp_path / "outside.py",
+    )
+    with pytest.raises(ValueError, match="outside this checkout"):
+        PROFILE_MODULE._resolved_sources()
+
+
+@requires_gpu
+def test_gpu_preserves_independent_oracle_reference_count_quantile_fixture():
+    law = CountPredictive(np.array([[1 / 3]]), np.array([[6.0]]), "cupy")
+    np.testing.assert_array_equal(law.quantiles([5], [0.25, 0.5, 0.75]), [[1], [1], [3]])

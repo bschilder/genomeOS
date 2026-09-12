@@ -155,22 +155,40 @@ permission does not qualify any source or publish any scientific result in this 
 
 ## Count-scoring numerical domain
 
-`CountPredictive.log_prob` evaluates interior beta-binomial draws by finite products of paired
-probability factors, using `log1p` near one instead of subtracting nearly equal log-beta
-normalizers. Its deterministic work is O(draws × AN); it refuses AN above 65,536 for any interior
-beta-binomial draw. This cap limits each draw batch to 16 support chunks, with temporary factor
-arrays bounded by 128 draws × 4,096 terms (524,288 float64 elements each). It is an engineering
-work budget, not a scientific threshold or a binomial approximation. Diagnostics call this scorer
-first and inherit its refusal. Binomial and exact p=0/1 draws retain the existing AN maximum
-2,147,483,647, as do CDF/quantile-only queries with their existing bounded tail-sum arithmetic.
-The existing beta shape/concentration checks also remain in force.
+`CountPredictive` evaluates the finite beta-binomial law using complete-support normalized
+neighboring-count recurrence for every admitted interior draw with AN at most 65,536. The same
+below/equal/above partitions supply log mass and both tails. A legal mode anchors the relative
+weights; logarithmic shape factors preserve tiny means without first rounding their products.
+Tree prefix sums and compensated carries bound accumulated rounding across support chunks.
+The target mass is isolated before normalization, preserving nearly certain negative log masses.
+AN=1 is Bernoulli exactly; symmetric central and uniform CDF identities preserve quantile ties.
+
+Interior concentration may exceed 67,108,864 through 1e300 when AN is at most 65,536. Above
+1e300, or where positive finite usable shapes cannot be represented, construction refuses the
+input. Legacy beta-normalizer validity checks remain for concentrations at most 67,108,864;
+high concentrations never pass through that normalizer. High-concentration interior draws with
+AN above 65,536 are refused by mass, CDF, quantiles and sampling, including trivial endpoints,
+before optional backend access. Interior log mass retains the 65,536 count limit at every
+concentration. For lower concentrations, CDF/quantile-only and sampling queries retain AN through
+2,147,483,647 and their existing larger-count arithmetic and limitations. Exactly degenerate
+p=0/1 draws and explicitly selected binomial laws retain their previous count domains.
+
+A complete CDF costs O(draws × AN); binary-search quantiles multiply that cost by query levels
+and approximately log2(AN). This also changes the cost of low-concentration short-tail queries.
+Each recurrence working grid has at most four query rows, 128 draws and 1,024 support entries;
+row/draw axes are flattened inside each bounded working batch (at most 512 scalar laws). Current and copied tree-prefix
+buffers, factor/ratio temporaries, masks, indices and reduction exponentials obey this bound.
+Carries and three partition accumulators have one value per scalar law. No working dimension
+spans the complete support. Allocator pool reservation, live arrays, process RSS and device-wide
+high-water measurements are distinct quantities; profiling must identify the measured scope.
 
 The accepted quantile levels remain `0 < q <= 1`; the 100% endpoint is the exact mixture support
-maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Earlier
-GPU timing reports identify their original source snapshots and require fresh hardware evidence
-for these revised scoring and endpoint paths. That refresh is now recorded in the
-[boundary-fix hardware evidence](research/count-scoring-boundary-refresh-2026-09-09.md), with
-116 actual-device tests and both synthetic workloads passing; it does not establish AF accuracy.
+maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Sampling
+retains the seeded beta-then-binomial construction. Where latent beta variation is below floating
+resolution, empirical samples cannot distinguish finite concentration from its limiting law;
+this is not a new sampler branch. Earlier hardware reports remain evidence for their original
+source revisions. This recurrence requires new complete-workflow CPU/GPU timing, memory and
+parity evidence; numerical checks do not establish biological calibration or AF accuracy.
 
 ## Optional GPU count-CDF profiling
 

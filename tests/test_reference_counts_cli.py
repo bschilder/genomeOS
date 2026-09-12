@@ -98,6 +98,7 @@ def test_complete_run_writes_reproducible_artifact_contract(tmp_path):
         "genomeos/validation/benchmark.py",
         "genomeos/validation/count_baseline.py",
         "genomeos/validation/predictive.py",
+        "genomeos/validation/count_recurrence.py",
         "genomeos/validation/reference_counts.py",
         "scripts/benchmark_reference_counts.py",
     }

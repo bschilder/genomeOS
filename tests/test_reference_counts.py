@@ -61,9 +61,20 @@ def test_exact_marginal_matches_beta_binomial():
         fit.marginal_predictive.cdf([2], [5]),
         [betabinom.cdf(2, 5, 2, 4)],
     )
+    # Exact binary64 p=1/3,c=6 has CDF(1)>0.5; SciPy's separately rounded
+    # alpha=2,beta=4 CDF rounds below the tie. Keep counts/levels and use an
+    # independent absolute oracle for the discrete endpoint, not a CDF epsilon.
+    from decimal import Decimal
+
+    from tests.count_recurrence_oracle import verified_law
+
+    reference = verified_law(5, float(1 / 3), 6.0, tuple(range(6)))
+    expected = [1, 1, 3]
+    for q, count in zip((0.25, 0.5, 0.75), expected, strict=True):
+        assert reference.lower[count - 1] < Decimal.from_float(q) <= reference.lower[count]
     np.testing.assert_array_equal(
         fit.marginal_predictive.quantiles([5], [0.25, 0.5, 0.75]),
-        np.asarray([[betabinom.ppf(q, 5, 2, 4)] for q in (0.25, 0.5, 0.75)]),
+        np.asarray(expected)[:, None],
     )
 
 

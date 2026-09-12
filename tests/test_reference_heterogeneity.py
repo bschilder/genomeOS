@@ -386,12 +386,27 @@ def test_nonfinite_diagnostic_error_retains_other_finite_variant_diagnostics(
     assert raised.value.divergence_count == 0
 
 
-def test_fit_refuses_concentration_outside_count_predictive_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fit_admits_concentration_above_old_count_predictive_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The original old-cap refusal fixture is now inside the declared scoring domain."""
     inference_data = idata_for(("v",))
     inference_data.posterior["rho"].values[:] *= 1e-10
     install_sampler(monkeypatch, inference_data)
+    fitted = fit_reference_population_heterogeneity([row("train")], config=config())
+    concentration = (1.0 - fitted.rho_draws) / fitted.rho_draws
+    assert np.all((concentration > 67108864.0) & (concentration <= 1e300))
+
+
+def test_fit_refuses_concentration_outside_count_predictive_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Fit construction rejects unusable scoring shapes without changing sampler diagnostics."""
+    from dataclasses import replace
+
+    install_sampler(monkeypatch, idata_for(("v",)))
+    fitted = fit_reference_population_heterogeneity([row("train")], config=config())
+    rho = fitted.rho_draws * 1e-301
+    assert np.all(np.isfinite(rho) & (rho > 0))
+    assert np.all((1.0 - rho) / rho > 1e300)
     with pytest.raises(ValueError, match="stable numeric domain"):
-        fit_reference_population_heterogeneity([row("train")], config=config())
+        replace(fitted, rho_draws=rho)
 
 
 def fitted_for_prediction(monkeypatch: pytest.MonkeyPatch):
