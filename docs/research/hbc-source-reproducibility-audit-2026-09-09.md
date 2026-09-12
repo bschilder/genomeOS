@@ -1,0 +1,33 @@
+# HbC source and reproducibility audit — September 9, 2026
+
+Status: source-discovery and methods notes for [#182](https://github.com/bschilder/genomeOS/issues/182), advancing WP0/WP1 of [#189](https://github.com/bschilder/genomeOS/issues/189). This is **not** a reviewed field-evidence record, observation import, reproduced frequency or validated surface.
+
+**Scientific objective:** determine whether this published HbC study can support a traceable benchmark and what its validation actually establishes. **Acceptance evidence:** recover original survey counts and source metadata, reproduce the three frequencies required by #182, then independently review the evidence. **Component:** a future source-qualified observation adapter, not inferred-map ingestion. **Refusal:** no counts, coordinates, dates, sampling footprints or rights may be invented. Currently **0/3 frequencies reproduced**; no observations admitted.
+
+## Sources inspected
+
+- Piel et al., *The distribution of haemoglobin C and its prevalence in newborns in Africa* (2013), DOI `10.1038/srep01671`: full publisher article text, including methods and rights. The article's rights section specifies CC BY 3.0 Unported; that is not a blanket licence for every underlying source. [Publisher article](https://www.nature.com/articles/srep01671).
+- The linked 24-page supplement: all extracted text read; relevant equations, validation figure and table inspected visually on S4, S5, S8, S9 and S12–S15. Not every supplementary page was visually inspected. PDF SHA256 `54c59ecb776f6d5030ad98cb76f58408edd3584958484e64abf23d6d667c4861`. Poppler emitted JP2-decoding warnings on some figure pages; rendered relevant content was inspected rather than assuming exit status proved fidelity. [Publisher supplement](https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fsrep01671/MediaObjects/41598_2013_BFsrep01671_MOESM1_ESM.pdf).
+- Both author repository trees were inspected without executing code. `ibd-world` default revision `cd10e81b5ab401067ad391fb1603b863ec90fee4`, HbC branch `4cfa13547bcd216eb1cadcc607e3f33d3397ab8b`, and the September 2011 HbC-coefficient revision `adc09ddfa90b3066e689efcd76de817e680233b9` were distinguished. Full `ibdw/model.py` was read at those three revisions. The generic wrapper tree was inspected at `b44c75e2fa1fa462f7bce1721e5dac3841be33d9`; its implementation was not fully read. [HbC branch](https://github.com/malaria-atlas-project/ibd-world/tree/4cfa13547bcd216eb1cadcc607e3f33d3397ab8b), [generic wrapper](https://github.com/malaria-atlas-project/generic-mbg/tree/b44c75e2fa1fa462f7bce1721e5dac3841be33d9).
+
+## What the historical validation does and does not establish
+
+The article compiles 445 locations from 174 sources and renders an African map on a 5 km grid. That grid spacing is a numerical output choice, not an independently established spatial resolving power. [Article, Results and Methods](https://www.nature.com/articles/srep01671).
+
+Supplement S14 describes a random 20-survey holdout and 186 training surveys, not buffered-region or external-study validation. S4's caption and embedded map legend assign opposite colours to held-out versus training points; do not recover split membership from colour. S9 allows gazetteer-derived centroids and several footprint classes, including an unbounded largest class. Those descriptions do not supply a universal uncertainty radius. [Supplement, S4, S9, S14](https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fsrep01671/MediaObjects/41598_2013_BFsrep01671_MOESM1_ESM.pdf).
+
+GenomeOS should therefore test explicit sampling footprints and source dependence, retain small-holdout uncertainty, and distinguish interpolative evidence from unsampled-region accuracy. Reproducing a historical random split would be a separate parity exercise, not the new model's promotion gate.
+
+## Paper/code ambiguities to preserve, not silently resolve
+
+Supplement S12 prints a cubic coefficient order opposite to the ascending-power evaluation in the historical HbC-coefficient source. It also prints a posterior-mean denominator containing an additional count term. The source uses `(pos+1)/(pos+neg+2)` with binomial total `pos+neg`. The mapping of actual source data into those arguments has not been recovered. These discrepancies preclude claiming an exact paper reproduction from the formula alone. [Supplement S12](https://media.springernature.com/original/springer-static/esm/art%3A10.1038%2Fsrep01671/MediaObjects/41598_2013_BFsrep01671_MOESM1_ESM.pdf), [historical HbC-coefficient source](https://github.com/malaria-atlas-project/ibd-world/blob/adc09ddfa90b3066e689efcd76de817e680233b9/ibdw/model.py).
+
+The HbC branch head is not an interchangeable replacement: its empirical-link code is commented out, its prior constraint disabled, and its covariance has short/long components. A branch name is not a publication provenance record. The earlier coefficient revision resembles the supplement more closely but has not been proven to be the executed publication revision. [HbC branch-head model](https://github.com/malaria-atlas-project/ibd-world/blob/4cfa13547bcd216eb1cadcc607e3f33d3397ab8b/ibdw/model.py).
+
+The inspected default-branch LICENSE explicitly includes NonCommercial and ShareAlike restrictions even though its README uses shorter wording; model-file headers also say BY-NC-SA. No author code was copied into genomeOS or executed. Inspect the licence at any exact revision selected for later reuse; publication openness is not software reuse clearance. [Inspected licence](https://github.com/malaria-atlas-project/ibd-world/blob/cd10e81b5ab401067ad391fb1603b863ec90fee4/LICENSE).
+
+## Remaining source work and model implications
+
+The supplement supplies national predictions, methods and bibliography, not a survey-level count/coordinate table. No such table appeared in the two inspected `ibd-world` trees or the inspected generic-wrapper tree; this does not prove none exists elsewhere or in history. Seek the source-level data through the documented public evidence workflow and original studies. Do not turn predicted national burdens or pixels into observed allele frequencies.
+
+The useful modeling lesson is to diagnose tail behaviour at downstream quantities as well as central intervals. S12–S15 discuss prior-tail constraints and draw-wise nonlinear burden integration. For genomeOS, compare justified prior/link alternatives inside training partitions, validate count predictions independently, and propagate coherent draws through burden calculations. Never tune a map to look plausible or square its posterior mean and call that a posterior burden. Existing clinical publication gates remain unchanged.
