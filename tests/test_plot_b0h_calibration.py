@@ -22,7 +22,6 @@ from genomeos.validation.heterogeneity_report import read_study_reduction
 
 GROUP_DENOMINATORS = {0: 512, 1: 384, 2: 64, 3: 1, 4: 8}
 ROOT = Path(__file__).parents[1]
-PYTENSOR_CACHE = "/private/tmp/genomeos-calibration-report-cache-20260911"
 MODE_LABELS = ("correct", "prior-only", "cyclic-rho")
 QUANTITY_LABELS = (
     "mean",
@@ -254,18 +253,55 @@ def test_accounting_figure_artists_bind_every_case_once_in_each_stage_panel():
         plt.close(figure)
 
 
-def _subprocess_environment() -> dict[str, str]:
+def _subprocess_environment(cache_root: Path) -> dict[str, str]:
     return {
         **os.environ,
         "PYTHONPATH": str(ROOT),
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTENSOR_FLAGS": (
-            f"base_compiledir={PYTENSOR_CACHE}/pytensor-base,"
-            f"compiledir={PYTENSOR_CACHE}/pytensor"
+            f"base_compiledir={cache_root}/pytensor-base,"
+            f"compiledir={cache_root}/pytensor"
         ),
-        "MPLCONFIGDIR": f"{PYTENSOR_CACHE}/mpl",
-        "XDG_CACHE_HOME": f"{PYTENSOR_CACHE}/xdg",
+        "MPLCONFIGDIR": str(cache_root / "mpl"),
+        "XDG_CACHE_HOME": str(cache_root / "xdg"),
     }
+
+
+def test_child_process_cache_paths_are_pytest_owned_and_ignore_host(tmp_path, monkeypatch):
+    poisoned = "/private/tmp/poisoned-host-cache"
+    monkeypatch.setenv(
+        "PYTENSOR_FLAGS",
+        f"base_compiledir={poisoned}/pytensor-base,compiledir={poisoned}/pytensor",
+    )
+    monkeypatch.setenv("MPLCONFIGDIR", f"{poisoned}/mpl")
+    monkeypatch.setenv("XDG_CACHE_HOME", f"{poisoned}/xdg")
+    cache_root = tmp_path / "child-cache"
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import json, os; "
+                "print(json.dumps({name: os.environ[name] for name in "
+                "('PYTENSOR_FLAGS', 'MPLCONFIGDIR', 'XDG_CACHE_HOME')}))"
+            ),
+        ],
+        env=_subprocess_environment(cache_root),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert json.loads(completed.stdout) == {
+        "PYTENSOR_FLAGS": (
+            f"base_compiledir={cache_root}/pytensor-base,"
+            f"compiledir={cache_root}/pytensor"
+        ),
+        "MPLCONFIGDIR": f"{cache_root}/mpl",
+        "XDG_CACHE_HOME": f"{cache_root}/xdg",
+    }
+    assert poisoned not in completed.stdout
 
 
 def _run_report(
@@ -289,7 +325,7 @@ def _run_report(
             str(output),
         ],
         cwd=ROOT,
-        env=_subprocess_environment(),
+        env=_subprocess_environment(output.parent / "subprocess-cache"),
         capture_output=True,
         text=True,
     )
@@ -452,7 +488,7 @@ def test_demo_cli_writes_deterministic_canonical_bytes_and_refuses_overwrite(tmp
                 str(output),
             ],
             cwd=ROOT,
-            env=_subprocess_environment(),
+            env=_subprocess_environment(tmp_path / "subprocess-cache"),
             capture_output=True,
             text=True,
         )
@@ -476,7 +512,7 @@ def test_demo_cli_writes_deterministic_canonical_bytes_and_refuses_overwrite(tmp
             str(outputs[0]),
         ],
         cwd=ROOT,
-        env=_subprocess_environment(),
+        env=_subprocess_environment(tmp_path / "subprocess-cache"),
         capture_output=True,
         text=True,
     )
