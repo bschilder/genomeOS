@@ -20,6 +20,13 @@
           "normalized_variant_id": "chr11-5227002-T-A",
           "rsid": "rs334",
           "cache_file": "external/dbsnp/rs334.json"
+        },
+        {
+          "source": "alphagenome",
+          "method": "atlas_lookup",
+          "normalized_variant_id": "chr11-5227002-T-A",
+          "model_version": "AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09",
+          "cache_file": "external/alphagenome/chr11-5227002-t-a.json"
         }
       ]
     },

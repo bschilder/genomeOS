@@ -199,7 +199,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
 
   async getExternalInfo(
     ref: ArtifactRef,
-    source: 'gnomad' | 'dbsnp',
+    source: 'gnomad' | 'dbsnp' | 'alphagenome',
     signal?: AbortSignal,
     progress?: TransferProgressListener,
   ): Promise<ExternalInfo> {
@@ -231,7 +231,11 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
         (info.source !== 'gnomad' ||
           info.query.dataset !== resource.dataset)) ||
       (resource.source === 'dbsnp' &&
-        (info.source !== 'dbsnp' || info.query.rsid !== resource.rsid))
+        (info.source !== 'dbsnp' || info.query.rsid !== resource.rsid)) ||
+      (resource.source === 'alphagenome' &&
+        (info.source !== 'alphagenome' ||
+          info.method !== resource.method ||
+          info.record.model_version !== resource.model_version))
     ) {
       throw new Error(`${source} cache query does not match the catalog`);
     }

@@ -95,6 +95,19 @@ const externalResourceSchema = z.discriminatedUnion('source', [
   z.strictObject({
     cache_sha256: sha256,
     cache_url: nonEmpty,
+    // `method` carries the lookup-versus-inference split. `source` names the provider and stays
+    // 'alphagenome' for both, so a future model-inference entry is also legitimately AlphaGenome
+    // without inheriting the coordinate requirement below.
+    method: z.literal('atlas_lookup'),
+    model_version: nonEmpty,
+    normalized_variant_id: z
+      .string()
+      .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
+    source: z.literal('alphagenome'),
+  }),
+  z.strictObject({
+    cache_sha256: sha256,
+    cache_url: nonEmpty,
     normalized_variant_id: z
       .string()
       .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
@@ -411,6 +424,32 @@ export const externalInfoSchema = z.discriminatedUnion('source', [
       }),
     }),
     source: z.literal('dbsnp'),
+  }),
+  z.strictObject({
+    ...externalBaseSchema,
+    schema_version: z.literal(1),
+    // The coordinate shape belongs to the Atlas AVI lookup, which is keyed by coordinate and
+    // ref/alt. It is not a property of AlphaGenome the model: the model is sequence-to-function, so
+    // it could in principle score an allele that carries no coordinate. A model-inference method
+    // would be a separate member without this regex.
+    method: z.literal('atlas_lookup'),
+    query: z.strictObject({
+      normalized_variant_id: z
+        .string()
+        .regex(
+          /^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/,
+        ),
+    }),
+    record: z.strictObject({
+      avi_phred: finiteNumber.nonnegative(),
+      avi_raw_score: finiteNumber,
+      avi_tail_quantile: probability,
+      deep_link: z.url(),
+      dominant_modality: nonEmpty,
+      model_version: nonEmpty,
+      prediction_class: z.literal('predicted_impact'),
+    }),
+    source: z.literal('alphagenome'),
   }),
 ]);
 
