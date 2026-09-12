@@ -5,8 +5,9 @@ host-resident draw and count arrays through a public typed interface; validation
 owned by ``genomeos.validation.predictive``. CuPy is imported only when ``CuPyCDF`` is explicitly
 constructed, and a missing library or CUDA device is an error rather than a CPU fallback.
 
-Beta-binomial tails are exact finite sums, pivoting at probability one half so subtraction always
-uses the directly summed smaller tail. Temporary log-mass grids are bounded by
+Beta-binomial CDFs through AN=65,536 use shared complete-support recurrence. Larger
+low-concentration counts retain finite beta-normalizer tail sums, pivoting at probability
+one half so subtraction uses the directly summed smaller tail. Temporary log-mass grids are bounded by
 ``CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE`` float64 elements and no
 array dimension depends on the complete allele-number support.
 """
@@ -16,6 +17,9 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+
+from genomeos.validation.count_recurrence import ProbabilityMean
+from genomeos.validation.count_recurrence import beta_binomial_cdf as recurrence_cdf
 
 CDF_ROW_CHUNK_SIZE = 4
 CDF_DRAW_CHUNK_SIZE = 128
@@ -138,7 +142,49 @@ class CuPyCDF:
 
     def _beta_binomial_cdf(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
         cp = self._cp
+        output = np.empty(ac.shape)
+        small = an <= 65_536
+        if np.any(~small):
+            # Select legacy columns BEFORE constructing any beta normalizer. High-c
+            # interior draws in these columns have already been refused by the caller.
+            output[:, ~small] = self._legacy_beta_binomial_cdf(
+                ac[:, ~small], an[~small], np.flatnonzero(~small)
+            )
+        for observation in np.flatnonzero(small):
+            n = int(an[observation])
+            for start in range(0, ac.shape[0], CDF_ROW_CHUNK_SIZE):
+                stop = min(start + CDF_ROW_CHUNK_SIZE, ac.shape[0])
+                k = cp.asarray(ac[start:stop, observation])[:, None]
+                average = None
+                for draw in range(0, self._mean.shape[0], CDF_DRAW_CHUNK_SIZE):
+                    mean = self._mean[draw : draw + CDF_DRAW_CHUNK_SIZE, observation][None, :]
+                    concentration = self._concentration[
+                        draw : draw + CDF_DRAW_CHUNK_SIZE, observation
+                    ][None, :]
+                    interior = (mean > 0) & (mean < 1)
+                    # Safe working values are only for lanes overwritten analytically.
+                    values = recurrence_cdf(
+                        cp.where(interior, mean, 0.5), cp.where(interior, concentration, 2.0),
+                        cp.asarray(n), k, array_module=cp, max_count=n,
+                    )
+                    values = cp.where(mean == 0, 1.0, cp.where(mean == 1, 0.0, values))
+                    values = cp.where(k < 0, 0.0, cp.where(k >= n, 1.0, values))
+                    if bool(cp.asnumpy(cp.any(~cp.isfinite(values) | (values < 0) | (values > 1)))):
+                        raise FloatingPointError("CuPy CDF produced an invalid component probability")
+                    average = (
+                        ProbabilityMean.from_values(values, array_module=cp)
+                        if average is None else average.add(values, array_module=cp)
+                    )
+                assert average is not None  # Validated draws are nonempty.
+                output[start:stop, observation] = cp.asnumpy(average.value)
+        return output
+
+    def _legacy_beta_binomial_cdf(
+        self, ac: np.ndarray, an: np.ndarray, observation_indices: np.ndarray
+    ) -> np.ndarray:
+        cp = self._cp
         count, denominator, observation = self._query_arrays(ac, an)
+        observation = cp.asarray(observation_indices)[observation]
         output = cp.empty(count.shape, dtype=cp.float64)
         for row_start in range(0, count.size, CDF_ROW_CHUNK_SIZE):
             row_stop = min(row_start + CDF_ROW_CHUNK_SIZE, count.size)
@@ -154,6 +200,7 @@ class CuPyCDF:
                 boundary_one = mean == 1.0
                 interior = ~(boundary_zero | boundary_one)
                 safe_mean = cp.where(interior, mean, 0.5)
+                concentration = cp.where(interior, concentration, 2.0)
                 lower_is_shorter = (k + 1) <= (n - k)
                 short_start = cp.where(lower_is_shorter, 0, k + 1)
                 short_stop = cp.where(lower_is_shorter, k + 1, n + 1)

@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT))
 import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.validation.benchmark as benchmark_module  # noqa: E402
 import genomeos.validation.count_baseline as count_baseline_module  # noqa: E402
+import genomeos.validation.count_recurrence as count_recurrence_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.reference_counts as reference_counts_module  # noqa: E402
 from genomeos.validation.benchmark import (  # noqa: E402
@@ -188,6 +189,7 @@ def _science_hashes() -> dict[str, str]:
         "genomeos/validation/benchmark.py": benchmark_module,
         "genomeos/validation/count_baseline.py": count_baseline_module,
         "genomeos/validation/predictive.py": predictive_module,
+        "genomeos/validation/count_recurrence.py": count_recurrence_module,
         "genomeos/validation/reference_counts.py": reference_counts_module,
     }
     result = {}
