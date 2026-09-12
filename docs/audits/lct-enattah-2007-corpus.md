@@ -49,10 +49,77 @@ for rs4988235 = their SNP4 C/T-13910).
    make_search_id helper (database, query, executed_at), and the corpus
    test now validates searches.tsv in addition to the evidence ledgers.
 
+## Provenance backfill and discovery correction (2026-09-10, issue #237)
+
+The slice was merged without a committed builder and without the raw ESearch
+payloads, so nothing in the repository could reproduce the 37-row manifest or
+re-derive the 12 record identifiers. #237 asked for that to be fixed.
+
+Added: `scripts/build_lct_enattah_fixture.py` (every path through `argparse`,
+replay by default, `--extracted-at` required, field rows driven off
+`TRACKED_FIELDS`), `payloads/Q1.json`–`Q3.json` (unmodified ESearch response
+bytes), and `PROVENANCE.json`. The builder reproduces `evidence.tsv` and
+`field_evidence.tsv` byte-for-byte, and all 12 `source_record_id` values
+re-derive through the project's `make_source_record_id` helper.
+
+**The merged manifest was truncated, and nothing recorded it.** Re-executing the
+three queries against PubMed (2026-09-12, reproducing the 2026-09-10 re-capture
+byte-for-byte):
+
+| query | merged candidates | PubMed `count` |
+|---|---|---|
+| Q1 `Enattah[Author] AND 13910[All Fields]` | 11 | 11 |
+| Q2 `Bersaglieri[Author] AND lactase[All Fields]` | 1 | 1 |
+| Q3 `rs4988235[All Fields] AND (population[Title/Abstract] OR frequency[Title/Abstract])` | 25 | **58** |
+
+Q1 and Q2 reproduce exactly. Q3 does not, and the cause is not a changed index:
+all 25 merged candidates are still present in the 58, and they are exactly the
+set PubMed returns when the same query is run with `retmax=25`. The merged
+capture was truncated at 25 and the manifest never recorded the cap.
+
+This is the failure mode `docs/literature-evidence-curation.md` names when it
+explains why the manifest reader refuses a `count` that disagrees with the
+returned `idlist`: "a truncated or paginated response otherwise becomes a short,
+confident-looking manifest." `scripts/fetch_pubmed_manifest.py` fetches with
+`retmax=100000` and rejects that disagreement, so the merged file could not have
+come from the documented tool.
+
+Corrected state:
+
+- `searches.pending.tsv` — 70 rows, all pending, `lct-rs4988235@2026-09-12.1`,
+  `build_manifest()` applied to the committed payloads.
+- `searches.tsv` — **not rewritten.** It remains the merged 37-row manifest at
+  `lct-rs4988235@2026-09-06.1`, with its two `included` and 35 `pending`
+  decisions exactly as merged.
+
+Re-deriving a manifest from a re-capture changes `search_id` by construction,
+because the id hashes `(database, query, executed_at)`. Superseding a published
+manifest version is therefore a data revision rather than a backfill, and it is
+tracked separately (issue #272). While that is open the two files deliberately
+share no identifier: the published revision describes the truncated capture, and
+`searches.pending.tsv` is the corrected snapshot committed beside it. No
+candidate was dropped (0 removed, 33 added).
+
+Payload hashes as committed:
+
+| payload | bytes | sha256 |
+|---|---|---|
+| `Q1.json` | 464 | `7b7b22d6edefdf69b40c51a3baaf53ce347fd3e5f5f4030947a22fd3b831741b` |
+| `Q2.json` | 1033 | `f474ffb457fdcad2bfe82aa5189a503e8cef76f7c628284f1b4c0ed0f3d33f3b` |
+| `Q3.json` | 1035 | `fe440da7c93ebad7442cfa6be31570762cbe701c78d6597757e765efa4297edf` |
+
+Consequence for the slice: 33 real matches for the third query were never
+recorded, so the discovery half of this corpus was less complete than its
+coverage report stated. They are now visible as unscreened, which is the honest
+state. Screening them, and republishing the manifest over the corrected
+snapshot, are not part of this backfill.
+
 ## Validator state (frozen contracts)
 
 - validate_literature_tables: PASS (12 evidence + 228 field rows)
-- validate_search_manifest: PASS (37 candidate rows, 3 unique searches)
+- validate_search_manifest: PASS (searches.pending.tsv 70 candidate rows, 3 unique
+  searches; the merged searches.tsv 37 candidate rows, 3 unique searches, left as
+  merged — see the provenance backfill above)
 - normalization_status recomputed: verified (all 12)
 - reuse_status recomputed: no_restriction_found (all 12)
 - extraction_method: automated_proposal (all 12)
