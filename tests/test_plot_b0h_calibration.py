@@ -218,25 +218,38 @@ def test_accounting_figure_artists_bind_every_case_once_in_each_stage_panel():
                     for track, study in groups
                 ]
             )
-            actual = np.asarray(axis.images[0].get_array())
+            image = axis.images[0]
+            actual = np.asarray(image.get_array())
+            assert (image.norm.vmin, image.norm.vmax) == (0, 512)
             assert np.array_equal(actual, expected)
             assert int(actual.sum()) == 1938
             assert tuple(actual.sum(axis=1)) == tuple(
                 GROUP_DENOMINATORS[study] for _, study in groups
             )
             assert set(status_labels) == {getattr(row, stage) for row in reduction.cases}
-            assert {text.get_text() for text in axis.texts} == {
-                str(int(value)) for value in actual.flat
+            assert len(axis.texts) == actual.size
+            assert {text.get_position(): text.get_text() for text in axis.texts} == {
+                (column_index, row_index): str(int(actual[row_index, column_index]))
+                for row_index, column_index in np.ndindex(actual.shape)
             }
             assert all(text.get_fontsize() >= 8 for text in axis.texts)
             assert all(label.get_fontsize() >= 9 for label in axis.get_xticklabels())
             assert all(label.get_fontsize() >= 9 for label in axis.get_yticklabels())
         footer = next(axis for axis in figure.axes if axis.get_gid() == "accounting-footer")
         assert not footer.axison
-        footer_text = "\n".join(text.get_text() for text in footer.texts)
-        assert "publication eligible: false" in footer_text
-        assert "unresolved_case_or_required_diagnostic_outcomes" in footer_text
-        assert "correct_family_discrepancy_detected" in footer_text
+        expected_claim = (
+            "recorded claim eligibility: false | publication eligible: false\n"
+            f"claim reasons: {', '.join(reduction.claim_reasons)}"
+        )
+        expected_limitation = (
+            "Each panel counts all 1,938 cases exactly once on a shared sequential blue "
+            "0–512 ramp. Stages share cases and are not independent observations; "
+            "not_admitted can mean an unnecessary retry or a blocked downstream stage."
+        )
+        assert [text.get_text() for text in footer.texts] == [
+            expected_claim,
+            expected_limitation,
+        ]
     finally:
         plt.close(figure)
 
