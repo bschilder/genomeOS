@@ -8,6 +8,8 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from genomeos.registry.variants import load as load_variant_registry
+from genomeos.registry.variants import normalized_identity
 from scripts import export_atlas_web
 
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
@@ -135,6 +137,25 @@ def test_public_catalog_inventory_has_two_map_and_twenty_eight_afnd_entries() ->
     assert sum(entry["variant_id"].startswith("cyt:") for entry in entries) == 4
     assert sum(entry["variant_id"].startswith("hla:") for entry in entries) == 20
     assert sum(entry["variant_id"].startswith("kir:") for entry in entries) == 4
+
+
+def test_every_declared_external_resource_resolves_against_the_real_registry() -> None:
+    """The real allowlist joined to the real registry — the only test that reads both.
+
+    Exporting was previously the sole place these two files met, so a row becoming unresolvable
+    (pending verification, refused, or removed) broke a published artifact with nothing failing
+    first. It also catches the opposite mistake: declaring an external resource for a locus whose
+    row is still pending.
+    """
+    allowlist = json.loads(PUBLIC_ALLOWLIST.read_text())
+    registry = load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH)
+    declaring = [entry for entry in allowlist["artifacts"] if entry.get("external_resources")]
+    assert declaring, "expected at least one allowlisted artifact to declare an external resource"
+    assert [
+        entry["id"]
+        for entry in declaring
+        if normalized_identity(entry["variant_id"], registry) is None
+    ] == []
 
 
 def _write_hbs_csv(path: Path) -> None:
@@ -398,3 +419,33 @@ def test_export_keeps_reviewed_surface_when_observations_are_unavailable(
     assert artifact["observations_sha256"] is None
     assert artifact["observations_url"] is None
     assert catalog["registry_versions"] == ["afnd-test-registry"]
+
+
+def test_a_coordinate_keyed_resource_needs_a_reviewed_normalization(tmp_path):
+    """A cytokine locus is entity_type=variant but has a composite id, so it must refuse until
+    the registry says otherwise. Previously this passed the exporter and failed in the browser."""
+    from genomeos.registry.variants import VARIANT_NORMALIZATION_SCHEMA
+
+    empty = VARIANT_NORMALIZATION_SCHEMA.validate(
+        pd.DataFrame(columns=list(VARIANT_NORMALIZATION_SCHEMA.columns))
+    )
+    entry = {
+        "external_resources": [
+            {
+                "source": "gnomad",
+                "normalized_variant_id": "cyt:il-6-174-c",
+                "dataset": "gnomad_r4",
+                "cache_file": "external/gnomad/cyt.json",
+            }
+        ]
+    }
+    with pytest.raises(ValueError, match="no reviewed normalization"):
+        export_atlas_web._external_resources(
+            entry,
+            artifact_id="cyt-il-6-174-c",
+            variant_id="cyt:il-6-174-c",
+            entity_type="variant",
+            source_root=tmp_path,
+            out_dir=tmp_path / "out",
+            variant_registry=empty,
+        )
