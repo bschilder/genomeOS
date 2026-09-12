@@ -155,6 +155,18 @@ permission does not qualify any source or publish any scientific result in this 
 
 ## Count-scoring numerical domain
 
+**Candidate status: numerical acceptance failed.** The admission range below describes the
+implementation, not a validated accuracy range. The fixed CPU and GPU matrices each recorded
+548 laws: 513 passed, 24 were expected domain refusals, and 11 had candidate mismatches on
+subnormal masses or tails. Some failures occur in the previously admitted concentration range.
+All ordinary log checks passed, but neither that result nor CPU/GPU parity waives the failed
+probability-accuracy requirement. This candidate is not release- or calibration-ready and
+establishes no global or real-population AF improvement.
+
+Those hardware numerical runs tested source `f8e7afdc199ff227ec03ca9d55bdd84d8a91c0f5`.
+The later `abddfb5c3ec60d81fe68b712c4fec04e407b8fc2` adapter/accounting correction was not a
+comprehensive numerical rerun; hardware evidence applies to its recorded source hashes.
+
 `CountPredictive` evaluates the finite beta-binomial law using complete-support normalized
 neighboring-count recurrence for every admitted interior draw with AN at most 65,536. The same
 below/equal/above partitions supply log mass and both tails. A legal mode anchors the relative
@@ -186,9 +198,23 @@ The accepted quantile levels remain `0 < q <= 1`; the 100% endpoint is the exact
 maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Sampling
 retains the seeded beta-then-binomial construction. Where latent beta variation is below floating
 resolution, empirical samples cannot distinguish finite concentration from its limiting law;
-this is not a new sampler branch. Earlier hardware reports remain evidence for their original
-source revisions. This recurrence requires new complete-workflow CPU/GPU timing, memory and
-parity evidence; numerical checks do not establish biological calibration or AF accuracy.
+this is not a new sampler branch. Numerical checks do not establish biological calibration or
+AF accuracy, and the failed numerical acceptance above remains unresolved.
+
+Completed ordinary complete-workflow timing compared the tested candidate with baseline
+`d081e9415973a7bc8865243ffcd5f5fa8e1ac489` on matched synthetic inputs on the same host,
+at concentration 20. Warm median runtime ratios over five repeats were:
+
+| Workload (draws / observations / AN) | CPU candidate / baseline | GPU candidate / baseline |
+|---|---:|---:|
+| Small: 32 / 2 / 20 | 0.14472× | 2.37544× |
+| Full: 2048 / 10 / 1000 | 1.35144× | 3.41106× |
+
+Ratios above one are regressions. GPU timings include transfers and synchronization;
+lightweight monitoring overlapped the runs, so these are not isolated-machine measurements.
+The high-concentration profile remains pending, and the baseline does not admit that workload.
+Recorded GPU device/pool memory metrics do not establish CPU peak RSS, which is unavailable
+in these reports.
 
 ## Optional GPU count-CDF profiling
 
