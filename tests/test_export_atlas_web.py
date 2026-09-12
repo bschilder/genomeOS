@@ -364,6 +364,7 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
         entity_type="variant",
         source_root=store,
         out_dir=out,
+        variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
     )
     assert len(resources) == 1
     assert resources[0]["source"] == "alphagenome"
@@ -393,21 +394,27 @@ def test_export_publishes_alphagenome_cache_with_pinned_model_version(
             entity_type="variant",
             source_root=store,
             out_dir=out,
+            variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
         )
 
 
-def test_export_refuses_an_external_lookup_without_coordinate_identity(
-    tmp_path: Path,
-) -> None:
-    """The exporter must enforce the same coordinate shape the browser contract does.
+def test_export_refuses_a_lookup_for_a_row_that_is_not_yet_verified(tmp_path: Path) -> None:
+    """The registry is the single gate for a coordinate-keyed external resource.
 
-    A composite locus id typed `variant` (the cytokine entries) passes every other check, so
-    without this gate it would export and pass CI, then fail in a reader's browser at runtime.
+    A composite locus id is typed `variant` but names a promoter offset, so it can carry a
+    coordinate-keyed lookup only once its reviewed mapping row is `verified`; until then
+    `normalized_identity` returns None and the export refuses. This replaces the shape regex this
+    PR first carried: the coordinate shape was a proxy for "resolved", and the registry states
+    that directly, so a locus the registry has not resolved is refused on the fact rather than on
+    the spelling of its id (#207 review). The browser contract is unchanged and still enforces the
+    shape on what is published.
     """
-    store = tmp_path / "store"
-    out = tmp_path / "web"
+    registry = load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH)
     composite_id = "cyt:il-6-174-c"
-    with pytest.raises(ValueError, match="coordinate variant id"):
+    row = registry.loc[registry["variant_id"] == composite_id].iloc[0]
+    if row["verification_status"] == "verified":
+        pytest.skip("mapping row is now verified, so this locus is eligible on purpose")
+    with pytest.raises(ValueError, match="no reviewed normalization"):
         export_atlas_web._external_resources(
             {
                 "external_resources": [
@@ -423,8 +430,9 @@ def test_export_refuses_an_external_lookup_without_coordinate_identity(
             artifact_id="cyt-il-6-174-c",
             variant_id=composite_id,
             entity_type="variant",
-            source_root=store,
-            out_dir=out,
+            source_root=tmp_path,
+            out_dir=tmp_path / "out",
+            variant_registry=registry,
         )
 
 
@@ -485,6 +493,7 @@ def test_export_refuses_non_redistributable_alphagenome_attributions(
             entity_type="variant",
             source_root=store,
             out_dir=out,
+            variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
         )
 
 
@@ -532,6 +541,7 @@ def test_export_refuses_an_alphagenome_method_mismatch(tmp_path: Path) -> None:
             entity_type="variant",
             source_root=store,
             out_dir=out,
+            variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
         )
 
 

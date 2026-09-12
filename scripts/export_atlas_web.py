@@ -12,7 +12,6 @@ import argparse
 import hashlib
 import json
 import math
-import re
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
@@ -32,17 +31,6 @@ from genomeos.registry.variants import load as load_variant_registry
 from genomeos.registry.variants import normalized_identity
 
 SCHEMA_VERSION = 1
-
-# The Atlas external lookup is keyed by coordinate and ref/alt (design §11), the same shape the
-# browser contract enforces in website/src/atlas/contracts.ts. Enforcing it here too means an
-# ineligible identifier fails the build instead of failing in a reader's browser, which is where it
-# would otherwise surface: the exporter and the contract have to agree on what the lookup accepts.
-#
-# A composite locus id (for example cyt:il-6-174-c) is ineligible because its coordinates are
-# unresolved, NOT because of anything about the locus. Those cytokine entries are single-nucleotide
-# changes biologically (IL-6 -174 C>G and friends), so they become eligible once they carry resolved
-# coordinates. Read this gate as a normalisation limit, never as a statement about cytokine biology.
-EXTERNAL_VARIANT_ID = re.compile(r"^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$")
 
 # The AVI score is permissively licensed, but the AVI Score Feature Breakdown is a separate artifact
 # that DeepMind lists as non-commercial use only, so it cannot be redistributed here. See the
@@ -487,11 +475,6 @@ def _external_resources(
             )
         seen.add(source)
         normalized = str(resource["normalized_variant_id"])
-        if not EXTERNAL_VARIANT_ID.match(normalized):
-            raise ValueError(
-                f"allowlist artifact {artifact_id}: external lookup needs a coordinate variant id "
-                f"(chr-pos-ref-alt), got {normalized!r}"
-            )
         if normalized != variant_id:
             raise ValueError(
                 f"allowlist artifact {artifact_id}: external normalized variant does not match the artifact"
