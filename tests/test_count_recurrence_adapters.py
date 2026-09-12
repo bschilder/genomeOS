@@ -5,8 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 from decimal import Decimal
+from types import SimpleNamespace
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from scripts import count_recurrence_evaluate as evaluate
@@ -296,3 +298,270 @@ def test_runtime_renderer_retains_all_cold_and_warm_points(tmp_path):
     )
     assert result["runtime"][0]["profile"]["timing"]["cpu_warm_seconds"] == [1.0, 1.1]
     assert (tmp_path / "runtime-plots" / "full-runtime.png").stat().st_size > 1000
+
+
+def test_extreme_domain_plot_displays_every_point_and_status(monkeypatch, tmp_path):
+    outcomes = [
+        {"group": "small", "concentration": c, "points": [{"log_absolute_error": "1e-12"}]}
+        for c in (1e-10, 2.0, 1e100, 1e300)
+    ]
+    statuses = {
+        "pass": 513,
+        "expected_domain_refusal": 24,
+        "candidate_mismatch": 11,
+        "unexpected_evaluation_failure": 1,
+    }
+    accounting = {
+        "evaluated_points": 4,
+        "planned_points": 4,
+        "law_status_counts": statuses,
+        "incomplete_laws": 0,
+        "zero_log_errors": 0,
+        "float_underflow_comparisons": 12,
+    }
+    receipt = {
+        "backend": "scipy",
+        "matrix_sha256": "a",
+        "complement_sha256": "b",
+        "source_sha256": {"source": "c"},
+        "complement_limitation": "not rounded inputs",
+    }
+    monkeypatch.setattr(plot, "read_run", lambda *args: (receipt, outcomes, accounting))
+    figures = []
+    monkeypatch.setattr(plot.plt, "close", figures.append)
+    plot.render([["injected", "d"]], [], tmp_path / "domain-plot")
+    figure = next(figure for figure in figures if hasattr(figure, "axes"))
+    axis, inventory = figure.axes
+    figure.canvas.draw()
+    coordinates = np.concatenate([artist.get_offsets() for artist in axis.collections])
+    assert len(coordinates) == 4
+    for dimension, limits in enumerate((axis.get_xlim(), axis.get_ylim())):
+        assert np.all(coordinates[:, dimension] >= limits[0])
+        assert np.all(coordinates[:, dimension] <= limits[1])
+    renderer = figure.canvas.get_renderer()
+    for artist in inventory.texts:
+        bounds = artist.get_window_extent(renderer)
+        assert inventory.bbox.contains(bounds.x0, bounds.y0)
+        assert inventory.bbox.contains(bounds.x1, bounds.y1)
+    inventory_text = "\n".join(artist.get_text() for artist in inventory.texts)
+    for name, count in statuses.items():
+        assert f"{name}: {count}" in inventory_text
+
+
+@pytest.mark.parametrize(
+    "exception, status",
+    [(ArithmeticError, "unexpected_evaluation_failure"), (KeyboardInterrupt, "incomplete_execution")],
+)
+def test_late_sampler_failure_preserves_receipt_and_rendered_points(
+    inputs, monkeypatch, tmp_path, exception, status
+):
+    injected_matrix(monkeypatch, [case()])
+
+    def fail(*args, **kwargs):
+        raise exception("injected late sampler failure")
+
+    monkeypatch.setattr(evaluate.CountPredictive, "sample_counts", fail)
+    assert validate.run(inputs) == 1
+    path = inputs.out / "receipt.json"
+    receipt = json.loads(path.read_text())
+    assert receipt["summary"]["evaluated_points"] == 2
+    assert receipt["summary"]["law_status_counts"] == {status: 1}
+    assert receipt["summary"]["incomplete_laws"] == (exception is KeyboardInterrupt)
+    receipt["planned_points"] = 2
+    validate.write_json(path, receipt)
+    result = plot.render([[str(path), validate.sha256(path)]], [], tmp_path / "late-failure-plot")
+    assert result["numerical"][0]["evaluated_points"] == 2
+    assert result["numerical"][0]["law_status_counts"] == {status: 1}
+
+
+def test_control_subcases_continue_and_account_for_dependencies(monkeypatch):
+    controls = validate.count_recurrence_controls
+
+    class FakeLaw:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def cdf(self, *args):
+            return np.zeros(5)
+
+        def sample_counts(self, *args, **kwargs):
+            values = np.zeros((129, 5), dtype=int)
+            values[1, 1] = 3
+            return values
+
+    monkeypatch.setattr(controls, "CountPredictive", FakeLaw)
+    monkeypatch.setattr(controls, "verified_law", lambda *args: SimpleNamespace(lower=[0.5]))
+    monkeypatch.setattr(controls, "predictive_diagnostics", lambda *args, **kwargs: pd.DataFrame({"x": [1]}))
+    chunks = []
+
+    def partitions(*args, **kwargs):
+        chunks.append(controls.recurrence.SUPPORT_CHUNK_SIZE)
+        if len(chunks) == 1:
+            raise ArithmeticError("injected first chunk failure")
+        return SimpleNamespace(
+            log_mass=lambda **kwargs: np.zeros((5, 129)),
+            tails=lambda **kwargs: (np.zeros((5, 129)), np.zeros((5, 129))),
+        )
+
+    monkeypatch.setattr(controls.recurrence, "beta_binomial_log_partitions", partitions)
+    events = []
+    result = controls.mixture("scipy", np, events.append)
+    statuses = {row["subcase_id"]: row["status"] for row in result["subcases"]}
+    assert not result["passed"]
+    assert statuses["mixture_cdf"] == "fail"
+    assert statuses["chunk_default"] == "fail"
+    assert statuses["chunk_257"] == "pass"
+    assert statuses["chunk_log_mass"] == "incomplete"
+    assert statuses["sample_determinism"] == "pass"
+    assert statuses["diagnostic_determinism"] == "pass"
+    assert chunks == [1024, 257]
+    assert len(statuses) == len(result["planned_subcases"])
+    assert {event["subcase_id"] for event in events if event.get("event") == "subcase_outcome"} == set(
+        statuses
+    )
+
+
+def test_control_receipt_accounts_for_interrupted_and_unattempted_subcases(inputs, monkeypatch, tmp_path):
+    from scripts.count_recurrence_control_plan import execute_subcases, subcase
+
+    injected_matrix(monkeypatch, [case()])
+    plan = [
+        subcase("first"),
+        subcase("blocked", "first"),
+        subcase("independent"),
+        subcase("interrupt"),
+        subcase("unattempted"),
+    ]
+    visited = []
+
+    def fail():
+        raise AssertionError("injected early failure")
+
+    def independent():
+        visited.append("independent")
+        return {"passed": True}
+
+    def interrupt():
+        raise KeyboardInterrupt("injected interruption")
+
+    actions = {
+        "first": fail,
+        "blocked": lambda: {},
+        "independent": independent,
+        "interrupt": interrupt,
+        "unattempted": lambda: {},
+    }
+    monkeypatch.setattr(validate.count_recurrence_controls, "CONTROL_SUBCASES", {"injected": plan})
+    monkeypatch.setattr(
+        validate.count_recurrence_controls,
+        "CONTROLS",
+        {"injected": lambda backend, xp, record: execute_subcases(plan, actions, record)},
+    )
+    assert validate.run(inputs) == 1
+    path = inputs.out / "receipt.json"
+    receipt = json.loads(path.read_text())
+    assert visited == ["independent"]
+    assert receipt["accounting_version"] == 2
+    assert receipt["summary"]["control_subcase_status_counts"] == {"fail": 1, "pass": 1, "incomplete": 3}
+    assert receipt["summary"]["accounted_control_subcases"] == 5
+    assert receipt["summary"]["incomplete_control_subcases"] == 3
+    receipt["planned_points"] = 2
+    validate.write_json(path, receipt)
+    result = plot.render([[str(path), validate.sha256(path)]], [], tmp_path / "interrupted-controls")
+    assert result["numerical"][0]["control_subcase_status_counts"] == {"fail": 1, "pass": 1, "incomplete": 3}
+    assert not result["numerical"][0]["run_passed"]
+
+
+def test_sampler_independent_fixtures_survive_first_generation_failure(monkeypatch):
+    controls = validate.count_recurrence_controls
+    calls = []
+
+    class FakeLaw:
+        def __init__(self, *args, **kwargs):
+            calls.append(1)
+            if len(calls) == 1:
+                raise ArithmeticError("injected first sampler fixture failure")
+
+        def sample_counts(self, *args, **kwargs):
+            return np.full((20000, 1), 2, dtype=int)
+
+    monkeypatch.setattr(controls, "CountPredictive", FakeLaw)
+    monkeypatch.setattr(
+        controls,
+        "verified_law",
+        lambda *args: SimpleNamespace(mean=Decimal(2), variance=Decimal(0), fourth_central=Decimal(0)),
+    )
+    result = controls.sampler("scipy", np)
+    statuses = [item["status"] for item in result["subcases"]]
+    assert len(calls) == 3 and len(statuses) == 15
+    assert statuses.count("fail") == 1 and statuses.count("incomplete") == 4
+    assert statuses.count("pass") == 10 and not result["passed"]
+
+
+def test_domain_accepted_bad_parameter_does_not_hide_later_cases(monkeypatch):
+    controls = validate.count_recurrence_controls
+    original = controls.CountPredictive
+
+    def accept_first_invalid(means, concentrations, **kwargs):
+        if concentrations[0, 0] == np.nextafter(1e300, np.inf):
+            concentrations = np.array([[20.0]])
+        return original(means, concentrations, **kwargs)
+
+    monkeypatch.setattr(controls, "CountPredictive", accept_first_invalid)
+    result = controls.domain("scipy", np)
+    statuses = {item["subcase_id"]: item["status"] for item in result["subcases"]}
+    assert statuses["invalid_parameter:0"] == "fail"
+    assert statuses["invalid_parameter:5"] == "pass"
+    assert statuses["invalid_counts:4"] == "pass"
+    assert statuses["degenerate_scope"] == "pass"
+    assert len(statuses) == len(result["planned_subcases"])
+    assert list(statuses.values()).count("fail") == 1
+
+
+def test_quantile_failure_keeps_later_ties_and_diagnostics(monkeypatch):
+    controls = validate.count_recurrence_controls
+    original = controls.CountPredictive
+    calls = []
+
+    def wrong_first_cdf(*args, **kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            return SimpleNamespace(cdf=lambda *args: np.array([0.25]))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(controls, "CountPredictive", wrong_first_cdf)
+    result = controls.quantiles_and_diagnostics("scipy", np)
+    statuses = {item["subcase_id"]: item["status"] for item in result["subcases"]}
+    assert statuses["tie:0:cdf"] == "fail"
+    assert statuses["tie:2:level_one"] == "pass"
+    assert statuses["uniform:129"] == "pass"
+    assert statuses["diagnostic_values"] == "pass"
+    assert statuses["diagnostic_determinism"] == "pass"
+    assert list(statuses.values()).count("fail") == 1
+    assert len(statuses) == len(result["planned_subcases"])
+
+
+def test_legacy_complete_failed_receipt_renders_without_mutation(inputs, monkeypatch, tmp_path):
+    path = tiny_receipt(inputs, monkeypatch)
+    receipt = json.loads(path.read_text())
+    receipt.pop("accounting_version")
+    receipt.pop("planned_control_subcases")
+    for key in list(receipt["summary"]):
+        if "subcase" in key:
+            receipt["summary"].pop(key)
+    receipt["summary"]["passed"] = False
+    receipt["summary"]["law_status_counts"] = {"candidate_mismatch": 1}
+    journal = inputs.out / "events.jsonl"
+    events = [json.loads(line) for line in journal.read_text().splitlines()]
+    for event in events:
+        if event["event"] == "outcome":
+            event["status"] = "candidate_mismatch"
+    journal.write_text("".join(json.dumps(event) + "\n" for event in events))
+    receipt["file_sha256"]["events.jsonl"] = validate.sha256(journal)
+    validate.write_json(path, receipt)
+    before = {item: validate.sha256(item) for item in (path, journal)}
+    result = plot.render([[str(path), validate.sha256(path)]], [], tmp_path / "legacy-plot")
+    assert result["numerical"][0]["control_subcase_accounting"] == "not_recorded_by_legacy_adapter"
+    assert result["numerical"][0]["law_status_counts"] == {"candidate_mismatch": 1}
+    assert not result["numerical"][0]["run_passed"]
+    assert before == {item: validate.sha256(item) for item in before}

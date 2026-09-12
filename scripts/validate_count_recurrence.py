@@ -32,6 +32,7 @@ import numpy as np  # noqa: E402
 
 from genomeos.validation import count_recurrence, predictive, predictive_cupy  # noqa: E402
 from scripts import (  # noqa: E402
+    count_recurrence_control_plan,
     count_recurrence_controls,
     count_recurrence_evaluate,
     count_recurrence_oracle,  # noqa: E402
@@ -44,6 +45,7 @@ SOURCE_PATHS = (
     "scripts/count_recurrence_oracle.py",
     "scripts/count_recurrence_evaluate.py",
     "scripts/count_recurrence_controls.py",
+    "scripts/count_recurrence_control_plan.py",
     "scripts/validate_count_recurrence.py",
     "scripts/plot_count_recurrence.py",
 )
@@ -135,6 +137,7 @@ def provenance(args: argparse.Namespace) -> tuple[dict, dict, dict]:
         predictive_cupy,
         count_recurrence_oracle,
         count_recurrence_evaluate,
+        count_recurrence_control_plan,
         count_recurrence_controls,
     ):
         path = Path(inspect.getfile(module)).resolve()
@@ -217,6 +220,7 @@ def run(args: argparse.Namespace) -> int:
         target.write_bytes((ROOT / relative).read_bytes())
     header = {
         "evidence_kind": "synthetic_numerical_validation",
+        "accounting_version": 2,
         "publication_eligible": False,
         "backend": args.backend,
         "command": sys.argv,
@@ -227,6 +231,12 @@ def run(args: argparse.Namespace) -> int:
         "planned_laws": len(cases),
         "planned_points": 11364,
         "planned_controls": list(count_recurrence_controls.CONTROLS),
+        "planned_control_subcases": {
+            name: count_recurrence_controls.CONTROL_SUBCASES.get(
+                name, [{"subcase_id": "operation", "depends_on": []}]
+            )
+            for name in count_recurrence_controls.CONTROLS
+        },
         **source,
     }
     # Preserve the exact matrix bytes as well as its parsed case inventory.
@@ -235,46 +245,112 @@ def run(args: argparse.Namespace) -> int:
     journal = args.out / "events.jsonl"
     outcomes, controls = [], []
     fatal = None
+    subcase_outcomes = {name: {} for name in header["planned_controls"]}
+
+    def control_record(name, evidence):
+        kind = evidence.get("event")
+        if kind == "subcase_outcome":
+            identifier = evidence["subcase_id"]
+            declared = {item["subcase_id"] for item in header["planned_control_subcases"][name]}
+            if identifier not in declared or identifier in subcase_outcomes[name]:
+                raise ValueError("undeclared or duplicate control subcase outcome")
+            subcase_outcomes[name][identifier] = {
+                key: value for key, value in evidence.items() if key != "event"
+            }
+        if kind in {"subcase_plan", "subcase_started", "subcase_outcome"}:
+            append_event(journal, {**evidence, "event": "control_" + kind, "name": name})
+        else:
+            append_event(journal, {"event": "control_evidence", "name": name, "evidence": evidence})
+
+    def complete_accounting(name, reason):
+        for item in header["planned_control_subcases"][name]:
+            if item["subcase_id"] not in subcase_outcomes[name]:
+                control_record(
+                    name, {"event": "subcase_outcome", **item, "status": "incomplete", "reason": reason}
+                )
+
     try:
         xp, details = environment(args.backend)
         append_event(journal, {"event": "environment", **details})
         for group, case in cases:
             append_event(journal, {"event": "started", "group": group, **case})
+            stages = {}
+            interrupted = None
+
+            def case_record(event, case_id=case["case_id"], stages=stages):
+                if event.get("case_id") != case_id or event["event"] in stages:
+                    raise ValueError("mismatched or duplicate retained numerical stage")
+                stages[event["event"]] = event
+                append_event(journal, event)
+
             try:
-                result = count_recurrence_evaluate.evaluate_case(
-                    case, group, args.backend, xp, lambda event: append_event(journal, event)
-                )
-            except Exception as error:
+                result = count_recurrence_evaluate.evaluate_case(case, group, args.backend, xp, case_record)
+            except BaseException as error:
+                if not isinstance(error, Exception):
+                    interrupted = error
                 result = {
-                    "status": "unexpected_evaluation_failure",
+                    "status": "incomplete_execution" if interrupted else "unexpected_evaluation_failure",
                     "message": str(error),
                     "traceback": traceback.format_exc(),
-                    "points": [],
+                    "points": stages.get("candidate_points", {}).get("points", []),
+                    "checks": stages.get("candidate_points", {}).get("checks", {}),
+                    "retained_stages": list(stages),
                 }
             result = {"event": "outcome", "group": group, **case, **result}
             append_event(journal, result)
             outcomes.append(result)
+            if interrupted is not None:
+                raise interrupted
         for name, operation in count_recurrence_controls.CONTROLS.items():
             append_event(journal, {"event": "control_started", "name": name})
+            plan = header["planned_control_subcases"][name]
+            standalone = plan == [{"subcase_id": "operation", "depends_on": []}]
+            if standalone:
+                control_record(name, {"event": "subcase_started", **plan[0]})
             try:
                 evidence = operation(
-                    args.backend,
-                    xp,
-                    lambda evidence, name=name: append_event(
-                        journal, {"event": "control_evidence", "name": name, "evidence": evidence}
-                    ),
+                    args.backend, xp, lambda evidence, name=name: control_record(name, evidence)
                 )
                 result = {
                     "status": "pass" if evidence.get("passed", True) else "control_failure",
                     "evidence": evidence,
                 }
+                if standalone:
+                    control_record(
+                        name,
+                        {
+                            "event": "subcase_outcome",
+                            **plan[0],
+                            "status": "pass" if evidence.get("passed", True) else "fail",
+                            "evidence": evidence,
+                        },
+                    )
             except Exception as error:
                 result = {
                     "status": "control_failure",
                     "message": str(error),
                     "traceback": traceback.format_exc(),
                 }
-            result = {"event": "control_outcome", "name": name, **result}
+                if standalone and "operation" not in subcase_outcomes[name]:
+                    control_record(
+                        name,
+                        {
+                            "event": "subcase_outcome",
+                            **plan[0],
+                            "status": "fail",
+                            "message": str(error),
+                            "traceback": traceback.format_exc(),
+                        },
+                    )
+            complete_accounting(name, "control stopped before this subcase completed")
+            if any(item["status"] != "pass" for item in subcase_outcomes[name].values()):
+                result["status"] = "control_failure"
+            result = {
+                "event": "control_outcome",
+                "name": name,
+                **result,
+                "subcases": list(subcase_outcomes[name].values()),
+            }
             append_event(journal, result)
             controls.append(result)
     except BaseException as error:
@@ -288,10 +364,18 @@ def run(args: argparse.Namespace) -> int:
             "traceback": traceback.format_exc(),
         }
         append_event(journal, {"event": "fatal", **fatal})
+    for name in header["planned_controls"]:
+        complete_accounting(name, "run interrupted before this subcase completed")
+    subcases = [item for rows in subcase_outcomes.values() for item in rows.values()]
     summary = {
+        "planned_control_subcases": sum(len(rows) for rows in header["planned_control_subcases"].values()),
+        "accounted_control_subcases": len(subcases),
+        "completed_control_subcases": sum(item["status"] != "incomplete" for item in subcases),
+        "incomplete_control_subcases": sum(item["status"] == "incomplete" for item in subcases),
+        "control_subcase_status_counts": dict(Counter(item["status"] for item in subcases)),
         "law_status_counts": dict(Counter(item["status"] for item in outcomes)),
-        "completed_laws": len(outcomes),
-        "incomplete_laws": len(cases) - len(outcomes),
+        "completed_laws": sum(item["status"] != "incomplete_execution" for item in outcomes),
+        "incomplete_laws": len(cases) - sum(item["status"] != "incomplete_execution" for item in outcomes),
         "evaluated_points": sum(len(item["points"]) for item in outcomes),
         "accounted_planned_points": sum(len(item["queried_ac"]) for item in outcomes),
         "completed_controls": len(controls),
@@ -299,7 +383,8 @@ def run(args: argparse.Namespace) -> int:
         "passed": fatal is None
         and len(outcomes) == len(cases)
         and len(controls) == len(count_recurrence_controls.CONTROLS)
-        and all(item["status"] in SUCCESS for item in outcomes + controls),
+        and all(item["status"] in SUCCESS for item in outcomes + controls)
+        and all(item["status"] == "pass" for item in subcases),
     }
     files = {
         path.relative_to(args.out).as_posix(): sha256(path) for path in args.out.rglob("*") if path.is_file()

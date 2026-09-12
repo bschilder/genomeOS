@@ -4,6 +4,12 @@
 No biological accuracy, map accuracy or scientific calibration claim follows from these
 plots. Zeros, floating underflow, refusals, failures and incomplete laws remain accounted.
 Runtime profiles use the existing complete-workflow profiler, including transfers and sync.
+
+Compatibility: legacy receipts are verified against their own copied source/evidence hashes
+and rendered read-only with their original pass/failure statuses. Their grouped controls
+are labelled as lacking subcase records; no new subcase result is inferred retroactively.
+Accounting-v2 receipts must reconcile every declared control subcase and retained point stage.
+The renderer's own source hash is recorded separately from the executed validation source.
 """
 
 from __future__ import annotations
@@ -13,6 +19,7 @@ import hashlib
 import json
 from collections import Counter
 from pathlib import Path
+from textwrap import fill
 from typing import Any
 
 import matplotlib
@@ -76,8 +83,8 @@ def read_run(path: Path, expected: str) -> tuple[dict, list[dict], dict]:
         "backend": receipt["backend"],
         "planned_laws": len(planned),
         "planned_points": sum(len(case["queried_ac"]) for case in planned.values()),
-        "completed_laws": len(outcomes),
-        "incomplete_laws": len(planned) - len(outcomes),
+        "completed_laws": sum(item["status"] != "incomplete_execution" for item in outcomes),
+        "incomplete_laws": len(planned) - sum(item["status"] != "incomplete_execution" for item in outcomes),
         "evaluated_points": len(points),
         "law_status_counts": statuses,
         "accounted_planned_points": sum(len(item["queried_ac"]) for item in outcomes),
@@ -85,7 +92,52 @@ def read_run(path: Path, expected: str) -> tuple[dict, list[dict], dict]:
         "float_underflow_comparisons": sum(
             tail["float_underflow"] for point in points for tail in point["tails"].values()
         ),
+        "run_passed": receipt["summary"]["passed"],
+        "control_group_status_counts": dict(Counter(item["status"] for item in controls)),
+        "control_subcase_accounting": "not_recorded_by_legacy_adapter",
     }
+    if receipt.get("accounting_version", 1) >= 2:
+        plans = receipt["planned_control_subcases"]
+        planned_subcases = {(name, item["subcase_id"]): item for name, rows in plans.items() for item in rows}
+        rows = [event for event in events if event["event"] == "control_subcase_outcome"]
+        observed = [(item["name"], item["subcase_id"]) for item in rows]
+        if len(set(observed)) != len(rows) or set(observed) != set(planned_subcases):
+            raise ValueError("control subcase inventory mismatch")
+        for item in rows:
+            plan = planned_subcases[(item["name"], item["subcase_id"])]
+            if item["depends_on"] != plan["depends_on"] or item["status"] not in {
+                "pass",
+                "fail",
+                "incomplete",
+            }:
+                raise ValueError("invalid control subcase outcome")
+        subcounts = {
+            "planned_control_subcases": len(planned_subcases),
+            "accounted_control_subcases": len(rows),
+            "completed_control_subcases": sum(item["status"] != "incomplete" for item in rows),
+            "incomplete_control_subcases": sum(item["status"] == "incomplete" for item in rows),
+            "control_subcase_status_counts": dict(Counter(item["status"] for item in rows)),
+        }
+        for key, value in subcounts.items():
+            if value != receipt["summary"][key]:
+                raise ValueError(f"control subcase accounting mismatch: {key}")
+        accounting.update(subcounts, control_subcase_accounting="explicit")
+        for control in controls:
+            recorded = {
+                item["subcase_id"]: {
+                    key: value for key, value in item.items() if key not in {"event", "name"}
+                }
+                for item in rows
+                if item["name"] == control["name"]
+            }
+            if recorded != {item["subcase_id"]: item for item in control["subcases"]}:
+                raise ValueError("control outcome differs from recorded subcases")
+        stages = [event for event in events if event["event"] == "candidate_points"]
+        if len({item["case_id"] for item in stages}) != len(stages):
+            raise ValueError("duplicate candidate stage")
+        outcome_points = {item["case_id"]: item["points"] for item in outcomes}
+        if any(outcome_points.get(item["case_id"]) != item["points"] for item in stages):
+            raise ValueError("retained candidate points missing from final outcomes")
     for key in (
         "completed_laws",
         "incomplete_laws",
@@ -144,20 +196,49 @@ def render(runs: list[list[str]], profiles: list[list[str]], out: Path) -> dict:
         "numerical": [],
         "runtime": runtime,
         "input_receipts": runs,
+        "renderer_source_sha256": digest(Path(__file__)),
+        "plot_accounting_version": 2,
     }
     if parsed:
-        figure, (axis, inventory) = plt.subplots(1, 2, figsize=(13, 5), gridspec_kw={"width_ratios": [3, 2]})
         descriptions = []
+        for receipt, _, accounting in parsed:
+            lines = [
+                f"{receipt['backend']}: {'PASS' if accounting.get('run_passed') else 'FAIL'}",
+                f"Evaluated points: {accounting['evaluated_points']}",
+                f"Planned points: {accounting['planned_points']}",
+            ]
+            lines.extend(f"{name}: {count}" for name, count in accounting["law_status_counts"].items())
+            lines.extend(
+                [
+                    f"incomplete laws: {accounting['incomplete_laws']}",
+                    f"zero log errors: {accounting['zero_log_errors']}",
+                    f"underflow comparisons: {accounting['float_underflow_comparisons']}",
+                ]
+            )
+            if accounting.get("control_subcase_accounting") == "explicit":
+                lines.extend(
+                    f"control subcases {status}: {count}"
+                    for status, count in accounting["control_subcase_status_counts"].items()
+                )
+            else:
+                lines.append("Legacy control subcases: not recorded")
+            descriptions.append("\n".join(fill(line, width=43) for line in lines))
+        height = max(6, 0.24 * sum(item.count("\n") + 3 for item in descriptions))
+        figure, (axis, inventory) = plt.subplots(
+            1, 2, figsize=(13, height), gridspec_kw={"width_ratios": [3, 2]}
+        )
+        domain = []
         for receipt, outcomes, accounting in parsed:
             for group, marker in (("small", "."), ("long", "x")):
                 rows = [
-                    (item["concentration"], float(point["log_absolute_error"]))
+                    (float(np.log10(item["concentration"])), float(point["log_absolute_error"]))
                     for item in outcomes
                     if item["group"] == group
                     for point in item["points"]
                 ]
                 if rows:
                     x, y = zip(*rows, strict=True)
+                    domain.extend(x)
                     axis.scatter(
                         x,
                         y,
@@ -166,26 +247,20 @@ def render(runs: list[list[str]], profiles: list[list[str]], out: Path) -> dict:
                         alpha=0.6,
                         label=f"{receipt['backend']} {group}: {len(rows)} points",
                     )
-            descriptions.append(
-                f"{receipt['backend']}: {accounting['evaluated_points']} evaluated / "
-                f"{accounting['planned_points']} planned points\n"
-                f"{accounting['law_status_counts']}\n"
-                f"incomplete laws: {accounting['incomplete_laws']}\n"
-                f"zero errors: {accounting['zero_log_errors']}; underflow comparisons: "
-                f"{accounting['float_underflow_comparisons']}"
-            )
             result["numerical"].append(accounting)
         axis.set(
-            xscale="log",
             yscale="symlog",
-            xlabel="Finite concentration",
+            xlabel="log10(finite concentration)",
             ylabel="Absolute log-mass error (symlog includes zero)",
         )
         axis.set_yscale("symlog", linthresh=1e-15)
+        if domain:
+            margin = max(1.0, (max(domain) - min(domain)) * 0.025)
+            axis.set_xlim(min(domain) - margin, max(domain) + margin)
         if axis.collections:
             axis.legend(fontsize=8)
         inventory.axis("off")
-        inventory.text(0, 1, "\n\n".join(descriptions), va="top", fontsize=9, wrap=True)
+        inventory.text(0.02, 0.98, "\n\n".join(descriptions), va="top", fontsize=9)
         figure.suptitle("Synthetic numerical evidence — complete declared domain accounting")
         figure.text(
             0.02,
@@ -198,6 +273,7 @@ def render(runs: list[list[str]], profiles: list[list[str]], out: Path) -> dict:
         figure.savefig(out / "numerical-errors.png", dpi=160)
         plt.close(figure)
         result["complement_limitation"] = parsed[0][0]["complement_limitation"]
+        result["concentration_coordinate"] = "log10(concentration), displayed on a linear axis"
     if runtime:
         figure, axis = plt.subplots(figsize=(12, 5))
         ticks, labels = [], []
