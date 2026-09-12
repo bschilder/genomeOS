@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 
+from genomeos.validation.count_recurrence import ProbabilityMean
 from genomeos.validation.count_recurrence import beta_binomial_cdf as recurrence_cdf
 
 CDF_ROW_CHUNK_SIZE = 4
@@ -154,7 +155,7 @@ class CuPyCDF:
             for start in range(0, ac.shape[0], CDF_ROW_CHUNK_SIZE):
                 stop = min(start + CDF_ROW_CHUNK_SIZE, ac.shape[0])
                 k = cp.asarray(ac[start:stop, observation])[:, None]
-                total = cp.zeros(stop - start, dtype=cp.float64)
+                average = None
                 for draw in range(0, self._mean.shape[0], CDF_DRAW_CHUNK_SIZE):
                     mean = self._mean[draw : draw + CDF_DRAW_CHUNK_SIZE, observation][None, :]
                     concentration = self._concentration[
@@ -170,8 +171,12 @@ class CuPyCDF:
                     values = cp.where(k < 0, 0.0, cp.where(k >= n, 1.0, values))
                     if bool(cp.asnumpy(cp.any(~cp.isfinite(values) | (values < 0) | (values > 1)))):
                         raise FloatingPointError("CuPy CDF produced an invalid component probability")
-                    total += cp.sum(values, axis=1)
-                output[start:stop, observation] = cp.asnumpy(total / self._mean.shape[0])
+                    average = (
+                        ProbabilityMean.from_values(values, array_module=cp)
+                        if average is None else average.add(values, array_module=cp)
+                    )
+                assert average is not None  # Validated draws are nonempty.
+                output[start:stop, observation] = cp.asnumpy(average.value)
         return output
 
     def _legacy_beta_binomial_cdf(

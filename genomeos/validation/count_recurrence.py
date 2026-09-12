@@ -27,6 +27,45 @@ ROW_CHUNK_SIZE = 4
 
 
 @dataclass(frozen=True)
+class ProbabilityMean:
+    """Mean of validated component CDFs, preserving identical values across batches.
+
+    Keep the minimum component and the sum of nonnegative offsets from it. A
+    constant batch has zero offsets, so replication cannot move an analytical
+    CDF tie. Unlike centering at an arbitrary first component, this never cancels
+    a tiny mixture probability against a large reference value. Divide only
+    after all batches, avoiding underflow from individually weighted components.
+    Arrays contain one accumulator per query row; the final axis of input is draws.
+    """
+
+    minimum: Any
+    offset_sum: Any
+    count: int
+
+    @classmethod
+    def from_values(cls, values: Any, *, array_module: Any) -> ProbabilityMean:
+        """Initialize from a nonempty last-axis batch of validated probabilities."""
+        xp = array_module
+        minimum = xp.min(values, axis=-1)
+        return cls(minimum, xp.sum(values - minimum[..., None], axis=-1), values.shape[-1])
+
+    def add(self, values: Any, *, array_module: Any) -> ProbabilityMean:
+        """Merge another batch without losing an identical common component value."""
+        xp = array_module
+        minimum = xp.minimum(self.minimum, xp.min(values, axis=-1))
+        offsets = (
+            self.offset_sum
+            + self.count * (self.minimum - minimum)
+            + xp.sum(values - minimum[..., None], axis=-1)
+        )
+        return ProbabilityMean(minimum, offsets, self.count + values.shape[-1])
+
+    @property
+    def value(self) -> Any:
+        return self.minimum + self.offset_sum / self.count
+
+
+@dataclass(frozen=True)
 class LogPartitions:
     """Below, equal and above threshold log weights, with a common arbitrary scale."""
 

@@ -29,10 +29,11 @@ from scipy.special import betaln, gammaln, logsumexp, xlog1py, xlogy
 from scipy.stats import binom
 
 from genomeos.validation.count_recurrence import (
-    beta_binomial_cdf as recurrence_cdf,
+    ProbabilityMean,
+    beta_binomial_log_partitions,
 )
 from genomeos.validation.count_recurrence import (
-    beta_binomial_log_partitions,
+    beta_binomial_cdf as recurrence_cdf,
 )
 
 SEED = 42
@@ -311,7 +312,7 @@ class CountPredictive:
                     means[interior], concentrations[interior], np.asarray(an), np.asarray(ac),
                     array_module=np, max_count=an,
                 )
-            return float(np.mean(values))
+            return float(ProbabilityMean.from_values(values, array_module=np).value)
         return float(
             np.mean(
                 [

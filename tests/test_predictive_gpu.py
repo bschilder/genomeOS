@@ -562,3 +562,32 @@ def test_profiler_rejects_recurrence_import_outside_checkout(monkeypatch, tmp_pa
 def test_gpu_preserves_independent_oracle_reference_count_quantile_fixture():
     law = CountPredictive(np.array([[1 / 3]]), np.array([[6.0]]), "cupy")
     np.testing.assert_array_equal(law.quantiles([5], [0.25, 0.5, 0.75]), [[1], [1], [3]])
+
+
+@requires_gpu
+@pytest.mark.parametrize("draws", [128, 129])
+def test_gpu_uniform_mixture_preserves_non_dyadic_quantile_brackets(draws):
+    """Exact component identities must survive device draw-batch aggregation."""
+    q = 1 / 3
+    law = CountPredictive(np.full((draws, 1), 0.5), np.full((draws, 1), 2.0), "cupy")
+    assert law.cdf([0], [2])[0] == q
+    assert law.cdf([1], [2])[0] == 2 * q
+    levels = [q, np.nextafter(q, np.inf), 2 * q, np.nextafter(2 * q, np.inf), 1]
+    np.testing.assert_array_equal(law.quantiles([2], levels), [[0], [1], [1], [2], [2]])
+
+
+@requires_gpu
+@pytest.mark.parametrize("n", [19, 20])
+@pytest.mark.parametrize("tiny_draw", [0, 128])
+def test_gpu_mixture_keeps_tiny_probability_across_batches(n, tiny_draw):
+    from decimal import Decimal
+
+    from tests.count_recurrence_oracle import verified_law
+    from tests.test_count_recurrence import assert_probability
+
+    p = np.nextafter(1.0, 0.0)
+    reference = verified_law(n, p, 1e300, (0,))
+    means = np.ones((129, 1))
+    means[tiny_draw, 0] = p
+    law = CountPredictive(means, np.full_like(means, 1e300), "cupy")
+    assert_probability(law.cdf([0], [n])[0], reference.lower[0] / Decimal(129))

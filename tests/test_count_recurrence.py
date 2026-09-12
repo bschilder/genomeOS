@@ -325,3 +325,57 @@ def test_high_concentration_does_not_evaluate_legacy_beta_normalizer(monkeypatch
     law = CountPredictive(np.array([[0.5], [0.5]]), np.array([[20.0], [1e300]]))
     assert np.isfinite(law.log_prob([1], [2])[0])
     assert 0 < law.cdf([1], [2])[0] < 1
+
+
+@pytest.mark.parametrize("draws", [1, 128, 129])
+def test_uniform_mixture_preserves_exact_non_dyadic_quantile_brackets(draws):
+    """Replicating a uniform law cannot move its non-dyadic CDF jumps."""
+    from decimal import Decimal
+
+    q = 1 / 3
+    assert Decimal.from_float(q) < Decimal(1) / 3
+    assert Decimal.from_float(np.nextafter(q, np.inf)) > Decimal(1) / 3
+    law = CountPredictive(np.full((draws, 1), 0.5), np.full((draws, 1), 2.0))
+    levels = [q, np.nextafter(q, np.inf), 2 * q, np.nextafter(2 * q, np.inf), 1]
+    np.testing.assert_array_equal(law.quantiles([2], levels), [[0], [1], [1], [2], [2]])
+    assert law.cdf([0], [2])[0] == q
+    assert law.cdf([1], [2])[0] == 2 * q
+    assert law.cdf([-1], [2])[0] == 0
+
+
+@pytest.mark.parametrize("n", [19, 20])
+@pytest.mark.parametrize("tiny_draw", [0, 128])
+def test_mixture_mean_keeps_tiny_probability_across_batches(n, tiny_draw):
+    """A centering subtraction or premature batch division must not erase the sole tiny tail."""
+    from decimal import Decimal
+
+    p = np.nextafter(1.0, 0.0)
+    reference = verified_law(n, p, 1e300, (0,))
+    means = np.ones((129, 1))
+    means[tiny_draw, 0] = p
+    law = CountPredictive(means, np.full_like(means, 1e300))
+    assert_probability(law.cdf([0], [n])[0], reference.lower[0] / Decimal(129))
+
+
+@pytest.mark.parametrize("tiny_draw", [0, 128])
+def test_probability_mean_batch_merge_preserves_constants_and_tiny_values(tiny_draw):
+    """Exercise the common GPU batching arithmetic with an independent absolute mean."""
+    from decimal import Decimal, localcontext
+
+    from genomeos.validation.count_recurrence import ProbabilityMean
+
+    constant = np.full((4, 129), 1 / 3)
+    tiny = np.zeros((4, 129))
+    tiny[:, tiny_draw] = [1e-300, 1e-310, 1e-319, np.nextafter(0.0, 1.0)]
+    decreasing_minimum = np.full((4, 129), 0.75)
+    decreasing_minimum[:, -1] = [0.5, 0.25, 0.0, 1e-300]
+    for values in (constant, tiny, decreasing_minimum):
+        first = ProbabilityMean.from_values(values[:, :128], array_module=np)
+        result = first.add(values[:, 128:], array_module=np).value
+        if values is constant:
+            np.testing.assert_array_equal(result, np.full(4, 1 / 3))
+        with localcontext() as context:
+            context.prec = 480
+            for row, actual in zip(values, result, strict=True):
+                expected = sum(Decimal.from_float(float(x)) for x in row) / Decimal(129)
+                assert_probability(actual, expected)
