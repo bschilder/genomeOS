@@ -212,7 +212,13 @@ at concentration 20. Warm median runtime ratios over five repeats were:
 
 Ratios above one are regressions. GPU timings include transfers and synchronization;
 lightweight monitoring overlapped the runs, so these are not isolated-machine measurements.
-The high-concentration profile remains pending, and the baseline does not admit that workload.
+
+The completed synthetic high-concentration workload (2048 draws, 10 observations, AN 1000,
+concentration 134,217,728, seed 42) passed CPU/GPU parity. Across five warm repeats, median
+times were 371.289 s on CPU and 26.582 s on GPU. The baseline does not admit this workload,
+so there is no baseline high-concentration comparison. This performance/parity result does
+not resolve the failed numerical acceptance above.
+
 Recorded GPU device/pool memory metrics do not establish CPU peak RSS, which is unavailable
 in these reports.
 
