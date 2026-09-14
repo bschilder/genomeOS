@@ -73,6 +73,28 @@ the adjacent SNPs are independent observations or yield a validated joint LD
 posterior. Deterministic 2D integration is the small-case numerical oracle,
 not a second production scoring implementation requiring weighted-mixture APIs.
 
+### Numerical likelihood correction (#214)
+
+The nonconjugate oracle exposed cancellation in the installed BetaBinomial
+log-gamma expression: one captured proposal received log likelihood +6160
+instead of -26.757334358778397. Use a mathematically equivalent, normalized
+log-domain rising-factorial likelihood through a named observed CustomDist.
+This replaces numerical evaluation only: the mean/rho priors, statistical law,
+sampler configuration, diagnostic gates and predictive-domain refusals do not
+change. No concentration cutoff or Binomial substitution is permitted.
+
+A pure PyTensor helper uses 16 exact log-domain factors and a shifted,
+stabilized Stirling tail with a protected small-argument polynomial. It must
+retain gradients at numerical branch joins and use bounded work per row,
+without an observation-by-AN matrix. Independent high-precision values and
+logit gradients, including the captured failure and maximum AN, gate the
+unchanged exact/nonconjugate sampler tests. The localized implementation and
+numerical bounds are frozen in Task 3 of the oracle plan. Passing those checks
+is not a uniform floating-point proof or a calibration claim. The existing
+public predictor remains the sampling/scoring interface; direct PyMC
+prior/posterior predictive generation from the custom observed node is not
+provided by this correction.
+
 ## Public fit and prediction contracts
 
 `genomeos.surfaces.heterogeneity_types` holds validated immutable contracts.
