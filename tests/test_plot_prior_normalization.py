@@ -13,6 +13,8 @@ def test_conditional_counterexample_matches_the_authored_numeric_control():
     assert result["scalar_ratio"][target].item() == pytest.approx(0.8953380210217113, abs=1e-14)
     assert result["local_ratio"][target].item() == 1.0
     assert len(result["query_lat"]) == 77
+    assert len(result["inducing_lat"]) == 16
+    assert len(result["inducing_lon"]) == 16
     assert int((result["scalar_ratio"] < 0.9).sum()) == 2
     assert result["surface_ratio"].shape == (71, 89)
     assert result["control_unknown"].tolist() == [True, True, True, True]

@@ -14,14 +14,19 @@ The figure is an authored synthetic counterexample, not population evidence or a
 surface. A 96-point geometry grid determines 16 H3 inducing points; it does not represent measured
 people. The Matérn-5/2 lengthscale is 1,500 km, amplitude is 1, production jitter is applied, and
 the intercept is `Normal(-3.5, 1.5)`. An independent covariance solve and 256-point Gauss-Hermite
-quadrature calculate the approximate prior frequency SD at 77 midpoint queries. The hypothetical
-posterior SD is set equal to each query's local prior SD. At `(-25, 64)`, the unchanged local
+quadrature calculate the approximate prior frequency SD at 77 midpoint queries. The colored field
+follows the coverage of the 16 computational inducing locations; it is not expected to follow
+coastlines, countries or population structure. Country outlines locate the authored coordinates
+only and do not enter the calculation. The hypothetical posterior SD is set equal to each query's
+local prior SD. At `(-25, 64)`, the unchanged local
 distribution has ratio 1.0 with the matched denominator but about 0.895338 with the old scalar
 reference, which crosses the 0.9 support threshold. Four distant controls remain `unknown` by the
-unchanged distance rule. The map shows the resulting spatial normalization error, the old
-single-location reference, and the two diagnostic query cells that cross the threshold. The ranked
-panel shows the old ratios for all 77 cells against the correct no-update ratio of 1.0. The dense
-map is evaluated only over the authored geometry; grey background is unevaluated.
+unchanged distance rule. The paired maps show the resulting normalization error under the old
+single-location denominator and the uniform ratio of 1.0 under the correct local denominator. The
+old panel marks the actual inducing locations that cause the spatial pattern and the two diagnostic
+query cells that cross the threshold. A world locator shows the authored domain and all four
+unknown controls. The dense maps are evaluated only over the authored geometry; grey background
+is unevaluated.
 
 The production interface samples the retained PyMC model's existing `freq_pred` node at requested
 coordinates. This includes the model's actual hyperpriors and HSGP or inducing geometry. The
