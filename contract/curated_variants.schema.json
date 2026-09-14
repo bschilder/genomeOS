@@ -1,0 +1,187 @@
+{
+  "coerce": true,
+  "columns": {
+    "canonical_identifier": {
+      "dtype": "string[pyarrow]"
+    },
+    "clinical_context": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "clinical_domain": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "mendelian",
+        "pharmacogenomic"
+      ]
+    },
+    "display_name": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "entity_type": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "sequence_variant",
+        "named_allele",
+        "hla_allele",
+        "copy_number_state"
+      ]
+    },
+    "founder_context": {
+      "dtype": "string[pyarrow]"
+    },
+    "gene": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[A-Z0-9-]+$"
+    },
+    "identity_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "resolved",
+        "unresolved"
+      ]
+    },
+    "inclusion_route": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "clinvar_penetrance",
+        "cpic_a_b",
+        "founder_validation",
+        "carrier_screening_validation"
+      ]
+    },
+    "inheritance": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "autosomal_recessive",
+        "autosomal_dominant",
+        "x_linked_recessive",
+        "x_linked_dominant",
+        "mitochondrial",
+        "not_applicable"
+      ]
+    },
+    "observation_type": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "biallelic_allele_count",
+        "multiallelic_allele_count",
+        "named_haplotype_count",
+        "copy_number_carrier_count"
+      ]
+    },
+    "penetrance_evidence_locator": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^https://.+|^$"
+    },
+    "penetrance_evidence_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "not_applicable",
+        "identified_pending_review",
+        "verified",
+        "not_identified",
+        "ambiguous"
+      ]
+    },
+    "project_review_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "pending",
+        "verified",
+        "rejected"
+      ]
+    },
+    "proposal_method": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "automated_proposal",
+        "manual_curation",
+        "deterministic_import"
+      ]
+    },
+    "proposed_by": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^(?:human|agent|import):[^\\s]+$"
+    },
+    "refusal_reason": {
+      "dtype": "string[pyarrow]"
+    },
+    "reviewed_at": {
+      "dtype": "string[pyarrow]"
+    },
+    "reviewed_by": {
+      "dtype": "string[pyarrow]"
+    },
+    "set_version": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "source_classification": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "source_name": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "source_record_id": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "source_release": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "source_url": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^https://.+|^$"
+    },
+    "variant_id": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      },
+      "unique": true
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "curated_variants",
+  "schema_type": "dataframe",
+  "strict": true,
+  "unique": [
+    "source_name",
+    "source_record_id"
+  ]
+}
