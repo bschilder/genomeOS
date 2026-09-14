@@ -86,6 +86,8 @@ background; there is a glossary at the end.
 | Document | What it covers |
 |---|---|
 | [Project overview](docs/overview.md) | **Start here.** Motivation, vision, goals, data sources, how to contribute |
+| [Contributing](CONTRIBUTING.md) · [Agent contract](AGENTS.md) | How to submit code or data, and every rule CI enforces |
+| [Literature evidence curation](docs/literature-evidence-curation.md) | The contract for submitting publication measurements, column by column |
 | [Atlas v1 design spec](docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md) | The full technical design for sub-projects P0–P5 |
 | [Implementation plan 1](docs/superpowers/plans/2026-08-22-atlas-data-foundation.md) | Task-by-task plan for the data foundation (P0 + P1) |
 | [Pan-UKB architecture](docs/panukb-architecture.md) | The serving model for the GWAS evidence layer |
@@ -109,6 +111,12 @@ people who can open doors to datasets.
 4. **Pick something up** from the [project board](https://github.com/users/bschilder/projects/8).
    Filter by `skill:*` to find what you can do; `Ready` means fully specified and unblocked, so
    take it without asking.
+
+**Before writing code or submitting data**, read [`CONTRIBUTING.md`](CONTRIBUTING.md) — it is a
+short router to the doc for your workstream and the gates CI enforces — and then
+[`AGENTS.md`](AGENTS.md), which is the contract. Data contributions have a stricter bar than code,
+because a wrong number is harder to detect than a broken build and can be cited before anyone
+notices; `CONTRIBUTING.md` says what that bar is.
 
 **Found a bug, or want a feature?** Open an issue. Features get triaged before implementation —
 priority here is derived from the dependency graph, so please don't arrive with an unrequested
