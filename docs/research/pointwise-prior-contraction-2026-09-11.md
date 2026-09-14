@@ -11,15 +11,17 @@ has not changed.
 ![Synthetic pointwise-prior normalization counterexample](https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/prior_normalization.png)
 
 The figure is an authored synthetic counterexample, not population evidence or a fitted genetic
-surface. Geography now enters the calculation in a narrow, visible way: 59 resolution-1 H3 land
-cells inside the displayed extent are the synthetic support sites, and 414 resolution-2 H3 land
-cells are evaluated. Ocean cells are absent rather than covered by an artificial rectangular
-field. The support sites determine 16 H3 inducing locations; none represents measured people. The
-Matérn-5/2 lengthscale is 1,500 km, amplitude is 1, production jitter is applied, and the intercept
-is `Normal(-3.5, 1.5)`. An independent covariance solve and 256-point Gauss-Hermite quadrature
-calculate the approximate prior frequency SD at every evaluation cell. Color follows distance to
-the displayed computational inducing locations; it is a numerical prior-SD ratio, not allele
-frequency or population structure.
+surface. Land is the evaluation domain, while great-circle distance among query and inducing
+locations is the relevant geography. The first panel therefore maps distance to the nearest of 16
+computational inducing locations before the second panel maps the resulting scalar-normalization
+error. Across the 414 evaluated cells their descriptive Pearson correlation is -0.928. Country
+boundaries provide orientation but do not enter the calculation. The 59 resolution-1 H3 land cells
+inside the displayed extent are synthetic support sites, and 414 resolution-2 H3 land cells are
+evaluated. Ocean cells are absent rather than covered by an artificial rectangular field. None of
+the sites represents measured people. The Matérn-5/2 lengthscale is 1,500 km, amplitude is 1,
+production jitter is applied, and the intercept is `Normal(-3.5, 1.5)`. An independent covariance
+solve and 256-point Gauss-Hermite quadrature calculate the approximate prior frequency SD at every
+evaluation cell. The numerical prior-SD ratio is not allele frequency or population structure.
 
 The hypothetical posterior SD equals each cell's local prior SD. The old scalar denominator is
 fixed to the displayed support cell near 20° N, 2° E, representing the arbitrary observation-order

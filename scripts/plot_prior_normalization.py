@@ -109,6 +109,9 @@ def compute_counterexample() -> dict[str, np.ndarray | float | int]:
     inducing_lat, inducing_lon = _from_unit_sphere(inducing)
     query_cells, query_lat, query_lon = _regional_land_cells(2)
     local_sd = _conditional_frequency_sd(inducing, query_lat, query_lon)
+    nearest_inducing_distance_km = _haversine_to_grid(
+        query_lat, query_lon, inducing_lat, inducing_lon
+    )
     # The old implementation used whichever observation happened to come first. Fix that
     # otherwise arbitrary ordering to a support cell near (20 N, 2 E), which is collocated with
     # an inducing location and therefore makes the scalar-denominator failure easy to inspect.
@@ -132,6 +135,7 @@ def compute_counterexample() -> dict[str, np.ndarray | float | int]:
         "query_cells": query_cells,
         "query_lat": query_lat,
         "query_lon": query_lon,
+        "nearest_inducing_distance_km": nearest_inducing_distance_km,
         "local_sd": local_sd,
         "scalar_sd": scalar_sd,
         "scalar_ratio": local_sd / scalar_sd,
@@ -144,18 +148,45 @@ def compute_counterexample() -> dict[str, np.ndarray | float | int]:
 
 
 def render(out: Path) -> Path:
-    """Map the denominator error on the land cells that determine the synthetic geometry."""
+    """Map the approximation geometry, resulting scalar error, and corrected statistic."""
     result = compute_counterexample()
     scalar_ratio = result["scalar_ratio"]
+    inducing_distance = result["nearest_inducing_distance_km"]
+    distance_correlation = float(np.corrcoef(inducing_distance, scalar_ratio)[0, 1])
     false_support = scalar_ratio < SUPPORT_THRESHOLD
     polygons, kept = h3_polygons(result["query_cells"])
     kept = np.asarray(kept)
-    fig, (old_ax, local_ax) = plt.subplots(1, 2, figsize=(13.4, 5.7))
+    fig, (geometry_ax, old_ax, local_ax) = plt.subplots(1, 3, figsize=(18.2, 5.7))
     norm = Normalize(vmin=0.75, vmax=1.0)
-    for axis in (old_ax, local_ax):
+    for axis in (geometry_ax, old_ax, local_ax):
         axis.set_facecolor("#eceff1")
         axis.set(xlim=(-25, 73), ylim=(-35, 45), xlabel="longitude")
         axis.grid(color="white", linewidth=0.45, alpha=0.4)
+
+    distance_surface = PolyCollection(
+        polygons, array=inducing_distance[kept], cmap="viridis_r",
+        norm=Normalize(vmin=0.0, vmax=2250.0), edgecolors="none", zorder=2,
+    )
+    geometry_ax.add_collection(distance_surface)
+    draw_countries(geometry_ax, color="#374151", linewidth=0.55, zorder=3)
+    geometry_ax.scatter(
+        result["anchor_lon"], result["anchor_lat"], s=8, facecolor="#4b5563",
+        edgecolor="none", zorder=4, label="59 synthetic H3 land support sites",
+    )
+    geometry_ax.scatter(
+        result["inducing_lon"], result["inducing_lat"], s=24,
+        facecolor="white", edgecolor="#111827", linewidth=0.8, zorder=5,
+        label="16 computational inducing locations",
+    )
+    geometry_ax.set(
+        ylabel="latitude",
+        title="A. Computational geometry\nnearest inducing distance",
+    )
+    geometry_ax.legend(loc="lower left", fontsize=7.2, frameon=True)
+    distance_colorbar = fig.colorbar(
+        distance_surface, ax=geometry_ax, shrink=0.78, pad=0.025
+    )
+    distance_colorbar.set_label("distance to nearest inducing location (km)", fontsize=8.5)
 
     surface = PolyCollection(
         polygons, array=scalar_ratio[kept], cmap="Blues_r", norm=norm,
@@ -187,6 +218,13 @@ def render(out: Path) -> Path:
         [reference_lon], [reference_lat], marker="*", s=150, facecolor="#111827",
         edgecolor="white", linewidth=0.7, zorder=7, label="old denominator location",
     )
+    old_ax.annotate(
+        "one denominator site",
+        xy=(reference_lon, reference_lat), xytext=(reference_lon + 8.0, reference_lat + 5.0),
+        fontsize=7.5, color="#111827", ha="left",
+        arrowprops={"arrowstyle": "->", "color": "#111827", "linewidth": 0.7},
+        zorder=8,
+    )
     old_ax.text(
         0.02, 0.97,
         f"{int(false_support.sum())}/{len(scalar_ratio)} land cells falsely cross 0.9\n"
@@ -195,10 +233,8 @@ def render(out: Path) -> Path:
         bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.9, "edgecolor": "#7f1d1d"},
     )
     old_ax.set(
-        ylabel="latitude",
-        title="Old: one location supplies every denominator",
+        title="B. Old scalar denominator\ninvented posterior contraction",
     )
-    old_ax.legend(loc="lower left", fontsize=7.2, frameon=True)
     colorbar = fig.colorbar(surface, ax=old_ax, shrink=0.78, pad=0.025)
     colorbar.set_label("posterior SD / old scalar prior SD", fontsize=8.5)
     colorbar.set_ticks([0.76, 0.8, 0.9, 1.0])
@@ -226,18 +262,18 @@ def render(out: Path) -> Path:
         bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.9,
               "edgecolor": "#047857"},
     )
-    local_ax.set(title="Correct: each location uses its own prior SD")
+    local_ax.set(title="C. Correct local denominator\nno invented contraction")
     fig.suptitle(
-        "Synthetic no-update test on H3 land cells: basis geometry must not look like learning",
+        "A spatial approximation artifact must not look like learning",
         fontsize=13.5,
     )
     fig.text(
         0.5, 0.91,
-        "Land geography determines the support and evaluation cells; color is a numerical "
-        "prior-SD ratio, not allele frequency.",
+        "Land is the evaluation domain. Great-circle distance to the inducing locations drives "
+        f"the old ratio (Pearson r = {distance_correlation:.3f}).",
         ha="center", fontsize=9.2, color="#374151",
     )
-    fig.subplots_adjust(left=0.06, right=0.97, bottom=0.12, top=0.82, wspace=0.22)
+    fig.subplots_adjust(left=0.045, right=0.985, bottom=0.12, top=0.82, wspace=0.22)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)
