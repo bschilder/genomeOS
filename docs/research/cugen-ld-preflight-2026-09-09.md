@@ -1,6 +1,6 @@
 # Local CuGen LD preflight — September 9, 2026
 
-**Implementation target:** the owner's `/Users/bschilder/code/cugen` checkout, clean at `03df1688abf52d295bd85d47f1aca6130440b553`, package version `0.1.7`. No pg_gpu substitution. This advances the WP6 admission investigation in [#189](https://github.com/bschilder/genomeOS/issues/189); no genomeOS LD adapter or GPU LD benchmark has been implemented yet.
+**Implementation target:** the owner's `$HOME/code/cugen` checkout, clean at `03df1688abf52d295bd85d47f1aca6130440b553`, package version `0.1.7`. No pg_gpu substitution. This advances the WP6 admission investigation in [#189](https://github.com/bschilder/genomeOS/issues/189); no genomeOS LD adapter or GPU LD benchmark has been implemented yet.
 
 **Scientific objective:** establish the selected library's genotype-correlation semantics before feeding training-only LD into a joint allele-frequency model. **Measurable output:** explicit pair identity, co-observed counts and independent-reference agreement, followed later by GPU parity, full-workflow cost and held-out predictive benefit. **Interface:** CuGen's existing `cugen.ld.ld_matrix`, wrapped later by an offline, versioned genomeOS adapter. **Refusals:** no marginal-AF-to-LD inference, unknown genotype encoding, invented sample mapping, missing annotation, silent missing-as-reference conversion or unauthorized data movement.
 
@@ -23,10 +23,10 @@ The run emitted **70 `Pandas4Warning` warnings** from `cugen/ld.py:582`: its `as
 Reproduction command (create a fresh temporary directory first; replace only the temporary path):
 
 ```bash
-cd /Users/bschilder/code/cugen
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=/Users/bschilder/code/cugen \
+cd "$HOME/code/cugen"
+PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$HOME/code/cugen" \
 MPLCONFIGDIR=/private/tmp/genomeos-cugen-preflight.RAuhlh/matplotlib \
-/Users/bschilder/code/genomeOS/.venv/bin/python -m pytest -q -p no:cacheprovider \
+"$HOME/code/genomeOS/.venv/bin/python" -m pytest -q -p no:cacheprovider \
   --basetemp=/private/tmp/genomeos-cugen-preflight.RAuhlh/pytest \
   --junitxml=/private/tmp/genomeos-cugen-preflight.RAuhlh/cpu-ld-tests.xml \
   tests/test_ld.py::test_r_matches_corrcoef \
