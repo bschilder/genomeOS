@@ -24,7 +24,7 @@ These are **author-reported results**, not genomeOS replications. Runtime compar
 | Array conversion: 21 minutes across 22 CPU jobs | One-time preparation, outside the headline downstream runtime; genotype conversion is not free | S4 |
 | Common-variant null calibration across 200 simulations | Simulation evidence for their association procedure, not calibration of AF count prediction | S5; S21 |
 
-Utility timings for LD/subsetting and other tools are demonstrations rather than controlled cross-tool comparisons (S10). The authors explicitly identify non-European, admixed and founder-cohort validation, probabilistic/dosage genotypes, and smaller-device operation as remaining work (S11). The current analysis uses hard-called imputed genotypes (S14); uncertainty discarded during hard-calling cannot be recovered by treating the output as exact dosage.
+Utility timings for subsetting, QC, PRS scoring and plotting are demonstrations rather than controlled cross-tool comparisons (S10). The authors explicitly identify non-European, admixed and founder-cohort validation, probabilistic/dosage genotypes, and smaller-device operation as remaining work (S11). The current analysis uses hard-called imputed genotypes (S14); uncertainty discarded during hard-calling cannot be recovered by treating the output as exact dosage.
 
 ## Methods that inform the next experiments
 
