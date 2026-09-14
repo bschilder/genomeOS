@@ -10,7 +10,10 @@ continue to work; this module is where they now live.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+
+import numpy as np
 
 from genomeos.surfaces.fit import FitConfig, SurfaceFit
 
@@ -33,6 +36,30 @@ _FIT_FIELDS = (
 )
 
 
+def _materialize_inference_data(idata):
+    """Copy sampler-backed arrays to NumPy so cache reload cannot change their dtype."""
+    if hasattr(idata, "subtree"):
+        materialized = idata.copy(deep=True)
+        for node in materialized.subtree:
+            node.dataset = node.dataset.map(
+                lambda variable: variable.copy(data=np.asarray(variable.data))
+            )
+        return materialized
+
+    materialized = idata.copy()
+    groups = materialized.groups
+    if callable(groups):
+        groups = groups()
+    for group in groups:
+        dataset = getattr(materialized, group)
+        setattr(
+            materialized,
+            group,
+            dataset.map(lambda variable: variable.copy(data=np.asarray(variable.data))),
+        )
+    return materialized
+
+
 def save_fit(fit: SurfaceFit, path: str | Path) -> Path:
     """Persist a trained surface so predictions cost seconds instead of a refit.
 
@@ -44,14 +71,17 @@ def save_fit(fit: SurfaceFit, path: str | Path) -> Path:
     Two limits worth knowing. The file is **coupled to this environment**: a PyMC or pytensor
     upgrade can make it unreadable, so it is a cache, never an archival artifact — §6 artifacts
     are the parquet outputs, not this. And pickle executes arbitrary code on load, so only ever
-    load files you produced yourself.
+    load files you produced yourself. Sampler-backed inference arrays are materialized on a copy
+    before serialization so a clean-process reload cannot silently change their dtype; the live
+    fitted object is not mutated.
     """
     import cloudpickle
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    persisted = replace(fit, idata=_materialize_inference_data(fit.idata))
     with path.open("wb") as stream:
-        cloudpickle.dump({"format": FIT_FORMAT, "fit": fit}, stream)
+        cloudpickle.dump({"format": FIT_FORMAT, "fit": persisted}, stream)
     return path
 
 
@@ -91,4 +121,7 @@ def load_fit(path: str | Path) -> SurfaceFit:
         raise ValueError(f"{path}: retained model is missing predictive nodes {missing_nodes}")
     if fit_format == FIT_FORMAT and isinstance(fit, SurfaceFit):
         return fit
-    return SurfaceFit(**{field: getattr(fit, field) for field in _FIT_FIELDS})
+    fields = {field: getattr(fit, field) for field in _FIT_FIELDS}
+    if hasattr(fit, "prediction_metadata"):
+        fields["prediction_metadata"] = fit.prediction_metadata
+    return SurfaceFit(**fields)
