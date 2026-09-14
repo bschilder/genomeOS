@@ -207,25 +207,24 @@ column without changing its separate read API schema or doing inference.
 
 - [ ] **Step 6: Generate the synthetic review figure and focused note.**
 
-Use the issue's fully authored conditional counterexample: anchor grid
-latitude range(-30,41,10), longitude range(-20,69,8); H3 placement budget16,
-reach1500 km; Matérn-5/2 length1500 km, amplitude1, production jitter; intercept
-Normal(-3.5,1.5). Evaluate the 77 midpoint queries on latitude
-range(-25,36,10), longitude range(-16,65,8). Include four clearly labelled far
-controls at (-75,-150), (-70,150), (75,-150), (80,160), and their actual
-distance-based unknown status. This is fixed-parameter
-synthetic geometry, not population observations or fitted posterior evidence.
+Use an authored conditional counterexample on African and southwest-Asian land. Select 16
+resolution-1 H3 land support sites with deterministic maximin distance, then use the production
+H3 placement at budget16 and reach1500 km so each inducing location is visibly collocated with a
+support site. Evaluate every resolution-2 H3 land cell in the displayed extent. Use Matérn-5/2
+length1500 km, amplitude1, production jitter and intercept Normal(-3.5,1.5). Retain four far
+controls at (-75,-150), (-70,150), (75,-150), (80,160), and test their actual distance-based
+unknown status. This is fixed-parameter synthetic geometry, not population observations or fitted
+posterior evidence.
 
 Calculate conditional SD with an independent covariance solve and 256-point
 Gauss-Hermite logistic-normal moments, using the exact equation in issue #266.
 For the no-update comparison set hypothetical posterior SD equal to each local
-prior SD. Show the scalar-reference and matched-local support maps side by side,
-with the unchanged-distribution assumption visible. Give unevaluated background
-and unknown controls explicit labels, keep all 77 queries, and never mark an
-anchor as measured genetic data. If showing numeric uncertainty, use a sequential
-low-to-high ramp. The known query (-25,64) must have scalar ratio about
-0.8953380210217113 and local ratio1. Plotting tests verify those numeric controls
-and successful creation of the standalone PNG, not pixel-perfect duplication.
+prior SD. Show nearest-inducing great-circle distance, the old ratio on the same H3 cells and the
+corrected uniform control, with the unchanged-distribution assumption visible. Use country
+outlines for orientation only, exclude ocean cells and never mark a synthetic support site as
+measured genetic data. If showing numeric uncertainty, use a sequential low-to-high ramp. Plotting
+tests verify the authored geometry, numeric controls and successful creation of the standalone
+PNG, not pixel-perfect duplication.
 
 Run `python scripts/plot_prior_normalization.py --out docs/figures/prior_normalization.png`.
 The note explains the conditional counterexample, actual-model API validation,

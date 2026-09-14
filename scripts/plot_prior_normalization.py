@@ -34,6 +34,7 @@ SEED = 42
 LENGTHSCALE_KM = 1500.0
 SUPPORT_THRESHOLD = 0.9
 REGION = (-20.0, 68.0, -30.0, 40.0)
+N_SUPPORT_SITES = 16
 
 
 def _matern52(left: np.ndarray, right: np.ndarray) -> np.ndarray:
@@ -102,10 +103,51 @@ def _regional_land_cells(resolution: int) -> tuple[np.ndarray, np.ndarray, np.nd
     return cells[order], centres[order, 0], centres[order, 1]
 
 
+def _spatially_balanced_sites(
+    cells: np.ndarray,
+    lat: np.ndarray,
+    lon: np.ndarray,
+    n_sites: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Choose deterministic synthetic sites that cover the authored land domain."""
+    if not 1 <= n_sites <= len(cells):
+        raise ValueError("n_sites must be between 1 and the number of candidate cells")
+
+    # Compute all geographic distances once. The maximin traversal is sequential because each
+    # choice changes the next score, while its expensive distance work stays vectorized.
+    lat1 = np.radians(lat[:, None])
+    lon1 = np.radians(lon[:, None])
+    lat2 = np.radians(lat[None, :])
+    lon2 = np.radians(lon[None, :])
+    a = (
+        np.sin((lat2 - lat1) / 2.0) ** 2
+        + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2.0) ** 2
+    )
+    pairwise_km = 2.0 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
+
+    west, east, south, north = REGION
+    centre_lat, centre_lon = (south + north) / 2.0, (west + east) / 2.0
+    chosen = np.empty(n_sites, dtype=int)
+    chosen[0] = int(np.argmin((lat - centre_lat) ** 2 + (lon - centre_lon) ** 2))
+    available = np.ones(len(cells), dtype=bool)
+    available[chosen[0]] = False
+    nearest_km = pairwise_km[:, chosen[0]].copy()
+    for index in range(1, n_sites):
+        chosen[index] = int(np.argmax(np.where(available, nearest_km, -np.inf)))
+        available[chosen[index]] = False
+        nearest_km = np.minimum(nearest_km, pairwise_km[:, chosen[index]])
+    return cells[chosen], lat[chosen], lon[chosen]
+
+
 def compute_counterexample() -> dict[str, np.ndarray | float | int]:
     """Return the fully authored fixed-geometry no-update counterexample from issue #266."""
     anchor_cells, anchor_lat, anchor_lon = _regional_land_cells(1)
-    inducing = h3_inducing_points(anchor_lat, anchor_lon, 16, reach_km=1500.0)
+    anchor_cells, anchor_lat, anchor_lon = _spatially_balanced_sites(
+        anchor_cells, anchor_lat, anchor_lon, N_SUPPORT_SITES
+    )
+    inducing = h3_inducing_points(
+        anchor_lat, anchor_lon, N_SUPPORT_SITES, reach_km=1500.0
+    )
     inducing_lat, inducing_lon = _from_unit_sphere(inducing)
     query_cells, query_lat, query_lon = _regional_land_cells(2)
     local_sd = _conditional_frequency_sd(inducing, query_lat, query_lon)
@@ -171,7 +213,7 @@ def render(out: Path) -> Path:
     draw_countries(geometry_ax, color="#374151", linewidth=0.55, zorder=3)
     geometry_ax.scatter(
         result["anchor_lon"], result["anchor_lat"], s=8, facecolor="#4b5563",
-        edgecolor="none", zorder=4, label="59 synthetic H3 land support sites",
+        edgecolor="none", zorder=4, label="16 spatially balanced synthetic support sites",
     )
     geometry_ax.scatter(
         result["inducing_lon"], result["inducing_lat"], s=24,
@@ -204,7 +246,7 @@ def render(out: Path) -> Path:
     draw_countries(old_ax, color="#374151", linewidth=0.55, zorder=4)
     old_ax.scatter(
         result["anchor_lon"], result["anchor_lat"], s=8, facecolor="#4b5563",
-        edgecolor="none", zorder=5, label="59 synthetic H3 land support sites",
+        edgecolor="none", zorder=5, label="16 spatially balanced synthetic support sites",
     )
     old_ax.scatter(
         result["inducing_lon"], result["inducing_lat"], s=24,
