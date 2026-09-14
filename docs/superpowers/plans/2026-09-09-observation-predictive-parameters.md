@@ -42,10 +42,10 @@
 Commands below run from the isolated modeling worktree, with these task-specific variables. Do not reinstall the shared editable environment or modify the original checkout.
 
 ```bash
-export PYTHONPATH=/Users/bschilder/code/genomeOS/.claude/worktrees/global-af-modeling
+export PYTHONPATH="$HOME/code/genomeOS/.claude/worktrees/global-af-modeling"
 export PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-modeling-cache.VPqlMe/pytensor
 export MPLCONFIGDIR=/private/tmp/genomeos-modeling-cache.VPqlMe/matplotlib
-AF_PYTHON=/Users/bschilder/code/genomeOS/.venv/bin/python
+AF_PYTHON="$HOME/code/genomeOS/.venv/bin/python"
 ```
 
 If execution uses a different isolated worktree, explicitly replace PYTHONPATH with that verified path and record it. Each task's gate commands are:
