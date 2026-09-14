@@ -147,7 +147,13 @@ only the failed ones, in a fresh source-keyed directory. All completed in
 164.12–211.80 seconds per process. The first wave overlapped the full CPU test
 suite; these timings are not a controlled backend comparison or a speedup claim.
 
-## Verification and outstanding CUDA evidence
+## Verification and initially outstanding CUDA evidence
+
+**Later update:** the exact changed source subsequently passed128tests with
+no skips on an A40. The [CUDA verification addendum](count-scoring-cuda-validation-2026-09-10.md)
+records the approved source-only transfer, historical regression, parity and
+pod cleanup. The pending-state account below is retained as the original
+chronology, not the current hardware status.
 
 At the clean reviewed source:
 
