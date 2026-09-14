@@ -15,7 +15,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
-from matplotlib.lines import Line2D  # noqa: E402
+from matplotlib.colors import TwoSlopeNorm  # noqa: E402
 
 from genomeos.surfaces.fit import (  # noqa: E402
     EARTH_RADIUS_KM,
@@ -73,21 +73,23 @@ def _haversine_to_grid(
 
 def compute_counterexample() -> dict[str, np.ndarray | float]:
     """Return the fully authored fixed-geometry no-update counterexample from issue #266."""
-    anchor_lat = np.array(
-        [lat for lat in range(-30, 41, 10) for _ in range(-20, 69, 8)], dtype=float
+    anchor_lon_grid, anchor_lat_grid = np.meshgrid(
+        np.arange(-20.0, 69.0, 8.0), np.arange(-30.0, 41.0, 10.0)
     )
-    anchor_lon = np.array(
-        [lon for _ in range(-30, 41, 10) for lon in range(-20, 69, 8)], dtype=float
-    )
+    anchor_lat, anchor_lon = anchor_lat_grid.ravel(), anchor_lon_grid.ravel()
     inducing = h3_inducing_points(anchor_lat, anchor_lon, 16, reach_km=1500.0)
-    query_lat = np.array(
-        [lat for lat in range(-25, 36, 10) for _ in range(-16, 65, 8)], dtype=float
+    query_lon_grid, query_lat_grid = np.meshgrid(
+        np.arange(-16.0, 65.0, 8.0), np.arange(-25.0, 36.0, 10.0)
     )
-    query_lon = np.array(
-        [lon for _ in range(-25, 36, 10) for lon in range(-16, 65, 8)], dtype=float
-    )
+    query_lat, query_lon = query_lat_grid.ravel(), query_lon_grid.ravel()
     local_sd = _conditional_frequency_sd(inducing, query_lat, query_lon)
     scalar_sd = float(_conditional_frequency_sd(inducing, anchor_lat[:1], anchor_lon[:1])[0])
+    surface_lon, surface_lat = np.meshgrid(
+        np.linspace(-20.0, 68.0, 89), np.linspace(-30.0, 40.0, 71)
+    )
+    surface_ratio = _conditional_frequency_sd(
+        inducing, surface_lat.ravel(), surface_lon.ravel()
+    ).reshape(surface_lat.shape) / scalar_sd
     controls = np.array([[-75.0, -150.0], [-70.0, 150.0], [75.0, -150.0], [80.0, 160.0]])
     control_distance = _haversine_to_grid(
         controls[:, 0], controls[:, 1], anchor_lat, anchor_lon
@@ -101,6 +103,9 @@ def compute_counterexample() -> dict[str, np.ndarray | float]:
         "scalar_sd": scalar_sd,
         "scalar_ratio": local_sd / scalar_sd,
         "local_ratio": local_sd / local_sd,
+        "surface_lat": surface_lat,
+        "surface_lon": surface_lon,
+        "surface_ratio": surface_ratio,
         "controls": controls,
         "control_distance_km": control_distance,
         "control_unknown": control_distance > 2.0 * LENGTHSCALE_KM,
@@ -108,81 +113,94 @@ def compute_counterexample() -> dict[str, np.ndarray | float]:
 
 
 def render(out: Path) -> Path:
-    """Render the counterexample as two support maps with a shared low-to-high ratio ramp."""
+    """Map the spatial denominator error and summarize its classification effect."""
     result = compute_counterexample()
     query_lat = result["query_lat"]
     query_lon = result["query_lon"]
-    controls = result["controls"]
-    ratios = (result["scalar_ratio"], result["local_ratio"])
-    titles = ("Scalar reference: false contraction", "Matched local prior: no update")
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.8))
-    norm = plt.Normalize(
-        min(float(np.min(ratio)) for ratio in ratios),
-        max(float(np.max(ratio)) for ratio in ratios),
+    scalar_ratio = result["scalar_ratio"]
+    false_support = scalar_ratio < SUPPORT_THRESHOLD
+    fig, (map_ax, diagnostic_ax) = plt.subplots(
+        1, 2, figsize=(13.5, 5.8), gridspec_kw={"width_ratios": (1.55, 1.0)}
     )
-    for ax, ratio, title in zip(axes, ratios, titles, strict=True):
-        ax.set_facecolor("#eceff1")
-        draw_countries(ax, color="#a4abb3", linewidth=0.45)
-        prior_dominated = ratio >= SUPPORT_THRESHOLD
-        ax.scatter(
-            query_lon[~prior_dominated], query_lat[~prior_dominated], c=ratio[~prior_dominated],
-            cmap="viridis", norm=norm, s=38, marker="o", edgecolor="black", linewidth=0.3,
-            label="interpolated (<0.9)", zorder=3,
-        )
-        scatter = ax.scatter(
-            query_lon[prior_dominated], query_lat[prior_dominated], c=ratio[prior_dominated],
-            cmap="viridis", norm=norm, s=42, marker="s", edgecolor="black", linewidth=0.3,
-            label="prior dominated (≥0.9)", zorder=3,
-        )
-        ax.scatter(
-            result["anchor_lon"], result["anchor_lat"], marker="^", s=12,
-            facecolor="none", edgecolor="#667085", linewidth=0.45, zorder=2,
-        )
-        ax.scatter(
-            controls[:, 1], controls[:, 0], marker="x", s=45, color="#4b5563",
-            linewidth=1.2, label="unknown (>2ρ)", zorder=4,
-        )
-        for control_lat, control_lon in controls:
-            ax.annotate(
-                f"({control_lat:.0f}, {control_lon:.0f})",
-                (control_lon, control_lat),
-                xytext=(4, 4),
-                textcoords="offset points",
-                fontsize=6.5,
-                color="#4b5563",
-            )
-        ax.set(xlim=(-180, 180), ylim=(-90, 90), xlabel="longitude", ylabel="latitude", title=title)
-        ax.text(-174, -84, "grey background: unevaluated", fontsize=8, color="#4b5563")
-        ax.grid(color="white", linewidth=0.5, alpha=0.7)
-    target = (query_lat == -25) & (query_lon == 64)
-    axes[0].annotate(
-        f"(-25°, 64°): {result['scalar_ratio'][target].item():.6f}",
-        xy=(64, -25), xytext=(82, -55), arrowprops={"arrowstyle": "->", "lw": 0.8}, fontsize=8,
+    norm = TwoSlopeNorm(
+        vmin=float(np.min(result["surface_ratio"])),
+        vcenter=1.0,
+        vmax=float(np.max(result["surface_ratio"])),
     )
-    legend = [
-        Line2D([], [], marker="o", linestyle="none", color="black", markerfacecolor="white",
-               label="interpolated support"),
-        Line2D([], [], marker="s", linestyle="none", color="black", markerfacecolor="white",
-               label="prior-dominated support"),
-        Line2D([], [], marker="x", linestyle="none", color="#4b5563", label="unknown control"),
-        Line2D([], [], marker="^", linestyle="none", color="#667085", markerfacecolor="none",
-               label="synthetic geometry anchor (not measured data)"),
-    ]
-    fig.legend(handles=legend, loc="lower center", bbox_to_anchor=(0.45, 0.015), ncol=4, fontsize=8)
+    map_ax.set_facecolor("#eceff1")
+    draw_countries(map_ax, color="#9aa4af", linewidth=0.55)
+    surface = map_ax.contourf(
+        result["surface_lon"], result["surface_lat"], result["surface_ratio"],
+        levels=24, cmap="RdBu_r", norm=norm, alpha=0.9, zorder=2,
+    )
+    map_ax.contour(
+        result["surface_lon"], result["surface_lat"], result["surface_ratio"],
+        levels=[SUPPORT_THRESHOLD], colors="#7f1d1d", linewidths=1.8, zorder=3,
+    )
+    map_ax.scatter(
+        query_lon[false_support], query_lat[false_support], s=72, facecolor="none",
+        edgecolor="#7f1d1d", linewidth=1.8, zorder=4,
+    )
+    reference_lat = float(result["anchor_lat"][0])
+    reference_lon = float(result["anchor_lon"][0])
+    map_ax.scatter(
+        [reference_lon], [reference_lat], marker="*", s=150, facecolor="#111827",
+        edgecolor="white", linewidth=0.7, zorder=5,
+    )
+    map_ax.annotate(
+        "single prior used by old code",
+        (reference_lon, reference_lat), xytext=(reference_lon + 9, reference_lat + 12),
+        arrowprops={"arrowstyle": "->", "lw": 0.9}, fontsize=8.5,
+    )
+    map_ax.text(
+        0.02, 0.97,
+        f"{int(false_support.sum())} of {len(query_lat)} diagnostic cells falsely cross 0.9",
+        transform=map_ax.transAxes, va="top", fontsize=9,
+        bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.9, "edgecolor": "#7f1d1d"},
+    )
+    map_ax.set(
+        xlim=(-35, 82), ylim=(-42, 52), xlabel="longitude", ylabel="latitude",
+        title="Error induced by one location's prior SD",
+    )
+    map_ax.grid(color="white", linewidth=0.5, alpha=0.45)
+    colorbar = fig.colorbar(surface, ax=map_ax, shrink=0.82, pad=0.025)
+    colorbar.set_label("local prior SD / single-location prior SD")
+    colorbar.set_ticks([0.86, 0.9, 0.95, 1.0, 1.05, 1.1, 1.13])
+
+    order = np.argsort(scalar_ratio)
+    ranked = scalar_ratio[order]
+    ranks = np.arange(1, len(ranked) + 1)
+    diagnostic_ax.axvline(
+        SUPPORT_THRESHOLD, color="#7f1d1d", linestyle="--", linewidth=1.4,
+        label="support threshold (0.9)",
+    )
+    diagnostic_ax.axvline(1.0, color="#047857", linewidth=2.0, label="correct ratio = 1.0")
+    diagnostic_ax.scatter(
+        ranked, ranks, c=np.where(ranked < SUPPORT_THRESHOLD, "#7f1d1d", "#2563eb"),
+        s=22, linewidth=0, label="old ratio at 77 query cells", zorder=3,
+    )
+    diagnostic_ax.annotate(
+        "false support calls", xy=(ranked[0], 1), xytext=(0.925, 12),
+        arrowprops={"arrowstyle": "->", "lw": 0.9, "color": "#7f1d1d"},
+        color="#7f1d1d", fontsize=9,
+    )
+    diagnostic_ax.set(
+        xlabel="posterior SD / prior SD", ylabel="query cells, sorted by old score",
+        ylim=(0, len(ranked) + 2), title="The correction restores the no-update invariant",
+    )
+    diagnostic_ax.legend(loc="lower right", fontsize=8, frameon=True)
+    diagnostic_ax.grid(axis="x", color="#d1d5db", linewidth=0.6)
     fig.suptitle(
-        "Synthetic unchanged-distribution control: local posterior SD equals local prior SD",
-        fontsize=13,
+        "A single-location denominator creates a geographic normalization error",
+        fontsize=13.5,
     )
-    fig.subplots_adjust(left=0.06, right=0.88, bottom=0.18, top=0.86, wspace=0.12)
-    fig.colorbar(
-        scatter,
-        ax=axes,
-        shrink=0.72,
-        label=(
-            "posterior SD / reference prior SD "
-            f"(full range {norm.vmin:.3f}–{norm.vmax:.3f}, low → high)"
-        ),
+    fig.text(
+        0.5, 0.925,
+        "Synthetic no-update control: posterior SD equals the local prior SD everywhere; "
+        "no populations or observations",
+        ha="center", fontsize=9.5, color="#374151",
     )
+    fig.subplots_adjust(left=0.065, right=0.98, bottom=0.12, top=0.84, wspace=0.23)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)

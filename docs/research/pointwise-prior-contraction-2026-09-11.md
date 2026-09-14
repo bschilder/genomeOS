@@ -18,7 +18,10 @@ quadrature calculate the approximate prior frequency SD at 77 midpoint queries. 
 posterior SD is set equal to each query's local prior SD. At `(-25, 64)`, the unchanged local
 distribution has ratio 1.0 with the matched denominator but about 0.895338 with the old scalar
 reference, which crosses the 0.9 support threshold. Four distant controls remain `unknown` by the
-unchanged distance rule. Grey background is unevaluated.
+unchanged distance rule. The map shows the resulting spatial normalization error, the old
+single-location reference, and the two diagnostic query cells that cross the threshold. The ranked
+panel shows the old ratios for all 77 cells against the correct no-update ratio of 1.0. The dense
+map is evaluated only over the authored geometry; grey background is unevaluated.
 
 The production interface samples the retained PyMC model's existing `freq_pred` node at requested
 coordinates. This includes the model's actual hyperpriors and HSGP or inducing geometry. The
