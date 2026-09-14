@@ -1,0 +1,87 @@
+{
+  "coerce": true,
+  "columns": {
+    "naming_citation": {
+      "dtype": "string[pyarrow]"
+    },
+    "normalized_variant_id": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]-[ACGT]$|^$"
+    },
+    "notes": {
+      "dtype": "string[pyarrow]"
+    },
+    "printed_alleles": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^[ACGT]/[ACGT]$"
+    },
+    "printed_convention": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "reference_resource": {
+      "dtype": "string[pyarrow]"
+    },
+    "refusal_reason": {
+      "dtype": "string[pyarrow]"
+    },
+    "resolved_at": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "reviewed_by": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "rsid": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^rs[1-9][0-9]*$|^$"
+    },
+    "status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "resolved",
+        "unresolved"
+      ]
+    },
+    "strand": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^(?:plus|minus)$|^$"
+    },
+    "strand_evidence": {
+      "dtype": "string[pyarrow]"
+    },
+    "variant_id": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      },
+      "unique": true
+    },
+    "verification_status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "verified",
+        "pending"
+      ]
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "variant_normalization",
+  "schema_type": "dataframe",
+  "strict": true
+}
