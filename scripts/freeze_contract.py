@@ -25,11 +25,13 @@ from genomeos.observations.schema import (
     OBSERVATIONS_SCHEMA,
 )
 from genomeos.registry.schema import ALIASES_SCHEMA, POPULATIONS_SCHEMA
+from genomeos.registry.variants import VARIANT_NORMALIZATION_SCHEMA
 
 CONTRACT_DIR = Path(__file__).resolve().parents[1] / "contract"
 PANDERA_SCHEMAS = {
     "populations.schema.json": POPULATIONS_SCHEMA,
     "population_aliases.schema.json": ALIASES_SCHEMA,
+    "variant_normalization.schema.json": VARIANT_NORMALIZATION_SCHEMA,
     "observations.schema.json": OBSERVATIONS_SCHEMA,
     "carrier_observations.schema.json": CARRIER_OBSERVATIONS_SCHEMA,
     "literature_evidence.schema.json": LITERATURE_EVIDENCE_SCHEMA,

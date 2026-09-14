@@ -196,3 +196,40 @@ def test_a_new_manifest_refuses_blank_target_grid_provenance(field):
     values[field] = ""
     with pytest.raises(ValueError, match=field):
         ArtifactManifest(**values)
+
+
+def test_the_manifest_round_trips_full_float_precision(tmp_path):
+    """A consumer recomputes contraction as `post_sd / prior_frequency_sd`, so the manifest has to
+    carry the value the fit used rather than a readable approximation of it (#234).
+
+    `publish_artifacts.py` stores both fitted floats unrounded. That is only worth anything if the
+    artifact format preserves them, so this pins the serialisation too: add a float formatter to
+    `ArtifactManifest.to_json` and this fails, instead of every future manifest quietly losing
+    digits that decide a `prior_dominated` verdict near the threshold.
+    """
+    sd = 0.12518374619283746
+    rho = 2149.3847562819374
+    manifest = ArtifactManifest(
+        variant_id="chr11-5227002-T-A",
+        model_version="v1",
+        data_version="map-2026-08",
+        resolution=3,
+        n_cells=5,
+        correlation_range_km=rho,
+        prior_frequency_sd=sd,
+        likelihood="beta_binomial",
+        lengthscale_sigma=0.7,
+        n_observations=1071,
+        support_counts={"observed": 2},
+        target_grid_source="worldpop-1km-unconstrained",
+        target_grid_version="test",
+        measurement="allele_frequency",
+    )
+    published = json.loads(manifest.to_json())
+    assert published["prior_frequency_sd"] == sd
+    assert published["correlation_range_km"] == rho
+
+    directory = publish(_frame(), tmp_path, manifest=manifest)
+    on_disk = json.loads((directory / "manifest.json").read_text())
+    assert on_disk["prior_frequency_sd"] == sd, "a published manifest lost precision on disk"
+    assert on_disk["correlation_range_km"] == rho
