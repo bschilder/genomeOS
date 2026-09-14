@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from genomeos.geo.population import WORLDPOP_SOURCE, PopulationGrid
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
+from scripts import publish_artifacts
 from scripts.publish_artifacts import publication_coordinates
 
 
@@ -63,3 +66,63 @@ def test_publication_coordinates_refuse_missing_coordinates():
     observations = pd.DataFrame({"lat": [14.933]})
     with pytest.raises(ValueError, match="lat.*lon"):
         publication_coordinates(_grid(), observations)
+
+
+def test_publisher_records_pointwise_protocol_and_retained_fit_seed(tmp_path, monkeypatch):
+    fits = tmp_path / "fits"
+    fits.mkdir()
+    (fits / "chr11-5227002-T-A.fit.pkl").touch()
+    observations = pd.DataFrame(
+        {
+            "variant_id": ["chr11-5227002-T-A"],
+            "lat": [0.0],
+            "lon": [0.0],
+        }
+    )
+    fit = SimpleNamespace(
+        correlation_range_km=680.0,
+        config=SimpleNamespace(seed=7, likelihood="beta_binomial", lengthscale_sigma=0.7),
+    )
+    captured = {}
+
+    monkeypatch.setattr(publish_artifacts, "read_population_grid", lambda path: _grid())
+    monkeypatch.setattr(
+        publish_artifacts, "LAYERS", {"hbs": lambda path, version: (observations, None)}
+    )
+    monkeypatch.setattr(publish_artifacts, "load_fit", lambda path: fit)
+    monkeypatch.setattr(
+        publish_artifacts,
+        "publication_coordinates",
+        lambda grid, rows: (["843f305ffffffff"], np.array([0.0]), np.array([0.0])),
+    )
+    monkeypatch.setattr(
+        publish_artifacts,
+        "cell_table",
+        lambda *args, **kwargs: pd.DataFrame({"support": ["observed"]}),
+    )
+
+    def capture_publish(frame, root, *, manifest, overwrite):
+        captured["manifest"] = manifest
+        directory = tmp_path / "published"
+        directory.mkdir()
+        (directory / "cells.parquet").write_bytes(b"fixture")
+        return directory
+
+    monkeypatch.setattr(publish_artifacts, "publish", capture_publish)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "publish_artifacts.py", "--fits", str(fits), "--out", str(tmp_path / "out"),
+            "--hbs", str(tmp_path / "hbs.csv"), "--population-cells",
+            str(tmp_path / "grid.parquet"), "--population-source", WORLDPOP_SOURCE,
+            "--population-version", "fixture-2020", "--h3-res", "4",
+        ],
+    )
+
+    publish_artifacts.main()
+
+    manifest = captured["manifest"]
+    assert manifest.prior_normalization == PRIOR_NORMALIZATION
+    assert manifest.prior_draws == PRIOR_DRAWS
+    assert manifest.prior_seed == 7
