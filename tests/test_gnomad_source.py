@@ -27,7 +27,7 @@ def test_coordinates_and_radius_come_from_the_registry(registry):
     obs = gnomad.load(FIXTURES / "gnomad_hgdp_1kg_freqs.tsv", populations, aliases, "0.1.0")
     yoruba = obs[obs["population_id"] == "hgdp-yoruba"].iloc[0]
     assert yoruba["lat"] == pytest.approx(7.38)
-    assert yoruba["radius_km"] == pytest.approx(50.0)
+    assert yoruba["radius_km"] == pytest.approx(2.5)
 
 
 def test_gnomad_is_marked_disease_depleted_healthy_reference(registry):
