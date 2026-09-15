@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload
 from .atlas_api import router as atlas_router
 from .config import settings
 from .db import get_session, init_db
+from .evidence.api import router as evidence_router
 from .models import Association, Phenotype, SourceAsset, SourceRelease, Variant
 from .observability import RequestLoggingMiddleware, configure_logging, log_event
 from .schemas import AssociationOut, Page, PhenotypeOut, ProvenanceOut
@@ -27,6 +28,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(title="GenomeOS", version="0.1.0", lifespan=lifespan)
 app.add_middleware(RequestLoggingMiddleware)
 app.include_router(atlas_router)
+app.include_router(evidence_router)
 
 
 @app.get("/health")

@@ -1,5 +1,7 @@
 /** Measured-observation presentation controls for Atlas design §11. */
 
+import { useAtlasControlId } from './AtlasScope';
+
 import type {
   ObservationColorVariable,
   ObservationShape,
@@ -57,6 +59,7 @@ export function ObservationControls({
   onSize,
   onSolidColor,
 }: ObservationControlsProps) {
+  const controlId = useAtlasControlId();
   const range = state.observationSizeRange;
   const sizeUnit = state.observationShape === 'sphere' ? 'km radius' : 'px';
   const setGradientStop = (index: 0 | 1 | 2, color: string) => {
@@ -69,7 +72,7 @@ export function ObservationControls({
     <div className="atlas-control-grid">
       <div className="atlas-field">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-marker-shape">Marker shape</label>
+          <label htmlFor={controlId('atlas-marker-shape')}>Marker shape</label>
           <InfoTip label="marker shape">
             Four presentations of the same measured location. Spheres are
             world-sized 3D landmarks; circles, surface-mounted domes, and pins
@@ -77,7 +80,7 @@ export function ObservationControls({
           </InfoTip>
         </span>
         <select
-          id="atlas-marker-shape"
+          id={controlId('atlas-marker-shape')}
           value={state.observationShape}
           disabled={disabled}
           onChange={(event) => onShape(event.target.value as ObservationShape)}
@@ -92,7 +95,7 @@ export function ObservationControls({
 
       <div className="atlas-field">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-marker-color">Marker color</label>
+          <label htmlFor={controlId('atlas-marker-color')}>Marker color</label>
           <InfoTip label="marker color">
             Solid uses one chosen color. Gradient maps observed frequency
             through three chosen colors. Study is categorical; allele count uses
@@ -100,7 +103,7 @@ export function ObservationControls({
           </InfoTip>
         </span>
         <select
-          id="atlas-marker-color"
+          id={controlId('atlas-marker-color')}
           value={state.observationColor}
           disabled={disabled}
           onChange={(event) =>
@@ -164,7 +167,7 @@ export function ObservationControls({
 
       <div className="atlas-field atlas-field--range">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-marker-opacity">
+          <label htmlFor={controlId('atlas-marker-opacity')}>
             Marker opacity · {Math.round(state.observationOpacity * 100)}%
           </label>
           <InfoTip label="marker opacity">
@@ -173,7 +176,7 @@ export function ObservationControls({
           </InfoTip>
         </span>
         <input
-          id="atlas-marker-opacity"
+          id={controlId('atlas-marker-opacity')}
           type="range"
           min="0.1"
           max="1"
@@ -186,7 +189,7 @@ export function ObservationControls({
 
       <div className="atlas-field">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-marker-size">Marker size</label>
+          <label htmlFor={controlId('atlas-marker-size')}>Marker size</label>
           <InfoTip label="marker size">
             Size can be fixed or calculated from source-reported AC, AN, or
             observed frequency. Spheres use a physical kilometre radius; other
@@ -194,7 +197,7 @@ export function ObservationControls({
           </InfoTip>
         </span>
         <select
-          id="atlas-marker-size"
+          id={controlId('atlas-marker-size')}
           value={state.observationSize}
           disabled={disabled}
           onChange={(event) =>
@@ -256,11 +259,11 @@ export function ObservationControls({
 
       <label
         className="atlas-color-control"
-        htmlFor="atlas-sampling-area-color"
+        htmlFor={controlId('atlas-sampling-area-color')}
       >
         <span>Observation radius color</span>
         <input
-          id="atlas-sampling-area-color"
+          id={controlId('atlas-sampling-area-color')}
           type="color"
           value={state.samplingAreaColor}
           disabled={disabled}

@@ -1,5 +1,8 @@
 /** Reviewed gnomAD and dbSNP evidence panel for Atlas design §11. */
 
+import { useContext } from 'react';
+import { AtlasScope, atlasPortalTarget } from './AtlasScope';
+
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -207,6 +210,7 @@ function ExternalDetails({
 }
 
 export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
+  const scope = useContext(AtlasScope);
   const [source, setSource] = useState<ExternalSource | null>(null);
   const [info, setInfo] = useState<ExternalInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -217,8 +221,8 @@ export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
   const activeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    setPortalTarget(document.querySelector('[data-atlas-external-slot]'));
-  }, []);
+    setPortalTarget(atlasPortalTarget(scope, '[data-atlas-external-slot]'));
+  }, [scope]);
 
   useEffect(() => {
     activeRequest.current?.abort();

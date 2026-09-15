@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "EvidenceProvenance": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_uri": {
+          "minLength": 1,
+          "title": "Asset Uri",
+          "type": "string"
+        },
+        "license": {
+          "minLength": 1,
+          "title": "License",
+          "type": "string"
+        },
+        "release": {
+          "minLength": 1,
+          "title": "Release",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "source": {
+          "const": "pan-ukb",
+          "title": "Source",
+          "type": "string"
+        },
+        "source_row": {
+          "minimum": 2,
+          "title": "Source Row",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source",
+        "release",
+        "asset_uri",
+        "sha256",
+        "source_row",
+        "license"
+      ],
+      "title": "EvidenceProvenance",
+      "type": "object"
+    },
+    "IndexedAssociation": {
+      "additionalProperties": false,
+      "properties": {
+        "allele_frequency": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Allele Frequency"
+        },
+        "analysis_kind": {
+          "enum": [
+            "population",
+            "meta",
+            "meta_hq"
+          ],
+          "title": "Analysis Kind",
+          "type": "string"
+        },
+        "association_id": {
+          "exclusiveMinimum": 0,
+          "title": "Association Id",
+          "type": "integer"
+        },
+        "beta": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Beta"
+        },
+        "effect_allele": {
+          "minLength": 1,
+          "title": "Effect Allele",
+          "type": "string"
+        },
+        "effect_scale": {
+          "const": "unrecorded",
+          "title": "Effect Scale",
+          "type": "string"
+        },
+        "encoded_p_value": {
+          "title": "Encoded P Value",
+          "type": "number"
+        },
+        "independent_review": {
+          "const": "not_recorded",
+          "title": "Independent Review",
+          "type": "string"
+        },
+        "low_confidence": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Low Confidence"
+        },
+        "neg_log10_p": {
+          "minimum": 0,
+          "title": "Neg Log10 P",
+          "type": "number"
+        },
+        "p_value_encoding": {
+          "enum": [
+            "ln",
+            "neg_log10",
+            "raw"
+          ],
+          "title": "P Value Encoding",
+          "type": "string"
+        },
+        "phenotype_id": {
+          "exclusiveMinimum": 0,
+          "title": "Phenotype Id",
+          "type": "integer"
+        },
+        "population": {
+          "enum": [
+            "AFR",
+            "AMR",
+            "CSA",
+            "EAS",
+            "EUR",
+            "MID",
+            "META",
+            "META_HQ"
+          ],
+          "title": "Population",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/EvidenceProvenance"
+        },
+        "standard_error": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Standard Error"
+        },
+        "trait": {
+          "$ref": "#/$defs/TraitIdentity"
+        },
+        "variant": {
+          "pattern": "^GRCh37:([1-9]|1[0-9]|2[0-2]|X|Y|MT):[1-9][0-9]*:[ACGT]+:[ACGT]+$",
+          "title": "Variant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "association_id",
+        "phenotype_id",
+        "trait",
+        "variant",
+        "effect_allele",
+        "population",
+        "analysis_kind",
+        "beta",
+        "standard_error",
+        "effect_scale",
+        "independent_review",
+        "allele_frequency",
+        "neg_log10_p",
+        "encoded_p_value",
+        "p_value_encoding",
+        "low_confidence",
+        "provenance"
+      ],
+      "title": "IndexedAssociation",
+      "type": "object"
+    },
+    "Refusal": {
+      "additionalProperties": false,
+      "properties": {
+        "reasons": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Reasons",
+          "type": "array"
+        },
+        "record_id": {
+          "exclusiveMinimum": 0,
+          "title": "Record Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "record_id",
+        "reasons"
+      ],
+      "title": "Refusal",
+      "type": "object"
+    },
+    "TraitIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "coding": {
+          "title": "Coding",
+          "type": "string"
+        },
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "modifier": {
+          "title": "Modifier",
+          "type": "string"
+        },
+        "pheno_sex": {
+          "minLength": 1,
+          "title": "Pheno Sex",
+          "type": "string"
+        },
+        "phenocode": {
+          "minLength": 1,
+          "title": "Phenocode",
+          "type": "string"
+        },
+        "release": {
+          "minLength": 1,
+          "title": "Release",
+          "type": "string"
+        },
+        "source": {
+          "const": "pan-ukb",
+          "title": "Source",
+          "type": "string"
+        },
+        "trait_type": {
+          "minLength": 1,
+          "title": "Trait Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "release",
+        "trait_type",
+        "phenocode",
+        "pheno_sex",
+        "coding",
+        "modifier",
+        "description"
+      ],
+      "title": "TraitIdentity",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "coverage": {
+      "const": "selective_index_only",
+      "title": "Coverage",
+      "type": "string"
+    },
+    "examined": {
+      "minimum": 0,
+      "title": "Examined",
+      "type": "integer"
+    },
+    "interpretation": {
+      "minLength": 1,
+      "title": "Interpretation",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/IndexedAssociation"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "limit": {
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "offset": {
+      "minimum": 0,
+      "title": "Offset",
+      "type": "integer"
+    },
+    "refusals": {
+      "items": {
+        "$ref": "#/$defs/Refusal"
+      },
+      "title": "Refusals",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "available",
+        "unavailable"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "total_indexed_matches": {
+      "minimum": 0,
+      "title": "Total Indexed Matches",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "coverage",
+    "status",
+    "total_indexed_matches",
+    "examined",
+    "limit",
+    "offset",
+    "items",
+    "refusals",
+    "interpretation"
+  ],
+  "title": "EvidencePage",
+  "type": "object"
+}

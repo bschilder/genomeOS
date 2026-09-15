@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "AssetAudit": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "exclusiveMinimum": 0,
+          "title": "Asset Id",
+          "type": "integer"
+        },
+        "indexed_associations": {
+          "minimum": 0,
+          "title": "Indexed Associations",
+          "type": "integer"
+        },
+        "issues": {
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "release": {
+          "minLength": 1,
+          "title": "Release",
+          "type": "string"
+        }
+      },
+      "required": [
+        "asset_id",
+        "release",
+        "indexed_associations",
+        "issues"
+      ],
+      "title": "AssetAudit",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "asset_count": {
+      "minimum": 0,
+      "title": "Asset Count",
+      "type": "integer"
+    },
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/AssetAudit"
+      },
+      "title": "Assets",
+      "type": "array"
+    },
+    "association_count": {
+      "minimum": 0,
+      "title": "Association Count",
+      "type": "integer"
+    },
+    "coverage": {
+      "const": "inspected_database_only",
+      "title": "Coverage",
+      "type": "string"
+    },
+    "limit": {
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "title": "Limitations",
+      "type": "array"
+    },
+    "offset": {
+      "minimum": 0,
+      "title": "Offset",
+      "type": "integer"
+    },
+    "orphan_associations": {
+      "minimum": 0,
+      "title": "Orphan Associations",
+      "type": "integer"
+    },
+    "phenotype_count": {
+      "minimum": 0,
+      "title": "Phenotype Count",
+      "type": "integer"
+    },
+    "release_count": {
+      "minimum": 0,
+      "title": "Release Count",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "schema_version",
+    "coverage",
+    "phenotype_count",
+    "association_count",
+    "release_count",
+    "asset_count",
+    "limit",
+    "offset",
+    "assets",
+    "orphan_associations",
+    "limitations"
+  ],
+  "title": "EvidenceAudit",
+  "type": "object"
+}

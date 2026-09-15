@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from genomeos.artifacts import ArtifactManifest
+from genomeos.evidence.schema import EvidenceAudit, EvidencePage
 from genomeos.observations.evidence import (
     LITERATURE_EVIDENCE_SCHEMA,
     LITERATURE_FIELD_EVIDENCE_SCHEMA,
@@ -39,6 +40,8 @@ PANDERA_SCHEMAS = {
     "literature_searches.schema.json": LITERATURE_SEARCHES_SCHEMA,
 }
 JSON_SCHEMAS = {
+    "trait_evidence.schema.json": EvidencePage.model_json_schema(),
+    "trait_evidence_audit.schema.json": EvidenceAudit.model_json_schema(),
     "atlas_catalog.schema.json": ArtifactManifest.model_json_schema(),
 }
 

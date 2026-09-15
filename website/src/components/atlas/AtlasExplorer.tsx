@@ -57,19 +57,36 @@ import { HoverPreview } from './HoverPreview';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 import { nextPaint, useAtlasActivity } from './useAtlasActivity';
 import { useObservationPlaces } from './useObservationPlaces';
+import { useComparisonNavigation } from './useComparisonNavigation';
+import type { SharedNavigation } from '../../atlas/comparison';
+import type { AtlasDataProvider } from '../../atlas/provider';
 
 interface AtlasExplorerProps {
   cesiumToken?: string;
   dataBaseUrl: string;
+  initialQuery?: string;
+  dataProvider?: AtlasDataProvider;
+  writeUrl?: boolean;
+  panel?: 'left' | 'right';
+  navigation?: SharedNavigation;
+  onStateChange?: (state: ExplorerState) => void;
+  onReady?: () => void;
 }
 
 export default function AtlasExplorer({
   cesiumToken = '',
   dataBaseUrl,
+  initialQuery,
+  dataProvider,
+  writeUrl = true,
+  panel,
+  navigation,
+  onStateChange,
+  onReady,
 }: AtlasExplorerProps) {
   const provider = useMemo(
-    () => new StaticAtlasDataProvider(dataBaseUrl),
-    [dataBaseUrl],
+    () => dataProvider ?? new StaticAtlasDataProvider(dataBaseUrl),
+    [dataBaseUrl, dataProvider],
   );
   const sceneElement = useRef<HTMLDivElement>(null);
   const scene = useRef<AtlasSceneController | null>(null);
@@ -111,6 +128,18 @@ export default function AtlasExplorer({
     status,
     update: updateActivity,
   } = useAtlasActivity(scene, (caught) => setError(errorMessage(caught)));
+  useEffect(() => {
+    if (status === 'ready' && activeArtifact) onReady?.();
+  }, [status, activeArtifact, onReady]);
+  useComparisonNavigation(
+    navigation,
+    panel,
+    status === 'ready',
+    scene,
+    state,
+    setState,
+    setError,
+  );
   const activeObservationDomains = useMemo(() => {
     if (!activeArtifact || observations.current.size === 0) return null;
     return observationDomains([...observations.current.values()]);
@@ -240,7 +269,10 @@ export default function AtlasExplorer({
         });
       })
       .then((loaded) => {
-        const parsed = parseExplorerState(window.location.search, loaded);
+        const parsed = parseExplorerState(
+          initialQuery ?? window.location.search,
+          loaded,
+        );
         setCatalog(loaded);
         setCorrections(parsed.corrections);
         setState(parsed.state);
@@ -385,13 +417,15 @@ export default function AtlasExplorer({
 
   useEffect(() => {
     if (!state) return;
+    onStateChange?.(state);
+    if (!writeUrl) return;
     const query = serializeExplorerState(state);
     window.history.replaceState(
       null,
       '',
       `${window.location.pathname}?${query}${window.location.hash}`,
     );
-  }, [state]);
+  }, [state, writeUrl, onStateChange]);
 
   useEffect(() => {
     if (!state) return;
