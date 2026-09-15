@@ -1,0 +1,617 @@
+{
+  "class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+  "fields": [
+    {
+      "name": "spec",
+      "value": {
+        "class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "fields": [
+          {
+            "name": "case",
+            "value": {
+              "class": "genomeos.validation.heterogeneity_simulation_types.SbcCaseId",
+              "fields": [
+                {
+                  "name": "track_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x1",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "study_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "case_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "replicate_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x3",
+                    "tag": "int"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "attempt_id",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x0",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "seed",
+            "value": {
+              "class": "genomeos.validation.heterogeneity_simulation_types.SeedIdentity",
+              "fields": [
+                {
+                  "name": "entropy",
+                  "value": {
+                    "items": [
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x2a",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0xd3",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x1",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x1",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x0",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x0",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x3",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x4",
+                        "tag": "int"
+                      },
+                      {
+                        "class": "builtins.int",
+                        "hex": "0x0",
+                        "tag": "int"
+                      }
+                    ],
+                    "tag": "tuple"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "config",
+            "value": {
+              "class": "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityConfig",
+              "fields": [
+                {
+                  "name": "mean_prior_alpha",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "mean_prior_beta",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "rho_prior_alpha",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "rho_prior_beta",
+                  "value": {
+                    "binary64_be_hex": "4010000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "draws",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x1f4",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "tune",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x3e8",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "chains",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x4",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "target_accept",
+                  "value": {
+                    "binary64_be_hex": "3feccccccccccccd",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "seed",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x7cb784a8",
+                    "tag": "int"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    },
+    {
+      "name": "status",
+      "value": {
+        "tag": "string",
+        "utf8_surrogatepass_hex": "6163636570746564"
+      }
+    },
+    {
+      "name": "fit",
+      "value": {
+        "class": "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityFit",
+        "fields": [
+          {
+            "name": "config",
+            "value": {
+              "class": "genomeos.surfaces.heterogeneity_types.PopulationHeterogeneityConfig",
+              "fields": [
+                {
+                  "name": "mean_prior_alpha",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "mean_prior_beta",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "rho_prior_alpha",
+                  "value": {
+                    "binary64_be_hex": "3ff0000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "rho_prior_beta",
+                  "value": {
+                    "binary64_be_hex": "4010000000000000",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "draws",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x1f4",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "tune",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x3e8",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "chains",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x4",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "target_accept",
+                  "value": {
+                    "binary64_be_hex": "3feccccccccccccd",
+                    "class": "builtins.float",
+                    "tag": "float"
+                  }
+                },
+                {
+                  "name": "seed",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x7cb784a8",
+                    "tag": "int"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "variant_ids",
+            "value": {
+              "items": [
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a76617269616e743a30"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "mean_draws",
+            "value": {
+              "path": "arrays/case-07-fit-0042.npy",
+              "shape": [
+                4,
+                500,
+                1
+              ],
+              "tag": "float64_ndarray"
+            }
+          },
+          {
+            "name": "rho_draws",
+            "value": {
+              "path": "arrays/case-07-fit-0043.npy",
+              "shape": [
+                4,
+                500,
+                1
+              ],
+              "tag": "float64_ndarray"
+            }
+          },
+          {
+            "name": "training_record_ids",
+            "value": {
+              "items": [
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a30"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a31"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a3130"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a3131"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a3132"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a3133"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a3134"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a3135"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a32"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a33"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a34"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a35"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a36"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a37"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a38"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a39"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "training_group_ids",
+            "value": {
+              "items": [
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a30"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a31"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a3130"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a3131"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a3132"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a3133"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a3134"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a3135"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a32"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a33"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a34"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a35"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a36"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a37"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a38"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a67726f75703a39"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "unavailable_training_ids",
+            "value": {
+              "items": [
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a30"
+                },
+                {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a747261696e3a726f773a38"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "training_counts",
+            "value": {
+              "items": [
+                {
+                  "class": "genomeos.surfaces.heterogeneity_types.VariantTrainingCounts",
+                  "fields": [
+                    {
+                      "name": "variant_id",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a76617269616e743a30"
+                      }
+                    },
+                    {
+                      "name": "training_observation_count",
+                      "value": {
+                        "class": "builtins.int",
+                        "hex": "0xe",
+                        "tag": "int"
+                      }
+                    },
+                    {
+                      "name": "training_ac",
+                      "value": {
+                        "class": "builtins.int",
+                        "hex": "0x7a",
+                        "tag": "int"
+                      }
+                    },
+                    {
+                      "name": "training_an",
+                      "value": {
+                        "class": "builtins.int",
+                        "hex": "0x11c",
+                        "tag": "int"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "diagnostics",
+            "value": {
+              "items": [
+                {
+                  "class": "genomeos.surfaces.heterogeneity_types.VariantHeterogeneityDiagnostics",
+                  "fields": [
+                    {
+                      "name": "variant_id",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72333a67313a76617269616e743a30"
+                      }
+                    },
+                    {
+                      "name": "max_rhat",
+                      "value": {
+                        "binary64_be_hex": "3ff01313c349d927",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    },
+                    {
+                      "name": "min_bulk_ess",
+                      "value": {
+                        "binary64_be_hex": "409056854ae8362b",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    },
+                    {
+                      "name": "min_tail_ess",
+                      "value": {
+                        "binary64_be_hex": "408cca19a9194264",
+                        "class": "builtins.float",
+                        "tag": "float"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                }
+              ],
+              "tag": "tuple"
+            }
+          },
+          {
+            "name": "divergence_count",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x0",
+              "tag": "int"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    },
+    {
+      "name": "error",
+      "value": {
+        "tag": "none"
+      }
+    },
+    {
+      "name": "identity_mismatches",
+      "value": {
+        "items": [],
+        "tag": "tuple"
+      }
+    },
+    {
+      "name": "returned_type",
+      "value": {
+        "tag": "none"
+      }
+    }
+  ],
+  "tag": "dataclass"
+}

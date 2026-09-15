@@ -1,0 +1,1339 @@
+{
+  "cases": [
+    {
+      "case": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "plan": {
+        "debug_dump": "debug/case-00-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 9.0,
+          "seed": 279725986,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-00-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 0,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 256,
+              "largest_free_block_bytes": 2097152,
+              "num_allocs": 2,
+              "peak_bytes_in_use": 512,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 2097152,
+              "pool_bytes": 2097152
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2403135,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 802428
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-00-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 224768,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 8165,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 33203659406,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 1358032
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-00-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 224768,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 8165,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 828298208,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 1359088
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-00-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 224768,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 8165,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 10700685098,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 1363028
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-00-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 224768,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 8165,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 43608658989,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        0
+      ],
+      "plan": {
+        "debug_dump": "debug/case-01-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 4.0,
+          "seed": 848552836,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-01-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 224768,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 8165,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2002447,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-01-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 344832,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 14210,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 18871315938,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-01-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 219136,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 14210,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 832977337,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-01-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 219136,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 14210,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 18010051305,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-01-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 219136,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 14210,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 1317225524,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "plan": {
+        "debug_dump": "debug/case-02-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 9.0,
+          "seed": 3313160635,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-02-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 219136,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 14210,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2074193,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 1563448
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-02-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 452864,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 22290,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 23649378654,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 1682772
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-02-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 337920,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 22290,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 841170242,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 1682772
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-02-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 337920,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 22290,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 14377249072,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 1682772
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-02-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 337920,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 22290,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 428591241,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 1682772
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        1
+      ],
+      "plan": {
+        "debug_dump": "debug/case-03-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 4.0,
+          "seed": 1253776786,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-03-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 337920,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 22290,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2306913,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 1682772
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-03-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 569600,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 28034,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 18746262583,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 1745236
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-03-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 444416,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 28034,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 848798488,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 1745236
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-03-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 444416,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 28034,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 18428604684,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 1745236
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-03-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 444416,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 28034,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 431283643,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 1745236
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        0,
+        0,
+        0,
+        2
+      ],
+      "plan": {
+        "debug_dump": "debug/case-04-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 9.0,
+          "seed": 723937072,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-04-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 444416,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 28034,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2564660,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 1745236
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-04-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 697344,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 36108,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 23199308683,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 1866068
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-04-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 568576,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 36108,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 824006863,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 1866068
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-04-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 568576,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 36108,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 11819914182,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 1866068
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-04-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 568576,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 36108,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 374270172,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 1866068
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        2
+      ],
+      "plan": {
+        "debug_dump": "debug/case-05-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 4.0,
+          "seed": 3869705889,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-05-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 568576,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 36108,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2273409,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 1866068
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-05-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 801792,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 43013,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 20996735682,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 1951108
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-05-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 677888,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 43013,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 823116779,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 1951108
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-05-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 677888,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 43013,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 13096794307,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 1951108
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-05-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 677888,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 43013,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 430099534,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 1951108
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        0,
+        0,
+        0,
+        3
+      ],
+      "plan": {
+        "debug_dump": "debug/case-06-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 9.0,
+          "seed": 662342276,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-06-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 677888,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 43013,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2103699,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 1951108
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-06-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 910080,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 51097,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 23445331179,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 2069904
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-06-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 788736,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 51097,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 832371712,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 2069904
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-06-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 788736,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 51097,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 13303844531,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 2069904
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-06-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 788736,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 51097,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 452993029,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 2069904
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    },
+    {
+      "case": [
+        1,
+        0,
+        0,
+        3
+      ],
+      "plan": {
+        "debug_dump": "debug/case-07-plan.json",
+        "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptSpec",
+        "sample_config": {
+          "chains": 4,
+          "draws": 500,
+          "mean_prior_alpha": 1.0,
+          "mean_prior_beta": 1.0,
+          "rho_prior_alpha": 1.0,
+          "rho_prior_beta": 4.0,
+          "seed": 2092401832,
+          "target_accept": 0.9,
+          "tune": 1000
+        }
+      },
+      "stages": [
+        {
+          "debug_dump": "debug/case-07-generation.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 788736,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 51097,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 2470172,
+          "returned_class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+          "rss_high_water": {
+            "point": "after_generation",
+            "unit": "KiB",
+            "value": 2069904
+          },
+          "stage": "generation",
+          "status": "available"
+        },
+        {
+          "debug_dump": "debug/case-07-fit.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 1020160,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 59173,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 23363157927,
+          "returned_class": "genomeos.validation.heterogeneity_attempts.FitAttemptResult",
+          "rss_high_water": {
+            "point": "after_fit",
+            "unit": "KiB",
+            "value": 2152848
+          },
+          "stage": "fit",
+          "status": "accepted"
+        },
+        {
+          "debug_dump": "debug/case-07-selected_quantities.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 899840,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 59173,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 831008213,
+          "returned_class": "genomeos.validation.heterogeneity_sbc_quantity_types.SelectedSbcQuantities",
+          "rss_high_water": {
+            "point": "after_selected_quantities",
+            "unit": "KiB",
+            "value": 2152848
+          },
+          "stage": "selected_quantities",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-07-summary-scipy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 899840,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 59173,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 11285843812,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-scipy",
+            "unit": "KiB",
+            "value": 2152848
+          },
+          "stage": "summary-scipy",
+          "status": null
+        },
+        {
+          "debug_dump": "debug/case-07-summary-cupy.json",
+          "device_memory_observation": {
+            "stats": {
+              "bytes_in_use": 899840,
+              "bytes_limit": 63820529664,
+              "bytes_reserved": 0,
+              "largest_alloc_size": 33554432,
+              "largest_free_block_bytes": 67108864,
+              "num_allocs": 59173,
+              "peak_bytes_in_use": 134359552,
+              "peak_bytes_reserved": 0,
+              "peak_pool_bytes": 136314880,
+              "pool_bytes": 136314880
+            },
+            "status": "available"
+          },
+          "elapsed_ns": 392856291,
+          "returned_class": "genomeos.validation.heterogeneity_summary_types.HeterogeneityFitSummary",
+          "rss_high_water": {
+            "point": "after_summary-cupy",
+            "unit": "KiB",
+            "value": 2152848
+          },
+          "stage": "summary-cupy",
+          "status": null
+        }
+      ]
+    }
+  ],
+  "complete": true,
+  "environment": {
+    "JAX_ENABLE_X64": "1",
+    "JAX_PLATFORMS": "cuda",
+    "XLA_PYTHON_CLIENT_PREALLOCATE": "false"
+  },
+  "execution_label": "b0h-timing-20260910-01",
+  "final_rss_high_water": {
+    "point": "final",
+    "unit": "KiB",
+    "value": 2152848
+  },
+  "first_fit_case_ordinal": 0,
+  "first_fit_note": "set immediately before the first whole public fitter call; not pure compilation time",
+  "heavy_import_elapsed_ns": 9237041015,
+  "package_versions": {
+    "arviz": "1.3.0",
+    "cupy": {
+      "distribution": "cupy-cuda12x",
+      "version": "14.2.0"
+    },
+    "jax": "0.11.1",
+    "jaxlib": "0.11.1",
+    "numpy": "2.4.6",
+    "numpyro": "0.21.0",
+    "pandas": "3.0.5",
+    "pymc": "6.3.1",
+    "pytensor": "3.3.0",
+    "scipy": "1.18.1",
+    "xarray": "2026.7.0"
+  },
+  "platform": {
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3 (main, Aug 14 2025, 17:47:21) [GCC 13.3.0]"
+  },
+  "preflight_elapsed_ns": 3841889830,
+  "protocol": "b0h_timing_spike_v1",
+  "rss_high_water": {
+    "point": "after_preflight",
+    "unit": "KiB",
+    "value": 802428
+  },
+  "runtime": {
+    "cupy_device_name": "NVIDIA A100-SXM4-80GB",
+    "cupy_probe_dtype": "float64",
+    "cupy_version": "14.2.0",
+    "jax_device": {
+      "kind": "NVIDIA A100-SXM4-80GB",
+      "platform": "gpu"
+    },
+    "jax_probe_dtype": "float64",
+    "nvidia_smi": "NVIDIA A100-SXM4-80GB, 580.126.16, 81920 MiB",
+    "preflight_note": "CUDA and CuPy initialized before fit timing"
+  },
+  "source_sha": "df0b71dfca1edd2c209abe8f9829cd103feaffdd"
+}
