@@ -1,0 +1,20 @@
+{
+ "header": {
+  "type": "esearch",
+  "version": "0.3"
+ },
+ "esearchresult": {
+  "count": "5",
+  "retmax": "5",
+  "retstart": "0",
+  "idlist": [
+   "39444160",
+   "35934714",
+   "31941490",
+   "24934404",
+   "20128890"
+  ],
+  "translationset": [],
+  "querytranslation": "\"rs334\"[All Fields] AND \"genotype\"[Title/Abstract]"
+ }
+}

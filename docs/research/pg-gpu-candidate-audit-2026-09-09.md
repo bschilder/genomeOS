@@ -2,7 +2,7 @@
 
 Status: related-work code/documentation inspection, **not** a selected genomeOS dependency, full-paper review or hardware benchmark. It does not change the active count-scoring experiment.
 
-**Implementation decision, corrected September 9 at the user's direction:** WP6 uses **CuGen from `/Users/bschilder/code/cugen`**, not pg_gpu. The earlier proposal to compare pg_gpu/CuGen as implementation candidates drifted from the user's specified tool. Retain the pg_gpu inspection below only as related-work evidence; it is not authorization to install, integrate or benchmark pg_gpu. The local CuGen checkout inspected for this correction is clean at `03df1688abf52d295bd85d47f1aca6130440b553` (package version `0.1.7`), with an implemented `cugen.ld.ld_matrix` API and CPU/GPU, missingness, tiling and PLINK-reference tests. Those tests have been located, not independently rerun during this correction.
+**Implementation decision, corrected September 9 at the user's direction:** WP6 uses **CuGen from `$HOME/code/cugen`**, not pg_gpu. The earlier proposal to compare pg_gpu/CuGen as implementation candidates drifted from the user's specified tool. Retain the pg_gpu inspection below only as related-work evidence; it is not authorization to install, integrate or benchmark pg_gpu. The local CuGen checkout inspected for this correction is clean at `03df1688abf52d295bd85d47f1aca6130440b553` (package version `0.1.7`), with an implemented `cugen.ld.ld_matrix` API and CPU/GPU, missingness, tiling and PLINK-reference tests. Those tests have been located, not independently rerun during this correction.
 
 ## Evidence inspected
 

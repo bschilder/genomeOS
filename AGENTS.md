@@ -3,6 +3,9 @@
 Most contributions to this repository are made by coding agents. This file is the contract.
 Read it fully before writing code; it is short on purpose.
 
+[`CONTRIBUTING.md`](CONTRIBUTING.md) is the shorter route in — which doc to read for which
+workstream, and the gate list — and points back here. It routes; this file rules.
+
 ## Read first
 
 1. [`docs/overview.md`](docs/overview.md) — what the project is and why. Non-negotiable context.
@@ -257,6 +260,20 @@ spying on `sample_jax_nuts`. A disagreement about `nuts=` versus `nuts_sampler_k
 always a version difference, and this turns two readings of the same source into two comparable
 outputs. It will also show you if your venv has drifted out of the declared bounds, which is worth
 checking before trusting a local test run.
+
+**Verifying a branch in a git worktree needs care: `.venv` is an editable install pinned to the
+main checkout.** Running that interpreter from a worktree can import the *main checkout's* code
+rather than the worktree's, so the gates pass or fail against a tree you are not reviewing, with no
+error to say so. Either `cd` into the worktree first, so its path precedes the `.pth` entry on
+`sys.path`, and then **confirm it**:
+
+```bash
+python -c "import genomeos; print(genomeos.__file__)"   # must print the worktree path
+```
+
+or build a fresh environment inside the worktree from `requirements.lock` as above. Do not assume
+the first worked without printing the path — this has already invalidated one "all gates pass"
+report. Note `ruff` is not on `PATH`; use `.venv/bin/ruff`.
 
 `sqlite:///./genomeos.db` is the local default; production requires a PostgreSQL `DATABASE_URL`.
 GCP operations must go through the [repository-local gcloud wrapper](docs/repo-gcloud-auth.md) —
