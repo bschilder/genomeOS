@@ -11,18 +11,20 @@ has not changed.
 ![Geography-aware pointwise-prior normalization counterexample](https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/prior_normalization.png)
 
 The figure is a conditional no-update counterexample, not a fitted genetic surface. Its first panel
-maps distance from each land cell to the nearest of 684 retained public MAP HbS survey sites. These
-measured coordinates define the sampling geography and are shown as small dots; measured allele
-frequencies do not enter the calculation. The input CSV has SHA-256
+shows the chain from evidence geography to approximation geometry: 684 retained public MAP HbS
+survey coordinates are small dots, while the background maps distance from each land cell to the
+nearest of the 64 retained model locations shown as white-ring circles. Measured allele frequencies
+do not enter the calculation. The input CSV has SHA-256
 `ab92edd3059aa59a37f3e2d10361d67e490c573fc3c03bf13eb902e3820e98fd`, matching the committed
 data-store inventory. A deterministic, vectorized maximin calculation selects
-64 geographically balanced resolution-4 cells that contain surveys. Their centers are shown as
-white-ring circles and passed through the production H3 placement at the same budget, which keeps
-the model locations collocated with those survey-supported cells. This is a figure-only stability
-measure while the production placement tie problem remains tracked in #280. The second panel maps
-the resulting scalar-normalization error, and the third verifies that the error follows distance
-to the computational locations while the corrected local ratio remains one. Country boundaries
-provide orientation but do not enter the kernel. The map evaluates 414 resolution-2 H3 land cells,
+64 geographically balanced resolution-4 cells that contain surveys. Their centers are passed
+through the production H3 placement at the same budget, which keeps the model locations collocated
+with those survey-supported cells. This is a figure-only stability measure while the production
+placement tie problem remains tracked in #280. The same model-location rings are repeated over the
+second panel, which maps the resulting scalar-normalization error, and the third verifies that the
+error follows distance to those computational locations while the corrected local ratio remains
+one. Country boundaries provide orientation but do not enter the kernel: it has no political,
+terrain, coastal or ecological covariate. The map evaluates 414 resolution-2 H3 land cells,
 with ocean cells absent rather than covered by an artificial rectangular field. The Matérn-5/2
 lengthscale is 1,500 km, amplitude is 1,
 production jitter is applied, and the intercept is `Normal(-3.5, 1.5)`. An independent covariance

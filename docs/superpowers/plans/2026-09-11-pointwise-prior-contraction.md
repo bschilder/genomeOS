@@ -224,9 +224,11 @@ posterior evidence or an allele-frequency surface.
 Calculate conditional SD with an independent covariance solve and 256-point
 Gauss-Hermite logistic-normal moments, using the exact equation in issue #266. For the no-update
 comparison set hypothetical posterior SD equal to each local prior SD. Map distance to the nearest
-measured survey separately from the old ratio, then plot old-ratio error against nearest-inducing
-distance with the corrected ratio at one. Use country outlines for orientation, exclude ocean
-cells, and label measured coordinate marks explicitly. If showing numeric uncertainty, use a
+retained model location separately from the old ratio, show the survey coordinates that define the
+candidate geography, then plot old-ratio error against nearest-inducing distance with the corrected
+ratio at one. Repeat the retained model locations over both maps so the relationship is directly
+readable. Use country outlines for orientation, exclude ocean cells, and label measured coordinate
+marks explicitly. If showing numeric uncertainty, use a
 sequential low-to-high ramp. Plotting tests verify cell/model collocation, input-order invariance,
 numeric controls and successful creation of the standalone PNG, not pixel-perfect duplication.
 

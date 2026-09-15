@@ -281,7 +281,7 @@ def render(out: Path, observations: Path) -> Path:
 
     distance_surface = PolyCollection(
         polygons,
-        array=result["nearest_observation_distance_km"][kept],
+        array=result["nearest_inducing_distance_km"][kept],
         cmap="viridis_r",
         norm=Normalize(vmin=0.0, vmax=1500.0),
         edgecolors="none",
@@ -311,13 +311,13 @@ def render(out: Path, observations: Path) -> Path:
     )
     geometry_ax.set(
         ylabel="latitude",
-        title="A. Sampling geography\ndistance to nearest measured survey",
+        title="A. Evidence defines the model geometry\ndistance to nearest retained model location",
     )
     geometry_ax.legend(loc="lower left", fontsize=7.2, frameon=True)
     distance_colorbar = fig.colorbar(
         distance_surface, ax=geometry_ax, shrink=0.78, pad=0.025
     )
-    distance_colorbar.set_label("distance to nearest survey site (km)", fontsize=8.5)
+    distance_colorbar.set_label("distance to nearest model location (km)", fontsize=8.5)
 
     surface = PolyCollection(
         polygons,
@@ -351,6 +351,16 @@ def render(out: Path, observations: Path) -> Path:
         edgecolor="none",
         alpha=0.28,
         zorder=5,
+    )
+    old_ax.scatter(
+        result["inducing_lon"],
+        result["inducing_lat"],
+        s=24,
+        facecolor="white",
+        edgecolor="#111827",
+        linewidth=0.75,
+        zorder=6,
+        label="retained model locations",
     )
     reference_index = int(result["reference_index"])
     reference_lat = float(result["observation_lat"][reference_index])
@@ -392,8 +402,9 @@ def render(out: Path, observations: Path) -> Path:
         },
     )
     old_ax.set(
-        title="B. Old scalar denominator\ninvented posterior contraction",
+        title="B. The same model geometry\ncreates an artificial spatial pattern",
     )
+    old_ax.legend(loc="lower left", fontsize=7.2, frameon=True)
     colorbar = fig.colorbar(surface, ax=old_ax, shrink=0.78, pad=0.025)
     colorbar.set_label("posterior SD / old scalar prior SD", fontsize=8.5)
     colorbar.set_ticks([0.76, 0.8, 0.9, 1.0])
@@ -402,8 +413,7 @@ def render(out: Path, observations: Path) -> Path:
         inducing_distance,
         scalar_ratio,
         s=14,
-        c=result["nearest_observation_distance_km"],
-        cmap="viridis_r",
+        color="#2a9d8f",
         alpha=0.75,
         edgecolor="none",
         label="old scalar denominator",
@@ -446,13 +456,22 @@ def render(out: Path, observations: Path) -> Path:
     fig.text(
         0.5,
         0.91,
-        "Survey coordinates determine the approximation geometry; measured allele frequencies "
-        "are not used, and the synthetic posterior contains no update.",
+        "Dots are measured survey coordinates; rings are the retained model locations that "
+        "generate both mapped distance and error. Allele frequencies are not used.",
         ha="center",
         fontsize=9.2,
         color="#374151",
     )
-    fig.subplots_adjust(left=0.045, right=0.985, bottom=0.12, top=0.82, wspace=0.22)
+    fig.text(
+        0.5,
+        0.025,
+        "Country borders are orientation only; the covariance uses spherical distance and the "
+        "display is clipped to land.",
+        ha="center",
+        fontsize=8.2,
+        color="#4b5563",
+    )
+    fig.subplots_adjust(left=0.045, right=0.985, bottom=0.14, top=0.82, wspace=0.22)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)
