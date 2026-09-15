@@ -16,7 +16,7 @@ cleanup/deletion. User recovery instructions require retaining every workspace.
 
 Worktree: /private/tmp/genomeos-b0h-paired-report-20260911.
 Base:26827fbd8cb0cb66ce9d6f93512ecc3fcd37ceeb.
-Use /Users/bschilder/code/genomeOS/.venv/bin/python with PYTHONPATH set to this
+Use $HOME/code/genomeOS/.venv/bin/python with PYTHONPATH set to this
 worktree, PYTHONDONTWRITEBYTECODE=1 and isolated PyTensor/MPL/XDG caches under
 /private/tmp/genomeos-paired-report-cache-20260911. Do not reinstall dependencies.
 Run focused tests, scripts/smoke.py, Ruff, contract drift, module-size and privacy
