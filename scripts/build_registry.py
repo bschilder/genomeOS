@@ -6,6 +6,9 @@
 HGDP input must follow the curated five-column contract documented in
 `docs/hgdp-registry-input.md`.
 
+HGDP input must follow the curated five-column contract documented in
+`docs/hgdp-registry-input.md`.
+
 `--afnd` takes an AFND population export in the format documented in
 `genomeos.registry.sources.afnd`. AFND publishes no licence and no bulk download, so this
 repository ships no fetcher for it and the file has to be obtained by agreement with AFND; the

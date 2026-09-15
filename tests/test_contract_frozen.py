@@ -25,3 +25,12 @@ def test_literature_contracts_and_observation_source_key_are_frozen():
     assert expected.issubset({path.name for path in (REPO / "contract").glob("*.json")})
     observations = json.loads((REPO / "contract" / "observations.schema.json").read_text())
     assert "source_record_id" in observations["columns"]
+
+
+def test_curated_variant_contracts_are_frozen():
+    expected = {
+        "curated_variants.schema.json",
+        "cpic_pair_targets.schema.json",
+        "cpic_coverage.schema.json",
+    }
+    assert expected.issubset({path.name for path in (REPO / "contract").glob("*.json")})

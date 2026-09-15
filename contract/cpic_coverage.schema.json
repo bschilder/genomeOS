@@ -1,0 +1,57 @@
+{
+  "coerce": true,
+  "columns": {
+    "allele_row_count": {
+      "dtype": "int64",
+      "greater_than_or_equal_to": 0
+    },
+    "candidate_count": {
+      "dtype": "int64",
+      "greater_than_or_equal_to": 0
+    },
+    "gene": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      },
+      "unique": true
+    },
+    "pair_count": {
+      "dtype": "int64",
+      "greater_than_or_equal_to": 1
+    },
+    "refusal_reason": {
+      "dtype": "string[pyarrow]"
+    },
+    "set_version": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "source_release": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "candidate_gene_covered",
+        "no_allele_table",
+        "no_admitted_function"
+      ]
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "cpic_coverage",
+  "schema_type": "dataframe",
+  "strict": true
+}
