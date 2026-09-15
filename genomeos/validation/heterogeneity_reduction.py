@@ -15,13 +15,13 @@ from genomeos.validation.heterogeneity_reduction_records import (
     StudyReduction,
 )
 from genomeos.validation.heterogeneity_runner_binding import (
-    next_stage_key,
     require_paired_generations,
-    validate_case_evidence,
+    validate_case_evidence_batch,
 )
 from genomeos.validation.heterogeneity_runner_records import (
     CampaignManifest,
     CaseEvidence,
+    StageKey,
     StoredStage,
     prepared_null,
 )
@@ -80,7 +80,9 @@ def _status(stage: StoredStage | None) -> str:
     return stage.value.status
 
 
-def _account(manifest: CampaignManifest, evidence: CaseEvidence) -> CaseAccounting:
+def _account(
+    manifest: CampaignManifest, evidence: CaseEvidence, upcoming: StageKey | None
+) -> CaseAccounting:
     found = {(s.start.key.stage, s.start.key.attempt_id): s for s in evidence.stages}
     accepted = next((s.value.spec.attempt_id for s in evidence.stages
                      if type(s.value) is FitAttemptResult and s.value.status == "accepted"), None)
@@ -90,7 +92,6 @@ def _account(manifest: CampaignManifest, evidence: CaseEvidence) -> CaseAccounti
               "attempt1": _status(found.get(("fit", 1))),
               "quantities": _status(found.get(("quantities", accepted))),
               "summary": _status(found.get(("summary", accepted)))}
-    upcoming = next_stage_key(manifest, evidence)
     missing = () if upcoming is None else (upcoming.stage,)
     if upcoming is not None:
         name = "attempt" + str(upcoming.attempt_id) if upcoming.stage == "fit" else upcoming.stage
@@ -194,8 +195,7 @@ def reduce_b0h_study(manifest: CampaignManifest, cases: tuple[CaseEvidence, ...]
         raise ValueError("reduction null differs from prepared campaign null")
     if type(cases) is not tuple or tuple(c.case for c in cases) != manifest.cases:
         raise ValueError("reduction requires exact ordered complete manifest membership")
-    for evidence in cases:
-        validate_case_evidence(manifest, evidence)
+    validation = validate_case_evidence_batch(manifest, cases)
     for index in range(0, len(cases), 2):
         left, right = cases[index:index + 2]
         if left.case.study_id != 0 and left.stages and right.stages:
@@ -203,7 +203,10 @@ def reduce_b0h_study(manifest: CampaignManifest, cases: tuple[CaseEvidence, ...]
     inventory = tuple((e.case.canonical_id, tuple(d for s in e.stages for d in (
         record_digest(s.start), None if s.completion is None else record_digest(s.completion),
         None if s.loss is None else record_digest(s.loss)) if d is not None)) for e in cases)
-    accounting = tuple(_account(manifest, evidence) for evidence in cases)
+    accounting = tuple(
+        _account(manifest, evidence, upcoming)
+        for evidence, upcoming in zip(cases, validation.next_stage_keys, strict=True)
+    )
     by_case = {account.case: account for account in accounting}
     ranks = []
     for track in (0, 1):
@@ -234,7 +237,7 @@ def reduce_b0h_study(manifest: CampaignManifest, cases: tuple[CaseEvidence, ...]
     all_stages = tuple(s for e in cases for s in e.stages)
     completed = Counter(s.start.key.stage for s in all_stages if s.completion is not None)
     return StudyReduction(
-        format="b0h_reduction", version="1", campaign_sha256=record_digest(manifest),
+        format="b0h_reduction", version="1", campaign_sha256=validation.campaign_sha256,
         inventory_sha256=sha256(_json(inventory)), null_sha256=manifest.null_sha256,
         cases=accounting, planned_initial_fits=1936, planned_retry_slots=1936,
         completed_fit_calls=completed["fit"],

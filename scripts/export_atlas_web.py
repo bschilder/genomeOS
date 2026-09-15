@@ -27,6 +27,9 @@ from genomeos.observations.sources import (
 )
 from genomeos.publication.atlas_discovery import validate_artifact_discovery, validate_discovery_groups
 from genomeos.registry.sources import afnd as afnd_registry
+from genomeos.registry.variants import load as load_variant_registry
+from genomeos.registry.variants import normalized_identity
+from genomeos.surfaces.artifacts import read as read_surface_artifact
 
 SCHEMA_VERSION = 1
 SUPPORT_STATES = {"observed", "interpolated", "prior_dominated", "unknown"}
@@ -55,7 +58,7 @@ MANIFEST_FIELDS = {
     "support_counts",
     "variant_id",
 }
-FORMAT_2_MANIFEST_FIELDS = {"target_grid_source", "target_grid_version"}
+GRID_MANIFEST_FIELDS = {"target_grid_source", "target_grid_version"}
 OBSERVATION_FIELDS = {
     "source_record_id",
     "lat",
@@ -77,6 +80,13 @@ NATURAL_EARTH_SOURCE = (
 NATURAL_EARTH_PLACES_SOURCE = (
     "https://github.com/nvkelso/natural-earth-vector/blob/"
     f"{NATURAL_EARTH_REVISION}/geojson/ne_50m_populated_places.geojson"
+)
+#: The reviewed variant-normalization registry (design 2026-09-10 §5, §7). A coordinate-keyed
+#: external resource may only attach to an artifact whose variant_id has a resolved row here.
+#: Anchored to the repository root rather than the CWD (matching scripts/freeze_contract.py and
+#: tests/test_variant_registry.py) so this script works when invoked from any directory (I5).
+VARIANT_REGISTRY_PATH = (
+    Path(__file__).resolve().parents[1] / "data" / "registry" / "variant_normalization.tsv"
 )
 
 
@@ -121,12 +131,12 @@ def _validated_surface(
     artifact_dir: Path,
     expected_variant_id: str,
 ) -> tuple[dict[str, Any], pd.DataFrame]:
-    manifest = _read_json(artifact_dir / "manifest.json")
+    cells, manifest = read_surface_artifact(artifact_dir)
     _require_fields(manifest, MANIFEST_FIELDS, str(artifact_dir / "manifest.json"))
-    if int(manifest["artifact_format"]) == 2:
+    if int(manifest["artifact_format"]) in {2, 3}:
         _require_fields(
             manifest,
-            FORMAT_2_MANIFEST_FIELDS,
+            GRID_MANIFEST_FIELDS,
             str(artifact_dir / "manifest.json"),
         )
     if manifest["variant_id"] != expected_variant_id:
@@ -135,7 +145,6 @@ def _validated_surface(
             f"allowlist {expected_variant_id!r}"
         )
 
-    cells = pd.read_parquet(artifact_dir / "cells.parquet")
     missing = SURFACE_COLUMNS - set(cells.columns)
     if missing:
         raise ValueError(f"{artifact_dir}: missing surface columns {sorted(missing)}")
@@ -402,7 +411,7 @@ def _surface_payload(
         "resolution": int(manifest["resolution"]),
         "variant_id": str(manifest["variant_id"]),
     }
-    if int(manifest["artifact_format"]) == 2:
+    if int(manifest["artifact_format"]) in {2, 3}:
         identity.update(
             {
                 "target_grid_source": str(manifest["target_grid_source"]),
@@ -424,6 +433,7 @@ def _external_resources(
     entity_type: str,
     source_root: Path,
     out_dir: Path,
+    variant_registry: pd.DataFrame,
 ) -> tuple[list[dict[str, Any]], list[Path]]:
     """Validate declared capabilities and publish their normalized cache payloads."""
     declared = entry.get("external_resources", [])
@@ -431,6 +441,16 @@ def _external_resources(
         raise ValueError(f"allowlist artifact {artifact_id}: external_resources must be a list")
     if declared and entity_type != "variant":
         raise ValueError(f"allowlist artifact {artifact_id}: external lookup requires entity_type=variant")
+    # An artifact may be entity_type=variant and still not be a coordinate substitution — the
+    # cytokine loci are named by promoter offset. A coordinate-keyed external source can only
+    # attach where a reviewed normalization exists, so the registry is the single gate rather
+    # than a shape regex duplicated here and in the TypeScript contract (#207 review).
+    if declared and normalized_identity(variant_id, variant_registry) is None:
+        raise ValueError(
+            f"allowlist artifact {artifact_id}: no reviewed normalization for {variant_id}; "
+            "add a reviewed row to data/registry/variant_normalization.tsv or remove the "
+            "external resource"
+        )
     resources: list[dict[str, Any]] = []
     written: list[Path] = []
     seen: set[str] = set()
@@ -520,6 +540,9 @@ def export_catalog(
         raise ValueError("requested Hugging Face revision does not match the allowlist")
     if not isinstance(allowlist["artifacts"], list):
         raise ValueError(f"{allowlist_path}: artifacts must be a list")
+    # Loaded once here, not per artifact: every artifact's coordinate-keyed external resource is
+    # gated against the same reviewed registry (design §5, §7).
+    variant_registry = load_variant_registry(VARIANT_REGISTRY_PATH)
 
     by_id = {entry.get("id"): entry for entry in allowlist["artifacts"]}
     if None in by_id or len(by_id) != len(allowlist["artifacts"]):
@@ -653,6 +676,7 @@ def export_catalog(
             entity_type=str(variant_metadata["entity_type"]),
             source_root=source_root,
             out_dir=out_dir,
+            variant_registry=variant_registry,
         )
         written.extend(path for path in (surface_path, observations_path, manifest_path) if path is not None)
         written.extend(external_paths)
