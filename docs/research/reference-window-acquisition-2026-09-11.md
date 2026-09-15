@@ -32,7 +32,7 @@ with bcftools/HTSlib/fill-tags 1.23.1, tabix/bgzip 1.23.1 and Google Cloud SDK 5
 
 ## Synthetic and fault evidence
 
-The CLI suite has 26 tests. The complete synthetic acquisition contains 22 ready
+The CLI suite has 28 tests. The complete synthetic acquisition contains 22 ready
 sources and 66 explicitly accounted windows. Its complete-empty preparation writes
 four real header-only count tables rather than treating absence as an omitted result.
 
