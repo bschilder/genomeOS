@@ -1,0 +1,75 @@
+{
+  "coerce": true,
+  "columns": {
+    "cpic_level": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "A",
+        "B"
+      ]
+    },
+    "drug_id": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "drug_name": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "gene": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "guideline_id": {
+      "dtype": "string[pyarrow]"
+    },
+    "guideline_name": {
+      "dtype": "string[pyarrow]"
+    },
+    "guideline_url": {
+      "dtype": "string[pyarrow]",
+      "str_matches": "^https://.+|^$"
+    },
+    "pair_id": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      },
+      "unique": true
+    },
+    "source_release": {
+      "dtype": "string[pyarrow]",
+      "str_length": {
+        "exact_value": null,
+        "max_value": null,
+        "min_value": 1
+      }
+    },
+    "status": {
+      "dtype": "string[pyarrow]",
+      "isin": [
+        "candidate_gene_covered",
+        "no_allele_table",
+        "no_admitted_function"
+      ]
+    }
+  },
+  "drop_invalid_rows": false,
+  "name": "cpic_pair_targets",
+  "schema_type": "dataframe",
+  "strict": true
+}

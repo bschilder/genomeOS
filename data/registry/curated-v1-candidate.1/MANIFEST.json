@@ -1,0 +1,44 @@
+{
+  "builder": {
+    "cpic_adapter_path": "genomeos/registry/cpic.py",
+    "cpic_adapter_sha256": "5c30769af5ab43416b29dc4b5be9c68499ee12f23206fb4776561f7d602f0042",
+    "domain_path": "genomeos/registry/curated.py",
+    "domain_sha256": "ff8aff7ebaa5aa26f9dbfcfc73fb8a608543172512a2b91f4ff81189cc539e3f",
+    "path": "scripts/build_curated_variant_set.py",
+    "sha256": "69ff82da9feb67c7707b757aa8e6f4b91ef2a701a7fd400f757eaa779ba0f8cb"
+  },
+  "counts": {
+    "cpic_genes": 29,
+    "cpic_genes_without_admitted_alleles": 9,
+    "cpic_genes_without_admitted_function": 1,
+    "cpic_genes_without_allele_table": 8,
+    "cpic_pair_targets": 128,
+    "pending_project_review": 698,
+    "resolved_identities": 697,
+    "unresolved_identities": 1,
+    "variants": 698,
+    "verified_for_affected_burden": 0,
+    "verified_for_frequency_surface": 0
+  },
+  "evidence_kind": "curated_candidate_set",
+  "outputs": {
+    "cpic_coverage.tsv": "395e83a548b403634fad0fb4b10d38d4900e9bb39c27ce8ecf26eacbef5493c9",
+    "cpic_pair_targets.tsv": "26c9211f6a2533d914297f86c79ff32a4508afe9a017beef58626e93efb9988f",
+    "curated_variants.tsv": "f0201964c51c4e6e58a1aead841db35a6af3f99e0c99e2a7eecac7fbcbbe8220"
+  },
+  "publication_eligible": false,
+  "publication_refusal": "Every candidate remains pending independent project review; unresolved entities also require an admitted canonical representation.",
+  "set_version": "v1-candidate.1",
+  "sources": {
+    "cpic": {
+      "accessed_at": "2026-09-14",
+      "release": "v1.60.0",
+      "source_data_date": "2026-08-07",
+      "source_manifest_sha256": "e4d733751a2ceb8f7275b702c2979972d7747c9f1d4ff14b17f227c951baee39"
+    },
+    "manual_candidates": {
+      "sha256": "737d1bfa1fcb2263704ec9a2efcc9413520521a0e172ec701a294e87da969994",
+      "source_manifest_sha256": "dd623503069c72b8cb1e8fab0f905f0e4479bd9d36a0143287cc3f57a8a84e67"
+    }
+  }
+}
