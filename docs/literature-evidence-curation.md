@@ -171,12 +171,29 @@ at [`genomeos/registry/variants.py`](../genomeos/registry/variants.py) and
 Use this derivation for a value seen in a paper; use the registry when an adapter or the web
 exporter needs a coordinate for a `variant_id` it already mints.
 
-## Discovery is one existing tool, and it is not optional
+## A paper does not need a search to enter this corpus
 
-**Use `scripts/fetch_pubmed_manifest.py`. Do not write your own fetcher.** Two corpus slices have
-now reimplemented it — worse each time, with wall-clock timestamps that re-mint `search_id` on every
-run, no payload validation, and screening fused into capture. If it does not fit your source, say so
-in the PR and explain why; do not quietly route around it.
+**Searching is one way a paper arrives. It is not a precondition, and nothing here requires one.**
+A collaborator names a paper, a domain expert brings a dataset, a classic reference is already
+familiar — those are legitimate provenances, and often higher-precision than a keyword query. The
+evidence ledger reflects that: a record needs a citation, a locator and a source URL. There is no
+search or manifest column, and none is wanted.
+
+This is deliberate. The corpora here are transcribed measurements, each independently checkable
+against its own source, not pooled effect estimates where what you excluded moves the answer. A
+paper you did not find cannot make a record you did transcribe wrong. Selection bias in this atlas
+is controlled where it actually bites — the per-observation ascertainment fields that have no
+defaults — not by proving a search was exhaustive.
+
+Say plainly how a paper arrived. "Named by a collaborator" is a better provenance record than a
+query reverse-engineered afterwards to retrieve something already chosen.
+
+## If you *do* search, use the existing tool
+
+**Use `scripts/fetch_pubmed_manifest.py` rather than writing your own fetcher.** Two corpus slices
+reimplemented it — worse each time, with wall-clock timestamps that re-mint `search_id` on every run,
+no payload validation, and screening fused into capture. This is about the quality of a search you
+chose to run; it is not a gate on contributing.
 
 What you get by using it, and would have to rebuild correctly otherwise:
 
@@ -268,11 +285,14 @@ stored status never collapses those states.
 
 ## Minimum curation workflow
 
-1. Snapshot discovery with `scripts/fetch_pubmed_manifest.py` and an explicit `--executed-at`;
-   every candidate starts pending. Commit the raw payload and the invocation. Writing a bespoke
-   fetcher instead is a review blocker, not a style choice.
-2. Screen the snapshot as a **new** `manifest_version`, giving every exclusion a reason. Never edit
-   a published manifest version in place.
+1. **If you searched**, snapshot discovery with `scripts/fetch_pubmed_manifest.py` and an explicit
+   `--executed-at`; every candidate starts pending. Commit the raw payload and the invocation — a
+   silently truncated fetch is indistinguishable from a complete one without it, which is how a
+   capture missing 33 candidates sat merged for a week. **If the paper reached you another way,
+   skip to step 3 and record how it arrived.** Steps 1 and 2 describe a search, not an entry
+   requirement.
+2. If you searched, screen that snapshot as a **new** `manifest_version`, giving every exclusion a
+   reason. Never edit a published manifest version in place.
 3. Assign one immutable source record and exact record locator per independent measurement.
 4. Fill only source-supported main values and all 19 field decisions. Use `not_reviewed` before
    inspection, `not_reported` only after documenting the complete checked scope, and `ambiguous`
