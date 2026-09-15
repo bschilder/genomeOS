@@ -13,20 +13,35 @@
           "source": "gnomad",
           "normalized_variant_id": "chr11-5227002-T-A",
           "dataset": "gnomad_r4",
-          "cache_file": "external/gnomad/chr11-5227002-t-a.json"
+          "cache_file": "external/gnomad/chr11-5227002-t-a.json",
+          "commercial_use": {
+            "finding": "not_checked",
+            "restricted_fields": []
+          }
         },
         {
           "source": "dbsnp",
           "normalized_variant_id": "chr11-5227002-T-A",
           "rsid": "rs334",
-          "cache_file": "external/dbsnp/rs334.json"
+          "cache_file": "external/dbsnp/rs334.json",
+          "commercial_use": {
+            "finding": "not_checked",
+            "restricted_fields": []
+          }
         },
         {
           "source": "alphagenome",
           "method": "atlas_lookup",
           "normalized_variant_id": "chr11-5227002-T-A",
           "model_version": "AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09",
-          "cache_file": "external/alphagenome/chr11-5227002-t-a.json"
+          "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+          "commercial_use": {
+            "finding": "explicitly_open",
+            "restricted_fields": [],
+            "checked_at": "2026-09-10",
+            "terms_url": "https://deepmind.google.com/science/alphagenome/terms",
+            "recorded_in": "docs/audits/alphagenome-avi-licensing.md"
+          }
         }
       ]
     },

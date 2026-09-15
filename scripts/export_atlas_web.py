@@ -33,10 +33,38 @@ from genomeos.surfaces.artifacts import read as read_surface_artifact
 
 SCHEMA_VERSION = 1
 
-# The AVI score is permissively licensed, but the AVI Score Feature Breakdown is a separate artifact
-# that DeepMind lists as non-commercial use only, so it cannot be redistributed here. See the
-# licensing note in docs/audits/alphagenome-avi-licensing.md.
-NON_REDISTRIBUTABLE_ALPHAGENOME_FIELDS = ("top_attributions",)
+# NON-COMMERCIAL: commercial-use marking. genomeOS may publish data under a non-commercial licence,
+# but every restricted field must be declared in the publish allowlist so a future commercial
+# component can find and remove all of it at once. The inventory is
+# `python scripts/check_commercial_use.py --list`; the register is docs/non-commercial-data.md.
+#
+# The vocabulary is the one the literature reuse checks already use (genomeos/observations/
+# evidence.py), so a source's terms read the same wherever they are recorded. `not_checked` stays
+# publishable on purpose: refusing it would push a contributor to invent a licence finding to make
+# an export run, which the publication-evidence safeguards forbid. The check script lists those as
+# unresolved instead, so an extraction still sees them.
+COMMERCIAL_USE_FINDINGS = (
+    "explicitly_open",
+    "permission_granted",
+    "no_restriction_found",
+    "restricted",
+    "not_checked",
+)
+COMMERCIAL_USE_EVIDENCE_FIELDS = ("checked_at", "terms_url", "recorded_in")
+
+# NON-COMMERCIAL: fields known to carry a non-commercial restriction inside a source that is
+# otherwise permissive. The restriction is field-level, not source-level: DeepMind carves the AVI
+# Score out for commercial use while leaving the AVI Score Feature Breakdown non-commercial, and
+# gnomAD is CC0 while the SpliceAI annotations it bundles are CC BY-NC (AGENTS.md, "Data and
+# access terms"). A source-level tag would wrongly condemn the permissive half.
+#
+# Presence in a published record without a matching `restricted_fields` entry is a hard error, so
+# restricted data can ship marked but never unmarked. Add to this list when a new restriction is
+# found; never remove an entry to make an export pass.
+KNOWN_NON_COMMERCIAL_FIELDS: dict[str, tuple[str, ...]] = {
+    "alphagenome": ("top_attributions",),
+    "gnomad": ("spliceai",),
+}
 SUPPORT_STATES = {"observed", "interpolated", "prior_dominated", "unknown"}
 SURFACE_COLUMNS = {
     "h3_index",
@@ -430,6 +458,84 @@ def _surface_payload(
     }
 
 
+def _commercial_use(
+    resource: Mapping[str, Any],
+    record: Mapping[str, Any],
+    source: str,
+    context: str,
+) -> dict[str, Any]:
+    """Validate the commercial-use declaration and return what gets published with the resource.
+
+    NON-COMMERCIAL: this is the single gate that decides whether restricted data may ship. It
+    permits publication and refuses concealment, which is the whole point: an unmarked restricted
+    field is invisible to an extraction, while a marked one is one grep away.
+    """
+    declared = resource.get("commercial_use")
+    if not isinstance(declared, Mapping):
+        raise ValueError(
+            f"{context}: commercial_use is required and must be an object; see "
+            "docs/non-commercial-data.md"
+        )
+    _require_fields(declared, {"finding", "restricted_fields"}, f"{context} commercial_use")
+    finding = declared["finding"]
+    if finding not in COMMERCIAL_USE_FINDINGS:
+        raise ValueError(
+            f"{context}: commercial_use finding must be one of {list(COMMERCIAL_USE_FINDINGS)}, "
+            f"got {finding!r}"
+        )
+    fields = declared["restricted_fields"]
+    if not isinstance(fields, list) or not all(isinstance(field, str) for field in fields):
+        raise ValueError(f"{context}: commercial_use restricted_fields must be a list of strings")
+    if len(set(fields)) != len(fields):
+        raise ValueError(f"{context}: commercial_use restricted_fields must be unique")
+
+    if finding == "restricted":
+        if not fields:
+            raise ValueError(
+                f"{context}: a restricted commercial_use finding must name at least one restricted "
+                "field, otherwise an extraction cannot tell what to remove"
+            )
+        absent = sorted(field for field in fields if field not in record)
+        if absent:
+            raise ValueError(
+                f"{context}: commercial_use names a field absent from the record: "
+                f"{absent}. A declaration that does not match the payload hides a rename."
+            )
+    elif fields:
+        raise ValueError(
+            f"{context}: only a restricted finding may name fields, got {finding!r} with {fields}"
+        )
+
+    published: dict[str, Any] = {"finding": finding, "restricted_fields": sorted(fields)}
+    if finding != "not_checked":
+        _require_fields(
+            declared,
+            set(COMMERCIAL_USE_EVIDENCE_FIELDS),
+            f"{context} commercial_use requires checked_at, terms_url and recorded_in for a "
+            "performed check",
+        )
+        terms_url = str(declared["terms_url"])
+        if not terms_url.startswith("https://"):
+            raise ValueError(f"{context}: commercial_use terms_url must be https")
+        for field in COMMERCIAL_USE_EVIDENCE_FIELDS:
+            published[field] = str(declared[field])
+
+    # NON-COMMERCIAL: the tripwire. A field we already know is restricted may not reach the
+    # published payload unless the declaration names it.
+    undeclared = sorted(
+        field
+        for field in KNOWN_NON_COMMERCIAL_FIELDS.get(source, ())
+        if field in record and field not in fields
+    )
+    if undeclared:
+        raise ValueError(
+            f"{context}: undeclared non-commercial field {undeclared}. {source} publishes this "
+            "under a non-commercial licence; declare it in commercial_use.restricted_fields with "
+            'finding "restricted", or drop it from the payload.'
+        )
+    return published
+
+
 def _external_resources(
     entry: Mapping[str, Any],
     *,
@@ -505,6 +611,9 @@ def _external_resources(
             "normalized_variant_id": normalized,
             "source": source,
         }
+        record = cache_payload["record"]
+        if not isinstance(record, Mapping):
+            raise ValueError(f"{source_root / cache_file}: record must be an object")
         if source == "gnomad":
             _require_fields(resource, {"dataset"}, f"{artifact_id} gnomad resource")
             dataset = str(resource["dataset"])
@@ -525,20 +634,16 @@ def _external_resources(
             method = str(resource["method"])
             if cache_payload.get("method") != method:
                 raise ValueError(f"{source_root / cache_file}: AlphaGenome method mismatch")
-            record = cache_payload.get("record")
-            if not isinstance(record, dict) or record.get("model_version") != model_version:
+            if record.get("model_version") != model_version:
                 raise ValueError(f"{source_root / cache_file}: AlphaGenome model_version mismatch")
-            restricted = [
-                field for field in NON_REDISTRIBUTABLE_ALPHAGENOME_FIELDS if field in record
-            ]
-            if restricted:
-                raise ValueError(
-                    f"{source_root / cache_file}: AlphaGenome {', '.join(restricted)} is not "
-                    "redistributable: DeepMind defines the AVI Score Feature Breakdown as separate "
-                    "from the AVI Score and lists it as non-commercial use only"
-                )
             published["method"] = method
             published["model_version"] = model_version
+        published["commercial_use"] = _commercial_use(
+            resource,
+            record,
+            source,
+            f"allowlist artifact {artifact_id} {source} resource",
+        )
         resources.append(published)
         written.append(published_path)
     return resources, written
