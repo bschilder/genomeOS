@@ -25,7 +25,7 @@ PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-calibration-report-cache-20260911/pytensor-base,compiledir=/private/tmp/genomeos-calibration-report-cache-20260911/pytensor \
 MPLCONFIGDIR=/private/tmp/genomeos-calibration-report-cache-20260911/mpl \
 XDG_CACHE_HOME=/private/tmp/genomeos-calibration-report-cache-20260911/xdg \
-/Users/bschilder/code/genomeOS/.venv/bin/python \
+$HOME/code/genomeOS/.venv/bin/python \
 scripts/build_calibration_report_demo.py \
 --out .superpowers/sdd/2026-09-11-calibration-report/task-2-demo-reduction.json
 ```
@@ -39,7 +39,7 @@ PYTHONPATH=. PYTHONDONTWRITEBYTECODE=1 \
 PYTENSOR_FLAGS=base_compiledir=/private/tmp/genomeos-calibration-report-cache-20260911/pytensor-base,compiledir=/private/tmp/genomeos-calibration-report-cache-20260911/pytensor \
 MPLCONFIGDIR=/private/tmp/genomeos-calibration-report-cache-20260911/mpl \
 XDG_CACHE_HOME=/private/tmp/genomeos-calibration-report-cache-20260911/xdg \
-/Users/bschilder/code/genomeOS/.venv/bin/python \
+$HOME/code/genomeOS/.venv/bin/python \
 scripts/plot_b0h_calibration.py \
 --reduction .superpowers/sdd/2026-09-11-calibration-report/task-2-demo-reduction.json \
 --expected-reduction-sha256 a55cd9f3fca5c0ebd7eef2cc124d146f7b7a81a3ebd0a246cb940dec36aa8913 \
