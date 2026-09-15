@@ -219,3 +219,122 @@ def test_a_major_alphabetical_allele_is_flipped_to_its_minor_partner(tmp_path):
     row = obs.iloc[0]
     assert row["variant_id"] == "cyt:il-6-174-a"
     assert (row["ac"], row["an"]) == (20, 200)
+
+
+def test_a_fractional_carrier_sample_size_is_refused_rather_than_rounded(tmp_path):
+    """A fraction of a person is not a sample size, and rounding invents a denominator (#225).
+
+    Rounding is worse than truncating here: `.round()` moves the invented count in either
+    direction, so a row claiming 100.5 individuals could be reported as either 100 or 101
+    depending only on the fractional part. Neither number was measured.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["kir"],
+            "gene": ["2DL1"],
+            "allele": ["2DL1"],
+            "population": [PLACED],
+            "indivs_over_n": ["95.0"],
+            "alleles_over_2n": [""],
+            "n": ["100.5"],
+        },
+    )
+    carriers, report = afnd_carriers.load(path, POPULATIONS, "test")
+    assert len(carriers) == 0
+    assert report.refusals["fractional_sample_size"] == 1
+    assert len(carriers) + sum(report.refusals.values()) == report.total_rows
+
+
+def test_carrier_sample_sizes_differing_only_by_a_fraction_cannot_collide_into_one_identity(
+    tmp_path,
+):
+    """The #160 defect, in the sibling adapter: three readings of one sample size (#225).
+
+    The duplicate check compares `n_indiv` as a parsed float, so 100 and 100.5 survive as two
+    rows; the identity then hashes `int(n)`, collapsing both onto one `source_record_id`; and
+    `unique=True` rejects the pair rather than the duplicate. One canonical integer is what
+    makes those rules agree — here by refusing the fractional row, so no id is ever minted for
+    a denominator nobody published.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["kir", "kir"],
+            "gene": ["2DL1", "2DL1"],
+            "allele": ["2DL1", "2DL1"],
+            "population": [PLACED, PLACED],
+            "indivs_over_n": ["95.0", "95.0"],
+            "alleles_over_2n": ["", ""],
+            "n": ["100", "100.5"],
+        },
+    )
+    carriers, report = afnd_carriers.load(path, POPULATIONS, "test")
+    assert len(carriers) == carriers["source_record_id"].nunique()
+    CARRIER_OBSERVATIONS_SCHEMA.validate(carriers)
+    assert report.refusals["fractional_sample_size"] == 1
+    assert len(carriers) + sum(report.refusals.values()) == report.total_rows
+    # The surviving row is the one AFND actually published a whole denominator for.
+    assert (carriers.iloc[0]["carriers"], carriers.iloc[0]["n_individuals"]) == (95, 100)
+
+
+def test_carrier_source_record_ids_are_pinned_against_the_canonical_integer(tmp_path):
+    """A published carrier identity must not move when the sample size changes in-memory form.
+
+    `n_individuals` is an `Int64` rather than the parsed float it used to be (#225). Integral
+    values hash identically either way — `str(np.int64(200))` and `str(int(200.0))` are both
+    `"200"` — and this digest is the tripwire that says so. Nothing else in the suite pins a
+    carrier id, so a future change to how the sample size is carried would otherwise silently
+    re-mint every `afnd-carriers` record and break any citation of one.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["kir"],
+            "gene": ["2DL1"],
+            "allele": ["2DL1"],
+            "population": [PLACED],
+            "indivs_over_n": ["95.0"],
+            "alleles_over_2n": [""],
+            "n": ["200"],
+        },
+    )
+    carriers, _ = afnd_carriers.load(path, POPULATIONS, "test")
+    assert carriers.iloc[0]["source_record_id"] == (
+        "afnd-carriers:bdc5659fd1c383c80450c84b27234a7e96932149f66677bd8beac29bc70a4400"
+    )
+
+
+def test_the_carrier_adapter_hands_the_identity_native_python_scalars(tmp_path, monkeypatch):
+    """The same guard as the frequency adapter, for the same reason (#160 review).
+
+    `n_individuals` is a nullable `Int64` here too, so its values iterate as `np.int64`. The
+    pinned digest above proves the id does not move today; this proves it cannot move under a
+    future NumPy, by keeping NumPy scalars out of the hash entirely.
+    """
+    path = _table(
+        tmp_path,
+        {
+            "group": ["kir"],
+            "gene": ["2DL1"],
+            "allele": ["2DL1"],
+            "population": [PLACED],
+            "indivs_over_n": ["95.0"],
+            "alleles_over_2n": [""],
+            "n": ["200"],
+        },
+    )
+    seen: list[tuple[type, ...]] = []
+    real = afnd_carriers.stable_source_record_id
+
+    def spy(namespace, *parts):
+        seen.append(tuple(type(part) for part in parts))
+        return real(namespace, *parts)
+
+    monkeypatch.setattr(afnd_carriers, "stable_source_record_id", spy)
+    afnd_carriers.load(path, POPULATIONS, "test")
+
+    assert seen, "the adapter minted no identities, so nothing was checked"
+    for types in seen:
+        assert types[-2] is float, f"carrier fraction reached the identity as {types[-2]}"
+        assert types[-1] is int, f"sample size reached the identity as {types[-1]}"
