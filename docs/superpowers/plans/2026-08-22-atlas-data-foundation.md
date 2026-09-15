@@ -351,6 +351,11 @@ git commit -m "feat(P0): population registry schema with strict coordinate contr
 
 ## Task 3: HGDP registry source adapter (the reference adapter)
 
+> **Superseded input contract:** The implementation example below records the original adapter.
+> [The explicit-support plan](2026-09-11-hgdp-explicit-support.md) and
+> [HGDP registry input guide](../../hgdp-registry-input.md) now require curated, per-row radius
+> and provenance fields. The historical example is retained unchanged.
+
 **Files:**
 - Create: `src/genomeos/registry/sources/__init__.py`, `src/genomeos/registry/sources/hgdp.py`
 - Create fixture: `tests/fixtures/hgdp_populations.tsv` (6 rows, hand-written)
@@ -492,6 +497,12 @@ git commit -m "feat(P0): HGDP registry adapter establishing the source-adapter c
 ---
 
 ## Task 4: Registry build with alias-collision detection
+
+> Historical implementation record: the mutable writer and invocation examples in this task were
+> superseded by [the immutable registry publication design](../specs/2026-09-11-registry-publication-design.md)
+> and [implementation plan](2026-09-11-registry-publication.md). Current builds require
+> `--release-version`, a fresh output path, and a verified completion manifest. The original code
+> below is preserved to document Task 4 as implemented at the time.
 
 **Files:**
 - Create: `src/genomeos/registry/build.py`

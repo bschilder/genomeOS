@@ -18,6 +18,7 @@ import pandas as pd
 from genomeos.observations.ingest import write_observations
 from genomeos.observations.sources import gnomad_hgdp_1kg as gnomad
 from genomeos.observations.sources import map_surveys, publications
+from genomeos.registry.publication import read_registry
 
 VERSION = "0.1.0"
 
@@ -34,8 +35,7 @@ def main() -> None:
     if (args.literature_evidence is None) != (args.literature_field_evidence is None):
         ap.error("--literature-evidence and --literature-field-evidence must be supplied together")
 
-    populations = pd.read_parquet(args.registry / "populations.parquet")
-    aliases = pd.read_parquet(args.registry / "population_aliases.parquet")
+    populations, aliases = read_registry(args.registry)
 
     surveys, survey_report = map_surveys.load(args.map_surveys, VERSION)
     frames = [

@@ -1,0 +1,31 @@
+{
+  "accessed_at": "2026-09-14",
+  "content_license": "CC0-1.0",
+  "data_release": "v1.60.0",
+  "license_file_sha256": "0bbd0b4ffcce8dfcbe6e77a803807b5eed2bb808f581b872060048c50cf40ce7",
+  "release_url": "https://github.com/cpicpgx/cpic-data/releases/tag/v1.60.0",
+  "source": "CPIC Database and API",
+  "source_data_date": "2026-08-07",
+  "source_url": "https://api.cpicpgx.org/v1/",
+  "tables": {
+    "alleles.csv": {
+      "query": "allele?select=id,genesymbol,name,functionalstatus,clinicalfunctionalstatus,clinicalfunctionalsubstrate,activityvalue,definitionid,citations,strength,version&order=genesymbol,name",
+      "sha256": "4819a8cfb744893d39607c477f6cc8557b5ea50ecec554d84491e3168408a361"
+    },
+    "drugs.csv": {
+      "query": "drug?select=drugid,name,guidelineid,clinpgxid&order=drugid",
+      "sha256": "3d19ecd31cf3ef8fa908d612d321b574f897d54c226ca8dbd8a674d28f483743"
+    },
+    "guidelines.csv": {
+      "query": "guideline?select=id,name,url,genes,clinpgxid&order=id",
+      "sha256": "252e614289dd2d9381c408297fa8d32598c51629040296daf516d4753746b2e9"
+    },
+    "pairs_a_b.csv": {
+      "query": "pair?select=genesymbol,drugid,guidelineid,cpiclevel,removed&removed=eq.false&cpiclevel=in.(A,B)&order=genesymbol,drugid",
+      "sha256": "a79b2da2939f394a811e8e80ce7ee5df2bb58c07cb18f99e5695bf83eedf717d"
+    }
+  },
+  "terms_checked_at": "2026-09-14",
+  "terms_status": "no_restriction_found",
+  "terms_url": "https://github.com/cpicpgx/cpic-data/blob/v1.60.0/LICENSE.md"
+}

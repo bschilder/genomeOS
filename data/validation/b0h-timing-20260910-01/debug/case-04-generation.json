@@ -1,0 +1,1509 @@
+{
+  "class": "genomeos.validation.heterogeneity_simulation_types.GeneratedDataset",
+  "fields": [
+    {
+      "name": "case_id",
+      "value": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.SbcCaseId",
+        "fields": [
+          {
+            "name": "track_id",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x0",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "study_id",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x0",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "case_id",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x0",
+              "tag": "int"
+            }
+          },
+          {
+            "name": "replicate_id",
+            "value": {
+              "class": "builtins.int",
+              "hex": "0x2",
+              "tag": "int"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    },
+    {
+      "name": "provenance",
+      "value": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.GenerationProvenance",
+        "fields": [
+          {
+            "name": "generation_id",
+            "value": {
+              "class": "genomeos.validation.heterogeneity_simulation_types.GenerationId",
+              "fields": [
+                {
+                  "name": "track_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "study_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "case_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x0",
+                    "tag": "int"
+                  }
+                },
+                {
+                  "name": "replicate_id",
+                  "value": {
+                    "class": "builtins.int",
+                    "hex": "0x2",
+                    "tag": "int"
+                  }
+                }
+              ],
+              "tag": "dataclass"
+            }
+          },
+          {
+            "name": "seeds",
+            "value": {
+              "items": [
+                {
+                  "class": "genomeos.validation.heterogeneity_simulation_types.SeedIdentity",
+                  "fields": [
+                    {
+                      "name": "entropy",
+                      "value": {
+                        "items": [
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2a",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0xd3",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x1",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          }
+                        ],
+                        "tag": "tuple"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                },
+                {
+                  "class": "genomeos.validation.heterogeneity_simulation_types.SeedIdentity",
+                  "fields": [
+                    {
+                      "name": "entropy",
+                      "value": {
+                        "items": [
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2a",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0xd3",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x1",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x1",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          }
+                        ],
+                        "tag": "tuple"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                },
+                {
+                  "class": "genomeos.validation.heterogeneity_simulation_types.SeedIdentity",
+                  "fields": [
+                    {
+                      "name": "entropy",
+                      "value": {
+                        "items": [
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2a",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0xd3",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x1",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          }
+                        ],
+                        "tag": "tuple"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                },
+                {
+                  "class": "genomeos.validation.heterogeneity_simulation_types.SeedIdentity",
+                  "fields": [
+                    {
+                      "name": "entropy",
+                      "value": {
+                        "items": [
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2a",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0xd3",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x1",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x2",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x3",
+                            "tag": "int"
+                          },
+                          {
+                            "class": "builtins.int",
+                            "hex": "0x0",
+                            "tag": "int"
+                          }
+                        ],
+                        "tag": "tuple"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                }
+              ],
+              "tag": "tuple"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    },
+    {
+      "name": "truth",
+      "value": {
+        "class": "genomeos.validation.heterogeneity_simulation_types.ParameterTruth",
+        "fields": [
+          {
+            "name": "mean",
+            "value": {
+              "binary64_be_hex": "3fdb71663cb011ac",
+              "class": "builtins.float",
+              "tag": "float"
+            }
+          },
+          {
+            "name": "rho",
+            "value": {
+              "binary64_be_hex": "3f7bc531e4d41a8a",
+              "class": "builtins.float",
+              "tag": "float"
+            }
+          }
+        ],
+        "tag": "dataclass"
+      }
+    },
+    {
+      "name": "training",
+      "value": {
+        "items": [
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a30"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a30"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a31"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a31"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x1",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a32"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a32"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x2",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a33"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a33"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x2",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x5",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a34"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a34"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x3",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0xa",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a35"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a35"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0xa",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x14",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a36"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a36"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x15",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x28",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a37"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a37"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x22",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x40",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a38"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a38"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a39"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a39"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x1",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a3130"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a3130"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x0",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x2",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a3131"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a3131"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x2",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x5",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a3132"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a3132"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x4",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0xa",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a3133"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a3133"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x5",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x14",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a3134"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a3134"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0xc",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x28",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          },
+          {
+            "class": "genomeos.validation.reference_counts.ReferenceCount",
+            "fields": [
+              {
+                "name": "record_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a726f773a3135"
+                }
+              },
+              {
+                "name": "variant_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                }
+              },
+              {
+                "name": "group_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a747261696e3a67726f75703a3135"
+                }
+              },
+              {
+                "name": "region_id",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                }
+              },
+              {
+                "name": "variant_group",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                }
+              },
+              {
+                "name": "ac",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x19",
+                  "tag": "int"
+                }
+              },
+              {
+                "name": "an",
+                "value": {
+                  "class": "builtins.int",
+                  "hex": "0x40",
+                  "tag": "int"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          }
+        ],
+        "tag": "tuple"
+      }
+    },
+    {
+      "name": "latent_frequencies",
+      "value": {
+        "items": [
+          {
+            "binary64_be_hex": "3fdbcd2c5e1c6ab1",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd52a0b8e6dadaa",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd8c301ff960f02",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd7853c10d98d9d",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fdb22e8edada342",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fe04465078c6768",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fdbee2120a12e77",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fdba3c9065bbfe9",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd95946eaadfb12",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd80e880decc913",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fdf746955055060",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fdaf5efc85d6d45",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd98d828bf10270",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fdb8adc8509a822",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fd98cf6b5826080",
+            "class": "builtins.float",
+            "tag": "float"
+          },
+          {
+            "binary64_be_hex": "3fda7a1a8bfd2486",
+            "class": "builtins.float",
+            "tag": "float"
+          }
+        ],
+        "tag": "tuple"
+      }
+    },
+    {
+      "name": "shared_history",
+      "value": {
+        "tag": "none"
+      }
+    },
+    {
+      "name": "heldouts",
+      "value": {
+        "items": [
+          {
+            "class": "genomeos.validation.heterogeneity_simulation_types.HeldoutTarget",
+            "fields": [
+              {
+                "name": "kind",
+                "value": {
+                  "tag": "string",
+                  "utf8_surrogatepass_hex": "66726573685f706f70756c6174696f6e"
+                }
+              },
+              {
+                "name": "row",
+                "value": {
+                  "class": "genomeos.validation.reference_counts.ReferenceCount",
+                  "fields": [
+                    {
+                      "name": "record_id",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a68656c646f75743a726f773a66726573685f706f70756c6174696f6e"
+                      }
+                    },
+                    {
+                      "name": "variant_id",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a76617269616e743a30"
+                      }
+                    },
+                    {
+                      "name": "group_id",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469633a6230685f7362635f76313a73303a63303a72323a67303a68656c646f75743a67726f75703a66726573685f706f70756c6174696f6e"
+                      }
+                    },
+                    {
+                      "name": "region_id",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469635f6e6f6e7370617469616c"
+                      }
+                    },
+                    {
+                      "name": "variant_group",
+                      "value": {
+                        "tag": "string",
+                        "utf8_surrogatepass_hex": "73796e7468657469635f73696e676c655f76617269616e74"
+                      }
+                    },
+                    {
+                      "name": "ac",
+                      "value": {
+                        "class": "builtins.int",
+                        "hex": "0x4",
+                        "tag": "int"
+                      }
+                    },
+                    {
+                      "name": "an",
+                      "value": {
+                        "class": "builtins.int",
+                        "hex": "0x14",
+                        "tag": "int"
+                      }
+                    }
+                  ],
+                  "tag": "dataclass"
+                }
+              },
+              {
+                "name": "latent_frequency",
+                "value": {
+                  "binary64_be_hex": "3fda613e71a694e9",
+                  "class": "builtins.float",
+                  "tag": "float"
+                }
+              },
+              {
+                "name": "cluster_id",
+                "value": {
+                  "tag": "none"
+                }
+              },
+              {
+                "name": "cluster_frequency",
+                "value": {
+                  "tag": "none"
+                }
+              },
+              {
+                "name": "candidate_frequency",
+                "value": {
+                  "tag": "none"
+                }
+              },
+              {
+                "name": "uses_cluster",
+                "value": {
+                  "tag": "none"
+                }
+              }
+            ],
+            "tag": "dataclass"
+          }
+        ],
+        "tag": "tuple"
+      }
+    },
+    {
+      "name": "beta_zero_draws",
+      "value": {
+        "class": "builtins.int",
+        "hex": "0x0",
+        "tag": "int"
+      }
+    },
+    {
+      "name": "beta_one_draws",
+      "value": {
+        "class": "builtins.int",
+        "hex": "0x0",
+        "tag": "int"
+      }
+    }
+  ],
+  "tag": "dataclass"
+}

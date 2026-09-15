@@ -1,0 +1,1985 @@
+{
+  "decoded_report": {
+    "sha256": "d59428aa8d03673cdec6f8a75a24dd36cb7ec573ddca4607e623f05c3a34e372",
+    "size_bytes": 1914078
+  },
+  "difference_direction": "B0H_minus_B0",
+  "executed_source": {
+    "sha256": "f6e92d0a1902a6cbfe284e10b9059e10344766007801eb53a9804fd2082d6b51",
+    "size_bytes": 13486
+  },
+  "input_encoding": "gzip",
+  "input_report": {
+    "sha256": "1e389cc92dc10dff30aaed8d51a0f644c60ab95e3597bfe8f98808b7241330ea",
+    "size_bytes": 87238
+  },
+  "output_files": {
+    "comparison.png": {
+      "sha256": "903afbedf871401b69bc88ec857be5d072f3c47e2ff5b557c285f24c085752a3",
+      "size_bytes": 468201
+    }
+  },
+  "package_versions": {
+    "matplotlib": "3.11.1",
+    "numpy": "2.4.6"
+  },
+  "rows": [
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "called",
+      "label": "technical_qc_4117 | called | seed=42 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row0-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row0-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row0-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row0-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row0-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row0-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row0-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row0-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row0-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row0-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row0-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row0-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row0-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row0-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row0-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row0-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho9-row0-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 42,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "called",
+      "label": "technical_qc_4117 | called | seed=42 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row0-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row0-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row0-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row0-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row0-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row0-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row0-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row0-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row0-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row0-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row0-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row0-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row0-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row0-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row0-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row0-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho4-row0-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 42,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "called",
+      "label": "technical_qc_4117 | called | seed=43 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row1-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row1-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row1-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row1-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row1-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row1-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row1-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row1-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row1-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row1-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row1-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row1-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row1-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row1-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row1-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row1-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 43,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "called",
+      "label": "technical_qc_4117 | called | seed=43 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row1-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row1-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row1-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row1-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row1-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row1-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row1-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row1-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row1-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row1-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row1-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row1-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row1-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row1-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row1-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row1-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "undefined: both_negative_infinity",
+          "reason": "both_negative_infinity",
+          "unit": "natural_log",
+          "value": null
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 43,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "called",
+      "label": "technical_qc_4117 | called | seed=44 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row2-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row2-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row2-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row2-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row2-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row2-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row2-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row2-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row2-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row2-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row2-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row2-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row2-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row2-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row2-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row2-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "called",
+      "label": "technical_qc_4117 | called | seed=44 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row2-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row2-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row2-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row2-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row2-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row2-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row2-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row2-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row2-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row2-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row2-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row2-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row2-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row2-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row2-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row2-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "quality",
+      "label": "technical_qc_4117 | quality | seed=42 | rho_prior_beta=9\nconditional: 4/5 common completed folds; b0 failed/infeasible=0; b0h failed/infeasible=1",
+      "label_artist": "rho9-row3-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row3-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row3-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row3-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row3-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row3-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row3-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row3-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row3-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row3-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row3-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row3-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row3-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row3-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row3-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row3-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho9-row3-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 42,
+      "status": "conditional"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "quality",
+      "label": "technical_qc_4117 | quality | seed=42 | rho_prior_beta=4\nconditional: 4/5 common completed folds; b0 failed/infeasible=0; b0h failed/infeasible=1",
+      "label_artist": "rho4-row3-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row3-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row3-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row3-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row3-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row3-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row3-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row3-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row3-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row3-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row3-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row3-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row3-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row3-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row3-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row3-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho4-row3-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 42,
+      "status": "conditional"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "quality",
+      "label": "technical_qc_4117 | quality | seed=43 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row4-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row4-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row4-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row4-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row4-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row4-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row4-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row4-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row4-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row4-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row4-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row4-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row4-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row4-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row4-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row4-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 43,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "quality",
+      "label": "technical_qc_4117 | quality | seed=43 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row4-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row4-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row4-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row4-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row4-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row4-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row4-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row4-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row4-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row4-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row4-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row4-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row4-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row4-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row4-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row4-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "undefined: both_negative_infinity",
+          "reason": "both_negative_infinity",
+          "unit": "natural_log",
+          "value": null
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 43,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "quality",
+      "label": "technical_qc_4117 | quality | seed=44 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row5-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row5-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row5-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row5-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row5-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row5-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row5-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row5-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row5-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row5-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row5-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row5-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row5-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row5-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row5-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row5-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "technical_qc_4117",
+      "count_kind": "quality",
+      "label": "technical_qc_4117 | quality | seed=44 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row5-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row5-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row5-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row5-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row5-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row5-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row5-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row5-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row5-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row5-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row5-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row5-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row5-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row5-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row5-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row5-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "called",
+      "label": "paper_ancestry_exclusion_4094 | called | seed=42 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row6-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row6-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row6-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row6-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row6-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row6-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row6-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row6-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row6-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row6-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row6-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row6-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row6-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row6-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row6-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row6-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho9-row6-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 42,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "called",
+      "label": "paper_ancestry_exclusion_4094 | called | seed=42 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row6-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row6-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row6-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row6-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row6-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row6-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row6-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row6-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row6-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row6-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row6-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row6-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row6-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row6-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row6-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row6-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho4-row6-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 42,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "called",
+      "label": "paper_ancestry_exclusion_4094 | called | seed=43 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row7-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row7-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row7-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row7-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row7-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row7-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row7-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row7-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row7-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row7-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row7-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row7-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row7-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row7-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row7-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row7-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 43,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "called",
+      "label": "paper_ancestry_exclusion_4094 | called | seed=43 | rho_prior_beta=4\nfailed: no common completed folds; b0 failed/infeasible=0; b0h failed/infeasible=5",
+      "label_artist": "rho4-row7-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row7-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "coverage_80": {
+          "artist": "rho4-row7-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "coverage_95": {
+          "artist": "rho4-row7-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "interval_width_50": {
+          "artist": "rho4-row7-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "interval_width_80": {
+          "artist": "rho4-row7-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "interval_width_95": {
+          "artist": "rho4-row7-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "mae": {
+          "artist": "rho4-row7-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "mean_log_score": {
+          "artist": "rho4-row7-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "natural_log",
+          "value": null
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 43,
+      "status": "failed"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "called",
+      "label": "paper_ancestry_exclusion_4094 | called | seed=44 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row8-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row8-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row8-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row8-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row8-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row8-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row8-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row8-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row8-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row8-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row8-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row8-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row8-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row8-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row8-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row8-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "called",
+      "label": "paper_ancestry_exclusion_4094 | called | seed=44 | rho_prior_beta=4\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho4-row8-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row8-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row8-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row8-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row8-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row8-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row8-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row8-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row8-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row8-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row8-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row8-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row8-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row8-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row8-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row8-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "quality",
+      "label": "paper_ancestry_exclusion_4094 | quality | seed=42 | rho_prior_beta=9\nconditional: 4/5 common completed folds; b0 failed/infeasible=0; b0h failed/infeasible=1",
+      "label_artist": "rho9-row9-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row9-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row9-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row9-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row9-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row9-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row9-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row9-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row9-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row9-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row9-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row9-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row9-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row9-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row9-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row9-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho9-row9-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 42,
+      "status": "conditional"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "quality",
+      "label": "paper_ancestry_exclusion_4094 | quality | seed=42 | rho_prior_beta=4\nconditional: 4/5 common completed folds; b0 failed/infeasible=0; b0h failed/infeasible=1",
+      "label_artist": "rho4-row9-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row9-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row9-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho4-row9-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row9-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho4-row9-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho4-row9-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho4-row9-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row9-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho4-row9-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row9-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho4-row9-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho4-row9-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho4-row9-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho4-row9-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho4-row9-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "+0",
+          "reason": null,
+          "unit": "natural_log",
+          "value": 0.0,
+          "value_label_artist": "rho4-row9-mean_log_score-value"
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 42,
+      "status": "conditional"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "quality",
+      "label": "paper_ancestry_exclusion_4094 | quality | seed=43 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row10-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row10-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row10-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row10-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row10-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row10-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row10-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row10-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row10-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row10-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row10-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row10-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row10-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row10-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row10-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row10-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 43,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "quality",
+      "label": "paper_ancestry_exclusion_4094 | quality | seed=43 | rho_prior_beta=4\nfailed: no common completed folds; b0 failed/infeasible=0; b0h failed/infeasible=5",
+      "label_artist": "rho4-row10-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row10-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "coverage_80": {
+          "artist": "rho4-row10-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "coverage_95": {
+          "artist": "rho4-row10-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "interval_width_50": {
+          "artist": "rho4-row10-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "interval_width_80": {
+          "artist": "rho4-row10-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "interval_width_95": {
+          "artist": "rho4-row10-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "mae": {
+          "artist": "rho4-row10-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "frequency",
+          "value": null
+        },
+        "mean_log_score": {
+          "artist": "rho4-row10-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "failed",
+          "reason": "failed",
+          "unit": "natural_log",
+          "value": null
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 43,
+      "status": "failed"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "quality",
+      "label": "paper_ancestry_exclusion_4094 | quality | seed=44 | rho_prior_beta=9\ncomplete: 5/5 common completed folds",
+      "label_artist": "rho9-row11-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho9-row11-coverage_50",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row11-coverage_50-value"
+        },
+        "coverage_80": {
+          "artist": "rho9-row11-coverage_80",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row11-coverage_80-value"
+        },
+        "coverage_95": {
+          "artist": "rho9-row11-coverage_95",
+          "axis_artist": "rho9-panel2",
+          "display": "+100",
+          "reason": null,
+          "unit": "percentage_points",
+          "value": 100.0,
+          "value_label_artist": "rho9-row11-coverage_95-value"
+        },
+        "interval_width_50": {
+          "artist": "rho9-row11-interval_width_50",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row11-interval_width_50-value"
+        },
+        "interval_width_80": {
+          "artist": "rho9-row11-interval_width_80",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row11-interval_width_80-value"
+        },
+        "interval_width_95": {
+          "artist": "rho9-row11-interval_width_95",
+          "axis_artist": "rho9-panel3",
+          "display": "+0.2",
+          "reason": null,
+          "unit": "frequency",
+          "value": 0.2,
+          "value_label_artist": "rho9-row11-interval_width_95-value"
+        },
+        "mae": {
+          "artist": "rho9-row11-mae",
+          "axis_artist": "rho9-panel0",
+          "display": "-0.025",
+          "reason": null,
+          "unit": "frequency",
+          "value": -0.025000000000000022,
+          "value_label_artist": "rho9-row11-mae-value"
+        },
+        "mean_log_score": {
+          "artist": "rho9-row11-mean_log_score",
+          "axis_artist": "rho9-panel1",
+          "display": "-Infinity",
+          "reason": null,
+          "unit": "natural_log",
+          "value": "-Infinity"
+        }
+      },
+      "rho_prior_beta": 9,
+      "seed": 44,
+      "status": "complete"
+    },
+    {
+      "cohort_stage": "paper_ancestry_exclusion_4094",
+      "count_kind": "quality",
+      "label": "paper_ancestry_exclusion_4094 | quality | seed=44 | rho_prior_beta=4\nnot_available: b0h publication directory is absent",
+      "label_artist": "rho4-row11-label",
+      "metrics": {
+        "coverage_50": {
+          "artist": "rho4-row11-coverage_50",
+          "axis_artist": "rho4-panel2",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "coverage_80": {
+          "artist": "rho4-row11-coverage_80",
+          "axis_artist": "rho4-panel2",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "coverage_95": {
+          "artist": "rho4-row11-coverage_95",
+          "axis_artist": "rho4-panel2",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "percentage_points",
+          "value": null
+        },
+        "interval_width_50": {
+          "artist": "rho4-row11-interval_width_50",
+          "axis_artist": "rho4-panel3",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "frequency",
+          "value": null
+        },
+        "interval_width_80": {
+          "artist": "rho4-row11-interval_width_80",
+          "axis_artist": "rho4-panel3",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "frequency",
+          "value": null
+        },
+        "interval_width_95": {
+          "artist": "rho4-row11-interval_width_95",
+          "axis_artist": "rho4-panel3",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "frequency",
+          "value": null
+        },
+        "mae": {
+          "artist": "rho4-row11-mae",
+          "axis_artist": "rho4-panel0",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "frequency",
+          "value": null
+        },
+        "mean_log_score": {
+          "artist": "rho4-row11-mean_log_score",
+          "axis_artist": "rho4-panel1",
+          "display": "not_available",
+          "reason": "not_available",
+          "unit": "natural_log",
+          "value": null
+        }
+      },
+      "rho_prior_beta": 4,
+      "seed": 44,
+      "status": "not_available"
+    }
+  ],
+  "schema_version": 1,
+  "synthetic": true
+}

@@ -1,0 +1,192 @@
+{
+  "files": [
+    {
+      "bytes": 1072,
+      "path": "LICENSE",
+      "sha256": "d2868beea4e1e952e9d7898bd68293eb526bffbbc78970892e5adb4b5d7c80dc"
+    },
+    {
+      "bytes": 14979,
+      "path": "README.md",
+      "sha256": "894b0e6db8e7b707a3cc85473ba4b235a58e8257feab1559c526e87ac86b4892"
+    },
+    {
+      "bytes": 5206,
+      "path": "cugen/__init__.py",
+      "sha256": "0c561e8ba32e8c3e7ae82ea65eefdd3a1dd57a6331c0fe92b61725bb791dd411"
+    },
+    {
+      "bytes": 128,
+      "path": "cugen/__main__.py",
+      "sha256": "09ca3383730c6bdc2743ce0f3c42b3d99e1d88df05393878b2df63c611b0f88e"
+    },
+    {
+      "bytes": 10309,
+      "path": "cugen/_binary_spa.py",
+      "sha256": "7decd8a9455e3405447629080d1aa4231bb7ec681783cc2d743659d8fd35f665"
+    },
+    {
+      "bytes": 9794,
+      "path": "cugen/_genmap.py",
+      "sha256": "94192226fddbd3e3eee4e815a9b95488d625f6344afa8f0b6639a2898d210f5f"
+    },
+    {
+      "bytes": 41993,
+      "path": "cugen/_impute_core.py",
+      "sha256": "1a380cc8dd6ea6b1f151358b94aa7c14e29909f91d3d7cfb6c839174983ab94e"
+    },
+    {
+      "bytes": 31025,
+      "path": "cugen/_impute_gpu.py",
+      "sha256": "d7ac22ee3c965f6ef3520d88d29230c11b5414bd310f6f926405cda1ed45308b"
+    },
+    {
+      "bytes": 93312,
+      "path": "cugen/_step5b_finemapping.py",
+      "sha256": "4388e3a69c0c6061a8fa056feefeb34d564d491ca177be7d7bb6568fc86d4d8b"
+    },
+    {
+      "bytes": 329,
+      "path": "cugen/_stubs.py",
+      "sha256": "cdcd85a69f82f616ddd52507a94bfd92a73dff4376284c36bb752953a63af180"
+    },
+    {
+      "bytes": 1274,
+      "path": "cugen/aliases.py",
+      "sha256": "74be8335b6fea435496dcbf620c77ee87cb75b4bdc2107425906c56c77937556"
+    },
+    {
+      "bytes": 35183,
+      "path": "cugen/assoc.py",
+      "sha256": "2ffdb28deea3a778ac363a9fc334e3e9bde8f790b00a77c62e5211446fb7f325"
+    },
+    {
+      "bytes": 7413,
+      "path": "cugen/cli.py",
+      "sha256": "9258071903618a884dd28078b779612e64d940cdc93fafeb1c9271723448c841"
+    },
+    {
+      "bytes": 12583,
+      "path": "cugen/config.py",
+      "sha256": "1106589af4f2a077822d744a34d9136922af89cb8cb564aef3bc6deaacbc628c"
+    },
+    {
+      "bytes": 18607,
+      "path": "cugen/convert.py",
+      "sha256": "532bde9942835ab9a6eb797c44c6094cf71e74c47ebc35aad3cf0919001bf3f9"
+    },
+    {
+      "bytes": 15935,
+      "path": "cugen/finemapping.py",
+      "sha256": "3a09a45bc02a377b6f00bf31d3997f9d9349f0489c50291abcff3357bcda15fa"
+    },
+    {
+      "bytes": 609,
+      "path": "cugen/freq.py",
+      "sha256": "e93cea090ef4a1cda138c2d12cb52924116f465aa0bf73774a0e0c023f81fe38"
+    },
+    {
+      "bytes": 21731,
+      "path": "cugen/impute.py",
+      "sha256": "01d486d370750a0403634897aa28780f819cc41e958424e4450c3dff2cef07f5"
+    },
+    {
+      "bytes": 28594,
+      "path": "cugen/io.py",
+      "sha256": "dad0dd89f69878dfff2fde6e5490f226b87f542cdd87c4efdc98fb6cc8f9d820"
+    },
+    {
+      "bytes": 33202,
+      "path": "cugen/lasso.py",
+      "sha256": "63e0f03ad069bc8af09c20317136e30306db615b077a47434b3adc7dffc697aa"
+    },
+    {
+      "bytes": 144100,
+      "path": "cugen/ld.py",
+      "sha256": "1a692f73109699b69840079b0ce28010dcc8a041d5be1e0893c449f34259ecab"
+    },
+    {
+      "bytes": 11366,
+      "path": "cugen/loci.py",
+      "sha256": "58057dfe03d1ec864fd05104cffd859219d82d1d9f5246366a4ac02b08123220"
+    },
+    {
+      "bytes": 122,
+      "path": "cugen/plot/__init__.py",
+      "sha256": "f2e2dc0619646e08b263b8c159a90a341bae4e571dc14c381dcbb50c527a1467"
+    },
+    {
+      "bytes": 11969,
+      "path": "cugen/plot/manhattan.py",
+      "sha256": "053c152b700878aa2584dc289a28b20e90cd8e0628d6b8d8a32574a2005f8244"
+    },
+    {
+      "bytes": 12107,
+      "path": "cugen/plot/qq.py",
+      "sha256": "455e4f93468eff21a8f576e5ec82db985111279979ecef29fcf96b222d1402b7"
+    },
+    {
+      "bytes": 323,
+      "path": "cugen/popstruct.py",
+      "sha256": "e90e3d65ae796deb096947123c750cf2ec136da28c05e9096080816c63218a0e"
+    },
+    {
+      "bytes": 10129,
+      "path": "cugen/prep_cohort.py",
+      "sha256": "f5c7af9fd45d2ca3e604c7e19c3159aaccc1dc9b388583b87ac86886034089d6"
+    },
+    {
+      "bytes": 37760,
+      "path": "cugen/prs.py",
+      "sha256": "af87dd80cb95ec0d79414e50139321a28e91a275d9c9d49119313b5b0d7612ce"
+    },
+    {
+      "bytes": 16374,
+      "path": "cugen/qc.py",
+      "sha256": "5f7971e22e01f55290740d6a481e95b1dd4e1a48f7d3060f5dd7cfb26ee163a7"
+    },
+    {
+      "bytes": 11475,
+      "path": "cugen/repair.py",
+      "sha256": "66616f92c4d0a0956f8e438ff1fa10a2df99976bdb971a6e86502296887fcc68"
+    },
+    {
+      "bytes": 10550,
+      "path": "cugen/score.py",
+      "sha256": "2bfcb8a314fb160bff911db145ec700c206bf9752459b01b57cc2442f1b4aaa1"
+    },
+    {
+      "bytes": 28767,
+      "path": "cugen/screen.py",
+      "sha256": "49d31a43bfea77b878cbe377c47a8fd938ccdbee64844dd453d2cd8cba4811fb"
+    },
+    {
+      "bytes": 21964,
+      "path": "cugen/subset.py",
+      "sha256": "a3bb33a96fad7eba3bf3512426b440ab45c0764c6f1a21d402b9cc768dd81177"
+    },
+    {
+      "bytes": 3256,
+      "path": "cugen/ultralasso/__init__.py",
+      "sha256": "b9ce765c5fc935a397e5d46ecb9de875d4eea66beaa254c2638b1ebd98bf09e7"
+    },
+    {
+      "bytes": 24900,
+      "path": "cugen/workflow.py",
+      "sha256": "d1c086e3f12f5dbcfa24a53ee36238848ea598daafc341199737a902a075438e"
+    },
+    {
+      "bytes": 23707,
+      "path": "cugen/write.py",
+      "sha256": "e27d29a0ad5c05a30168e2efd7bc047d47cf14bb7cdde2a87970c16c90fd4f41"
+    },
+    {
+      "bytes": 1457,
+      "path": "pyproject.toml",
+      "sha256": "5b74e8cd56365810ade4e52d34aeb44bb4c839c90913bab3596e4a29213c7c3a"
+    }
+  ],
+  "repository": "https://github.com/bschilder/cugen",
+  "revision": "b95adbaabef1ca5ff2795b9435e9bb7d6aebb9a1",
+  "schema_version": 1
+}

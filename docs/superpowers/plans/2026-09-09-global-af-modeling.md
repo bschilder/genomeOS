@@ -34,6 +34,12 @@
 
 Freeze source snapshot, releases, configurations, and existing outputs. Audit counts, denominators, measurement type, geographic support, date support, recruitment, population target, and source overlap. Record independent study/population/locus counts and unresolved metadata. Do not certify resident representativeness from reference-panel membership or recruitment labels. Keep allele, carrier, and phenotype data distinct.
 
+The [owner-supplied GBD cardiovascular paper assessment](../../research/gbd-cardiovascular-fulltext-notes-2026-09-09.md)
+adds age/sex composition, native support, observed-versus-modeled status and upstream source
+lineage to ancillary-source qualification. Missing composition remains unknown. Any population
+reweighting needs documented denominators and a prespecified target; age-standardized disease
+rates are neither resident allele counts nor interchangeable with all-age rates.
+
 **Exit:** traceable qualified input inventory, explicit exclusions, and an identifiable target for each proposed real-data benchmark. A schema-valid table alone does not satisfy this gate.
 
 ### WP1 — Benchmark foundation
@@ -41,6 +47,11 @@ Freeze source snapshot, releases, configurations, and existing outputs. Audit co
 Build a dependency graph for studies, participants/kin where known, reused panels/tables, and derived resources. Freeze local-interpolation, buffered-region, all-variant new-region, whole-locus, and conditional-imputation tracks separately. Reserve independent external confirmation before tuning. Nested model selection may only use training/development evidence.
 
 Score integrated count predictive probabilities, predictive coverage/width, discrete calibration, point error, and joint-site quantities. Keep the current median-based binomial score explicitly legacy. Retain every fold, failure, retry, and refusal. Studies are averaged within represented region/variant-group cells, then cells equally; report absent cells and rare-allele/denominator/distance strata.
+
+Disease-burden map agreement is not an AF validation endpoint. Before using a modeled external
+layer, audit whether its upstream data already include held-out evidence. Prespecify source-
+support/sparsity reporting where identifiable; absent metadata cannot be manufactured into a
+stratum. Transparent health-estimate reporting complements, but never replaces, sealed testing.
 
 **Exit:** analytical score tests, deliberate-leakage tests, deterministic manifests, reproduced current-model baseline, and genuinely sealed external data. A fixture runner is engineering evidence only.
 
@@ -57,6 +68,13 @@ Prediction accepts survey design and cohort identity, preserving shared new-coho
 Acquire terrain/elevation/water, then demographics, climate normals, locus-relevant pathogens, modern migration/displacement, and finally qualified historical/paleoclimate layers. Biodiversity and historical events need narrow hypotheses and qualified support; exotic environmental signals are not mandatory inputs.
 
 Version source, checksum, units, support, valid/available time, uncertainty, missingness, upstream dependencies, and terms. Cesium display assets are not a scientific covariate store. Offline extraction needs scientific semantics and asset-specific permission.
+
+The GBD assessment nominates particulate pollution, household-fuel exposure, lead and
+time-supported temperature exposure for later source inspection, without displacing the order
+above or claiming AF benefit. Keep environmental covariates, care/screening observation-process
+descriptors and downstream disease/metabolic outcomes distinct. Using downstream modeled
+outcomes as AF predictors requires an explicit circularity/dependency argument and ablation.
+Interpolating a coarse estimate to fine H3 cells does not improve its empirical resolution.
 
 Compare baseline, added family, missingness-only, structured negative control, and incremental value after genomic structure, on unchanged evaluation populations. Record rejected layers.
 
@@ -80,7 +98,7 @@ Ablate local/global branches, shared/variant components, covariates, pretraining
 
 Separate cross-variant sharing, complete multinomial allele observations, and haplotype dependence. Incomplete allele lists do not become zeros. Begin with short blocks and compatible individual-level data; marginal frequencies alone do not identify LD. Preserve valid joint probabilities/covariance.
 
-Use the user's **local CuGen implementation at `/Users/bschilder/code/cugen`**, not pg_gpu. The checkout inspected on September 9 is `03df1688abf52d295bd85d47f1aca6130440b553` (package version `0.1.7`); pin and record the exact revision actually used by each experiment. Its `cugen.ld.ld_matrix` interface already provides unphased `r`/`r2`, so inspect and reuse it rather than substitute another library. Related-work audits do not change this implementation choice.
+Use the user's **local CuGen implementation at `$HOME/code/cugen`**, not pg_gpu. The checkout inspected on September 9 is `03df1688abf52d295bd85d47f1aca6130440b553` (package version `0.1.7`); pin and record the exact revision actually used by each experiment. Its `cugen.ld.ld_matrix` interface already provides unphased `r`/`r2`, so inspect and reuse it rather than substitute another library. Related-work audits do not change this implementation choice.
 
 Validate CuGen counts and declared LD definitions against an independent CPU reference, including missingness, orientation, rare/monomorphic sites, subsets, ploidy and supported dosage formats. Start with explicitly requested unphased `r`/`r2`; CuGen's two-bit representation does not retain observed haplotype phase. Treat estimated `D`/`D'` as a separate, later admission decision. Cache offline by data/sample/block/statistic/version. Separate conditional imputation gains from geographic extrapolation without local genotypes.
 
@@ -91,6 +109,10 @@ Validate CuGen counts and declared LD definitions against an independent CPU ref
 Qualified regional LCT/MCM6 plus neutral controls. Stochastic migration/drift first; selection separately ablated. Demographic variables are uncertain priors, not reproductive migration or effective population size. Ancient likelihoods preserve pseudohaploidy, damage/contamination, date distributions, kin/site effects, and cross-panel deduplication.
 
 Introduce explicit calendar time; legacy modern=0 remains date-unspecified, not today's survey date. Infer history by probabilistic smoothing, never deterministic reverse migration or relocation of diaspora counts. An FNO forward-simulator surrogate is optional only after exact reference and surrogate-error checks.
+
+Do not extrapolate contemporary disease-risk maps into evolutionary time. Recent care or
+environmental changes can affect ascertainment and disease without identifying allele dynamics;
+selection hypotheses still need separately supported exposure histories and migration/drift controls.
 
 **Exit:** independent site/time validation and modern-prediction ablation; regional feasibility is not a global historical claim.
 
