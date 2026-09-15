@@ -59,3 +59,18 @@ The six-row file at `tests/fixtures/hgdp_populations.tsv` is synthetic test data
 locators are hand-written values used only to verify parsing and serialization; they are not
 measured or inferred extents of the named populations and do not satisfy the source-qualification
 work tracked in #21 or #219.
+
+## Publishing a registry release
+
+Build into a new path with an explicit release label:
+
+```bash
+PYTHONPATH=. python scripts/build_registry.py \
+  --hgdp tests/fixtures/hgdp_populations.tsv \
+  --release-version 0.1.0 \
+  --out data/registry-fixture-v1
+```
+
+The command refuses every pre-existing output path and publishes the verified completion manifest
+required by the P1 build. See [Immutable registry publication](registry-publication.md) for the
+identity, migration, and failure contracts.
