@@ -8,6 +8,9 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from genomeos.registry.variants import load as load_variant_registry
+from genomeos.registry.variants import normalized_identity
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
 from scripts import export_atlas_web
 
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
@@ -135,6 +138,25 @@ def test_public_catalog_inventory_has_two_map_and_twenty_eight_afnd_entries() ->
     assert sum(entry["variant_id"].startswith("cyt:") for entry in entries) == 4
     assert sum(entry["variant_id"].startswith("hla:") for entry in entries) == 20
     assert sum(entry["variant_id"].startswith("kir:") for entry in entries) == 4
+
+
+def test_every_declared_external_resource_resolves_against_the_real_registry() -> None:
+    """The real allowlist joined to the real registry — the only test that reads both.
+
+    Exporting was previously the sole place these two files met, so a row becoming unresolvable
+    (pending verification, refused, or removed) broke a published artifact with nothing failing
+    first. It also catches the opposite mistake: declaring an external resource for a locus whose
+    row is still pending.
+    """
+    allowlist = json.loads(PUBLIC_ALLOWLIST.read_text())
+    registry = load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH)
+    declaring = [entry for entry in allowlist["artifacts"] if entry.get("external_resources")]
+    assert declaring, "expected at least one allowlisted artifact to declare an external resource"
+    assert [
+        entry["id"]
+        for entry in declaring
+        if normalized_identity(entry["variant_id"], registry) is None
+    ] == []
 
 
 def _write_hbs_csv(path: Path) -> None:
@@ -362,6 +384,72 @@ def test_export_refuses_missing_manifest_version(export_inputs: dict[str, Path])
         _export(export_inputs)
 
 
+def _upgrade_fixture_to_format_three(export_inputs: dict[str, Path]) -> Path:
+    artifact = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test"
+    cells_path = artifact / "cells.parquet"
+    cells = pd.read_parquet(cells_path)
+    cells["prior_frequency_sd"] = cells["post_sd"] / cells["posterior_contraction"]
+    cells.to_parquet(cells_path, index=False)
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest.update(
+        {
+            "artifact_format": 3,
+            "prior_normalization": PRIOR_NORMALIZATION,
+            "prior_draws": PRIOR_DRAWS,
+            "prior_seed": 42,
+            "measurement": "allele_frequency",
+            "target_grid_source": "worldpop-1km-unconstrained",
+            "target_grid_version": "fixture-2020",
+        }
+    )
+    manifest.pop("prior_frequency_sd", None)
+    manifest_path.write_text(json.dumps(manifest))
+    return artifact
+
+
+def test_export_accepts_validated_format_three_and_preserves_grid_identity(
+    export_inputs: dict[str, Path],
+) -> None:
+    _upgrade_fixture_to_format_three(export_inputs)
+    _export(export_inputs)
+    surface = json.loads((export_inputs["out"] / "hbs-rs334.surface.json").read_text())
+    assert surface["artifact"]["artifact_format"] == 3
+    assert surface["artifact"]["target_grid_source"] == "worldpop-1km-unconstrained"
+    assert surface["artifact"]["target_grid_version"] == "fixture-2020"
+
+
+def test_export_refuses_malformed_format_three_and_unknown_versions(
+    export_inputs: dict[str, Path],
+) -> None:
+    artifact = _upgrade_fixture_to_format_three(export_inputs)
+    cells = pd.read_parquet(artifact / "cells.parquet").drop(columns="prior_frequency_sd")
+    cells.to_parquet(artifact / "cells.parquet", index=False)
+    with pytest.raises(ValueError, match="prior_frequency_sd|format-3"):
+        _export(export_inputs)
+
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["artifact_format"] = 999
+    manifest_path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="artifact_format"):
+        _export(export_inputs)
+
+
+@pytest.mark.parametrize("bad_format", [True, 2.0, 3.0, "3", 2.9])
+def test_export_refuses_noninteger_or_boolean_artifact_format(
+    export_inputs: dict[str, Path], bad_format
+) -> None:
+    artifact = _upgrade_fixture_to_format_three(export_inputs)
+    manifest_path = artifact / "manifest.json"
+    manifest = json.loads(manifest_path.read_text())
+    manifest["artifact_format"] = bad_format
+    manifest_path.write_text(json.dumps(manifest))
+
+    with pytest.raises(ValueError, match="artifact_format"):
+        _export(export_inputs)
+
+
 def test_export_refuses_variant_mismatch(export_inputs: dict[str, Path]) -> None:
     artifact = export_inputs["store"] / "artifacts" / "hbs-test__v1__map-test"
     cells = pd.read_parquet(artifact / "cells.parquet")
@@ -398,3 +486,33 @@ def test_export_keeps_reviewed_surface_when_observations_are_unavailable(
     assert artifact["observations_sha256"] is None
     assert artifact["observations_url"] is None
     assert catalog["registry_versions"] == ["afnd-test-registry"]
+
+
+def test_a_coordinate_keyed_resource_needs_a_reviewed_normalization(tmp_path):
+    """A cytokine locus is entity_type=variant but has a composite id, so it must refuse until
+    the registry says otherwise. Previously this passed the exporter and failed in the browser."""
+    from genomeos.registry.variants import VARIANT_NORMALIZATION_SCHEMA
+
+    empty = VARIANT_NORMALIZATION_SCHEMA.validate(
+        pd.DataFrame(columns=list(VARIANT_NORMALIZATION_SCHEMA.columns))
+    )
+    entry = {
+        "external_resources": [
+            {
+                "source": "gnomad",
+                "normalized_variant_id": "cyt:il-6-174-c",
+                "dataset": "gnomad_r4",
+                "cache_file": "external/gnomad/cyt.json",
+            }
+        ]
+    }
+    with pytest.raises(ValueError, match="no reviewed normalization"):
+        export_atlas_web._external_resources(
+            entry,
+            artifact_id="cyt-il-6-174-c",
+            variant_id="cyt:il-6-174-c",
+            entity_type="variant",
+            source_root=tmp_path,
+            out_dir=tmp_path / "out",
+            variant_registry=empty,
+        )
