@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 import base64
+import gzip
 import hashlib
 import platform
+import shutil
 import struct
+from pathlib import Path
 
 import numpy as np
 
-from genomeos.validation.reference_acquisition_types import RetainedIndex, ReviewReceipt
+from genomeos.validation.reference_acquisition_types import (
+    ArtifactRef,
+    RangeReceipt,
+    RetainedIndex,
+    ReviewReceipt,
+    VerifiedSource,
+)
 from genomeos.validation.reference_byte_plan import (
     IndexReceipt,
     SourceBytePlan,
@@ -21,6 +30,7 @@ from genomeos.validation.reference_byte_plan import (
     plan_window,
 )
 from genomeos.validation.reference_tbi import parse_tbi
+from genomeos.validation.reference_vcf_tokens import HeaderEvidence, parse_header
 from genomeos.validation.reference_window_manifest import (
     encode_manifest,
     encode_window_config,
@@ -49,12 +59,16 @@ from genomeos.validation.reference_window_types import (
     GenomicInterval,
     Provenance,
     PublicObject,
+    ReferenceWindow,
     SourcePair,
+    StartRun,
     WindowConfig,
     WindowManifest,
 )
 from genomeos.validation.reference_windows import select_reference_windows
 from tests.reference_tbi_fixture import synthetic_bgzf
+
+NATIVE_FIXTURES = Path(__file__).parent / "fixtures" / "reference_acquisition" / "native"
 
 
 def _b64(raw: bytes) -> str:
@@ -64,10 +78,7 @@ def _b64(raw: bytes) -> str:
 def _tbi(chrom: str) -> bytes:
     name = f"{chrom}\0".encode("ascii")
     payload = (
-        b"TBI\x01"
-        + struct.pack("<8i", 1, 2, 1, 2, 0, 35, 0, len(name))
-        + name
-        + struct.pack("<2i", 0, 0)
+        b"TBI\x01" + struct.pack("<8i", 1, 2, 1, 2, 0, 35, 0, len(name)) + name + struct.pack("<2i", 0, 0)
     )
     return synthetic_bgzf(payload)
 
@@ -85,8 +96,9 @@ def _object(chrom: str, suffix: str, generation: str, raw: bytes | None) -> Publ
     )
 
 
-def synthetic_preflight_case(
-) -> tuple[WindowManifest, bytes, bytes, tuple[RetainedIndex, ...], ReviewReceipt]:
+def synthetic_preflight_case() -> tuple[
+    WindowManifest, bytes, bytes, tuple[RetainedIndex, ...], ReviewReceipt
+]:
     """Build a strict 22-source, 66-window preflight without network or native tools."""
     lengths = tuple((chrom, 100_000) for chrom in AUTOSOMES)
     config = WindowConfig(
@@ -230,3 +242,135 @@ def synthetic_preflight_case(
         "accepted",
     )
     return manifest, manifest_raw, preflight_raw, retained, review
+
+
+def synthetic_window(chrom: str, *, start0: int = 100, end0: int = 10_100) -> ReferenceWindow:
+    """Construct the plan's fixed-width toy first-stratum window."""
+    if end0 - start0 != WIDTH or not 0 <= start0 <= 23_333:
+        raise ValueError("synthetic window must be a legal fixed-width first-stratum window")
+    return ReferenceWindow(
+        f"{chrom}-s1",
+        chrom,
+        1,
+        0,
+        33_333,
+        start0,
+        end0,
+        (StartRun(0, 23_333),),
+        23_334,
+        start0,
+    )
+
+
+def _later_window(chrom: str, stratum: int, lower: int, upper: int) -> ReferenceWindow:
+    start = lower
+    return ReferenceWindow(
+        f"{chrom}-s{stratum}",
+        chrom,
+        stratum,
+        lower,
+        upper,
+        start,
+        start + WIDTH,
+        (StartRun(lower, upper - WIDTH),),
+        upper - lower - WIDTH + 1,
+        0,
+    )
+
+
+def _artifact(root: Path, path: str) -> ArtifactRef:
+    raw = (root / path).read_bytes()
+    return ArtifactRef(path, len(raw), hashlib.sha256(raw).hexdigest())
+
+
+def synthetic_coverage_case(
+    artifact_root: Path,
+) -> tuple[SourceBytePlan, VerifiedSource, ReferenceWindow, HeaderEvidence]:
+    """Stage the checked-in synthetic source using real range receipt evidence."""
+    from scripts.reference_window_io import stage_sparse
+
+    raw_vcf = (NATIVE_FIXTURES / "synthetic.vcf.bgz").read_bytes()
+    raw_tbi = (NATIVE_FIXTURES / "synthetic.vcf.bgz.tbi").read_bytes()
+    artifact_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    source = SourcePair(
+        "chr1",
+        _object("chr1", "", "100", raw_vcf),
+        _object("chr1", ".tbi", "200", raw_tbi),
+    )
+    index = parse_tbi(raw_tbi, expected_chrom="chr1", vcf_size_bytes=len(raw_vcf))
+    window = synthetic_window("chr1")
+    windows = (
+        plan_window(index, window, source_size_bytes=len(raw_vcf)),
+        plan_window(
+            index,
+            _later_window("chr1", 2, 33_333, 66_666),
+            source_size_bytes=len(raw_vcf),
+        ),
+        plan_window(
+            index,
+            _later_window("chr1", 3, 66_666, 1_000_000),
+            source_size_bytes=len(raw_vcf),
+        ),
+    )
+    required = fixed_vcf_ranges(
+        len(raw_vcf),
+        header_prefix_bytes=HEADER_PREFIX_BYTES,
+        eof_bytes=EOF_BYTES,
+    ) + tuple(value for planned in windows for value in planned.ranges)
+    merged = merge_byte_ranges(required, source_size_bytes=len(raw_vcf))
+    plan = SourceBytePlan(
+        source,
+        IndexReceipt("chr1", "verified", None, 1, 1, 1, len(raw_tbi), hashlib.sha256(raw_tbi).hexdigest()),
+        windows,
+        merged,
+    )
+
+    (artifact_root / "ranges").mkdir()
+    (artifact_root / "sources" / "chr1").mkdir(parents=True)
+    index_path = artifact_root / "sources" / "chr1" / "INCOMPLETE.original.vcf.bgz.tbi"
+    shutil.copyfile(NATIVE_FIXTURES / "synthetic.vcf.bgz.tbi", index_path)
+    index_ref = _artifact(artifact_root, "sources/chr1/INCOMPLETE.original.vcf.bgz.tbi")
+    receipts = []
+    for byte_range in merged:
+        relative = f"ranges/chr1-{byte_range.first}-{byte_range.last}.bin"
+        (artifact_root / relative).write_bytes(raw_vcf[byte_range.first : byte_range.last + 1])
+        body = _artifact(artifact_root, relative)
+        stderr_path = relative + ".stderr"
+        (artifact_root / stderr_path).write_bytes(b"")
+        stderr = _artifact(artifact_root, stderr_path)
+        receipts.append(
+            RangeReceipt(
+                "chr1",
+                source.vcf.generation,
+                byte_range.first,
+                byte_range.last,
+                byte_range.last - byte_range.first + 1,
+                body.size_bytes,
+                1,
+                "verified",
+                None,
+                body.sha256,
+                body,
+                stderr,
+                0,
+                False,
+                False,
+            )
+        )
+    verified = stage_sparse(
+        plan,
+        tuple(receipts),
+        artifact_root=artifact_root,
+        index=index_ref,
+        sparse_path="sources/chr1/INCOMPLETE.original.vcf.bgz",
+    )
+    expanded = gzip.decompress(raw_vcf)
+    header_end = expanded.index(b"#CHROM")
+    header_end = expanded.index(b"\n", header_end) + 1
+    header = parse_header(
+        expanded[:header_end],
+        expected_contigs=(("chr1", 1_000_000),),
+        source_chrom="chr1",
+        expected_samples=("s1", "s2"),
+    )
+    return plan, verified, window, header
