@@ -39,7 +39,7 @@ can be completed. They are not claimed by finishing this core plan.
 ## Workspace and verification
 
 Existing isolated checkout:
-`/Users/bschilder/code/genomeOS/.claude/worktrees/global-af-empirical`.
+`$HOME/code/genomeOS/.claude/worktrees/global-af-empirical`.
 Dedicated branch: `feat/global-af-population-heterogeneity`, base
 `5d295706cac9c7bec945e563d03c7fc69c6335f2`. Do not switch another checkout,
 modify the pending PR210 branch, or alter CuGen's worktree.
