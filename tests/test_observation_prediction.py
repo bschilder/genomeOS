@@ -99,7 +99,6 @@ def _fit(
         lengthscale_prior_km=(100.0, 1_000.0),
         beta_cohort_applied=prediction_metadata.cohort_effect_applied,
         design_levels=prediction_metadata.fitted_designs[1:],
-        prior_frequency_sd=0.1,
         inducing_spacing_ratio=None,
         correlation_range_km=500.0,
         idata=idata,
