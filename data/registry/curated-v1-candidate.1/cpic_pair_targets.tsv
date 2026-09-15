@@ -1,0 +1,129 @@
+pair_id	gene	drug_id	drug_name	cpic_level	guideline_id	guideline_name	guideline_url	source_release	status
+CPIC:pair:ABCG2:RxNorm:301542	ABCG2	RxNorm:301542	rosuvastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:ABL2:RxNorm:11118	ABL2	RxNorm:11118	valproic acid	B				v1.60.0	no_allele_table
+CPIC:pair:ASL:RxNorm:11118	ASL	RxNorm:11118	valproic acid	B				v1.60.0	no_allele_table
+CPIC:pair:ASS1:RxNorm:11118	ASS1	RxNorm:11118	valproic acid	B				v1.60.0	no_allele_table
+CPIC:pair:CACNA1S:RxNorm:10154	CACNA1S	RxNorm:10154	succinylcholine	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CACNA1S:RxNorm:27340	CACNA1S	RxNorm:27340	desflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CACNA1S:RxNorm:36453	CACNA1S	RxNorm:36453	sevoflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CACNA1S:RxNorm:3920	CACNA1S	RxNorm:3920	enflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CACNA1S:RxNorm:5095	CACNA1S	RxNorm:5095	halothane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CACNA1S:RxNorm:6026	CACNA1S	RxNorm:6026	isoflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CACNA1S:RxNorm:6857	CACNA1S	RxNorm:6857	methoxyflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:CFTR:RxNorm:1243041	CFTR	RxNorm:1243041	ivacaftor	A	100409	CFTR and Ivacaftor	https://www.clinpgx.org/guideline/PA166251449	v1.60.0	candidate_gene_covered
+CPIC:pair:CPS1:RxNorm:11118	CPS1	RxNorm:11118	valproic acid	B				v1.60.0	no_allele_table
+CPIC:pair:CYP2B6:RxNorm:195085	CYP2B6	RxNorm:195085	efavirenz	A	104245	CYP2B6 and efavirenz	https://www.clinpgx.org/guideline/PA166251463	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2B6:RxNorm:36437	CYP2B6	RxNorm:36437	sertraline	B	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:10834	CYP2C19	RxNorm:10834	trimipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:121243	CYP2C19	RxNorm:121243	voriconazole	A	100410	CYP2C19 and Voriconazole	https://www.clinpgx.org/guideline/PA166251456	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:17128	CYP2C19	RxNorm:17128	lansoprazole	A	110076	CYP2C19 and Proton Pump Inhibitors	https://www.clinpgx.org/guideline/PA166251441	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:1739745	CYP2C19	RxNorm:1739745	brivaracetam	B				v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:2556	CYP2C19	RxNorm:2556	citalopram	A	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:2597	CYP2C19	RxNorm:2597	clomipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:321988	CYP2C19	RxNorm:321988	escitalopram	A	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:32968	CYP2C19	RxNorm:32968	clopidogrel	A	100411	CYP2C19 and Clopidogrel	https://www.clinpgx.org/guideline/PA166251443	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:3638	CYP2C19	RxNorm:3638	doxepin	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:36437	CYP2C19	RxNorm:36437	sertraline	A	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:40790	CYP2C19	RxNorm:40790	pantoprazole	A	110076	CYP2C19 and Proton Pump Inhibitors	https://www.clinpgx.org/guideline/PA166251441	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:5691	CYP2C19	RxNorm:5691	imipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:704	CYP2C19	RxNorm:704	amitriptyline	A	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:7646	CYP2C19	RxNorm:7646	omeprazole	A	110076	CYP2C19 and Proton Pump Inhibitors	https://www.clinpgx.org/guideline/PA166251441	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C19:RxNorm:816346	CYP2C19	RxNorm:816346	dexlansoprazole	B	110076	CYP2C19 and Proton Pump Inhibitors	https://www.clinpgx.org/guideline/PA166251441	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:11289	CYP2C9	RxNorm:11289	warfarin	A	100425	CYP2C9, VKORC1, CYP4F2 and Warfarin	https://www.clinpgx.org/guideline/PA166251465	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:140587	CYP2C9	RxNorm:140587	celecoxib	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:154	CYP2C9	RxNorm:154	acenocoumarol	B				v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:20890	CYP2C9	RxNorm:20890	lornoxicam	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:2121085	CYP2C9	RxNorm:2121085	siponimod	A				v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:37790	CYP2C9	RxNorm:37790	tenoxicam	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:41127	CYP2C9	RxNorm:41127	fluvastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:41493	CYP2C9	RxNorm:41493	meloxicam	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:4502	CYP2C9	RxNorm:4502	flurbiprofen	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:5640	CYP2C9	RxNorm:5640	ibuprofen	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:72236	CYP2C9	RxNorm:72236	fosphenytoin	A	100412	CYP2C9, HLA-B and Phenytoin	https://www.clinpgx.org/guideline/PA166251461	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:8183	CYP2C9	RxNorm:8183	phenytoin	A	100412	CYP2C9, HLA-B and Phenytoin	https://www.clinpgx.org/guideline/PA166251461	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2C9:RxNorm:8356	CYP2C9	RxNorm:8356	piroxicam	A	110058	CYP2C9 and NSAIDs	https://www.clinpgx.org/guideline/PA166251464	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:10324	CYP2D6	RxNorm:10324	tamoxifen	A	100415	CYP2D6 and Tamoxifen	https://www.clinpgx.org/guideline/PA166251458	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:10689	CYP2D6	RxNorm:10689	tramadol	A	100416	CYP2D6, OPRM1, COMT, and Opioids	https://www.clinpgx.org/guideline/PA166251454	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:10834	CYP2D6	RxNorm:10834	trimipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:1455099	CYP2D6	RxNorm:1455099	vortioxetine	A	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:2197878	CYP2D6	RxNorm:2197878	pitolisant	A				v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:2597	CYP2D6	RxNorm:2597	clomipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:26225	CYP2D6	RxNorm:26225	ondansetron	A	100417	CYP2D6 and Ondansetron and Tropisetron	https://www.clinpgx.org/guideline/PA166251457	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:2670	CYP2D6	RxNorm:2670	codeine	A	100416	CYP2D6, OPRM1, COMT, and Opioids	https://www.clinpgx.org/guideline/PA166251454	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:27392	CYP2D6	RxNorm:27392	tropisetron	A	100417	CYP2D6 and Ondansetron and Tropisetron	https://www.clinpgx.org/guideline/PA166251457	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:3247	CYP2D6	RxNorm:3247	desipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:32937	CYP2D6	RxNorm:32937	paroxetine	A	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:35636	CYP2D6	RxNorm:35636	risperidone	B				v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:3638	CYP2D6	RxNorm:3638	doxepin	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:38400	CYP2D6	RxNorm:38400	atomoxetine	A	104243	CYP2D6 and Atomoxetine	https://www.clinpgx.org/guideline/PA166251459	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:39786	CYP2D6	RxNorm:39786	venlafaxine	B	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:42355	CYP2D6	RxNorm:42355	fluvoxamine	B	100413	CYP2D6, CYP2C19, CYP2B6, SLC6A4, HTR2A and Serotonin Reuptake Inhibitor Antidepressants	https://www.clinpgx.org/guideline/PA166251452	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:5489	CYP2D6	RxNorm:5489	hydrocodone	B	100416	CYP2D6, OPRM1, COMT, and Opioids	https://www.clinpgx.org/guideline/PA166251454	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:5691	CYP2D6	RxNorm:5691	imipramine	B	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:6918	CYP2D6	RxNorm:6918	metoprolol	B	5290480	CYP2D6, ADRB1, ADRB2, ADRA2C, GRK4, and GRK5 and Beta-Blockers	https://www.clinpgx.org/guideline/PA166343383	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:704	CYP2D6	RxNorm:704	amitriptyline	A	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:7531	CYP2D6	RxNorm:7531	nortriptyline	A	100414	CYP2D6, CYP2C19 and Tricyclic Antidepressants	https://www.clinpgx.org/guideline/PA166251445	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP2D6:RxNorm:89013	CYP2D6	RxNorm:89013	aripiprazole	B				v1.60.0	candidate_gene_covered
+CPIC:pair:CYP3A5:RxNorm:42316	CYP3A5	RxNorm:42316	tacrolimus	A	100418	CYP3A5 and Tacrolimus	https://www.clinpgx.org/guideline/PA166251451	v1.60.0	candidate_gene_covered
+CPIC:pair:CYP4F2:RxNorm:11289	CYP4F2	RxNorm:11289	warfarin	A	100425	CYP2C9, VKORC1, CYP4F2 and Warfarin	https://www.clinpgx.org/guideline/PA166251465	v1.60.0	no_admitted_function
+CPIC:pair:CYP4F2:RxNorm:154	CYP4F2	RxNorm:154	acenocoumarol	B				v1.60.0	no_admitted_function
+CPIC:pair:CYP4F2:RxNorm:8150	CYP4F2	RxNorm:8150	phenprocoumon	B				v1.60.0	no_admitted_function
+CPIC:pair:DPYD:RxNorm:194000	DPYD	RxNorm:194000	capecitabine	A	100419	DPYD and Fluoropyrimidines	https://www.clinpgx.org/guideline/PA166251462	v1.60.0	candidate_gene_covered
+CPIC:pair:DPYD:RxNorm:4492	DPYD	RxNorm:4492	fluorouracil	A	100419	DPYD and Fluoropyrimidines	https://www.clinpgx.org/guideline/PA166251462	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:1011650	G6PD	RxNorm:1011650	pegloticase	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:10638	G6PD	RxNorm:10638	toluidine blue	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:2054023	G6PD	RxNorm:2054023	tafenoquine	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:283821	G6PD	RxNorm:283821	rasburicase	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:3108	G6PD	RxNorm:3108	dapsone	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:6878	G6PD	RxNorm:6878	methylene blue	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:7454	G6PD	RxNorm:7454	nitrofurantoin	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:G6PD:RxNorm:8687	G6PD	RxNorm:8687	primaquine	A	2405438	G6PD	https://www.clinpgx.org/guideline/PA166251450	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-A:RxNorm:2002	HLA-A	RxNorm:2002	carbamazepine	A	100423	HLA-A, HLA-B and Carbamazepine and Oxcarbazepine	https://www.clinpgx.org/guideline/PA166251448	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-B:RxNorm:190521	HLA-B	RxNorm:190521	abacavir	A	100421	HLA-B and Abacavir	https://www.clinpgx.org/guideline/PA166251444	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-B:RxNorm:2002	HLA-B	RxNorm:2002	carbamazepine	A	100423	HLA-A, HLA-B and Carbamazepine and Oxcarbazepine	https://www.clinpgx.org/guideline/PA166251448	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-B:RxNorm:32624	HLA-B	RxNorm:32624	oxcarbazepine	A	100423	HLA-A, HLA-B and Carbamazepine and Oxcarbazepine	https://www.clinpgx.org/guideline/PA166251448	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-B:RxNorm:519	HLA-B	RxNorm:519	allopurinol	A	100422	HLA-B and Allopurinol	https://www.clinpgx.org/guideline/PA166251446	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-B:RxNorm:72236	HLA-B	RxNorm:72236	fosphenytoin	A	100412	CYP2C9, HLA-B and Phenytoin	https://www.clinpgx.org/guideline/PA166251461	v1.60.0	candidate_gene_covered
+CPIC:pair:HLA-B:RxNorm:8183	HLA-B	RxNorm:8183	phenytoin	A	100412	CYP2C9, HLA-B and Phenytoin	https://www.clinpgx.org/guideline/PA166251461	v1.60.0	candidate_gene_covered
+CPIC:pair:HPRT1:RxNorm:7145	HPRT1	RxNorm:7145	mycophenolic acid	B				v1.60.0	no_allele_table
+CPIC:pair:MT-RNR1:ATC:D06AX07	MT-RNR1	ATC:D06AX07	gentamicin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:10109	MT-RNR1	RxNorm:10109	streptomycin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:10627	MT-RNR1	RxNorm:10627	tobramycin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:2049549	MT-RNR1	RxNorm:2049549	plazomicin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:3328	MT-RNR1	RxNorm:3328	dibekacin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:6099	MT-RNR1	RxNorm:6099	kanamycin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:641	MT-RNR1	RxNorm:641	amikacin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:7299	MT-RNR1	RxNorm:7299	neomycin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:7337	MT-RNR1	RxNorm:7337	netilmicin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:7934	MT-RNR1	RxNorm:7934	paromomycin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:MT-RNR1:RxNorm:NA	MT-RNR1	RxNorm:NA	ribostamycin	A	826283	MT-RNR1 and Aminoglycosides	https://www.clinpgx.org/guideline/PA166251466	v1.60.0	candidate_gene_covered
+CPIC:pair:NAGS:RxNorm:11118	NAGS	RxNorm:11118	valproic acid	B				v1.60.0	no_allele_table
+CPIC:pair:NAGS:RxNorm:401713	NAGS	RxNorm:401713	carglumic acid	B				v1.60.0	no_allele_table
+CPIC:pair:NAT2:RxNorm:5470	NAT2	RxNorm:5470	hydralazine	A	6478852	NAT2 and Hydralazine	https://www.clinpgx.org/guideline/PA166416361	v1.60.0	candidate_gene_covered
+CPIC:pair:NUDT15:RxNorm:103	NUDT15	RxNorm:103	mercaptopurine	A	100428	TPMT, NUDT15 and Thiopurines	https://www.clinpgx.org/guideline/PA166251442	v1.60.0	candidate_gene_covered
+CPIC:pair:NUDT15:RxNorm:10485	NUDT15	RxNorm:10485	thioguanine	A	100428	TPMT, NUDT15 and Thiopurines	https://www.clinpgx.org/guideline/PA166251442	v1.60.0	candidate_gene_covered
+CPIC:pair:NUDT15:RxNorm:1256	NUDT15	RxNorm:1256	azathioprine	A	100428	TPMT, NUDT15 and Thiopurines	https://www.clinpgx.org/guideline/PA166251442	v1.60.0	candidate_gene_covered
+CPIC:pair:OTC:RxNorm:11118	OTC	RxNorm:11118	valproic acid	B				v1.60.0	no_allele_table
+CPIC:pair:RYR1:RxNorm:10154	RYR1	RxNorm:10154	succinylcholine	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:RYR1:RxNorm:27340	RYR1	RxNorm:27340	desflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:RYR1:RxNorm:36453	RYR1	RxNorm:36453	sevoflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:RYR1:RxNorm:3920	RYR1	RxNorm:3920	enflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:RYR1:RxNorm:5095	RYR1	RxNorm:5095	halothane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:RYR1:RxNorm:6026	RYR1	RxNorm:6026	isoflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:RYR1:RxNorm:6857	RYR1	RxNorm:6857	methoxyflurane	A	100427	RYR1, CACNA1S and Volatile anesthetic agents and Succinylcholine	https://www.clinpgx.org/guideline/PA166251460	v1.60.0	candidate_gene_covered
+CPIC:pair:SCN1A:RxNorm:2002	SCN1A	RxNorm:2002	carbamazepine	B				v1.60.0	no_allele_table
+CPIC:pair:SCN1A:RxNorm:8183	SCN1A	RxNorm:8183	phenytoin	B				v1.60.0	no_allele_table
+CPIC:pair:SLCO1B1:RxNorm:301542	SLCO1B1	RxNorm:301542	rosuvastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:SLCO1B1:RxNorm:36567	SLCO1B1	RxNorm:36567	simvastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:SLCO1B1:RxNorm:41127	SLCO1B1	RxNorm:41127	fluvastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:SLCO1B1:RxNorm:42463	SLCO1B1	RxNorm:42463	pravastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:SLCO1B1:RxNorm:6472	SLCO1B1	RxNorm:6472	lovastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:SLCO1B1:RxNorm:83367	SLCO1B1	RxNorm:83367	atorvastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:SLCO1B1:RxNorm:861634	SLCO1B1	RxNorm:861634	pitavastatin	A	100426	SLCO1B1, ABCG2, CYP2C9, and Statins	https://www.clinpgx.org/guideline/PA166264281	v1.60.0	candidate_gene_covered
+CPIC:pair:TPMT:RxNorm:103	TPMT	RxNorm:103	mercaptopurine	A	100428	TPMT, NUDT15 and Thiopurines	https://www.clinpgx.org/guideline/PA166251442	v1.60.0	candidate_gene_covered
+CPIC:pair:TPMT:RxNorm:10485	TPMT	RxNorm:10485	thioguanine	A	100428	TPMT, NUDT15 and Thiopurines	https://www.clinpgx.org/guideline/PA166251442	v1.60.0	candidate_gene_covered
+CPIC:pair:TPMT:RxNorm:1256	TPMT	RxNorm:1256	azathioprine	A	100428	TPMT, NUDT15 and Thiopurines	https://www.clinpgx.org/guideline/PA166251442	v1.60.0	candidate_gene_covered
+CPIC:pair:UGT1A1:RxNorm:1543543	UGT1A1	RxNorm:1543543	belinostat	B				v1.60.0	candidate_gene_covered
+CPIC:pair:UGT1A1:RxNorm:343047	UGT1A1	RxNorm:343047	atazanavir	A	100429	UGT1A1 and Atazanavir	https://www.clinpgx.org/guideline/PA166251453	v1.60.0	candidate_gene_covered
+CPIC:pair:UGT1A1:RxNorm:51499	UGT1A1	RxNorm:51499	irinotecan	A				v1.60.0	candidate_gene_covered
+CPIC:pair:VKORC1:RxNorm:11289	VKORC1	RxNorm:11289	warfarin	A	100425	CYP2C9, VKORC1, CYP4F2 and Warfarin	https://www.clinpgx.org/guideline/PA166251465	v1.60.0	candidate_gene_covered

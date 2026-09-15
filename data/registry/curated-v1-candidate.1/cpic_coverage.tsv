@@ -1,0 +1,30 @@
+gene	pair_count	allele_row_count	candidate_count	status	refusal_reason	source_release	set_version
+ABCG2	1	2	1	candidate_gene_covered		v1.60.0	v1-candidate.1
+ABL2	1	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+ASL	1	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+ASS1	1	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+CACNA1S	7	3	2	candidate_gene_covered		v1.60.0	v1-candidate.1
+CFTR	1	104	103	candidate_gene_covered		v1.60.0	v1-candidate.1
+CPS1	1	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+CYP2B6	2	49	23	candidate_gene_covered		v1.60.0	v1-candidate.1
+CYP2C19	15	49	19	candidate_gene_covered		v1.60.0	v1-candidate.1
+CYP2C9	13	94	34	candidate_gene_covered		v1.60.0	v1-candidate.1
+CYP2D6	22	208	81	candidate_gene_covered		v1.60.0	v1-candidate.1
+CYP3A5	1	8	3	candidate_gene_covered		v1.60.0	v1-candidate.1
+CYP4F2	3	23	0	no_admitted_function	The frozen CPIC allele table has no row carrying an admitted functional state or exact allele-status trigger for this A/B pair gene.	v1.60.0	v1-candidate.1
+DPYD	2	84	28	candidate_gene_covered		v1.60.0	v1-candidate.1
+G6PD	8	187	176	candidate_gene_covered		v1.60.0	v1-candidate.1
+HLA-A	1	1	1	candidate_gene_covered		v1.60.0	v1-candidate.1
+HLA-B	6	3	3	candidate_gene_covered		v1.60.0	v1-candidate.1
+HPRT1	1	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+MT-RNR1	11	25	3	candidate_gene_covered		v1.60.0	v1-candidate.1
+NAGS	2	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+NAT2	1	59	42	candidate_gene_covered		v1.60.0	v1-candidate.1
+NUDT15	3	23	14	candidate_gene_covered		v1.60.0	v1-candidate.1
+OTC	1	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+RYR1	7	347	96	candidate_gene_covered		v1.60.0	v1-candidate.1
+SCN1A	2	0	0	no_allele_table	The frozen CPIC snapshot publishes no allele rows for this A/B pair gene.	v1.60.0	v1-candidate.1
+SLCO1B1	7	47	13	candidate_gene_covered		v1.60.0	v1-candidate.1
+TPMT	3	49	39	candidate_gene_covered		v1.60.0	v1-candidate.1
+UGT1A1	3	9	7	candidate_gene_covered		v1.60.0	v1-candidate.1
+VKORC1	1	2	1	candidate_gene_covered		v1.60.0	v1-candidate.1

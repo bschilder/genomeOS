@@ -24,6 +24,11 @@ from genomeos.observations.schema import (
     CARRIER_OBSERVATIONS_SCHEMA,
     OBSERVATIONS_SCHEMA,
 )
+from genomeos.registry.curated import (
+    CPIC_COVERAGE_SCHEMA,
+    CPIC_PAIR_TARGETS_SCHEMA,
+    CURATED_VARIANTS_SCHEMA,
+)
 from genomeos.registry.schema import ALIASES_SCHEMA, POPULATIONS_SCHEMA
 from genomeos.registry.variants import VARIANT_NORMALIZATION_SCHEMA
 
@@ -32,6 +37,9 @@ PANDERA_SCHEMAS = {
     "populations.schema.json": POPULATIONS_SCHEMA,
     "population_aliases.schema.json": ALIASES_SCHEMA,
     "variant_normalization.schema.json": VARIANT_NORMALIZATION_SCHEMA,
+    "curated_variants.schema.json": CURATED_VARIANTS_SCHEMA,
+    "cpic_pair_targets.schema.json": CPIC_PAIR_TARGETS_SCHEMA,
+    "cpic_coverage.schema.json": CPIC_COVERAGE_SCHEMA,
     "observations.schema.json": OBSERVATIONS_SCHEMA,
     "carrier_observations.schema.json": CARRIER_OBSERVATIONS_SCHEMA,
     "literature_evidence.schema.json": LITERATURE_EVIDENCE_SCHEMA,

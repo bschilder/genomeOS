@@ -1,0 +1,20 @@
+{
+  "accessed_at": "2026-09-14",
+  "scope": "External identifiers, source classifications, and evidence links for manual_candidates.tsv; no GeneReviews prose or tables are redistributed.",
+  "sources": {
+    "ClinVar": {
+      "attribution": "ClinVar, National Center for Biotechnology Information",
+      "reuse_status": "no_restriction_found",
+      "terms_url": "https://www.ncbi.nlm.nih.gov/clinvar/docs/maintenance_use/",
+      "usage_note": "ClinVar asks downstream users to attribute copied or distributed data to ClinVar.",
+      "url": "https://www.ncbi.nlm.nih.gov/clinvar/"
+    },
+    "GeneReviews": {
+      "attribution": "GeneReviews, University of Washington",
+      "reuse_status": "restriction_found",
+      "terms_url": "https://www.ncbi.nlm.nih.gov/books/NBK138602/",
+      "usage_note": "GeneReviews content has noncommercial reproduction terms. This source file stores links as evidence locators and does not reproduce chapter content.",
+      "url": "https://www.ncbi.nlm.nih.gov/books/NBK1116/"
+    }
+  }
+}

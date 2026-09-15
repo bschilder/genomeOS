@@ -34,6 +34,12 @@
 
 Freeze source snapshot, releases, configurations, and existing outputs. Audit counts, denominators, measurement type, geographic support, date support, recruitment, population target, and source overlap. Record independent study/population/locus counts and unresolved metadata. Do not certify resident representativeness from reference-panel membership or recruitment labels. Keep allele, carrier, and phenotype data distinct.
 
+The [owner-supplied GBD cardiovascular paper assessment](../../research/gbd-cardiovascular-fulltext-notes-2026-09-09.md)
+adds age/sex composition, native support, observed-versus-modeled status and upstream source
+lineage to ancillary-source qualification. Missing composition remains unknown. Any population
+reweighting needs documented denominators and a prespecified target; age-standardized disease
+rates are neither resident allele counts nor interchangeable with all-age rates.
+
 **Exit:** traceable qualified input inventory, explicit exclusions, and an identifiable target for each proposed real-data benchmark. A schema-valid table alone does not satisfy this gate.
 
 ### WP1 — Benchmark foundation
@@ -41,6 +47,11 @@ Freeze source snapshot, releases, configurations, and existing outputs. Audit co
 Build a dependency graph for studies, participants/kin where known, reused panels/tables, and derived resources. Freeze local-interpolation, buffered-region, all-variant new-region, whole-locus, and conditional-imputation tracks separately. Reserve independent external confirmation before tuning. Nested model selection may only use training/development evidence.
 
 Score integrated count predictive probabilities, predictive coverage/width, discrete calibration, point error, and joint-site quantities. Keep the current median-based binomial score explicitly legacy. Retain every fold, failure, retry, and refusal. Studies are averaged within represented region/variant-group cells, then cells equally; report absent cells and rare-allele/denominator/distance strata.
+
+Disease-burden map agreement is not an AF validation endpoint. Before using a modeled external
+layer, audit whether its upstream data already include held-out evidence. Prespecify source-
+support/sparsity reporting where identifiable; absent metadata cannot be manufactured into a
+stratum. Transparent health-estimate reporting complements, but never replaces, sealed testing.
 
 **Exit:** analytical score tests, deliberate-leakage tests, deterministic manifests, reproduced current-model baseline, and genuinely sealed external data. A fixture runner is engineering evidence only.
 
@@ -66,6 +77,13 @@ Never infer continuous high-resolution coverage by stitching incompatible produc
 See the [climate qualification note](../../research/climate-covariate-qualification-2026-09-10.md).
 
 Version source, checksum, units, support, valid/available time, uncertainty, missingness, upstream dependencies, and terms. Cesium display assets are not a scientific covariate store. Offline extraction needs scientific semantics and asset-specific permission.
+
+The GBD assessment nominates particulate pollution, household-fuel exposure, lead and
+time-supported temperature exposure for later source inspection, without displacing the order
+above or claiming AF benefit. Keep environmental covariates, care/screening observation-process
+descriptors and downstream disease/metabolic outcomes distinct. Using downstream modeled
+outcomes as AF predictors requires an explicit circularity/dependency argument and ablation.
+Interpolating a coarse estimate to fine H3 cells does not improve its empirical resolution.
 
 Compare baseline, added family, missingness-only, structured negative control, and incremental value after genomic structure, on unchanged evaluation populations. Record rejected layers.
 
@@ -108,6 +126,10 @@ interpolated model output. Do not assume a present-day variant existed throughou
 the evolutionary interval. Separate retrospective reconstruction with later data
 from forward prediction using only information available at its declared cutoff;
 test independent sites/time windows and climate-family ablations accordingly.
+
+Do not extrapolate contemporary disease-risk maps into evolutionary time. Recent care or
+environmental changes can affect ascertainment and disease without identifying allele dynamics;
+selection hypotheses still need separately supported exposure histories and migration/drift controls.
 
 **Exit:** independent site/time validation and modern-prediction ablation; regional feasibility is not a global historical claim.
 
