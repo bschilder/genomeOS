@@ -142,6 +142,7 @@ def _beta_quadrature(
         nodes.shape != (order,)
         or not np.all(np.isfinite(nodes))
         or np.any((nodes <= 0.0) | (nodes >= 1.0))
+        or np.any(np.diff(nodes) <= 0.0)
         or weights.shape != (order,)
         or not np.all(np.isfinite(weights))
         or np.any(weights <= 0.0)
@@ -158,6 +159,15 @@ def _beta_quadrature(
     ):
         raise ArithmeticError(f"{name} quadrature weights failed normalization")
     return nodes, normalized_weights
+
+
+def beta_prior_quadrature(
+    prior: tuple[float, float], *, order: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return validated nodes and normalized weights for one Beta prior."""
+    normalized_prior = _positive_real_pair(prior, "prior")
+    normalized_order = _bounded_integer(order, "order", minimum=2, maximum=512)
+    return _beta_quadrature(normalized_prior, normalized_order, "prior")
 
 
 @dataclass(frozen=True)
@@ -192,11 +202,11 @@ def heterogeneity_quadrature(
     )
     normalized_order = _bounded_integer(order, "order", minimum=2, maximum=512)
 
-    mean_nodes, mean_weights = _beta_quadrature(
-        normalized_mean_prior, normalized_order, "mean_prior"
+    mean_nodes, mean_weights = beta_prior_quadrature(
+        normalized_mean_prior, order=normalized_order
     )
-    rho_nodes, rho_weights = _beta_quadrature(
-        normalized_rho_prior, normalized_order, "rho_prior"
+    rho_nodes, rho_weights = beta_prior_quadrature(
+        normalized_rho_prior, order=normalized_order
     )
     mean_grid = mean_nodes[:, None]
     rho_grid = rho_nodes[None, :]
