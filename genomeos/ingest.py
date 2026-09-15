@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import gzip
+import hashlib
 import math
 from collections.abc import Iterable
 from pathlib import Path
@@ -233,6 +234,11 @@ def ingest_associations(
             index_uri=f"{source_uri}.tbi",
             columns=fields,
         )
+        with path.open("rb") as source_bytes:
+            checksum = hashlib.file_digest(source_bytes, "sha256").hexdigest()
+        if asset.checksum is not None and asset.checksum != checksum:
+            raise IngestionError("source asset bytes changed within the registered release")
+        asset.checksum = checksum
         inserted = 0
         for row_number, row in enumerate(reader, start=2):
             chromosome, position = _text(row["chr"]), int(row["pos"])

@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GenomeOS — Trait–variant evidence</title>
+<style>
+body{max-width:76rem;margin:2rem auto;padding:0 1rem;background:#07111f;color:#e4efff;font:16px/1.6 system-ui}
+a{color:#70d7ff}input,select,button{font:inherit;padding:.5rem;margin:.25rem}table{border-collapse:collapse;width:100%}
+th,td{text-align:left;vertical-align:top;padding:.6rem;border-bottom:1px solid #456;overflow-wrap:anywhere}
+pre{white-space:pre-wrap;overflow-wrap:anywhere}.scroll{overflow:auto}label{display:inline-block}
+</style>
+<main><h1>Trait–variant evidence</h1>
+<p>Browse source-indexed associations. Missing evidence does not mean no association.
+These records do not establish causation, pleiotropy, or geographic trait prevalence.</p>
+<p id="inventory" role="status">Checking the registered evidence inventory…</p>
+<form id="query"><label>Search by <select id="kind"><option value="variant">Exact GRCh37 variant</option>
+<option value="phenotype_id">Registered phenotype ID</option></select></label>
+<label>Identifier <input id="identifier" required size="38" autocomplete="off"></label>
+<button>Search evidence</button></form>
+<p>Variant format: GRCh37:chromosome:position:ref:alt. No assembly conversion is inferred.</p>
+<p id="status" role="status"></p><div id="result" class="scroll"></div>
+<button id="previous" disabled>Previous page</button><button id="next" disabled>Next page</button>
+<details><summary>Analysis availability</summary><ul id="limitations"></ul></details>
+</main>
+<script type="module">
+const byId=id=>document.getElementById(id);
+const element=(tag,text)=>{const node=document.createElement(tag);node.textContent=text;return node;};
+let offset=0, search=null, request=null;
+async function get(path,signal){const r=await fetch(path,{signal});if(!r.ok)throw new Error(`Evidence request failed (HTTP ${r.status}). No substitute loaded.`);return r.json();}
+try{const inventory=await get('/v1/evidence/audit');byId('inventory').textContent=
+`${inventory.phenotype_count} phenotypes and ${inventory.association_count} associations registered in this database. ${inventory.association_count===0?'Trait evidence is unavailable.':''}`;
+for(const message of inventory.limitations)byId('limitations').append(element('li',message));}
+catch(error){byId('inventory').textContent=error.message;}
+async function load(){request?.abort();const controller=new AbortController();request=controller;
+byId('status').textContent='Loading evidence…';byId('result').replaceChildren();byId('next').disabled=true;byId('previous').disabled=true;
+try{const params=new URLSearchParams({...search,offset:String(offset),limit:'50'});const page=await get('/v1/evidence/associations?'+params,controller.signal);
+if(request!==controller)return;
+byId('status').textContent=`${page.items.length} traceable records on this page; ${page.refusals.length} refused; ${page.total_indexed_matches} indexed matches. ${page.status==='unavailable'?'No eligible evidence on this page. ':''}${page.interpretation}`;
+const table=document.createElement('table'),head=document.createElement('tr');
+for(const title of ['Trait / release','Variant / effect allele','Analysis group','Reported evidence','Provenance'])head.append(element('th',title));table.append(head);
+for(const row of page.items){const tr=document.createElement('tr');
+const values=[`${row.trait.description}\n${JSON.stringify(row.trait)}\nPhenotype ID: ${row.phenotype_id}`,`${row.variant}\n${row.effect_allele}`,`${row.population}\n${row.analysis_kind}`,
+`Independent review: ${row.independent_review}\nbeta: ${row.beta??'unrecorded'}; scale: ${row.effect_scale}\nSE: ${row.standard_error??'unrecorded'}\n−log10(p): ${row.neg_log10_p}\nLow confidence: ${row.low_confidence===null?'unknown':row.low_confidence}`,JSON.stringify(row.provenance,null,2)];
+for(const value of values){const td=document.createElement('td');td.append(element('pre',value));tr.append(td);}table.append(tr);}
+if(page.items.length)byId('result').append(table);
+for(const refusal of page.refusals)byId('result').append(element('p',`Record ${refusal.record_id} refused: ${refusal.reasons.join(', ')}`));
+byId('previous').disabled=offset===0;byId('next').disabled=offset+page.examined>=page.total_indexed_matches;
+}catch(error){if(request!==controller)return;if(error.name!=='AbortError')byId('status').textContent=error.message;}}
+byId('query').addEventListener('submit',event=>{event.preventDefault();offset=0;search={[byId('kind').value]:byId('identifier').value};void load();});
+byId('previous').addEventListener('click',()=>{offset=Math.max(0,offset-50);void load();});
+byId('next').addEventListener('click',()=>{offset+=50;void load();});
+</script>
+</html>

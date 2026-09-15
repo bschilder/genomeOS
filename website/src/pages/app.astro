@@ -8,6 +8,9 @@ import { sitePath } from '../lib/paths';
   title="Atlas"
   description="Explore measured observations, modeled geographic patterns, uncertainty, and evidence gaps in the genomeOS globe atlas."
 >
+  <nav aria-label="Atlas comparison">
+    <a href={sitePath('/app/compare/')}>Compare two published maps</a>
+  </nav>
   <AtlasExplorer
     client:load
     cesiumToken={import.meta.env.CESIUM_TOKEN ?? ''}
