@@ -21,8 +21,9 @@ def gcloud_environment() -> dict[str, str]:
 
 def run_gcloud(arguments: list[str]) -> int:
     REPO_GCLOUD_CONFIG.mkdir(parents=True, exist_ok=True)
+    executable = os.getenv("GENOMEOS_GCLOUD_EXECUTABLE", "gcloud")
     return subprocess.call(
-        ["gcloud", *arguments], cwd=ROOT, env=gcloud_environment()
+        [executable, *arguments], cwd=ROOT, env=gcloud_environment()
     )
 
 
