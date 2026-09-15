@@ -1,0 +1,3 @@
+source_record_id	block_id	region_id	variant_group
+west-only	west	region-west	rare
+east-only	east	region-east	common
