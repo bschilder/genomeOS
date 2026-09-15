@@ -368,7 +368,7 @@ def _validate_acquisition_content(
                  "range receipt accounting mismatch")
         if source.verified is not None:
             validate_verified_source(source.verified, plan, artifact_root=root)
-        if source.metadata.state == "verified":
+        if source.metadata.state != "not_attempted":
             validate_metadata_receipt(source.source.vcf, source.metadata, artifact_root=root)
     totals = manifest.totals
     _require(totals.planned_bytes_including_indexes == preflight.total_planned_bytes,

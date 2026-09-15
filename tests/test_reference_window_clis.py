@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import platform
+import sqlite3
 import subprocess
 import sys
 from dataclasses import replace
@@ -263,6 +264,7 @@ def _install_acquisition_adapters(
     monkeypatch,
     *,
     fail_chrom: str | None = None,
+    false_metadata_refusal_chrom: str | None = None,
     retained_window: str | None = None,
     retained_records: int = 1,
     record_alts: tuple[str, ...] | None = None,
@@ -312,6 +314,7 @@ def _install_acquisition_adapters(
 
     def metadata(source, *, wrapper, artifact_root, destination, gcloud_executable):
         del wrapper, gcloud_executable
+        chrom = "chr" + source.uri.rsplit(".chr", 1)[1].split(".", 1)[0]
         raw = (json.dumps(
             {
                 "generation": source.generation,
@@ -322,9 +325,21 @@ def _install_acquisition_adapters(
             sort_keys=True,
             separators=(",", ":"),
         ) + "\n").encode()
-        stdout = _put(artifact_root, destination.as_posix(), raw)
-        stderr = _put(artifact_root, f"{destination}.stderr", b"")
-        return MetadataReceipt("verified", None, 1, len(raw), stdout, stderr, 0, False, False)
+        refused = chrom == false_metadata_refusal_chrom
+        suffix = ".partial" if refused else ""
+        stdout = _put(artifact_root, f"{destination}{suffix}", raw)
+        stderr = _put(artifact_root, f"{destination}.stderr{suffix}", b"")
+        return MetadataReceipt(
+            "refused" if refused else "verified",
+            "metadata_mismatch" if refused else None,
+            1,
+            len(raw),
+            stdout,
+            stderr,
+            0,
+            False,
+            False,
+        )
 
     def source_bytes(source) -> bytes:
         chrom = "chr" + source.uri.rsplit(".chr", 1)[1].split(".", 1)[0]
@@ -1305,6 +1320,25 @@ def test_one_source_failure_keeps_full_ledger_and_blocks_preparation(tmp_path, m
 
     assert prepare_main(_preparation_argv(tmp_path)) == 2
     assert not (tmp_path / "counts").exists()
+
+
+def test_false_metadata_refusal_cannot_write_a_self_consistent_manifest(tmp_path, monkeypatch):
+    _synthetic_inputs(tmp_path, source_size_bytes=4_096)
+    _install_acquisition_adapters(monkeypatch, false_metadata_refusal_chrom="chr1")
+
+    with pytest.raises(ValueError, match="metadata refusal is not reproduced"):
+        compose_acquisition(_acquisition_composition(tmp_path))
+    assert not (tmp_path / "out/acquisition.json").exists()
+
+
+def test_preparation_cli_reports_sqlite_failure_without_traceback(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(
+        preparation_cli,
+        "prepare",
+        lambda _args: (_ for _ in ()).throw(sqlite3.OperationalError("disk I/O error")),
+    )
+    assert prepare_main(_preparation_argv(tmp_path)) == 2
+    assert capsys.readouterr().err == "error:invalid_input\n"
 
 
 def test_unreproducible_preparation_parse_failure_rolls_back_manifest(tmp_path, monkeypatch):

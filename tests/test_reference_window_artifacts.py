@@ -191,7 +191,6 @@ def _synthetic_artifact_adapters(monkeypatch):
 
     monkeypatch.setattr(artifact_io, "validate_original_records", validate_original)
     monkeypatch.setattr(artifact_io, "validate_original_evidence", validate_original_evidence)
-    monkeypatch.setattr(artifact_io, "validate_metadata_receipt", lambda *args, **kwargs: None)
     monkeypatch.setattr(count_replay, "parse_header", artifact_io.parse_header)
 
 
@@ -445,14 +444,29 @@ def _complete_acquisition_tree(
         sparse.parent.mkdir(parents=True, exist_ok=True)
         sparse.write_bytes(source_raw)
         index_ref = put(f"{sparse_relative}.tbi", index.raw)
-        metadata_stdout = put(f"runtime/{chrom}.metadata.stdout", b"")
-        metadata_stderr = put(f"runtime/{chrom}.metadata.stderr", b"")
-        range_stderr = put(f"runtime/{chrom}.range.stderr", b"")
+        metadata_raw = (
+            json.dumps(
+                {
+                    "generation": plan.source.vcf.generation,
+                    "size": str(plan.source.vcf.size_bytes),
+                    "md5Hash": plan.source.vcf.md5_b64,
+                    "crc32c": plan.source.vcf.crc32c_b64,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+        metadata_stdout = put(f"runtime/{chrom}.metadata.stdout", metadata_raw)
+        metadata_stderr = put(f"runtime/{chrom}.metadata.stdout.stderr", b"")
         receipts = []
         verified_ranges = []
         for byte_range in plan.merged_vcf_ranges:
-            relative = f"ranges/{chrom}-{byte_range.first}-{byte_range.last}.bin"
+            relative = (
+                f"sources/{chrom}/ranges/{byte_range.first}-{byte_range.last}.bin"
+            )
             retained_range = put(relative, source_raw[byte_range.first : byte_range.last + 1])
+            range_stderr = put(f"{relative}.stderr", b"")
             receipts.append(
                 RangeReceipt(
                     chrom,
@@ -488,7 +502,15 @@ def _complete_acquisition_tree(
                 plan.source,
                 index_ref,
                 MetadataReceipt(
-                    "verified", None, 1, 0, metadata_stdout, metadata_stderr, 0, False, False
+                    "verified",
+                    None,
+                    1,
+                    len(metadata_raw),
+                    metadata_stdout,
+                    metadata_stderr,
+                    0,
+                    False,
+                    False,
                 ),
                 tuple(receipts),
                 "ready",
@@ -1416,6 +1438,57 @@ def test_acquisition_writer_rejects_rehashed_unrelated_inventory_file(tmp_path):
     with pytest.raises(ValueError, match="noncanonical path"):
         write_acquisition_manifest(tmp_path, changed, preflight=preflight)
     assert not (tmp_path / "acquisition.json").exists()
+
+
+@pytest.mark.parametrize(
+    "role",
+    (
+        "retained_index",
+        "metadata_stdout",
+        "metadata_stderr",
+        "range_stdout",
+        "range_stderr",
+        "sparse_source",
+        "header",
+        "original_records",
+        "record_offsets",
+    ),
+)
+def test_acquisition_validator_rejects_relocated_role_artifacts(tmp_path, role):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    source = manifest.sources[0]
+    window = manifest.windows[0]
+    paths = {
+        "retained_index": source.retained_index.path,
+        "metadata_stdout": source.metadata.retained.path,
+        "metadata_stderr": source.metadata.stderr.path,
+        "range_stdout": source.ranges[0].retained.path,
+        "range_stderr": source.ranges[0].stderr.path,
+        "sparse_source": source.verified.sparse_path,
+        "header": source.header.header.path,
+        "original_records": window.raw.path,
+        "record_offsets": window.offsets.path,
+    }
+    old = paths[role]
+    new = f"{old}.moved"
+    (tmp_path / old).rename(tmp_path / new)
+    payload = json.loads((tmp_path / "acquisition.json").read_bytes())
+
+    def relocate(value):
+        if type(value) is dict:
+            return {key: relocate(item) for key, item in value.items()}
+        if type(value) is list:
+            return [relocate(item) for item in value]
+        return new if value == old else value
+
+    payload = relocate(payload)
+    payload["files"].sort(key=lambda value: value["path"])
+    (tmp_path / "acquisition.json").write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+    )
+    with pytest.raises(ValueError, match="fixed layout"):
+        validate_acquisition(tmp_path)
 
 
 def test_acquisition_writer_removes_its_manifest_after_postwrite_source_change(

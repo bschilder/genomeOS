@@ -6,7 +6,6 @@ import base64
 import gzip
 import hashlib
 import json
-import shutil
 import subprocess
 import sys
 from dataclasses import replace
@@ -149,6 +148,38 @@ def test_metadata_validator_rejects_rehashed_semantic_mutation(tmp_path):
     )
     with pytest.raises(ValueError, match="metadata_mismatch"):
         validate_metadata_receipt(source, changed_receipt, artifact_root=tmp_path)
+
+
+def test_metadata_validator_rejects_false_zero_exit_mismatch_refusal(tmp_path):
+    source = _public_object()
+    raw = (
+        json.dumps(
+            {
+                "generation": source.generation,
+                "size": str(source.size_bytes),
+                "md5Hash": source.md5_b64,
+                "crc32c": source.crc32c_b64,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode()
+    (tmp_path / "metadata.json.partial").write_bytes(raw)
+    (tmp_path / "metadata.stderr.partial").write_bytes(b"")
+    receipt = MetadataReceipt(
+        "refused",
+        "metadata_mismatch",
+        1,
+        len(raw),
+        _artifact(tmp_path, "metadata.json.partial"),
+        _artifact(tmp_path, "metadata.stderr.partial"),
+        0,
+        False,
+        False,
+    )
+    with pytest.raises(ValueError, match="metadata refusal is not reproduced"):
+        validate_metadata_receipt(source, receipt, artifact_root=tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -388,7 +419,7 @@ def test_verified_source_is_relocatable_by_relative_content_identity(tmp_path):
     assert len(verified.ranges) == 2
     assert verified.ranges[0].last + 1 < verified.ranges[1].first
     assert sum(value.range_file.size_bytes for value in verified.ranges) < verified.logical_size_bytes
-    shutil.copytree(original, relocated)
+    original.rename(relocated)
     validate_verified_source(verified, plan, artifact_root=relocated)
 
 

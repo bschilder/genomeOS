@@ -245,6 +245,41 @@ def test_duplicate_contig_and_format_declarations_refuse():
         )
 
 
+def test_per_chromosome_header_does_not_require_every_expected_autosome():
+    header = parse_header(
+        _header(),
+        expected_contigs=(("chr1", 1_000_000), ("chr2", 2_000_000)),
+        source_chrom="chr1",
+        expected_samples=("s1", "s2"),
+    )
+    assert header.contigs == (("chr1", 1_000_000, "gnomAD_GRCh38"),)
+
+
+def test_unrelated_incomplete_contig_is_retained_only_in_raw_header():
+    unrelated = b"##contig=<ID=GL000220.1,length=161802>\n"
+    raw = _header().replace(b"##contig=<", unrelated + b"##contig=<", 1)
+    header = parse_header(
+        raw,
+        expected_contigs=(("chr1", 1_000_000), ("chr2", 2_000_000)),
+        source_chrom="chr1",
+        expected_samples=("s1", "s2"),
+    )
+    assert header.contigs == (("chr1", 1_000_000, "gnomAD_GRCh38"),)
+    assert header.raw_sha256 == hashlib.sha256(raw).hexdigest()
+
+
+def test_declared_expected_autosome_must_match_frozen_identity():
+    second = b"##contig=<ID=chr2,length=999,assembly=gnomAD_GRCh38>\n"
+    raw = _header().replace(b"##contig=<", second + b"##contig=<", 1)
+    with pytest.raises(ValueError, match="contig identity"):
+        parse_header(
+            raw,
+            expected_contigs=(("chr1", 1_000_000), ("chr2", 2_000_000)),
+            source_chrom="chr1",
+            expected_samples=("s1", "s2"),
+        )
+
+
 def test_bgzf_member_is_bounded_and_integrity_checked():
     raw = _bgzf_member(b"hello")
     assert decode_bgzf_member(raw) == b"hello"

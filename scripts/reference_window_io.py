@@ -105,31 +105,38 @@ def validate_metadata_receipt(
     *,
     artifact_root: Path,
 ) -> None:
-    """Reparse retained metadata and prove its exact frozen public-object identity."""
+    """Replay verified metadata or prove a zero-exit mismatch refusal is truthful."""
     _require(
         type(source) is PublicObject
         and type(receipt) is MetadataReceipt
-        and receipt.state == "verified"
+        and receipt.state != "not_attempted"
         and receipt.retained is not None,
-        "metadata receipt is not verified",
+        "metadata receipt was not attempted",
     )
+    matches = False
+    raw = _validate_artifact(artifact_root, receipt.retained).read_bytes()
     try:
-        value = json.loads(
-            _validate_artifact(artifact_root, receipt.retained).read_bytes(),
-            object_pairs_hook=_unique_pairs,
+        value = json.loads(raw, object_pairs_hook=_unique_pairs)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError):
+        value = None
+    else:
+        expected = {
+            "generation": source.generation,
+            "size": str(source.size_bytes),
+            "md5Hash": source.md5_b64,
+            "crc32c": source.crc32c_b64,
+        }
+        matches = type(value) is dict and all(
+            value.get(key) == item for key, item in expected.items()
         )
-    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
-        raise ValueError("metadata_mismatch") from error
-    expected = {
-        "generation": source.generation,
-        "size": str(source.size_bytes),
-        "md5Hash": source.md5_b64,
-        "crc32c": source.crc32c_b64,
-    }
-    _require(
-        type(value) is dict and all(value.get(key) == item for key, item in expected.items()),
-        "metadata_mismatch",
-    )
+    if receipt.state == "verified":
+        _require(matches, "metadata_mismatch")
+    elif (
+        receipt.exit_code == 0
+        and not receipt.stdout_limit_exceeded
+        and not receipt.stderr_limit_exceeded
+    ):
+        _require(not matches, "metadata refusal is not reproduced")
 
 
 def fetch_metadata(

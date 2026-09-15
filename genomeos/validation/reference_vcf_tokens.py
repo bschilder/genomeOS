@@ -300,29 +300,43 @@ def parse_header(
         expected[chrom] = length
     _require(source_chrom in expected, "source chromosome is absent from expected contigs")
 
+    declared_contig_ids: list[str] = []
     declared_contigs: list[tuple[str, int, str]] = []
     declared_formats: list[tuple[str, str, str]] = []
     for line in lines[1:-1]:
         contig = _metadata_values(line, "##contig=<")
         if contig is not None:
-            _require(set(contig) >= {"ID", "length", "assembly"}, "incomplete contig declaration")
-            length_text = contig["length"]
-            _require(_POS.fullmatch(length_text) is not None, "invalid contig length")
-            declared_contigs.append((contig["ID"], int(length_text), contig["assembly"]))
+            _require("ID" in contig, "incomplete contig declaration")
+            chrom = _text(contig["ID"], "contig ID")
+            declared_contig_ids.append(chrom)
+            if chrom in expected:
+                _require(
+                    set(contig) >= {"length", "assembly"},
+                    "incomplete expected contig declaration",
+                )
+            if "length" in contig:
+                _require(_POS.fullmatch(contig["length"]) is not None, "invalid contig length")
+            if set(contig) >= {"length", "assembly"}:
+                declared_contigs.append((chrom, int(contig["length"]), contig["assembly"]))
             continue
         format_ = _metadata_values(line, "##FORMAT=<")
         if format_ is not None:
             _require(set(format_) >= {"ID", "Number", "Type"}, "incomplete FORMAT declaration")
             declared_formats.append((format_["ID"], format_["Number"], format_["Type"]))
 
-    contig_ids = tuple(chrom for chrom, _, _ in declared_contigs)
-    _require(len(contig_ids) == len(set(contig_ids)), "duplicate contig declaration")
+    _require(
+        len(declared_contig_ids) == len(set(declared_contig_ids)),
+        "duplicate contig declaration",
+    )
     format_ids = tuple(key for key, _, _ in declared_formats)
     _require(len(format_ids) == len(set(format_ids)), "duplicate FORMAT declaration")
     by_contig = {chrom: (length, assembly) for chrom, length, assembly in declared_contigs}
-    for chrom, length in expected.items():
-        _require(by_contig.get(chrom) == (length, "gnomAD_GRCh38"), "contig identity mismatch")
-    _require(source_chrom in by_contig, "source contig declaration is missing")
+    _require(source_chrom in declared_contig_ids, "source contig declaration is missing")
+    for chrom in set(declared_contig_ids) & set(expected):
+        _require(
+            by_contig.get(chrom) == (expected[chrom], "gnomAD_GRCh38"),
+            "contig identity mismatch",
+        )
     by_format = {key: (number, type_) for key, number, type_ in declared_formats}
     required = {
         "GT": ("1", "String"),

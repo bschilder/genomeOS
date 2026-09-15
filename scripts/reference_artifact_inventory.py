@@ -80,10 +80,77 @@ def _nested_inventory(manifest: object) -> dict[str, ArtifactRef]:
     return nested
 
 
+def _acquisition_role_paths(manifest: AcquisitionManifest) -> set[str]:
+    """Validate and return paths derived from acquisition roles, never manifest filenames."""
+    expected: set[str] = set()
+
+    def add(reference: ArtifactRef | None, path: str, role: str) -> None:
+        require(type(reference) is ArtifactRef, f"{role} is missing from the artifact roles")
+        assert reference is not None
+        require(reference.path == path, f"{role} differs from the fixed layout")
+        expected.add(path)
+
+    add(manifest.inputs.window_manifest, "inputs/window-manifest.json", "window manifest")
+    add(manifest.inputs.windows, "inputs/windows.tsv", "frozen windows")
+    add(manifest.inputs.preflight, "inputs/preflight.json", "preflight")
+    add(manifest.inputs.review, "inputs/review.json", "acquisition review")
+    for source in manifest.sources:
+        chrom = source.source.chrom
+        sparse = f"sources/{chrom}/INCOMPLETE.original.vcf.bgz"
+        add(source.retained_index, f"{sparse}.tbi", "retained index")
+        if source.metadata.state != "not_attempted":
+            suffix = ".partial" if source.metadata.state == "refused" else ""
+            add(
+                source.metadata.retained,
+                f"runtime/{chrom}.metadata.stdout{suffix}",
+                "metadata stdout",
+            )
+            add(
+                source.metadata.stderr,
+                f"runtime/{chrom}.metadata.stdout.stderr{suffix}",
+                "metadata stderr",
+            )
+        for receipt in source.ranges:
+            if receipt.state == "not_attempted":
+                continue
+            base = f"sources/{chrom}/ranges/{receipt.first}-{receipt.last}.bin"
+            suffix = "" if receipt.state == "verified" else ".partial"
+            add(receipt.retained, f"{base}{suffix}", "retained range")
+            add(receipt.stderr, f"{base}.stderr{suffix}", "range stderr")
+        if source.verified is not None:
+            require(source.verified.sparse_path == sparse, "sparse source differs from the fixed layout")
+            add(source.verified.index, f"{sparse}.tbi", "verified index")
+            for value in source.verified.ranges:
+                add(
+                    value.range_file,
+                    f"sources/{chrom}/ranges/{value.first}-{value.last}.bin",
+                    "verified range",
+                )
+        if source.header is not None:
+            add(source.header.header, f"sources/{chrom}/header.vcf", "source header")
+    for window in manifest.windows:
+        prefix = f"windows/{window.window_id}"
+        if window.raw is not None:
+            add(window.raw, f"{prefix}.original-records.tsv", "original records")
+        if window.offsets is not None:
+            add(window.offsets, f"{prefix}.record-offsets.tsv", "record offsets")
+        run_paths = (
+            (f"{prefix}.native.bcf", f"{prefix}.extract.stderr"),
+            (f"{prefix}.native.keys.tsv", f"{prefix}.keys.stderr"),
+        )
+        for run, (stdout, stderr) in zip(window.native_runs, run_paths, strict=False):
+            suffix = ".partial" if run.state == "refused" else ""
+            add(run.stdout, f"{stdout}{suffix}", "native stdout")
+            add(run.stderr, f"{stderr}{suffix}", "native stderr")
+    nested = _nested_inventory(manifest)
+    require(set(nested) == expected, "acquisition artifact roles differ from the fixed layout")
+    return expected
+
+
 def acquisition_inventory_paths(manifest: AcquisitionManifest) -> set[str]:
     """Return every canonical local path allowed in one acquisition inventory."""
     return {
-        *_nested_inventory(manifest),
+        *_acquisition_role_paths(manifest),
         *COHORT_PATHS.values(),
         "windows.tsv",
     }

@@ -47,8 +47,9 @@ variant × 80 populations. Hand-checked aggregate counts are:
 The native count and token artifacts carry the same variant and sample identities and
 pass the deep preparation validator. A forced short transfer for chr1 produces three
 refused chr1 windows and 63 explicit no-record windows; the acquisition is incomplete
-and preparation creates no output. A separate begun-preparation parse failure writes
-a terminal 66-window refusal manifest with both stages marked not attempted. Missing
+and preparation creates no output. A reproducible invalid original-QC token marks the
+affected window and both stages refused. An injected parse failure that cannot be
+reproduced by final validation causes the final manifest to be rolled back. Missing
 review, changed reviewed source hash, synthetic public-evidence cohorts and an existing
 destination all refuse before external work.
 
@@ -56,15 +57,16 @@ destination all refuse before external work.
 
 The current software state passed:
 
-- 231 focused acquisition/preparation tests, zero skips, including the live native
+- 246 focused acquisition/preparation tests, zero skips, including the live native
   full-versus-sparse/count/normalization fixture.
-- 3,086 full-repository tests with 30 optional-tool skips and no failures, out of
-  3,116 collected tests.
+- 3,101 full-repository tests with 30 optional-tool skips and no failures, out of
+  3,131 collected tests.
 - The 40-check smoke suite, Ruff, frozen-contract, module-size and private-file gates.
 
-An independent controller review found no material Task 6 issue after checking runtime
-evidence, causal refusal replay, exact inventories, native identity joins, ordering,
-refusal ledgers and post-publication rollback. No network or real acquisition was run.
+The initial whole-branch review of revision `8dc9b02` found five material issues in
+refusal replay, role-derived paths, header scope, SQLite error reporting and this note.
+This revision repairs those findings and requires a new exact-head independent review
+before real retrieval. No network or real acquisition was run.
 
 ## Remaining controller phase
 

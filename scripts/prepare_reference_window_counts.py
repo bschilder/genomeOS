@@ -792,7 +792,7 @@ def main(argv: list[str] | None = None) -> int:
         return int(error.code)
     try:
         result = prepare(args)
-    except (OSError, ValueError):
+    except (OSError, sqlite3.Error, ValueError):
         print("error:invalid_input", file=sys.stderr)
         return 2
     return 0 if result.complete else 1
