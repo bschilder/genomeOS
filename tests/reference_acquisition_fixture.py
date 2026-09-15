@@ -96,7 +96,7 @@ def _object(chrom: str, suffix: str, generation: str, raw: bytes | None) -> Publ
     )
 
 
-def synthetic_preflight_case() -> tuple[
+def synthetic_preflight_case(*, source_size_bytes: int = 2_097_152) -> tuple[
     WindowManifest, bytes, bytes, tuple[RetainedIndex, ...], ReviewReceipt
 ]:
     """Build a strict 22-source, 66-window preflight without network or native tools."""
@@ -145,10 +145,18 @@ def synthetic_preflight_case() -> tuple[
         source_audit_locator="synthetic-audit.md",
     )
     raw_indexes = tuple(_tbi(chrom) for chrom in AUTOSOMES)
+    if source_size_bytes < 1:
+        raise ValueError("source_size_bytes must be positive")
+    source_payloads = tuple(
+        None
+        if source_size_bytes == 2_097_152
+        else (f"synthetic-{chrom}\n".encode().ljust(source_size_bytes, b"x"))
+        for chrom in AUTOSOMES
+    )
     sources = tuple(
         SourcePair(
             chrom,
-            _object(chrom, "", str(10_000 + index), None),
+            _object(chrom, "", str(10_000 + index), source_payloads[index]),
             _object(chrom, ".tbi", str(20_000 + index), raw_indexes[index]),
         )
         for index, chrom in enumerate(AUTOSOMES)
