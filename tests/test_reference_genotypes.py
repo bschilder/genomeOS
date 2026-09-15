@@ -12,7 +12,9 @@ from genomeos.validation.reference_genotypes import (
     QcTally,
     assess_call,
     check_native_interpretation,
+    count_cohort_pair_with_native,
     count_variant,
+    plan_cohort_pair,
 )
 from genomeos.validation.reference_vcf_tokens import SourceRecord
 
@@ -161,6 +163,62 @@ def test_native_comparison_is_semantic_and_lazy():
             large,
             columns,
             NativeVariantTokens("GRCh38:chr1:101:A:G", ("s1",), ("0/1:.:10:2,8",)),
+        )
+
+
+def test_paired_counting_matches_two_independent_cohort_calls():
+    record = _record()
+    technical = (
+        CohortColumn("s1", 0, "p1", "r"),
+        CohortColumn("s2", 1, "p1", "r"),
+        CohortColumn("s3", 2, "p2", "r"),
+        CohortColumn("s4", 3, "p2", "r"),
+    )
+    paper = (technical[0], technical[3])
+    technical_native = NativeVariantTokens(
+        "GRCh38:chr1:101:A:G",
+        tuple(reversed(record.sample_ids)),
+        tuple(reversed(record.sample_tokens)),
+    )
+    paper_native = NativeVariantTokens(
+        "GRCh38:chr1:101:A:G",
+        ("s4", "s1"),
+        (record.sample_tokens[3], record.sample_tokens[0]),
+    )
+
+    paired = count_cohort_pair_with_native(
+        record,
+        plan_cohort_pair(record.sample_ids, technical, paper),
+        technical_native,
+        paper_native,
+    )
+
+    assert paired == (count_variant(record, technical), count_variant(record, paper))
+    check_native_interpretation(record, technical, technical_native)
+    check_native_interpretation(record, paper, paper_native)
+
+    malformed = replace(
+        technical_native,
+        tokens=("0/0:bad:10:.", *technical_native.tokens[1:]),
+    )
+    with pytest.raises(ValueError, match="native_encoding_refused"):
+        count_cohort_pair_with_native(
+            record,
+            plan_cohort_pair(record.sample_ids, technical, paper),
+            malformed,
+            paper_native,
+        )
+
+    disagreement = replace(
+        technical_native,
+        tokens=("0/1:20:10:2,8", *technical_native.tokens[1:]),
+    )
+    with pytest.raises(ValueError, match="native_mismatch"):
+        count_cohort_pair_with_native(
+            record,
+            plan_cohort_pair(record.sample_ids, technical, paper),
+            disagreement,
+            paper_native,
         )
 
 

@@ -8,7 +8,12 @@ from dataclasses import dataclass
 from typing import Literal
 
 from genomeos.validation.reference_cohorts import CohortColumn
-from genomeos.validation.reference_vcf_tokens import CallTokens, SourceRecord, project_call
+from genomeos.validation.reference_vcf_tokens import (
+    CallTokens,
+    SourceRecord,
+    compile_call_projection,
+    project_compiled_call,
+)
 
 Disposition = Literal[
     "accepted",
@@ -47,6 +52,7 @@ _MISSING_DISPOSITION = {
     "dp": "missing_dp",
     "ad": "missing_het_ad",
 }
+_NATIVE_PROJECTION = compile_call_projection(("GT", "GQ", "DP", "AD"))
 
 
 def _require(condition: bool, message: str) -> None:
@@ -186,6 +192,51 @@ class _PopulationAccumulator:
 
 
 @dataclass(frozen=True)
+class CohortPairPlan:
+    """One source-ordered technical cohort with its paper-stage membership mask."""
+
+    sample_ids: tuple[str, ...]
+    technical: tuple[CohortColumn, ...]
+    paper: tuple[CohortColumn, ...]
+    paper_members: tuple[bool, ...]
+
+    def __post_init__(self) -> None:
+        _validate_columns_for_samples(self.sample_ids, self.technical)
+        _validate_columns_for_samples(self.sample_ids, self.paper)
+        _require(
+            type(self.paper_members) is tuple
+            and len(self.paper_members) == len(self.technical)
+            and all(type(value) is bool for value in self.paper_members),
+            "invalid paper cohort membership mask",
+        )
+        selected = tuple(
+            column for column, included in zip(self.technical, self.paper_members, strict=True)
+            if included
+        )
+        _require(selected == self.paper, "paper cohort is not a source-ordered technical subset")
+        _require(
+            {(value.population, value.region) for value in self.technical}
+            == {(value.population, value.region) for value in self.paper},
+            "paired cohorts must retain the same population identities",
+        )
+
+
+def plan_cohort_pair(
+    sample_ids: tuple[str, ...],
+    technical: tuple[CohortColumn, ...],
+    paper: tuple[CohortColumn, ...],
+) -> CohortPairPlan:
+    """Validate cohort/source identity once and compile paper membership for all variants."""
+    paper_ids = {column.sample_id for column in paper}
+    return CohortPairPlan(
+        sample_ids,
+        technical,
+        paper,
+        tuple(column.sample_id in paper_ids for column in technical),
+    )
+
+
+@dataclass(frozen=True)
 class QcTally:
     dispositions: tuple[tuple[str, int], ...]
     inspection_totals: tuple[tuple[str, int], ...]
@@ -297,7 +348,10 @@ def assess_call(gt: str, gq: str, dp: str, ad: str) -> CallAssessment:
     return CallAssessment(dosage, "accepted", tuple(inspected))
 
 
-def _validate_columns(record: SourceRecord, columns: tuple[CohortColumn, ...]) -> None:
+def _validate_columns_for_samples(
+    sample_ids: tuple[str, ...], columns: tuple[CohortColumn, ...]
+) -> None:
+    _require(type(sample_ids) is tuple, "source sample IDs must be a tuple")
     _require(type(columns) is tuple, "cohort columns must be a tuple")
     _require(all(type(column) is CohortColumn for column in columns), "invalid cohort column")
     ids: set[str] = set()
@@ -306,9 +360,9 @@ def _validate_columns(record: SourceRecord, columns: tuple[CohortColumn, ...]) -
     for column in columns:
         _require(column.sample_id not in ids and column.sample_index not in indices,
                  "duplicate cohort column identity")
-        _require(column.sample_index < len(record.sample_ids), "cohort source index is out of bounds")
+        _require(column.sample_index < len(sample_ids), "cohort source index is out of bounds")
         _require(
-            record.sample_ids[column.sample_index] == column.sample_id,
+            sample_ids[column.sample_index] == column.sample_id,
             "cohort/source identity mismatch",
         )
         previous = regions.setdefault(column.population, column.region)
@@ -317,12 +371,15 @@ def _validate_columns(record: SourceRecord, columns: tuple[CohortColumn, ...]) -
         indices.add(column.sample_index)
 
 
+def _validate_columns(record: SourceRecord, columns: tuple[CohortColumn, ...]) -> None:
+    _validate_columns_for_samples(record.sample_ids, columns)
+
+
 def _variant_id(record: SourceRecord) -> str:
     return f"GRCh38:{record.chrom}:{record.pos1}:{record.ref}:{record.alt}"
 
 
-def count_variant(record: SourceRecord, columns: tuple[CohortColumn, ...]) -> VariantCounts:
-    """Count called and quality alleles by exact source identity in one pass."""
+def _require_retained(record: SourceRecord) -> None:
     _require(type(record) is SourceRecord, "record must be SourceRecord")
     _require(
         record.filter == "PASS"
@@ -332,38 +389,46 @@ def count_variant(record: SourceRecord, columns: tuple[CohortColumn, ...]) -> Va
         and record.alt in "ACGT",
         "record is not a retained A/C/G/T SNP",
     )
-    _validate_columns(record, columns)
-    aggregates: dict[str, _PopulationAccumulator] = {}
-    dispositions: Counter[str] = Counter()
-    inspections: Counter[str] = Counter()
-    missing: Counter[tuple[str, str]] = Counter()
-    for column in columns:
-        values = aggregates.setdefault(column.population, _PopulationAccumulator(column.region))
-        values.sample_count += 1
-        call = project_call(record.format_keys, record.sample_tokens[column.sample_index])
-        assessment = assess_call(call.gt, call.gq, call.dp, call.ad)
-        dispositions[assessment.disposition] += 1
-        inspections.update(assessment.inspected_fields)
-        if assessment.dosage is not None:
-            values.called_ac += assessment.dosage
-            values.called_an += 2
-        if assessment.disposition == "accepted":
-            _require(assessment.dosage is not None, "accepted call lacks dosage")
-            values.quality_ac += assessment.dosage
-            values.quality_an += 2
-        missing_field = next(
-            (
-                field
-                for field, disposition in _MISSING_DISPOSITION.items()
-                if disposition == assessment.disposition
-            ),
-            None,
-        )
-        if missing_field is not None:
-            origin = dict(call.presence)[missing_field]
-            _require(origin != "present", "missing disposition lacks explicit origin")
-            missing[(missing_field, origin)] += 1
 
+
+def _accumulate(
+    column: CohortColumn,
+    call: CallTokens,
+    assessment: CallAssessment,
+    aggregates: dict[str, _PopulationAccumulator],
+    dispositions: Counter[str],
+    inspections: Counter[str],
+    missing: Counter[tuple[str, str]],
+) -> None:
+    values = aggregates.setdefault(column.population, _PopulationAccumulator(column.region))
+    values.sample_count += 1
+    dispositions[assessment.disposition] += 1
+    inspections.update(assessment.inspected_fields)
+    if assessment.dosage is not None:
+        values.called_ac += assessment.dosage
+        values.called_an += 2
+    if assessment.disposition == "accepted":
+        _require(assessment.dosage is not None, "accepted call lacks dosage")
+        values.quality_ac += assessment.dosage
+        values.quality_an += 2
+    missing_field = next(
+        (field for field, disposition in _MISSING_DISPOSITION.items()
+         if disposition == assessment.disposition),
+        None,
+    )
+    if missing_field is not None:
+        origin = dict(call.presence)[missing_field]
+        _require(origin != "present", "missing disposition lacks explicit origin")
+        missing[(missing_field, origin)] += 1
+
+
+def _variant_counts(
+    variant_id: str,
+    aggregates: dict[str, _PopulationAccumulator],
+    dispositions: Counter[str],
+    inspections: Counter[str],
+    missing: Counter[tuple[str, str]],
+) -> VariantCounts:
     populations = tuple(
         PopulationCount(
             population,
@@ -379,9 +444,26 @@ def count_variant(record: SourceRecord, columns: tuple[CohortColumn, ...]) -> Va
     qc = QcTally(
         tuple(sorted((key, value) for key, value in dispositions.items() if value)),
         tuple(sorted((key, value) for key, value in inspections.items() if value)),
-        tuple(MissingOriginCount(field, origin, count) for (field, origin), count in sorted(missing.items())),
+        tuple(MissingOriginCount(field, origin, count)
+              for (field, origin), count in sorted(missing.items())),
     )
-    return VariantCounts(_variant_id(record), populations, qc)
+    return VariantCounts(variant_id, populations, qc)
+
+
+def count_variant(record: SourceRecord, columns: tuple[CohortColumn, ...]) -> VariantCounts:
+    """Count called and quality alleles by exact source identity in one pass."""
+    _require_retained(record)
+    _validate_columns(record, columns)
+    aggregates: dict[str, _PopulationAccumulator] = {}
+    dispositions: Counter[str] = Counter()
+    inspections: Counter[str] = Counter()
+    missing: Counter[tuple[str, str]] = Counter()
+    projection = compile_call_projection(record.format_keys)
+    for column in columns:
+        call = project_compiled_call(projection, record.sample_tokens[column.sample_index])
+        assessment = assess_call(call.gt, call.gq, call.dp, call.ad)
+        _accumulate(column, call, assessment, aggregates, dispositions, inspections, missing)
+    return _variant_counts(_variant_id(record), aggregates, dispositions, inspections, missing)
 
 
 def _native_value(field: str, call: CallTokens) -> object:
@@ -400,6 +482,34 @@ def _native_value(field: str, call: CallTokens) -> object:
     return _natural(alleles[index], field)
 
 
+def _compare_native_call(
+    original: CallTokens,
+    assessment: CallAssessment,
+    normalized_token: str,
+) -> None:
+    try:
+        normalized = project_compiled_call(_NATIVE_PROJECTION, normalized_token)
+    except ValueError as error:
+        raise ValueError("native_encoding_refused") from error
+    for field in assessment.inspected_fields:
+        try:
+            normalized_value = _native_value(field, normalized)
+        except ValueError as error:
+            raise ValueError("native_encoding_refused") from error
+        _require(_native_value(field, original) == normalized_value, "native_mismatch")
+
+
+def _native_tokens_by_id(
+    native: NativeVariantTokens,
+    variant_id: str,
+    columns: tuple[CohortColumn, ...],
+) -> dict[str, str]:
+    _require(native.variant_id == variant_id, "native variant identity mismatch")
+    expected_ids = {column.sample_id for column in columns}
+    _require(set(native.sample_ids) == expected_ids, "native sample identity mismatch")
+    return dict(zip(native.sample_ids, native.tokens, strict=True))
+
+
 def check_native_interpretation(
     record: SourceRecord,
     columns: tuple[CohortColumn, ...],
@@ -411,16 +521,50 @@ def check_native_interpretation(
         "invalid native comparison",
     )
     _validate_columns(record, columns)
-    _require(native.variant_id == _variant_id(record), "native variant identity mismatch")
-    expected_ids = {column.sample_id for column in columns}
-    _require(set(native.sample_ids) == expected_ids, "native sample identity mismatch")
-    native_by_id = dict(zip(native.sample_ids, native.tokens, strict=True))
+    native_by_id = _native_tokens_by_id(native, _variant_id(record), columns)
+    projection = compile_call_projection(record.format_keys)
     for column in columns:
-        original = project_call(record.format_keys, record.sample_tokens[column.sample_index])
+        original = project_compiled_call(projection, record.sample_tokens[column.sample_index])
         assessment = assess_call(original.gt, original.gq, original.dp, original.ad)
-        normalized = project_call(("GT", "GQ", "DP", "AD"), native_by_id[column.sample_id])
-        for field in assessment.inspected_fields:
-            _require(
-                _native_value(field, original) == _native_value(field, normalized),
-                "native token interpretation mismatch",
+        _compare_native_call(original, assessment, native_by_id[column.sample_id])
+
+
+def count_cohort_pair_with_native(
+    record: SourceRecord,
+    plan: CohortPairPlan,
+    technical_native: NativeVariantTokens,
+    paper_native: NativeVariantTokens,
+) -> tuple[VariantCounts, VariantCounts]:
+    """Count both nested cohorts and verify both native token streams in one source pass."""
+    _require_retained(record)
+    _require(type(plan) is CohortPairPlan, "plan must be CohortPairPlan")
+    _require(record.sample_ids == plan.sample_ids, "record sample order differs from cohort plan")
+    variant_id = _variant_id(record)
+    native = (
+        _native_tokens_by_id(technical_native, variant_id, plan.technical),
+        _native_tokens_by_id(paper_native, variant_id, plan.paper),
+    )
+    aggregates = ({}, {})
+    dispositions = (Counter(), Counter())
+    inspections = (Counter(), Counter())
+    missing = (Counter(), Counter())
+    projection = compile_call_projection(record.format_keys)
+    for column, paper_member in zip(plan.technical, plan.paper_members, strict=True):
+        original = project_compiled_call(projection, record.sample_tokens[column.sample_index])
+        assessment = assess_call(original.gt, original.gq, original.dp, original.ad)
+        _accumulate(
+            column, original, assessment,
+            aggregates[0], dispositions[0], inspections[0], missing[0],
+        )
+        _compare_native_call(original, assessment, native[0][column.sample_id])
+        if paper_member:
+            _accumulate(
+                column, original, assessment,
+                aggregates[1], dispositions[1], inspections[1], missing[1],
             )
+            _compare_native_call(original, assessment, native[1][column.sample_id])
+    return tuple(
+        _variant_counts(variant_id, aggregates[index], dispositions[index],
+                        inspections[index], missing[index])
+        for index in range(2)
+    )

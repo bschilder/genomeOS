@@ -126,7 +126,16 @@ class SourceRecord:
         _validate_format_keys(self.format_keys)
         sample_ids = _tuple_of_text(self.sample_ids, "record sample ID")
         _require(len(sample_ids) == len(set(sample_ids)), "record sample IDs must be unique")
-        sample_tokens = _tuple_of_text(self.sample_tokens, "sample token")
+        _require(
+            type(self.sample_tokens) is tuple
+            and all(
+                isinstance(token, str)
+                and not any(character in token for character in "\t\n\r\0")
+                for token in self.sample_tokens
+            ),
+            "invalid sample token storage",
+        )
+        sample_tokens = self.sample_tokens
         _require(len(sample_ids) == len(sample_tokens), "sample ID/token length mismatch")
         _require(
             type(self.source_virtual_offset) is int and self.source_virtual_offset >= 0,
@@ -152,6 +161,56 @@ class CallTokens:
             "call presence fields are invalid",
         )
         _require(all(origin in _PRESENCE for _, origin in self.presence), "invalid call presence origin")
+
+
+@dataclass(frozen=True)
+class CallProjection:
+    """Validated FORMAT-column positions reusable across every sample in one record."""
+
+    format_keys: tuple[str, ...]
+    positions: tuple[int | None, int | None, int | None, int | None]
+
+    def __post_init__(self) -> None:
+        _validate_format_keys(self.format_keys)
+        _require(type(self.positions) is tuple and len(self.positions) == len(_CALL_FIELDS),
+                 "invalid call projection")
+        _require(
+            all(value is None or (type(value) is int and 0 <= value < len(self.format_keys))
+                for value in self.positions),
+            "invalid call projection position",
+        )
+
+
+def compile_call_projection(format_keys: tuple[str, ...]) -> CallProjection:
+    """Validate one FORMAT layout and compile its four QC-field positions."""
+    _require(type(format_keys) is tuple, "FORMAT keys must be a tuple")
+    _validate_format_keys(format_keys)
+    positions = {key: index for index, key in enumerate(format_keys)}
+    return CallProjection(format_keys, tuple(positions.get(field.upper()) for field in _CALL_FIELDS))
+
+
+def project_compiled_call(projection: CallProjection, sample_token: str) -> CallTokens:
+    """Project one sample token through an already validated record FORMAT layout."""
+    _require(type(projection) is CallProjection, "projection must be CallProjection")
+    token = _text(sample_token, "sample token")
+    values = token.split(":")
+    _require(all(values), "empty interior sample subfield")
+    _require(len(values) <= len(projection.format_keys), "extra sample subfield")
+    projected: list[str] = []
+    evidence: list[tuple[str, Presence]] = []
+    for field, index in zip(_CALL_FIELDS, projection.positions, strict=True):
+        if index is None:
+            value = "."
+            origin: Presence = "absent_record_format"
+        elif index >= len(values):
+            value = "."
+            origin = "omitted_trailing"
+        else:
+            value = values[index]
+            origin = "literal_dot" if _missing_lexeme(field, value) else "present"
+        projected.append(value)
+        evidence.append((field, origin))
+    return CallTokens(*projected, tuple(evidence))
 
 
 def decode_bgzf_member(raw: bytes) -> bytes:
@@ -292,30 +351,7 @@ def parse_header(
 
 def project_call(format_keys: tuple[str, ...], sample_token: str) -> CallTokens:
     """Project named QC fields while retaining VCF-defined missingness provenance."""
-    _require(type(format_keys) is tuple, "FORMAT keys must be a tuple")
-    _validate_format_keys(format_keys)
-    token = _text(sample_token, "sample token")
-    values = token.split(":")
-    _require(all(values), "empty interior sample subfield")
-    _require(len(values) <= len(format_keys), "extra sample subfield")
-    positions = {key: index for index, key in enumerate(format_keys)}
-    projected: dict[str, str] = {}
-    evidence: list[tuple[str, Presence]] = []
-    for field in _CALL_FIELDS:
-        key = field.upper()
-        index = positions.get(key)
-        if index is None:
-            value = "."
-            origin: Presence = "absent_record_format"
-        elif index >= len(values):
-            value = "."
-            origin = "omitted_trailing"
-        else:
-            value = values[index]
-            origin = "literal_dot" if _missing_lexeme(field, value) else "present"
-        projected[field] = value
-        evidence.append((field, origin))
-    return CallTokens(projected["gt"], projected["gq"], projected["dp"], projected["ad"], tuple(evidence))
+    return project_compiled_call(compile_call_projection(format_keys), sample_token)
 
 
 def parse_record(raw: bytes, *, source_virtual_offset: int, header: HeaderEvidence) -> SourceRecord:
@@ -341,8 +377,6 @@ def parse_record(raw: bytes, *, source_virtual_offset: int, header: HeaderEviden
     format_keys = tuple(format_text.split(":"))
     _validate_format_keys(format_keys)
     sample_tokens = tuple(fields[9:])
-    for sample_token in sample_tokens:
-        project_call(format_keys, sample_token)
     return SourceRecord(
         chrom,
         int(pos_text),

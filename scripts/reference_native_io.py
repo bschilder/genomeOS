@@ -18,6 +18,8 @@ from genomeos.validation.reference_genotypes import NativeVariantTokens
 from genomeos.validation.reference_window_types import ReferenceWindow
 from scripts.reference_io_common import (
     _existing,
+    _partial_process_paths,
+    _promote_process_outputs,
     _require,
     _run_process,
     _validate_artifact,
@@ -33,6 +35,24 @@ RECORD_LIMIT_BYTES = 16_777_216
 _NATURAL = re.compile(r"[0-9]+\Z")
 
 
+def _native_natural(value: str) -> int:
+    """Parse one native decimal under the closed encoding refusal taxonomy."""
+    _require(_NATURAL.fullmatch(value) is not None, "native_encoding_refused")
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError("native_encoding_refused") from error
+
+
+def _is_retained_snp(ref: str, alt: str) -> bool:
+    return (
+        len(ref) == len(alt) == 1
+        and ref in "ACGT"
+        and alt in "ACGT"
+        and ref != alt
+    )
+
+
 def _native_receipt(
     operation: str,
     argv: list[str],
@@ -43,11 +63,14 @@ def _native_receipt(
     stderr_path: str,
     stdout_limit: int,
 ) -> NativeRunReceipt:
+    stdout_partial, stderr_partial = _partial_process_paths(
+        artifact_root, stdout_path, stderr_path
+    )
     result = _run_process(
         argv,
         artifact_root=artifact_root,
-        stdout_path=stdout_path,
-        stderr_path=stderr_path,
+        stdout_path=stdout_partial,
+        stderr_path=stderr_partial,
         stdout_limit=stdout_limit,
         stderr_limit=STDERR_LIMIT_BYTES,
         timeout=NATIVE_TIMEOUT_SECONDS,
@@ -61,14 +84,19 @@ def _native_receipt(
     else:
         reason = None
     state = "complete" if reason is None else "refused"
+    stdout, stderr = result.stdout, result.stderr
+    if reason is None:
+        stdout, stderr = _promote_process_outputs(
+            artifact_root, result.stdout, result.stderr
+        )
     return NativeRunReceipt(
         operation,
         argv_template,
         state,
         reason,
         result.exit_code,
-        result.stdout,
-        result.stderr,
+        stdout,
+        stderr,
         stdout_limit,
         STDERR_LIMIT_BYTES,
         result.stdout_limit_exceeded,
@@ -112,6 +140,29 @@ def extract_native(
     return _native_receipt(
         "extract_bcf",
         [str(bcftools), *template[1:-1], str(sparse)],
+        template,
+        artifact_root=artifact_root,
+        stdout_path=stdout_path,
+        stderr_path=stderr_path,
+        stdout_limit=NATIVE_STDOUT_LIMIT_BYTES,
+    )
+
+
+def query_native_keys(
+    bcf: ArtifactRef,
+    *,
+    artifact_root: Path,
+    bcftools: Path,
+    stdout_path: str,
+    stderr_path: str,
+) -> NativeRunReceipt:
+    """Query exact variant/FILTER keys from one retained native BCF."""
+    input_path = _validate_artifact(artifact_root, bcf)
+    format_ = r"%CHROM\t%POS\t%REF\t%ALT\t%FILTER\n"
+    template = ("bcftools", "query", "-f", format_, bcf.path)
+    return _native_receipt(
+        "query_keys",
+        [str(bcftools), "query", "-f", format_, str(input_path)],
         template,
         artifact_root=artifact_root,
         stdout_path=stdout_path,
@@ -178,14 +229,14 @@ def query_native_tokens(
 
 
 def _text_lines(path: Path, *, limit: int) -> tuple[str, ...]:
-    _require(path.stat().st_size <= limit, "text artifact limit exceeded")
+    _require(path.stat().st_size <= limit, "native_encoding_refused")
     raw = path.read_bytes()
-    _require(not raw or raw.endswith(b"\n"), "text artifact lacks terminal LF")
-    _require(b"\r" not in raw and b"\0" not in raw, "text artifact has invalid bytes")
+    _require(not raw or raw.endswith(b"\n"), "native_encoding_refused")
+    _require(b"\r" not in raw and b"\0" not in raw, "native_encoding_refused")
     try:
         return tuple(raw.decode("ascii").splitlines())
     except UnicodeDecodeError as error:
-        raise ValueError("native text artifact must be ASCII") from error
+        raise ValueError("native_encoding_refused") from error
 
 
 def iter_native_tokens(query: NativeTokenFiles, *, artifact_root: Path) -> Iterator[NativeVariantTokens]:
@@ -197,22 +248,25 @@ def iter_native_tokens(query: NativeTokenFiles, *, artifact_root: Path) -> Itera
     samples_path = _validate_artifact(artifact_root, query.samples)
     tokens_path = _validate_artifact(artifact_root, query.tokens)
     samples = _text_lines(samples_path, limit=NATIVE_SAMPLE_STDOUT_LIMIT_BYTES)
-    _require(
-        bool(samples) and len(samples) == len(set(samples)) and all(samples), "invalid native sample IDs"
-    )
+    _require(bool(samples) and len(samples) == len(set(samples)) and all(samples),
+             "native_encoding_refused")
     seen: set[str] = set()
     with tokens_path.open("rb") as handle:
-        for raw in handle:
-            _require(len(raw) <= RECORD_LIMIT_BYTES and raw.endswith(b"\n"), "invalid native token line")
+        while raw := handle.readline(RECORD_LIMIT_BYTES + 1):
+            _require(len(raw) <= RECORD_LIMIT_BYTES and raw.endswith(b"\n"),
+                     "native_encoding_refused")
             try:
                 fields = raw[:-1].decode("ascii").split("\t")
             except UnicodeDecodeError as error:
-                raise ValueError("native token line must be ASCII") from error
-            _require(len(fields) == 4 + len(samples), "native token column count mismatch")
+                raise ValueError("native_encoding_refused") from error
+            _require(len(fields) == 4 + len(samples), "native_encoding_refused")
             chrom, pos, ref, alt = fields[:4]
-            _require(_NATURAL.fullmatch(pos) is not None and int(pos) > 0, "invalid native position")
-            variant_id = f"GRCh38:{chrom}:{int(pos)}:{ref}:{alt}"
-            _require(variant_id not in seen, "duplicate native variant identity")
+            position = _native_natural(pos)
+            _require(position > 0, "native_encoding_refused")
+            if not _is_retained_snp(ref, alt):
+                continue
+            variant_id = f"GRCh38:{chrom}:{position}:{ref}:{alt}"
+            _require(variant_id not in seen, "native_encoding_refused")
             seen.add(variant_id)
             yield NativeVariantTokens(variant_id, samples, tuple(fields[4:]))
 
@@ -239,6 +293,7 @@ def native_called_totals(
 ) -> NativeCountFiles:
     """Recompute called cohort AC/AN using bounded local native commands."""
     input_path = _validate_artifact(acquisition_root, bcf)
+    external_bcf = ArtifactRef(f"@acquisition/{bcf.path}", bcf.size_bytes, bcf.sha256)
     requested_path = _validate_artifact(artifact_root, cohort_samples)
     runs: list[NativeRunReceipt] = []
     files: list[ArtifactRef] = []
@@ -295,8 +350,13 @@ def native_called_totals(
         select_template,
         NATIVE_STDOUT_LIMIT_BYTES,
     ):
-        return _refused_counts(bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files)
-    selected_path = _validate_artifact(artifact_root, files[0])
+        return _refused_counts(
+            external_bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files
+        )
+    try:
+        selected_path = _validate_artifact(artifact_root, files[0])
+    except ValueError:
+        return _refused_counts(external_bcf, cohort_samples, runs, "artifact_mismatch", files)
     fill_template = (
         "bcftools",
         "+fill-tags",
@@ -314,8 +374,13 @@ def native_called_totals(
         fill_template,
         NATIVE_STDOUT_LIMIT_BYTES,
     ):
-        return _refused_counts(bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files)
-    recomputed_path = _validate_artifact(artifact_root, files[1])
+        return _refused_counts(
+            external_bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files
+        )
+    try:
+        recomputed_path = _validate_artifact(artifact_root, files[1])
+    except ValueError:
+        return _refused_counts(external_bcf, cohort_samples, runs, "artifact_mismatch", files)
     samples_template = ("bcftools", "query", "-l", f"{output_prefix}.recomputed.bcf")
     if not run(
         "query_samples",
@@ -324,13 +389,26 @@ def native_called_totals(
         samples_template,
         NATIVE_SAMPLE_STDOUT_LIMIT_BYTES,
     ):
-        return _refused_counts(bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files)
-    requested = _text_lines(requested_path, limit=NATIVE_SAMPLE_STDOUT_LIMIT_BYTES)
-    selected_ids = _text_lines(
-        _validate_artifact(artifact_root, files[2]), limit=NATIVE_SAMPLE_STDOUT_LIMIT_BYTES
-    )
-    if not requested or len(requested) != len(set(requested)) or set(requested) != set(selected_ids):
-        return _refused_counts(bcf, cohort_samples, runs, "native_mismatch", files)
+        return _refused_counts(
+            external_bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files
+        )
+    try:
+        requested = _text_lines(requested_path, limit=NATIVE_SAMPLE_STDOUT_LIMIT_BYTES)
+        selected_ids = _text_lines(
+            _validate_artifact(artifact_root, files[2]), limit=NATIVE_SAMPLE_STDOUT_LIMIT_BYTES
+        )
+    except ValueError:
+        return _refused_counts(
+            external_bcf, cohort_samples, runs, "native_encoding_refused", files
+        )
+    if (
+        not requested
+        or len(requested) != len(set(requested))
+        or len(selected_ids) != len(set(selected_ids))
+        or len(requested) != len(selected_ids)
+        or set(requested) != set(selected_ids)
+    ):
+        return _refused_counts(external_bcf, cohort_samples, runs, "native_mismatch", files)
     totals_format = r"%CHROM\t%POS\t%REF\t%ALT\t%INFO/AC\t%INFO/AN\n"
     totals_template = (
         "bcftools",
@@ -346,8 +424,10 @@ def native_called_totals(
         totals_template,
         NATIVE_STDOUT_LIMIT_BYTES,
     ):
-        return _refused_counts(bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files)
-    return NativeCountFiles(bcf, cohort_samples, *files, tuple(runs), "complete", None)
+        return _refused_counts(
+            external_bcf, cohort_samples, runs, runs[-1].reason or "native_encoding_refused", files
+        )
+    return NativeCountFiles(external_bcf, cohort_samples, *files, tuple(runs), "complete", None)
 
 
 def read_native_totals(
@@ -356,32 +436,41 @@ def read_native_totals(
     artifact_root: Path,
 ) -> tuple[tuple[str, int, int], ...]:
     """Parse exact native AC/AN totals, refusing native missing values."""
+    return tuple(iter_native_totals(control, artifact_root=artifact_root))
+
+
+def iter_native_totals(
+    control: NativeCountFiles,
+    *,
+    artifact_root: Path,
+) -> Iterator[tuple[str, int, int]]:
+    """Stream exact native AC/AN totals, refusing missing or duplicate values."""
     _require(
         type(control) is NativeCountFiles and control.state == "complete",
         "native count control is incomplete",
     )
     assert control.totals is not None
     path = _validate_artifact(artifact_root, control.totals)
-    result: list[tuple[str, int, int]] = []
     seen: set[str] = set()
     with path.open("rb") as handle:
         while raw := handle.readline(RECORD_LIMIT_BYTES + 1):
-            _require(raw.endswith(b"\n") and len(raw) <= RECORD_LIMIT_BYTES, "invalid native totals line")
-            _require(b"\r" not in raw and b"\0" not in raw, "native totals line has invalid bytes")
+            _require(raw.endswith(b"\n") and len(raw) <= RECORD_LIMIT_BYTES,
+                     "native_encoding_refused")
+            _require(b"\r" not in raw and b"\0" not in raw, "native_encoding_refused")
             try:
                 fields = raw[:-1].decode("ascii").split("\t")
             except UnicodeDecodeError as error:
-                raise ValueError("native totals line must be ASCII") from error
-            _require(len(fields) == 6, "native totals column count mismatch")
+                raise ValueError("native_encoding_refused") from error
+            _require(len(fields) == 6, "native_encoding_refused")
             chrom, pos, ref, alt, ac, an = fields
+            position = _native_natural(pos)
+            _require(position > 0, "native_encoding_refused")
+            if not _is_retained_snp(ref, alt):
+                continue
             if ac == "." or an == ".":
                 raise ValueError("native_count_unavailable")
-            _require(
-                all(_NATURAL.fullmatch(value) is not None for value in (pos, ac, an)),
-                "invalid native total",
-            )
-            variant_id = f"GRCh38:{chrom}:{int(pos)}:{ref}:{alt}"
-            _require(variant_id not in seen, "duplicate native total variant")
+            ac_value, an_value = _native_natural(ac), _native_natural(an)
+            variant_id = f"GRCh38:{chrom}:{position}:{ref}:{alt}"
+            _require(variant_id not in seen, "native_encoding_refused")
             seen.add(variant_id)
-            result.append((variant_id, int(ac), int(an)))
-    return tuple(result)
+            yield variant_id, ac_value, an_value

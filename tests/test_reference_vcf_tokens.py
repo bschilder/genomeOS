@@ -155,8 +155,6 @@ def test_parse_record_refuses_structural_damage_and_truncation():
     header = _evidence()
     bad_records = (
         _record(tokens=("0/1:20:10:2,8",)),
-        _record(tokens=("0/1:20:10:2,8", "")),
-        _record(tokens=("0/1:20:10:2,8:extra", "0/0:20:10:.")),
         _record(format_="GQ:GT:DP:AD", tokens=("20:0/1:10:2,8", "20:0/0:10:.")),
         _record(format_="GT:GT", tokens=("0/1:0/1", "0/0:0/0")),
         _record()[:-1],
@@ -188,6 +186,20 @@ def test_site_position_boundaries(pos, expected):
     ],
 )
 def test_site_dispositions_are_sequential(changes, expected):
+    record = parse_record(_record(**changes), source_virtual_offset=0, header=_evidence())
+    assert site_disposition(record, _window()) == expected
+
+
+@pytest.mark.parametrize(
+    "changes,expected",
+    [
+        ({"pos": 100, "tokens": ("", "too:many:sample:fields:here")}, "outside_pos"),
+        ({"filter_": ".", "tokens": ("", "too:many:sample:fields:here")}, "not_pass"),
+        ({"alt": "G,T", "tokens": ("", "too:many:sample:fields:here")}, "not_biallelic"),
+        ({"ref": "N", "tokens": ("", "too:many:sample:fields:here")}, "not_acgt_snp"),
+    ],
+)
+def test_excluded_sites_do_not_inspect_malformed_sample_tokens(changes, expected):
     record = parse_record(_record(**changes), source_virtual_offset=0, header=_evidence())
     assert site_disposition(record, _window()) == expected
 

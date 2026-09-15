@@ -16,6 +16,7 @@ OUTLIERS_SHA256 = "592772fff79086a6b55ce07693f2871c9e4fbe9bdeff1ff926d87fcba8849
 EXCLUSIONS_SHA256 = "a2d7138d85ba0931d3de7edb20e714fd840bdc75d82e29ed7cd1c9392b544488"
 TECHNICAL_SAMPLES_SHA256 = "4a4cb8594e78e8d584dd61357d10b9c35b2e50c870a9a7bad0f42b326544d4e2"
 PAPER_SAMPLES_SHA256 = "7e2a7260d7d9b138b535c1cc2c48496e534bad9b72b8f7d72da6107193e55aec"
+DEPENDENCY_AUDIT_SHA256 = "a4f8a305d5b795bbea36672eb00ca27f69866695cfcd26e83e965689da51858e"
 
 _REQUIRED_COLUMNS = (
     "s",
@@ -263,26 +264,99 @@ def _encoded_cohort(cohort: Cohort) -> bytes:
     return "".join(f"{sample.sample_id}\n" for sample in cohort.samples).encode()
 
 
-def qualify_real_cohorts(
+def _qualify_cohort_content(
     metadata: bytes,
     outliers: bytes,
     exclusions: bytes,
     technical_samples: bytes,
     paper_samples: bytes,
-) -> tuple[Cohort, Cohort]:
-    """Reconstruct the two exact retained real cohorts after checking all frozen bytes."""
-    _verify_real_hashes((metadata, outliers, exclusions, technical_samples, paper_samples))
+) -> tuple[Cohort, Cohort, tuple[str, ...]]:
     parsed_samples = _parse_metadata(metadata)
     parsed_outliers = _parse_ids(outliers, "release outlier", sorted_lf=False)
     parsed_exclusions = _parse_exclusions(exclusions)
     _parse_ids(technical_samples, "technical sample list", sorted_lf=True)
     _parse_ids(paper_samples, "paper sample list", sorted_lf=True)
 
+    technical, paper = select_cohorts(parsed_samples, parsed_exclusions, parsed_outliers)
+    _require(_encoded_cohort(technical) == technical_samples,
+             "technical sample list does not match reconstructed cohort")
+    _require(_encoded_cohort(paper) == paper_samples,
+             "paper sample list does not match reconstructed cohort")
+    source_samples = (*[sample.sample_id for sample in parsed_samples], parsed_exclusions.control_id)
+    _require(len(source_samples) == len(set(source_samples)), "source sample IDs must be unique")
+    return technical, paper, tuple(source_samples)
+
+
+@dataclass(frozen=True)
+class QualifiedCohortInputs:
+    """Exact retained cohort bytes bound to their strictly reconstructed typed values."""
+
+    metadata: bytes
+    outliers: bytes
+    exclusions: bytes
+    technical_samples: bytes
+    paper_samples: bytes
+    dependency_audit: bytes
+    technical: Cohort
+    paper: Cohort
+    source_samples: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        raw = (
+            self.metadata,
+            self.outliers,
+            self.exclusions,
+            self.technical_samples,
+            self.paper_samples,
+            self.dependency_audit,
+        )
+        _require(all(type(value) is bytes and bool(value) for value in raw),
+                 "qualified cohort inputs must be nonempty bytes")
+        expected = _qualify_cohort_content(*raw[:5])
+        _require(
+            (self.technical, self.paper, self.source_samples) == expected,
+            "qualified cohort values differ from retained bytes",
+        )
+
+
+def qualify_cohort_inputs(
+    metadata: bytes,
+    outliers: bytes,
+    exclusions: bytes,
+    technical_samples: bytes,
+    paper_samples: bytes,
+    dependency_audit: bytes,
+) -> QualifiedCohortInputs:
+    """Strictly qualify structurally valid cohort evidence without campaign identity claims."""
+    technical, paper, source_samples = _qualify_cohort_content(
+        metadata, outliers, exclusions, technical_samples, paper_samples
+    )
+    return QualifiedCohortInputs(
+        metadata,
+        outliers,
+        exclusions,
+        technical_samples,
+        paper_samples,
+        dependency_audit,
+        technical,
+        paper,
+        source_samples,
+    )
+
+
+def _validate_real_cohorts(
+    metadata: bytes,
+    outliers: bytes,
+    technical: Cohort,
+    paper: Cohort,
+    source_samples: tuple[str, ...],
+) -> None:
+    parsed_samples = _parse_metadata(metadata)
+    parsed_outliers = _parse_ids(outliers, "release outlier", sorted_lf=False)
     _require(len(parsed_samples) == 4_150, "real metadata must contain 4,150 samples")
     _require(sum(sample.hard_filtered for sample in parsed_samples) == 31,
              "real metadata must contain 31 hard filters")
     _require(len(parsed_outliers) == 23, "real outlier list must contain 23 samples")
-    technical, paper = select_cohorts(parsed_samples, parsed_exclusions, parsed_outliers)
     _require(len(technical.samples) == 4_117 and len(paper.samples) == 4_094,
              "real cohort cardinalities do not match the frozen stages")
     technical_populations = {sample.population for sample in technical.samples}
@@ -291,8 +365,63 @@ def qualify_real_cohorts(
              "real cohorts must each retain 80 literal populations")
     _require(_KNOWN_COLLISION_IDENTITIES <= technical_populations,
              "known literal population identities were collapsed")
-    _require(_encoded_cohort(technical) == technical_samples,
-             "technical sample list does not match reconstructed cohort")
-    _require(_encoded_cohort(paper) == paper_samples,
-             "paper sample list does not match reconstructed cohort")
+    _require(len(source_samples) == 4_151, "real source sample identity mismatch")
+
+
+def qualify_real_cohort_inputs(
+    metadata: bytes,
+    outliers: bytes,
+    exclusions: bytes,
+    technical_samples: bytes,
+    paper_samples: bytes,
+    dependency_audit: bytes,
+) -> QualifiedCohortInputs:
+    """Qualify all six retained inputs against the frozen real campaign identity."""
+    _verify_real_hashes((metadata, outliers, exclusions, technical_samples, paper_samples))
+    _require(_digest(dependency_audit) == DEPENDENCY_AUDIT_SHA256,
+             "real dependency audit hash mismatch")
+    inputs = qualify_cohort_inputs(
+        metadata,
+        outliers,
+        exclusions,
+        technical_samples,
+        paper_samples,
+        dependency_audit,
+    )
+    _validate_real_cohorts(
+        metadata, outliers, inputs.technical, inputs.paper, inputs.source_samples
+    )
+    return inputs
+
+
+def qualify_real_cohorts(
+    metadata: bytes,
+    outliers: bytes,
+    exclusions: bytes,
+    technical_samples: bytes,
+    paper_samples: bytes,
+) -> tuple[Cohort, Cohort]:
+    """Reconstruct the two exact retained real cohorts after checking frozen bytes."""
+    _verify_real_hashes((metadata, outliers, exclusions, technical_samples, paper_samples))
+    technical, paper, source_samples = _qualify_cohort_content(
+        metadata, outliers, exclusions, technical_samples, paper_samples
+    )
+    _validate_real_cohorts(metadata, outliers, technical, paper, source_samples)
     return technical, paper
+
+
+def qualify_real_source_samples(
+    metadata: bytes,
+    outliers: bytes,
+    exclusions: bytes,
+    technical_samples: bytes,
+    paper_samples: bytes,
+) -> tuple[Cohort, Cohort, tuple[str, ...]]:
+    """Qualify both cohorts and the exact metadata-plus-control source sample set."""
+    technical, paper = qualify_real_cohorts(
+        metadata, outliers, exclusions, technical_samples, paper_samples
+    )
+    _, _, source_samples = _qualify_cohort_content(
+        metadata, outliers, exclusions, technical_samples, paper_samples
+    )
+    return technical, paper, source_samples

@@ -3,33 +3,101 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import os
-import re
-from collections.abc import Iterator
-from dataclasses import fields, is_dataclass
-from pathlib import Path, PurePosixPath
-from typing import Any
+from pathlib import Path
 
-from genomeos.validation.reference_acquisition_codec import decode_acquisition, encode_acquisition
+from genomeos.validation.reference_acquisition_codec import (
+    decode_acquisition,
+    decode_acquisition_review,
+    encode_acquisition,
+)
 from genomeos.validation.reference_acquisition_types import (
     AcquisitionManifest,
     ArtifactRef,
     RetainedIndex,
-    ReviewReceipt,
 )
 from genomeos.validation.reference_byte_plan import BytePreflight, encode_preflight
-from genomeos.validation.reference_counts import ReferenceCount, validate_reference_counts
+from genomeos.validation.reference_cohorts import (
+    PAPER_STAGE,
+    TECHNICAL_STAGE,
+    QualifiedCohortInputs,
+)
 from genomeos.validation.reference_preflight_input import decode_reviewed_preflight
 from genomeos.validation.reference_preparation_codec import (
-    decode_dependency,
     decode_preparation,
     decode_preparation_inputs,
     encode_preparation,
 )
 from genomeos.validation.reference_preparation_types import PreparationManifest
+from genomeos.validation.reference_tbi import MAX_COMPRESSED_BYTES
+from genomeos.validation.reference_vcf_tokens import (
+    HEADER_LIMIT_BYTES,
+    parse_header,
+)
 from genomeos.validation.reference_window_manifest import decode_manifest
-from scripts.reference_io_common import validate_verified_source
+from genomeos.validation.reference_window_types import WindowManifest
+from scripts.reference_artifact_inventory import (
+    acquisition_inventory_paths,
+    preparation_inventory_paths,
+)
+from scripts.reference_artifact_inventory import (
+    check_tsv as _check_tsv,
+)
+from scripts.reference_artifact_inventory import (
+    header_failure_reason as _header_failure_reason,
+)
+from scripts.reference_artifact_inventory import (
+    record_failure_reason as _record_failure_reason,
+)
+from scripts.reference_artifact_inventory import (
+    validate_inventory as _inventory,
+)
+from scripts.reference_artifact_inventory import (
+    windows_rows as _windows_rows,
+)
+from scripts.reference_artifact_io import (
+    artifact_identity as _identity,
+)
+from scripts.reference_artifact_io import (
+    artifact_path as _path,
+)
+from scripts.reference_artifact_io import (
+    artifact_root as _root,
+)
+from scripts.reference_artifact_io import (
+    checked_ref as _check_ref,
+)
+from scripts.reference_artifact_io import (
+    read_bounded as _bounded_bytes,
+)
+from scripts.reference_artifact_io import (
+    read_bounded_ref as _bounded_ref,
+)
+from scripts.reference_artifact_io import (
+    require as _require,
+)
+from scripts.reference_artifact_io import (
+    write_exclusive as _write_exclusive,
+)
+from scripts.reference_cohort_artifacts import (
+    COHORT_PATHS as _COHORT_PATHS,
+)
+from scripts.reference_cohort_artifacts import (
+    qualify_cohort_files as _qualify_cohort_files,
+)
+from scripts.reference_count_artifacts import (
+    expected_native_rows,
+    expected_qc_rows,
+    validate_count_tables,
+)
+from scripts.reference_io_common import fsync_artifact_tree, validate_verified_source
+from scripts.reference_runtime import campaign_source_hashes, validate_runtime_provenance
+from scripts.reference_window_io import (
+    iter_source_records,
+    load_source_header,
+    validate_metadata_receipt,
+    validate_original_evidence,
+    validate_original_records,
+)
 
 _ACQUISITION_COLUMNS = (
     "window_id", "chrom", "state", "reason", "raw_records", "native_records",
@@ -37,207 +105,160 @@ _ACQUISITION_COLUMNS = (
 _PREPARATION_COLUMNS = (
     "window_id", "chrom", "state", "reason", "raw_records", "retained_variants",
 )
-_COUNT_COLUMNS = (
-    "record_id", "variant_id", "group_id", "region_id", "variant_group", "ac", "an",
-)
-_VARIANT_WINDOW_COLUMNS = (
-    "variant_id", "window_id", "chrom", "start0", "end0", "source_uri", "source_generation",
-)
 _QC_COLUMNS = ("window_id", "stage", "category", "key", "origin", "count")
 _NATIVE_COLUMNS = (
     "window_id", "stage", "state", "variants", "native_ac_an_matches", "native_interpreted_calls",
 )
-_COHORT_PATHS = {
-    "metadata": "inputs/cohort/metadata.tsv",
-    "outliers": "inputs/cohort/outliers.txt",
-    "exclusions": "inputs/cohort/exclusions.json",
-    "technical_samples": "inputs/cohort/technical.samples.txt",
-    "paper_samples": "inputs/cohort/paper.samples.txt",
-    "dependency_audit": "inputs/cohort/dependency-audit.json",
+_MANIFEST_LIMIT = 16_777_216
+_SIDECAR_LIMIT = 16_777_216
+_NATIVE_STDOUT_LIMITS = {
+    "extract_bcf": 2_147_483_648,
+    "query_keys": 2_147_483_648,
+    "select_cohort": 2_147_483_648,
+    "fill_tags": 2_147_483_648,
+    "query_samples": 1_048_576,
+    "query_tokens": 2_147_483_648,
+    "query_totals": 2_147_483_648,
 }
-_DIGEST = re.compile(r"[0-9a-f]{64}\Z")
 
 
-def _require(condition: bool, message: str) -> None:
-    if not condition:
-        raise ValueError(message)
-
-
-def _root(directory: Path) -> Path:
-    _require(isinstance(directory, Path) and directory.is_dir() and not directory.is_symlink(),
-             "invalid artifact root")
-    return directory.resolve(strict=True)
-
-
-def _path(root: Path, relative: str) -> Path:
-    path = PurePosixPath(relative)
-    _require(
-        isinstance(relative, str)
-        and bool(relative)
-        and not path.is_absolute()
-        and "\\" not in relative
-        and all(part not in ("", ".", "..") for part in path.parts)
-        and str(path) == relative,
-        "invalid artifact path",
-    )
-    candidate = root / relative
-    cursor = root
-    for part in path.parts:
-        cursor /= part
-        _require(not cursor.is_symlink(), "artifact path contains a symlink")
-    _require(candidate.is_file() and candidate.resolve(strict=True).is_relative_to(root),
-             "artifact is unavailable")
-    return candidate
-
-
-def _identity(path: Path) -> tuple[int, str]:
-    digest = hashlib.sha256()
-    size = 0
-    with path.open("rb") as stream:
-        while chunk := stream.read(1_048_576):
-            size += len(chunk)
-            digest.update(chunk)
-    return size, digest.hexdigest()
-
-
-def _check_ref(root: Path, reference: ArtifactRef) -> Path:
-    path = _path(root, reference.path)
-    _require(_identity(path) == (reference.size_bytes, reference.sha256), "artifact identity mismatch")
-    return path
-
-
-def _check_cohort_files(root: Path, hashes: object) -> None:
-    for field, relative in _COHORT_PATHS.items():
-        path = _path(root, relative)
-        _require(_identity(path)[1] == getattr(hashes, field), f"cohort {field} hash mismatch")
-
-
-def _check_source_hashes(provenance: object) -> None:
+def _check_provenance(provenance: object, *, phase: str) -> None:
     checkout = Path(__file__).resolve().parents[1]
-    _require(bool(provenance.imported_source_sha256), "source hash evidence is empty")
-    for relative, expected in provenance.imported_source_sha256:
-        _require(
-            _identity(_path(checkout, relative))[1] == expected,
-            f"imported source hash mismatch: {relative}",
-        )
-
-
-def _nested_refs(
-    value: object,
-    *,
-    trail: tuple[str, ...] = (),
-) -> Iterator[tuple[tuple[str, ...], ArtifactRef]]:
-    if type(value) is ArtifactRef:
-        yield trail, value
-    elif is_dataclass(value) and not isinstance(value, type):
-        for field in fields(value):
-            if field.name != "files":
-                yield from _nested_refs(getattr(value, field.name), trail=(*trail, field.name))
-    elif isinstance(value, tuple):
-        for index, item in enumerate(value):
-            yield from _nested_refs(item, trail=(*trail, str(index)))
-
-
-def _inventory(root: Path, manifest: object, final_name: str, *, sparse: set[str] | None = None) -> None:
-    inventory = {reference.path: reference for reference in manifest.files}
-    _require(len(inventory) == len(manifest.files), "duplicate artifact inventory path")
-    nested: dict[str, ArtifactRef] = {}
-    for trail, reference in _nested_refs(manifest):
-        external = "native_control" in trail and trail[-1:] == ("input_bcf",) and reference.path.startswith(
-            "@acquisition/"
-        )
-        if external:
-            continue
-        previous = nested.setdefault(reference.path, reference)
-        _require(previous == reference, "one artifact path has conflicting identities")
-    _require(set(nested) <= set(inventory), "nested artifact is absent from file inventory")
-    for reference in manifest.files:
-        _check_ref(root, reference)
-
-    exempt = {final_name, "runtime-attempts.jsonl", *(sparse or set())}
-    actual: set[str] = set()
-    for candidate in root.rglob("*"):
-        _require(not candidate.is_symlink(), "artifact tree contains a symlink")
-        if candidate.is_file():
-            actual.add(candidate.relative_to(root).as_posix())
-    _require(actual - exempt == set(inventory), "artifact file inventory mismatch")
-
-
-def _tsv(path: Path, columns: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
-    raw = path.read_bytes()
-    _require(raw.endswith(b"\n") and b"\r" not in raw and b"\0" not in raw, "TSV must use LF")
-    try:
-        lines = raw.decode("utf-8").splitlines()
-    except UnicodeDecodeError as error:
-        raise ValueError("TSV must be UTF-8") from error
-    _require(bool(lines) and tuple(lines[0].split("\t")) == columns, "TSV columns mismatch")
-    rows = tuple(tuple(line.split("\t")) for line in lines[1:])
-    _require(all(len(row) == len(columns) for row in rows), "TSV row width mismatch")
-    return rows
-
-
-def _natural(token: str, field: str) -> int:
-    _require(re.fullmatch(r"0|[1-9][0-9]*", token) is not None, f"invalid {field}")
-    return int(token)
-
-
-def _nullable(value: object) -> str:
-    return "NA" if value is None else str(value)
-
-
-def _windows_rows(windows: tuple[object, ...], *, preparation: bool) -> tuple[tuple[str, ...], ...]:
-    result = []
-    last = "retained_variants" if preparation else "native_records"
-    for value in windows:
-        result.append(
-            (
-                value.window_id,
-                value.chrom,
-                value.state,
-                _nullable(value.reason),
-                _nullable(value.raw_records),
-                _nullable(getattr(value, last)),
-            )
-        )
-    return tuple(result)
-
-
-def _unique_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        _require(key not in result, f"duplicate review key: {key}")
-        result[key] = value
-    return result
-
-
-def _decode_review(raw: bytes) -> ReviewReceipt:
-    try:
-        value = json.loads(raw.decode(), object_pairs_hook=_unique_pairs)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ValueError("invalid review JSON") from error
-    keys = {
-        "schema_version", "manifest_sha256", "preflight_sha256", "implementation_revision",
-        "implementation_sha256", "review_locator", "review_sha256", "status",
-    }
-    _require(type(value) is dict and set(value) == keys, "invalid review fields")
-    hashes = value["implementation_sha256"]
-    _require(type(hashes) is dict, "invalid review implementation hashes")
-    review = ReviewReceipt(
-        value["schema_version"], value["manifest_sha256"], value["preflight_sha256"],
-        value["implementation_revision"], tuple(sorted(hashes.items())), value["review_locator"],
-        value["review_sha256"], value["status"],
+    expected = campaign_source_hashes(checkout)
+    _require(
+        provenance.imported_source_sha256 == expected,
+        "imported source hash map is incomplete or changed",
     )
-    canonical = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
-    _require(canonical == raw, "review JSON bytes are not canonical")
-    return review
+    validate_runtime_provenance(provenance, phase=phase)
+
+
+def _check_native_run_limits(run: object) -> None:
+    _require(
+        run.stdout_limit_bytes == _NATIVE_STDOUT_LIMITS[run.operation]
+        and run.stderr_limit_bytes == 1_048_576,
+        "native process receipt uses noncanonical bounds",
+    )
+
+
+def _check_run_template(
+    run: object,
+    expected: tuple[str, ...],
+    *,
+    stdout_path: str,
+    stderr_path: str,
+) -> None:
+    _check_native_run_limits(run)
+    _require(run.argv_template == expected, "native process argv differs from frozen command")
+    suffix = ".partial" if run.state == "refused" else ""
+    _require(
+        run.stdout.path == f"{stdout_path}{suffix}"
+        and run.stderr.path == f"{stderr_path}{suffix}",
+        "native process outputs differ from the fixed layout",
+    )
+
+
+def _check_acquisition_runs(window: object, source: object, frozen_window: object) -> None:
+    if not window.native_runs:
+        return
+    _require(source.verified is not None, "native window lacks verified source")
+    region = f"{window.chrom}:{frozen_window.start0 + 1}-{frozen_window.end0}"
+    templates = (
+        (
+            "bcftools", "view", "--no-version", "-r", region,
+            "--regions-overlap", "0", "-Ob", source.verified.sparse_path,
+        ),
+        (
+            "bcftools", "query", "-f",
+            r"%CHROM\t%POS\t%REF\t%ALT\t%FILTER\n",
+            f"windows/{window.window_id}.native.bcf",
+        ),
+    )
+    paths = (
+        (f"windows/{window.window_id}.native.bcf", f"windows/{window.window_id}.extract.stderr"),
+        (f"windows/{window.window_id}.native.keys.tsv", f"windows/{window.window_id}.keys.stderr"),
+    )
+    for run, expected, (stdout_path, stderr_path) in zip(
+        window.native_runs, templates, paths, strict=False
+    ):
+        _check_run_template(
+            run,
+            expected,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+        )
+
+
+def _check_stage_runs(window: object, stage: object) -> None:
+    control = stage.native_control
+    tokens = stage.native_tokens
+    prefix = f"native/{window.window_id}.{stage.stage}"
+    if control is not None:
+        sample_path = _COHORT_PATHS[
+            "technical_samples" if stage.stage == TECHNICAL_STAGE else "paper_samples"
+        ]
+        templates = (
+            (
+                "bcftools", "view", "--no-version", "-S", sample_path,
+                "-m2", "-M2", "-v", "snps", "-f", "PASS", "-Ob",
+                control.input_bcf.path,
+            ),
+            (
+                "bcftools", "+fill-tags", f"{prefix}.selected.bcf",
+                "--no-version", "-Ob", "--", "-t", "AC,AN",
+            ),
+            ("bcftools", "query", "-l", f"{prefix}.recomputed.bcf"),
+            (
+                "bcftools", "query", "-f",
+                r"%CHROM\t%POS\t%REF\t%ALT\t%INFO/AC\t%INFO/AN\n",
+                f"{prefix}.recomputed.bcf",
+            ),
+        )
+        paths = (
+            (f"{prefix}.selected.bcf", f"{prefix}.selected.bcf.stderr"),
+            (f"{prefix}.recomputed.bcf", f"{prefix}.recomputed.bcf.stderr"),
+            (f"{prefix}.samples.txt", f"{prefix}.samples.txt.stderr"),
+            (f"{prefix}.totals.tsv", f"{prefix}.totals.tsv.stderr"),
+        )
+        for run, expected, (stdout_path, stderr_path) in zip(
+            control.runs, templates, paths, strict=False
+        ):
+            _check_run_template(
+                run,
+                expected,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+            )
+    if tokens is not None:
+        token_templates = (
+            ("bcftools", "query", "-l", tokens.input_bcf.path),
+            (
+                "bcftools", "query", "-f",
+                r"%CHROM\t%POS\t%REF\t%ALT[\t%GT:%GQ:%DP:%AD]\n",
+                tokens.input_bcf.path,
+            ),
+        )
+        _check_run_template(
+            tokens.sample_query,
+            token_templates[0],
+            stdout_path=f"{prefix}.tokens.samples.txt",
+            stderr_path=f"{prefix}.tokens.samples.stderr",
+        )
+        if tokens.token_query is not None:
+            _check_run_template(
+                tokens.token_query,
+                token_templates[1],
+                stdout_path=f"{prefix}.tokens.tokens.tsv",
+                stderr_path=f"{prefix}.tokens.tokens.stderr",
+            )
 
 
 def _validate_acquisition_inputs(
     root: Path,
     manifest: AcquisitionManifest,
     expected_preflight: BytePreflight | None,
-) -> BytePreflight:
-    _check_source_hashes(manifest.provenance)
+    cohort_inputs: QualifiedCohortInputs | None,
+) -> tuple[BytePreflight, tuple[str, ...], WindowManifest]:
+    _check_provenance(manifest.provenance, phase="acquisition")
     _require(
         (
             manifest.inputs.window_manifest.path,
@@ -253,14 +274,30 @@ def _validate_acquisition_inputs(
         ),
         "acquisition input paths differ from the fixed layout",
     )
-    _check_cohort_files(root, manifest.inputs.cohort)
-    windows_raw = _check_ref(root, manifest.inputs.windows).read_bytes()
-    window_manifest_raw = _check_ref(root, manifest.inputs.window_manifest).read_bytes()
+    _, _, source_samples = _qualify_cohort_files(
+        root, manifest.inputs.cohort, cohort_inputs
+    )
+    windows_raw = _bounded_ref(root, manifest.inputs.windows, _SIDECAR_LIMIT, "windows sidecar")
+    window_manifest_raw = _bounded_ref(
+        root, manifest.inputs.window_manifest, _MANIFEST_LIMIT, "window manifest"
+    )
     window_manifest = decode_manifest(window_manifest_raw, windows_bytes=windows_raw)
-    preflight_raw = _check_ref(root, manifest.inputs.preflight).read_bytes()
-    review = _decode_review(_check_ref(root, manifest.inputs.review).read_bytes())
+    preflight_raw = _bounded_ref(root, manifest.inputs.preflight, _MANIFEST_LIMIT, "preflight")
+    review = decode_acquisition_review(
+        _bounded_ref(root, manifest.inputs.review, _MANIFEST_LIMIT, "acquisition review")
+    )
+    _require(
+        review.implementation_revision == manifest.provenance.code_revision
+        and review.implementation_sha256 == manifest.provenance.imported_source_sha256,
+        "acquisition review differs from implementation provenance",
+    )
     retained = tuple(
-        RetainedIndex(source.source.chrom, _check_ref(root, source.retained_index).read_bytes())
+        RetainedIndex(
+            source.source.chrom,
+            _bounded_ref(
+                root, source.retained_index, MAX_COMPRESSED_BYTES, "retained index"
+            ),
+        )
         for source in manifest.sources
     )
     preflight = decode_reviewed_preflight(
@@ -268,7 +305,7 @@ def _validate_acquisition_inputs(
         manifest=window_manifest,
         manifest_raw=window_manifest_raw,
         indexes=retained,
-        review=review,
+        review=review.preflight,
     )
     if expected_preflight is not None:
         _require(encode_preflight(preflight) == encode_preflight(expected_preflight),
@@ -280,26 +317,49 @@ def _validate_acquisition_inputs(
         == tuple(value.window_id for value in window_manifest.windows),
         "acquisition window identity mismatch",
     )
-    return preflight
+    return preflight, source_samples, window_manifest
 
 
 def _validate_acquisition_content(
     root: Path,
     manifest: AcquisitionManifest,
     expected_preflight: BytePreflight | None = None,
+    cohort_inputs: QualifiedCohortInputs | None = None,
 ) -> None:
-    preflight = _validate_acquisition_inputs(root, manifest, expected_preflight)
+    preflight, source_samples, window_manifest = _validate_acquisition_inputs(
+        root, manifest, expected_preflight, cohort_inputs
+    )
     plans = {value.source.chrom: value for value in preflight.sources}
     sparse = {
         source.verified.sparse_path
         for source in manifest.sources
         if source.verified is not None
     }
-    _inventory(root, manifest, "acquisition.json", sparse=sparse)
-    _require(
-        _tsv(_path(root, "windows.tsv"), _ACQUISITION_COLUMNS)
-        == _windows_rows(manifest.windows, preparation=False),
-        "acquisition windows ledger mismatch",
+    acquisition_caps = {
+        "windows.tsv": _SIDECAR_LIMIT,
+        **{value: _SIDECAR_LIMIT for value in _COHORT_PATHS.values()},
+        manifest.inputs.window_manifest.path: _MANIFEST_LIMIT,
+        manifest.inputs.windows.path: _SIDECAR_LIMIT,
+        manifest.inputs.preflight.path: _MANIFEST_LIMIT,
+        manifest.inputs.review.path: _MANIFEST_LIMIT,
+        **{
+            source.header.header.path: HEADER_LIMIT_BYTES
+            for source in manifest.sources
+            if source.header is not None
+        },
+    }
+    _inventory(
+        root,
+        manifest,
+        "acquisition.json",
+        allowed_paths=acquisition_inventory_paths(manifest),
+        sparse=sparse,
+        caps=acquisition_caps,
+    )
+    _check_tsv(
+        _path(root, "windows.tsv"),
+        _ACQUISITION_COLUMNS,
+        _windows_rows(manifest.windows, preparation=False),
     )
     for source in manifest.sources:
         plan = plans[source.source.chrom]
@@ -308,6 +368,8 @@ def _validate_acquisition_content(
                  "range receipt accounting mismatch")
         if source.verified is not None:
             validate_verified_source(source.verified, plan, artifact_root=root)
+        if source.metadata.state == "verified":
+            validate_metadata_receipt(source.source.vcf, source.metadata, artifact_root=root)
     totals = manifest.totals
     _require(totals.planned_bytes_including_indexes == preflight.total_planned_bytes,
              "planned byte total mismatch")
@@ -332,119 +394,197 @@ def _validate_acquisition_content(
              "metadata invocation total mismatch")
     _require(totals.metadata_stdout_bytes == sum(value.metadata.stdout_bytes for value in manifest.sources),
              "metadata stdout total mismatch")
-    for window in manifest.windows:
-        if window.state == "refused":
+    source_receipts = {value.source.chrom: value for value in manifest.sources}
+    frozen_windows = {value.window_id: value for value in window_manifest.windows}
+    headers = {}
+    for source in manifest.sources:
+        if source.verified is None:
             continue
-        raw = _check_ref(root, window.raw).read_bytes()
-        raw_lines = raw.splitlines(keepends=True)
-        _require(all(line.endswith(b"\n") for line in raw_lines), "original records must use LF")
-        offsets = _tsv(_check_ref(root, window.offsets), ("ordinal", "source_virtual_offset", "raw_sha256"))
-        _require(len(raw_lines) == len(offsets) == window.raw_records, "original record count mismatch")
-        for ordinal, (line, offset) in enumerate(zip(raw_lines, offsets, strict=True)):
-            _require(_natural(offset[0], "record ordinal") == ordinal, "record ordinals are not contiguous")
-            _natural(offset[1], "source virtual offset")
-            _require(_DIGEST.fullmatch(offset[2]) is not None
-                     and hashlib.sha256(line).hexdigest() == offset[2], "original record hash mismatch")
-        native_keys = _check_ref(root, window.native_keys).read_bytes()
-        _require(b"\r" not in native_keys and native_keys.count(b"\n") == window.native_records,
-                 "native key count mismatch")
-        original_keys = []
-        for line in raw_lines:
-            columns = line[:-1].split(b"\t")
-            _require(len(columns) >= 7, "original VCF record is malformed")
-            original_keys.append(b"\t".join((columns[0], columns[1], columns[3], columns[4], columns[6])))
-        _require(native_keys.splitlines() == original_keys, "native/original variant keys differ")
+        try:
+            source_header_raw, header = load_source_header(
+                source.verified,
+                plans[source.source.chrom],
+                artifact_root=root,
+                expected_contigs=window_manifest.contig_lengths,
+                expected_samples=source_samples,
+            )
+        except ValueError as error:
+            _require(
+                source.state == "refused"
+                and source.header is None
+                and source.reason == _header_failure_reason(error),
+                "refused source header evidence differs from its reason",
+            )
+            continue
+        _require(
+            source.state == "ready" and source.header is not None,
+            "refused source header failure is not reproduced",
+        )
+        retained_header_raw = _bounded_ref(
+            root, source.header.header, HEADER_LIMIT_BYTES, "source header"
+        )
+        _require(source_header_raw == retained_header_raw, "retained header differs from source bytes")
+        retained_header = parse_header(
+            retained_header_raw,
+            expected_contigs=window_manifest.contig_lengths,
+            source_chrom=source.source.chrom,
+            expected_samples=source_samples,
+        )
+        _require(retained_header == header, "retained header differs from source bytes")
+        ordered_samples = "".join(f"{sample}\n" for sample in header.samples).encode()
+        _require(
+            source.header.sample_count == len(header.samples)
+            and source.header.ordered_samples_sha256 == hashlib.sha256(ordered_samples).hexdigest(),
+            "header receipt differs from retained header",
+        )
+        headers[source.source.chrom] = header
+    for source in manifest.sources:
+        if source.state != "refused":
+            continue
+        for window in (value for value in manifest.windows if value.chrom == source.source.chrom):
+            _require(
+                window.state == "refused"
+                and window.reason == source.reason
+                and window.raw_records is None
+                and window.native_records is None
+                and window.raw is None
+                and window.offsets is None
+                and window.native_bcf is None
+                and window.native_keys is None
+                and window.native_runs == (),
+                "refused source has contradictory child window evidence",
+            )
+    for window in manifest.windows:
+        source = source_receipts[window.chrom]
+        _check_acquisition_runs(window, source, frozen_windows[window.window_id])
+        if window.state == "refused":
+            _require(
+                (window.raw is None) == (window.offsets is None),
+                "refused original evidence is incomplete",
+            )
+            if window.raw is not None and window.offsets is not None:
+                _require(
+                    source.verified is not None
+                    and source.header is not None
+                    and window.raw_records is not None,
+                    "refused original evidence lacks source lineage",
+                )
+                count = validate_original_evidence(
+                    source.verified,
+                    plans[window.chrom],
+                    frozen_windows[window.window_id],
+                    headers[window.chrom],
+                    artifact_root=root,
+                    raw=window.raw,
+                    offsets=window.offsets,
+                )
+                _require(count == window.raw_records, "refused original record count mismatch")
+                complete_keys = (
+                    len(window.native_runs) == 2
+                    and all(run.state == "complete" for run in window.native_runs)
+                    and window.native_keys is not None
+                )
+                if complete_keys:
+                    try:
+                        native_count = validate_original_records(
+                            source.verified,
+                            plans[window.chrom],
+                            frozen_windows[window.window_id],
+                            headers[window.chrom],
+                            artifact_root=root,
+                            raw=window.raw,
+                            offsets=window.offsets,
+                            native_keys=window.native_keys,
+                        )
+                    except ValueError as error:
+                        _require(
+                            str(error) == "native_mismatch" and window.reason == "native_mismatch",
+                            "refused native evidence differs from its reason",
+                        )
+                    else:
+                        _require(
+                            native_count == count,
+                            "refused native evidence differs from its reason",
+                        )
+                        raise ValueError("refused native failure is not reproduced")
+                elif window.native_runs and all(
+                    run.state == "complete" for run in window.native_runs
+                ):
+                    raise ValueError("refused native failure is not reproduced")
+            elif source.state == "ready":
+                try:
+                    for _ in iter_source_records(
+                        source.verified,
+                        plans[window.chrom],
+                        frozen_windows[window.window_id],
+                        headers[window.chrom],
+                        artifact_root=root,
+                    ):
+                        pass
+                except ValueError as error:
+                    _require(
+                        window.reason == _record_failure_reason(error),
+                        "refused original evidence differs from its reason",
+                    )
+                else:
+                    raise ValueError("refused original failure is not reproduced")
+            continue
+        _require(source.verified is not None and window.native_keys is not None, "missing source evidence")
+        count = validate_original_records(
+            source.verified,
+            plans[window.chrom],
+            frozen_windows[window.window_id],
+            headers[window.chrom],
+            artifact_root=root,
+            raw=window.raw,
+            offsets=window.offsets,
+            native_keys=window.native_keys,
+        )
+        _require(count == window.raw_records == window.native_records, "original record count mismatch")
         _require(
             tuple(run.operation for run in window.native_runs) == ("extract_bcf", "query_keys"),
             "successful window lacks exact native controls",
         )
 
 
-def _count_rows(path: Path) -> tuple[ReferenceCount, ...]:
-    rows = []
-    for value in _tsv(path, _COUNT_COLUMNS):
-        rows.append(ReferenceCount(*value[:5], _natural(value[5], "AC"), _natural(value[6], "AN")))
-    result = tuple(rows)
-    if result:
-        validate_reference_counts(result)
-        for row in result:
-            expected_id = json.dumps([row.group_id, row.variant_id], separators=(",", ":"))
-            _require(row.record_id == expected_id, "count record_id is not canonical")
-            _require(
-                re.fullmatch(
-                    r"GRCh38:chr(?:[1-9]|1[0-9]|2[0-2]):[1-9][0-9]*:[^:]+:[^:]+",
-                    row.variant_id,
-                )
-                is not None,
-                "invalid count variant identity",
-            )
-        _require(
-            tuple(value.record_id for value in result)
-            == tuple(sorted(value.record_id for value in result)),
-            "count rows must be sorted by record_id",
-        )
-    return result
-
-
-def _expected_qc_rows(manifest: PreparationManifest) -> tuple[tuple[str, ...], ...]:
-    rows = []
-    for window in manifest.windows:
-        for stage in window.stages:
-            if stage.summary is None:
-                continue
-            rows.extend(
-                (window.window_id, stage.stage, "disposition", key, "NA", str(count))
-                for key, count in stage.summary.qc.dispositions
-            )
-            rows.extend(
-                (window.window_id, stage.stage, "inspection", key, "NA", str(count))
-                for key, count in stage.summary.qc.inspection_totals
-            )
-            rows.extend(
-                (window.window_id, stage.stage, "missing_origin", value.field, value.origin, str(value.count))
-                for value in stage.summary.qc.missing_origins
-            )
-    return tuple(rows)
-
-
-def _expected_native_rows(manifest: PreparationManifest) -> tuple[tuple[str, ...], ...]:
-    rows = []
-    for window in manifest.windows:
-        for stage in window.stages:
-            summary = stage.summary
-            rows.append(
-                (
-                    window.window_id,
-                    stage.stage,
-                    stage.state,
-                    _nullable(None if summary is None else summary.variants),
-                    _nullable(None if summary is None else summary.native_ac_an_matches),
-                    _nullable(None if summary is None else summary.native_interpreted_calls),
-                )
-            )
-    return tuple(rows)
-
-
-def _variant_windows(root: Path) -> dict[str, tuple[str, str, int, int, str, str]]:
-    result = {}
-    for value in _tsv(_path(root, "variant-windows.tsv"), _VARIANT_WINDOW_COLUMNS):
-        variant_id, window_id, chrom, start0, end0, uri, generation = value
-        _require(variant_id not in result, "duplicate variant-window assignment")
-        start, end = _natural(start0, "window start0"), _natural(end0, "window end0")
-        _require(start < end and variant_id.startswith(f"GRCh38:{chrom}:"), "invalid variant-window row")
-        result[variant_id] = (window_id, chrom, start, end, uri, generation)
-    return result
-
-
 def _validate_preparation_content(
     root: Path,
     manifest: PreparationManifest,
     acquisition_root: Path,
+    *,
+    deep: bool = True,
+    cohort_inputs: QualifiedCohortInputs | None = None,
 ) -> None:
-    _check_source_hashes(manifest.provenance)
-    acquisition = validate_acquisition(acquisition_root)
-    parent_raw = _path(_root(acquisition_root), "acquisition.json").read_bytes()
-    copied = _check_ref(root, manifest.inputs.acquisition).read_bytes()
+    _require(type(deep) is bool, "invalid preparation validation mode")
+    _check_provenance(manifest.provenance, phase="preparation")
+    parent_root = _root(acquisition_root)
+    if deep:
+        acquisition = validate_acquisition(parent_root, cohort_inputs=cohort_inputs)
+    else:
+        acquisition = decode_acquisition(
+            _bounded_bytes(
+                _path(parent_root, "acquisition.json"),
+                _MANIFEST_LIMIT,
+                "acquisition manifest",
+            )
+        )
+    _require(
+        (
+            manifest.provenance.code_revision,
+            manifest.provenance.imported_source_sha256,
+        )
+        == (
+            acquisition.provenance.code_revision,
+            acquisition.provenance.imported_source_sha256,
+        ),
+        "preparation implementation differs from reviewed acquisition",
+    )
+    parent_raw = _bounded_bytes(
+        _path(parent_root, "acquisition.json"), _MANIFEST_LIMIT, "acquisition manifest"
+    )
+    copied = _bounded_ref(
+        root, manifest.inputs.acquisition, _MANIFEST_LIMIT, "copied acquisition manifest"
+    )
     _require(copied == parent_raw, "copied acquisition manifest differs from acquisition root")
     _require(manifest.inputs.acquisition.sha256 == hashlib.sha256(parent_raw).hexdigest(),
              "preparation acquisition hash mismatch")
@@ -453,188 +593,126 @@ def _validate_preparation_content(
         and manifest.inputs.dependency_audit.path == _COHORT_PATHS["dependency_audit"],
         "preparation input paths differ from the fixed layout",
     )
-    _check_cohort_files(root, manifest.inputs.cohort)
+    _require(
+        manifest.inputs.cohort == acquisition.inputs.cohort,
+        "preparation cohort inputs differ from acquisition",
+    )
+    technical, paper, source_samples = _qualify_cohort_files(
+        root, manifest.inputs.cohort, cohort_inputs
+    )
     _require(manifest.inputs.dependency_audit.sha256 == manifest.inputs.cohort.dependency_audit,
              "preparation dependency-audit identity mismatch")
-    _inventory(root, manifest, "manifest.json")
-    _require(decode_preparation_inputs(_path(root, "inputs.json").read_bytes()) == manifest.inputs,
-             "preparation inputs sidecar mismatch")
-    _require(
-        _tsv(_path(root, "windows.tsv"), _PREPARATION_COLUMNS)
-        == _windows_rows(manifest.windows, preparation=True),
-        "preparation windows ledger mismatch",
+    preparation_caps = {
+        "windows.tsv": _SIDECAR_LIMIT,
+        "qc-dispositions.tsv": _SIDECAR_LIMIT,
+        "native-controls.tsv": _SIDECAR_LIMIT,
+        "inputs.json": _SIDECAR_LIMIT,
+        manifest.inputs.acquisition.path: _MANIFEST_LIMIT,
+        **{value: _SIDECAR_LIMIT for value in _COHORT_PATHS.values()},
+        f"{TECHNICAL_STAGE}.dependencies.json": _SIDECAR_LIMIT,
+        f"{PAPER_STAGE}.dependencies.json": _SIDECAR_LIMIT,
+        **{track.dependencies.path: _SIDECAR_LIMIT for track in manifest.tracks},
+    }
+    _inventory(
+        root,
+        manifest,
+        "manifest.json",
+        allowed_paths=preparation_inventory_paths(manifest),
+        caps=preparation_caps,
     )
-    _require(_tsv(_path(root, "qc-dispositions.tsv"), _QC_COLUMNS) == _expected_qc_rows(manifest),
-             "QC dispositions ledger mismatch")
-    _require(_tsv(_path(root, "native-controls.tsv"), _NATIVE_COLUMNS) == _expected_native_rows(manifest),
-             "native controls ledger mismatch")
-    if manifest.complete:
-        _require(acquisition.complete, "complete preparation requires complete acquisition")
-        acquisition_windows = {value.window_id: value for value in acquisition.windows}
-        frozen = decode_manifest(
-            _path(_root(acquisition_root), "inputs/window-manifest.json").read_bytes(),
-            windows_bytes=_path(_root(acquisition_root), "inputs/windows.tsv").read_bytes(),
-        )
-        frozen_windows = {value.window_id: value for value in frozen.windows}
-        sources = {value.source.chrom: value.source for value in acquisition.sources}
-        for window in manifest.windows:
-            parent = acquisition_windows[window.window_id]
+    for window in manifest.windows:
+        for stage in window.stages:
+            _check_stage_runs(window, stage)
+    _require(decode_preparation_inputs(
+        _bounded_bytes(_path(root, "inputs.json"), _SIDECAR_LIMIT, "preparation inputs")
+    ) == manifest.inputs,
+             "preparation inputs sidecar mismatch")
+    _check_tsv(
+        _path(root, "windows.tsv"),
+        _PREPARATION_COLUMNS,
+        _windows_rows(manifest.windows, preparation=True),
+    )
+    _check_tsv(
+        _path(root, "qc-dispositions.tsv"), _QC_COLUMNS, expected_qc_rows(manifest)
+    )
+    _check_tsv(
+        _path(root, "native-controls.tsv"), _NATIVE_COLUMNS, expected_native_rows(manifest)
+    )
+    acquisition_windows = {value.window_id: value for value in acquisition.windows}
+    frozen = decode_manifest(
+        _bounded_bytes(
+            _path(_root(acquisition_root), "inputs/window-manifest.json"),
+            _MANIFEST_LIMIT,
+            "window manifest",
+        ),
+        windows_bytes=_bounded_bytes(
+            _path(_root(acquisition_root), "inputs/windows.tsv"),
+            _SIDECAR_LIMIT,
+            "windows sidecar",
+        ),
+    )
+    admitted_bcf = {
+        value.native_bcf.path: value.native_bcf
+        for value in acquisition.windows
+        if value.native_bcf is not None
+    }
+    acquisition_root = parent_root
+    for window in manifest.windows:
+        parent_window = acquisition_windows[window.window_id]
+        if window.raw_records is not None:
             _require(
-                window.raw_records == parent.raw_records,
+                window.raw_records == parent_window.raw_records,
                 "preparation raw count differs from acquisition",
             )
-        tables = tuple(_count_rows(_check_ref(root, track.table)) for track in manifest.tracks)
-        keysets = tuple({row.record_id for row in table} for table in tables)
-        _require(not keysets or all(keys == keysets[0] for keys in keysets), "four track keys differ")
-        assignments = _variant_windows(root)
-        _require(set(assignments) == {row.variant_id for row in tables[0]} if tables else not assignments,
-                 "variant-window key mismatch")
-        assigned_counts: dict[str, int] = {}
-        for variant_id, assignment in assignments.items():
-            window_id, chrom, start, end, uri, generation = assignment
-            frozen_window = frozen_windows.get(window_id)
-            source = sources.get(chrom)
-            match = re.fullmatch(r"GRCh38:chr(?:[1-9]|1[0-9]|2[0-2]):([1-9][0-9]*):[^:]+:[^:]+", variant_id)
+        if window.state == "refused":
             _require(
-                frozen_window is not None
-                and source is not None
-                and (chrom, start, end)
-                == (frozen_window.chrom, frozen_window.start0, frozen_window.end0)
-                and (uri, generation) == (source.vcf.uri, source.vcf.generation)
-                and match is not None
-                and start < int(match.group(1)) <= end,
-                "variant-window assignment differs from frozen acquisition",
+                window.retained_variants is None,
+                "refused preparation cannot claim a retained variant count",
             )
-            assigned_counts[window_id] = assigned_counts.get(window_id, 0) + 1
-        _require(
-            all(
-                assigned_counts.get(window.window_id, 0) == window.retained_variants
-                for window in manifest.windows
-            ),
-            "variant-window counts differ from preparation ledger",
+        for stage in window.stages:
+            _require(
+                stage.native_tokens is None or stage.native_control is not None,
+                "native token evidence lacks its count control",
+            )
+            if stage.native_control is None:
+                continue
+            sample_relative = _COHORT_PATHS[
+                "technical_samples" if stage.stage == TECHNICAL_STAGE else "paper_samples"
+            ]
+            sample_size, sample_sha = _identity(_path(root, sample_relative))
+            _require(
+                stage.native_control.requested_samples
+                == ArtifactRef(sample_relative, sample_size, sample_sha),
+                "native requested samples differ from the qualified cohort",
+            )
+            if stage.native_tokens is not None:
+                _require(
+                    stage.native_control.selected_bcf is not None
+                    and stage.native_tokens.input_bcf == stage.native_control.selected_bcf,
+                    "native token input differs from selected cohort BCF",
+                )
+            parent = stage.native_control.input_bcf
+            _require(parent.path.startswith("@acquisition/"), "native input lacks parent prefix")
+            relative = parent.path.removeprefix("@acquisition/")
+            expected = admitted_bcf.get(relative)
+            _require(
+                expected is not None
+                and (parent.size_bytes, parent.sha256) == (expected.size_bytes, expected.sha256),
+                "native input differs from admitted acquisition BCF",
+            )
+            _check_ref(acquisition_root, expected)
+    _require(acquisition.complete, "preparation requires complete acquisition")
+    if deep:
+        validate_count_tables(
+            root,
+            manifest,
+            acquisition_root,
+            acquisition,
+            frozen,
+            (technical, paper),
+            source_samples,
         )
-        table_by_track = {
-            (track.stage, track.kind): table
-            for track, table in zip(manifest.tracks, tables, strict=True)
-        }
-        for window in manifest.windows:
-            variants = {
-                variant_id
-                for variant_id, assignment in assignments.items()
-                if assignment[0] == window.window_id
-            }
-            for stage in window.stages:
-                summary = stage.summary
-                for kind in ("called", "quality"):
-                    rows = tuple(
-                        row for row in table_by_track[(stage.stage, kind)] if row.variant_id in variants
-                    )
-                    prefix = "called" if kind == "called" else "quality"
-                    _require(
-                        (
-                            len(rows),
-                            sum(row.an == 0 for row in rows),
-                            sum(row.ac for row in rows),
-                            sum(row.an for row in rows),
-                        )
-                        == (
-                            summary.rows,
-                            getattr(summary, f"{prefix}_unavailable"),
-                            getattr(summary, f"{prefix}_ac_sum"),
-                            getattr(summary, f"{prefix}_an_sum"),
-                        ),
-                        "count rows differ from stage-window summary",
-                    )
-        for track, table in zip(manifest.tracks, tables, strict=True):
-            groups = {row.group_id for row in table}
-            variants = {row.variant_id for row in table}
-            _require(
-                (track.rows, track.variants, track.represented_groups, track.unavailable_rows,
-                 track.ac_sum, track.an_sum)
-                == (len(table), len(variants), len(groups), sum(row.an == 0 for row in table),
-                    sum(row.ac for row in table), sum(row.an for row in table)),
-                "track summary mismatch",
-            )
-            dependency = decode_dependency(_check_ref(root, track.dependencies).read_bytes())
-            _require(dependency.stage == track.stage, "dependency stage differs from count track")
-            if manifest.status == "complete_nonempty":
-                _require(set(dependency.populations) == groups,
-                         "dependency populations differ from count track")
-            else:
-                _require(
-                    len(dependency.populations) == 80
-                    and dependency.reported_pairs in (1_302, 1_294)
-                    and dependency.component_count == 77,
-                    "empty preparation lacks the full dependency graph",
-                )
-            for row in table:
-                window_id, chrom, start, end, _, _ = assignments[row.variant_id]
-                _require(row.variant_group == f"GRCh38:{chrom}:{start + 1}-{end}",
-                         "variant group differs from assigned window")
-                _require(window_id.startswith(f"{chrom}-s"), "variant window identity mismatch")
-        for track in manifest.tracks:
-            summaries = tuple(
-                stage.summary
-                for window in manifest.windows
-                for stage in window.stages
-                if stage.stage == track.stage
-            )
-            unavailable_field = "called_unavailable" if track.kind == "called" else "quality_unavailable"
-            ac_field = "called_ac_sum" if track.kind == "called" else "quality_ac_sum"
-            an_field = "called_an_sum" if track.kind == "called" else "quality_an_sum"
-            _require(
-                (
-                    track.rows,
-                    track.variants,
-                    track.unavailable_rows,
-                    track.ac_sum,
-                    track.an_sum,
-                )
-                == (
-                    sum(value.rows for value in summaries),
-                    sum(value.variants for value in summaries),
-                    sum(getattr(value, unavailable_field) for value in summaries),
-                    sum(getattr(value, ac_field) for value in summaries),
-                    sum(getattr(value, an_field) for value in summaries),
-                ),
-                "track totals differ from stage-window summaries",
-            )
-        admitted_bcf = {
-            value.native_bcf.path: value.native_bcf
-            for value in acquisition.windows
-            if value.native_bcf is not None
-        }
-        acquisition_root = _root(acquisition_root)
-        for window in manifest.windows:
-            for stage in window.stages:
-                if stage.native_control is None:
-                    continue
-                parent = stage.native_control.input_bcf
-                _require(parent.path.startswith("@acquisition/"), "native input lacks parent prefix")
-                relative = parent.path.removeprefix("@acquisition/")
-                expected = admitted_bcf.get(relative)
-                _require(
-                    expected is not None
-                    and (parent.size_bytes, parent.sha256) == (expected.size_bytes, expected.sha256),
-                    "native input differs from admitted acquisition BCF",
-                )
-                _check_ref(acquisition_root, expected)
 
-
-def _write_exclusive(path: Path, raw: bytes) -> None:
-    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        with os.fdopen(descriptor, "wb", closefd=False) as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(stream.fileno())
-    finally:
-        os.close(descriptor)
-    directory = os.open(path.parent, os.O_RDONLY)
-    try:
-        os.fsync(directory)
-    finally:
-        os.close(directory)
 
 
 def write_acquisition_manifest(
@@ -642,24 +720,42 @@ def write_acquisition_manifest(
     manifest: AcquisitionManifest,
     *,
     preflight: BytePreflight,
+    cohort_inputs: QualifiedCohortInputs | None = None,
 ) -> ArtifactRef:
     """Validate a complete phase tree and exclusively write acquisition.json last."""
     root = _root(directory)
     _require(type(manifest) is AcquisitionManifest and type(preflight) is BytePreflight,
              "invalid acquisition writer inputs")
     _require(not (root / "acquisition.json").exists(), "acquisition manifest already exists")
-    _validate_acquisition_content(root, manifest, preflight)
+    _validate_acquisition_content(root, manifest, preflight, cohort_inputs)
+    fsync_artifact_tree(root)
     raw = encode_acquisition(manifest)
-    _write_exclusive(root / "acquisition.json", raw)
-    _require(validate_acquisition(root) == manifest, "written acquisition manifest failed readback")
+    final = root / "acquisition.json"
+    published = False
+    try:
+        _check_provenance(manifest.provenance, phase="acquisition")
+        _write_exclusive(final, raw)
+        published = True
+        _require(validate_acquisition(root, cohort_inputs=cohort_inputs) == manifest,
+                 "written acquisition manifest failed readback")
+    except BaseException:
+        if published:
+            final.unlink(missing_ok=True)
+        raise
     return ArtifactRef("acquisition.json", len(raw), hashlib.sha256(raw).hexdigest())
 
 
-def validate_acquisition(directory: Path) -> AcquisitionManifest:
+def validate_acquisition(
+    directory: Path,
+    *,
+    cohort_inputs: QualifiedCohortInputs | None = None,
+) -> AcquisitionManifest:
     """Deeply validate one acquisition root and return its typed final ledger."""
     root = _root(directory)
-    manifest = decode_acquisition(_path(root, "acquisition.json").read_bytes())
-    _validate_acquisition_content(root, manifest)
+    manifest = decode_acquisition(
+        _bounded_bytes(_path(root, "acquisition.json"), _MANIFEST_LIMIT, "acquisition manifest")
+    )
+    _validate_acquisition_content(root, manifest, cohort_inputs=cohort_inputs)
     return manifest
 
 
@@ -668,22 +764,64 @@ def write_preparation_manifest(
     manifest: PreparationManifest,
     *,
     acquisition_root: Path,
+    cohort_inputs: QualifiedCohortInputs | None = None,
 ) -> ArtifactRef:
     """Validate a count tree and exclusively write manifest.json last."""
     root = _root(directory)
     _require(type(manifest) is PreparationManifest, "invalid preparation manifest")
     _require(not (root / "manifest.json").exists(), "preparation manifest already exists")
-    _validate_preparation_content(root, manifest, acquisition_root)
+    _validate_preparation_content(
+        root,
+        manifest,
+        acquisition_root,
+        deep=True,
+        cohort_inputs=cohort_inputs,
+    )
+    fsync_artifact_tree(root)
     raw = encode_preparation(manifest)
-    _write_exclusive(root / "manifest.json", raw)
-    _require(validate_preparation(root, acquisition_root=acquisition_root) == manifest,
-             "written preparation manifest failed readback")
+    final = root / "manifest.json"
+    published = False
+    try:
+        _check_provenance(manifest.provenance, phase="preparation")
+        _write_exclusive(final, raw)
+        published = True
+        retained = _bounded_bytes(
+            final,
+            _MANIFEST_LIMIT,
+            "written preparation manifest",
+        )
+        _require(
+            retained == raw and decode_preparation(retained) == manifest,
+            "written preparation manifest failed readback",
+        )
+        _require(
+            validate_preparation(
+                root,
+                acquisition_root=acquisition_root,
+                cohort_inputs=cohort_inputs,
+            )
+            == manifest,
+            "written preparation manifest failed deep readback",
+        )
+    except BaseException:
+        if published:
+            final.unlink(missing_ok=True)
+        raise
     return ArtifactRef("manifest.json", len(raw), hashlib.sha256(raw).hexdigest())
 
 
-def validate_preparation(directory: Path, *, acquisition_root: Path) -> PreparationManifest:
+def validate_preparation(
+    directory: Path,
+    *,
+    acquisition_root: Path,
+    cohort_inputs: QualifiedCohortInputs | None = None,
+) -> PreparationManifest:
     """Deeply validate one preparation root and its external acquisition binding."""
     root = _root(directory)
-    manifest = decode_preparation(_path(root, "manifest.json").read_bytes())
-    _validate_preparation_content(root, manifest, acquisition_root)
+    manifest = decode_preparation(
+        _bounded_bytes(_path(root, "manifest.json"), _MANIFEST_LIMIT, "preparation manifest")
+    )
+    _validate_preparation_content(
+        root, manifest, acquisition_root, cohort_inputs=cohort_inputs
+    )
     return manifest
