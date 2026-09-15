@@ -1,0 +1,188 @@
+{
+  "configuration": {
+    "an": 20,
+    "concentration": 20.0,
+    "draws": 32,
+    "observations": 2,
+    "repeats": 5,
+    "seed": 42
+  },
+  "count_dtype": "int64",
+  "device": {
+    "compute_capability": "8.0",
+    "cuda_driver_version": 13000,
+    "cuda_runtime_version": 12090,
+    "device_id": 0,
+    "device_name": "NVIDIA A100-SXM4-80GB"
+  },
+  "environment": {
+    "installed_distributions": {
+      "Pygments": "2.21.0",
+      "cuda-pathfinder": "1.8.1",
+      "cupy-cuda12x": "14.2.0",
+      "iniconfig": "2.3.0",
+      "numpy": "2.4.6",
+      "packaging": "26.3",
+      "pandas": "3.0.5",
+      "pip": "24.0",
+      "pluggy": "1.6.0",
+      "pytest": "8.4.2",
+      "python-dateutil": "2.9.0.post0",
+      "scipy": "1.18.1",
+      "six": "1.17.0"
+    },
+    "platform": "Linux-6.17.0-14-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "evidence_kind": "synthetic_performance_probe",
+  "executed_source_sha256": {
+    "genomeos/validation/predictive.py": "3c25cd5bd57d7fbe81ff5990dbcbb716e53ff0395de85277574b5ac4028b2acb",
+    "genomeos/validation/predictive_cupy.py": "3f9978de4f0262b3c6f6ecd07a8ccc5f15f138e920b5031b37811cd666f5e341",
+    "scripts/profile_count_scoring.py": "abe3d1e6b0b3a5bdae72ae9071b15af161238a356cfbb48f65ee60a6db91002c"
+  },
+  "gpu_memory": {
+    "device_total_bytes": 85093777408,
+    "device_used_bytes_before": 447545344,
+    "measurement_run_separate_from_timing": true,
+    "pool_reserved_bytes_after": 57856,
+    "pool_reserved_bytes_before": 0,
+    "pool_used_bytes_after": 0,
+    "sampled_peak_additional_device_bytes": 2097152,
+    "sampling_interval_seconds": 0.0005,
+    "semantics": "sampled_peak_additional_device_bytes is a 0.5 ms sampled, device-wide high-water delta and may include other processes; pool_reserved_bytes is allocator reservation, not peak live memory"
+  },
+  "implementation_bounds": {
+    "draw_chunk_size": 128,
+    "maximum_temporary_log_mass_elements": 524288,
+    "row_chunk_size": 4,
+    "support_chunk_size": 1024
+  },
+  "input_dtype": "float64",
+  "input_sha256": "56a46d1ba444c2a1d0b7649e31e0a9f559ab641f3f1849def328d183ee6569ea",
+  "interpretation": "complete count-diagnostic computational comparison; not model-accuracy or allele-frequency benchmark evidence",
+  "parity": {
+    "atol": 1e-11,
+    "count_quantile_levels": [
+      0.025,
+      0.1,
+      0.25,
+      0.5,
+      0.75,
+      0.9,
+      0.975
+    ],
+    "count_quantiles_equal": true,
+    "cpu_count_quantiles": [
+      [
+        0,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        6,
+        5
+      ],
+      [
+        11,
+        11
+      ],
+      [
+        15,
+        16
+      ],
+      [
+        18,
+        19
+      ],
+      [
+        20,
+        20
+      ]
+    ],
+    "exact_columns": {
+      "absolute_error": true,
+      "coverage_50": true,
+      "coverage_80": true,
+      "coverage_95": true,
+      "interval_width_50": true,
+      "interval_width_80": true,
+      "interval_width_95": true,
+      "squared_error": true
+    },
+    "gpu_count_quantiles": [
+      [
+        0,
+        0
+      ],
+      [
+        2,
+        1
+      ],
+      [
+        6,
+        5
+      ],
+      [
+        11,
+        11
+      ],
+      [
+        15,
+        16
+      ],
+      [
+        18,
+        19
+      ],
+      [
+        20,
+        20
+      ]
+    ],
+    "maximum_absolute_count_quantile_discrepancy": 0,
+    "maximum_absolute_discrepancy": {
+      "log_score": 0.0,
+      "randomized_pit": 7.771561172376096e-16
+    },
+    "passed": true,
+    "quantile_endpoint_policy": "interval widths and coverage require exact equality, including discrete CDF ties",
+    "rtol": 1e-09,
+    "seeded_sample_counts_equal": true,
+    "tolerance_columns": {
+      "log_score": true,
+      "randomized_pit": true
+    }
+  },
+  "publication_eligible": false,
+  "schema_version": 1,
+  "source_revision": {
+    "provenance": "supplied",
+    "revision": "6fd7693164794359fd18749e6afe71b8c5ba490c"
+  },
+  "timing": {
+    "cpu_first_seconds": 0.29854387044906616,
+    "cpu_warm_seconds": [
+      0.29736436158418655,
+      0.29820554703474045,
+      0.2975054197013378,
+      0.2980482764542103,
+      0.29939351975917816
+    ],
+    "gpu_cold_context_plus_first_scoring_seconds": 9.686128839850426,
+    "gpu_first_scoring_seconds": 8.804098546504974,
+    "gpu_preflight_context_seconds": 0.8820302933454514,
+    "gpu_warm_seconds": [
+      0.03356897458434105,
+      0.033098600804805756,
+      0.0331726036965847,
+      0.033086925745010376,
+      0.0330483578145504
+    ],
+    "imports_and_input_generation_included": false,
+    "scope": "each measurement constructs CountPredictive and runs full predictive_diagnostics; GPU measurements include host/device transfers and explicit synchronization"
+  },
+  "transfer_policy": "mean/concentration and each CDF threshold batch transfer host-to-device; each CDF batch returns device-to-host; log mass, errors, sampling, and final frame stay on CPU"
+}

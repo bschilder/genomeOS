@@ -41,8 +41,10 @@ Reported per fold and pooled:
 - (superseded) share of held-out observations inside the predicted
   interval. Should approach 0.95 and 0.50; **below is overconfidence, above is uselessly wide**.
 - ``mae`` / ``rmse`` on the allele-frequency scale.
-- ``log_score`` — mean predictive log-likelihood of the held-out counts under the fitted
-  likelihood. A proper scoring rule, so it cannot be gamed by widening intervals.
+- ``log_score`` — the legacy binomial expression evaluated at the posterior median, without the
+  count-normalization term. It is retained for historical result compatibility, but is neither
+  the integrated predictive log probability nor comparable across different observed counts.
+  New benchmark code uses :mod:`genomeos.validation.predictive` instead.
 - The same metrics for a **constant baseline** (the training-set pooled frequency). A spatial
   model that cannot beat "assume the global average everywhere" has no spatial skill at all.
 """
@@ -241,9 +243,10 @@ def make_folds(
 
 
 def _log_score(ac: np.ndarray, an: np.ndarray, p: np.ndarray) -> float:
-    """Mean binomial log-likelihood per held-out observation, ignoring the constant term.
+    """Legacy median plug-in binomial expression, excluding the normalization term.
 
-    A proper scoring rule: unlike coverage it cannot be improved by simply widening intervals.
+    Retained unchanged for comparability with existing validation artifacts. It is not the exact
+    integrated count-predictive score; new benchmarks use ``CountPredictive.log_prob``.
     """
     p = np.clip(p, 1e-9, 1 - 1e-9)
     return float(np.mean(ac * np.log(p) + (an - ac) * np.log1p(-p)))
