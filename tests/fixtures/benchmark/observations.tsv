@@ -1,0 +1,5 @@
+variant_id	rsid	population_id	lat	lon	radius_km	ac	an	source_record_id	source	assay	date_lower	date_upper	sampling_design	disease_ascertainment_excluded	cohort_id	ingest_version
+chr1-100-A-G	rs100	pop-west-1	0.0	-20.0	25.0	0	20	west-v1	synthetic_fixture	array	0	0	population_random	False	cohort-west-1	fixture-v1
+chr2-200-C-T	rs200	pop-west-2	1.0	-20.0	25.0	8	20	west-v2	synthetic_fixture	array	0	0	healthy_reference	True	cohort-west-2	fixture-v1
+chr1-100-A-G	rs100	pop-east-1	0.0	20.0	25.0	2	20	east-v1	synthetic_fixture	array	0	0	population_random	False	cohort-east-1	fixture-v1
+chr2-200-C-T	rs200	pop-east-2	1.0	20.0	25.0	10	20	east-v2	synthetic_fixture	array	0	0	healthy_reference	True	cohort-east-2	fixture-v1

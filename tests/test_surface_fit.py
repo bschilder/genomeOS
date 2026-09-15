@@ -1,12 +1,19 @@
 """Surface fit tests (design §7). Sampling is small and seeded; see FAST_CONFIG."""
 
+import hashlib
+import subprocess
+import sys
+from contextlib import nullcontext
 from dataclasses import replace
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
 import pandas as pd
 import pandera.errors
+import pymc as pm
 import pytest
+import xarray as xr
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 from genomeos.surfaces.fit import (
@@ -22,6 +29,9 @@ from genomeos.surfaces.fit import (
     save_fit,
     to_unit_sphere,
 )
+from genomeos.surfaces.observation import SurveyQueries
+from genomeos.surfaces.prior import PRIOR_DRAWS
+from genomeos.validation.predictive import CountPredictive, predictive_diagnostics
 
 # Enough draws to actually converge: fit_surface now refuses a fit that has not mixed (§12),
 # so a too-short chain is a failure rather than a fast approximation. numpyro keeps it quick.
@@ -96,6 +106,16 @@ def test_fit_records_which_designs_were_applied(fit):
     assert set(fit.design_effects()["sampling_design"]) == {"healthy_reference"}
 
 
+def test_fit_records_actual_prediction_metadata(fit):
+    metadata = fit.prediction_metadata
+    assert metadata.convention == "new_cohort_count_v1"
+    assert metadata.fitted_designs == ("population_random", "healthy_reference")
+    assert metadata.training_cohort_ids == ("cohort-0", "cohort-1", "cohort-2", "cohort-3")
+    assert metadata.cohort_effect_applied is True
+    assert metadata.nugget_applied is False
+    assert metadata.likelihood == "beta_binomial"
+
+
 def test_predictions_carry_uncertainty_and_lie_on_the_frequency_scale(fit):
     pred = fit.predict(lat=[0.0, 5.0], lon=[-8.0, 8.0])
     assert list(pred.columns) == [
@@ -108,6 +128,53 @@ def test_predictions_carry_uncertainty_and_lie_on_the_frequency_scale(fit):
     assert (pred["q25"] <= pred["post_median"]).all()
     assert (pred["post_median"] <= pred["q75"]).all()
     assert (pred["q75"] <= pred["q975"]).all()
+
+
+def _assert_pointwise_prior_protocol(fit):
+    query = np.array([[9.0, 0.0], [20.0, 78.0], [-4.0, 22.0]])
+    original = np.array(fit._model["x_pred"].get_value(), copy=True)
+    sd = fit.prior_frequency_sd_at(query[:, 0], query[:, 1])
+    with fit._model:
+        pm.set_data({"x_pred": to_unit_sphere(query[:, 0], query[:, 1])})
+        direct = pm.sample_prior_predictive(
+            draws=PRIOR_DRAWS, var_names=["freq_pred"], random_seed=fit.config.seed
+        )
+        pm.set_data({"x_pred": original})
+    expected = direct.prior["freq_pred"].to_numpy().reshape(PRIOR_DRAWS, 3).std(axis=0)
+    np.testing.assert_allclose(sd, expected, rtol=0, atol=1e-10)
+    np.testing.assert_allclose(fit.prior_frequency_sd_at(query[:, 0], query[:, 1]), sd, rtol=0, atol=1e-10)
+    order = np.array([2, 0, 1])
+    np.testing.assert_allclose(
+        fit.prior_frequency_sd_at(query[order, 0], query[order, 1]), sd[order], rtol=0, atol=1e-10
+    )
+    split = np.concatenate(
+        [
+            fit.prior_frequency_sd_at(query[:1, 0], query[:1, 1]),
+            fit.prior_frequency_sd_at(query[1:, 0], query[1:, 1]),
+        ]
+    )
+    np.testing.assert_allclose(split, sd, rtol=0, atol=1e-10)
+
+
+def test_hsgp_pointwise_prior_uses_the_retained_predictive_graph(fit):
+    _assert_pointwise_prior_protocol(fit)
+
+
+@pytest.mark.parametrize(
+    "lat,lon,match",
+    [
+        ([], [], "nonempty"),
+        ([0.0], [0.0, 1.0], "same"),
+        ([[0.0]], [[0.0]], "one-dimensional"),
+        ([np.nan], [0.0], "finite"),
+        ([91.0], [0.0], "latitude"),
+        ([0.0], [181.0], "longitude"),
+        ([True], [False], "Boolean"),
+    ],
+)
+def test_pointwise_prior_refuses_invalid_queries(fit, lat, lon, match):
+    with pytest.raises(ValueError, match=match):
+        fit.prior_frequency_sd_at(lat, lon)
 
 
 def test_the_median_is_reported_because_the_mean_is_skewed_where_data_is_thin(fit):
@@ -135,9 +202,10 @@ def test_fit_is_deterministic_given_the_same_seed():
 def test_single_design_omits_beta_design_rather_than_pretending_to_estimate_it():
     """With one design there is no contrast, so β_design is unidentifiable (§7.1a)."""
     obs = _observations(designs=("population_random",))
-    fit = fit_surface(obs, FAST_CONFIG)
+    fit = fit_surface(obs, replace(FAST_CONFIG, reference_design="healthy_reference"))
     assert fit.beta_design_applied is False
     assert fit.design_effects().empty
+    assert fit.prediction_metadata.fitted_designs == ("population_random",)
 
 
 def test_beta_binomial_likelihood_is_selectable():
@@ -205,15 +273,30 @@ def test_inducing_placement_is_deterministic_given_the_seed():
     assert np.allclose(inducing_points(x, 25, seed=7), inducing_points(x, 25, seed=7))
 
 
-def test_the_inducing_approximation_fits_and_predicts():
+@pytest.mark.parametrize("placement", ["h3", "kmeans"])
+def test_the_inducing_approximation_fits_and_predicts(placement):
     observations = _observations(n=70)
-    fit = fit_surface(
-        observations,
-        FitConfig(draws=400, tune=800, chains=4, approximation="inducing", n_inducing=40),
+    context = (
+        pytest.warns(UserWarning, match=r"inducing points are .*They are redundant")
+        if placement == "h3"
+        else nullcontext()
     )
+    with context:
+        fit = fit_surface(
+            observations,
+            FitConfig(
+                draws=400,
+                tune=800,
+                chains=4,
+                approximation="inducing",
+                inducing_placement=placement,
+                n_inducing=40,
+            ),
+        )
     pred = fit.predict(lat=[0.0, 0.0], lon=[-8.0, 8.0])
     assert ((pred["post_median"] > 0) & (pred["post_median"] < 1)).all()
     assert pred["post_median"].iloc[0] < pred["post_median"].iloc[1], "must follow the cline"
+    _assert_pointwise_prior_protocol(fit)
 
 
 def test_inducing_resolution_is_set_by_point_count_not_by_a_global_grid():
@@ -307,10 +390,195 @@ def test_a_saved_fit_predicts_identically_to_the_original(fit, tmp_path):
     for column in ("post_median", "post_sd", "q025", "q975"):
         np.testing.assert_allclose(before[column], after[column])
     assert reloaded.correlation_range_km == fit.correlation_range_km
-    assert reloaded.prior_frequency_sd == fit.prior_frequency_sd
+    np.testing.assert_allclose(
+        reloaded.prior_frequency_sd_at(lat, lon),
+        fit.prior_frequency_sd_at(lat, lon),
+        rtol=0,
+        atol=1e-10,
+    )
     assert reloaded.design_levels == fit.design_levels
 
 
+def test_owned_legacy_fit_is_reconstructed_without_refit_or_rewrite(fit, tmp_path):
+    import cloudpickle
+
+    legacy = SimpleNamespace(**fit.__dict__, prior_frequency_sd=9.9e99)
+    path = tmp_path / "legacy.pkl"
+    with path.open("wb") as stream:
+        cloudpickle.dump({"format": 1, "fit": legacy}, stream)
+    before_hash = hashlib.sha256(path.read_bytes()).hexdigest()
+    query = np.array([[9.0, 0.0], [20.0, 78.0]])
+    expected_post = fit.predict(query[:, 0], query[:, 1])
+    expected_prior = fit.prior_frequency_sd_at(query[:, 0], query[:, 1])
+
+    migrated = load_fit(path)
+
+    assert hashlib.sha256(path.read_bytes()).hexdigest() == before_hash
+    assert not hasattr(migrated, "prior_frequency_sd")
+    np.testing.assert_allclose(
+        migrated.predict(query[:, 0], query[:, 1])[["post_median", "post_sd"]],
+        expected_post[["post_median", "post_sd"]],
+    )
+    np.testing.assert_allclose(
+        migrated.prior_frequency_sd_at(query[:, 0], query[:, 1]),
+        expected_prior,
+        rtol=0,
+        atol=1e-10,
+    )
+
+
+def test_legacy_fit_refuses_missing_fields_invalid_config_and_predictive_nodes(fit, tmp_path):
+    import cloudpickle
+
+    cases = []
+    missing = fit.__dict__.copy()
+    del missing["_scale"]
+    cases.append((SimpleNamespace(**missing), "missing required fields"))
+    cases.append((SimpleNamespace(**{**fit.__dict__, "config": "not-a-config"}), "configuration"))
+    cases.append((SimpleNamespace(**{**fit.__dict__, "_model": pm.Model()}), "predictive nodes"))
+    for index, (legacy, match) in enumerate(cases):
+        path = tmp_path / f"invalid-{index}.pkl"
+        with path.open("wb") as stream:
+            cloudpickle.dump({"format": 1, "fit": legacy}, stream)
+        with pytest.raises(ValueError, match=match):
+            load_fit(path)
+
+
+def test_boolean_fit_format_is_not_misread_as_legacy_format_one(fit, tmp_path):
+    import cloudpickle
+
+    path = tmp_path / "boolean-format.pkl"
+    with path.open("wb") as stream:
+        cloudpickle.dump({"format": True, "fit": fit}, stream)
+    with pytest.raises(ValueError, match="supported format"):
+        load_fit(path)
+def test_observation_parameters_follow_real_posterior_ids_and_query_identity(fit):
+    queries = SurveyQueries(
+        observation_ids=("unseen-a", "unseen-b", "unseen-c"),
+        cohort_ids=("new-shared", "new-shared", "new-other"),
+        sampling_designs=("population_random", "healthy_reference", "healthy_reference"),
+        lat=(0.0, 0.0, 5.0),
+        lon=(-180.0, 180.0, 8.0),
+    )
+    parameters = fit.predict_new_cohort_parameters(queries)
+    expected_ids = tuple(
+        (int(chain), int(draw))
+        for chain in sorted(fit.idata.posterior.coords["chain"].to_numpy())
+        for draw in sorted(fit.idata.posterior.coords["draw"].to_numpy())
+    )
+    assert parameters.draw_ids == expected_ids
+
+    order = (2, 0, 1)
+    permuted_queries = SurveyQueries(
+        observation_ids=tuple(queries.observation_ids[index] for index in order),
+        cohort_ids=tuple(queries.cohort_ids[index] for index in order),
+        sampling_designs=tuple(queries.sampling_designs[index] for index in order),
+        lat=tuple(queries.lat[index] for index in order),
+        lon=tuple(queries.lon[index] for index in order),
+    )
+    permuted = fit.predict_new_cohort_parameters(permuted_queries)
+    inverse = [permuted.queries.observation_ids.index(value) for value in queries.observation_ids]
+    assert permuted.draw_ids == parameters.draw_ids
+    np.testing.assert_array_equal(parameters.mean_draws, permuted.mean_draws[:, inverse])
+    np.testing.assert_array_equal(parameters.concentration, permuted.concentration[:, inverse])
+
+    predictive = CountPredictive(
+        parameters.mean_draws, concentration=parameters.concentration
+    )
+    diagnostics = predictive_diagnostics(predictive, ac=[0, 1, 2], an=[10, 12, 20])
+    assert not diagnostics.isna().any().any()
+    assert np.isfinite(diagnostics.select_dtypes(include="number").to_numpy()).all()
+
+
+def test_new_observation_parameters_survive_save_load_exactly(fit, tmp_path):
+    queries = SurveyQueries(
+        observation_ids=("cache-a", "cache-b"),
+        cohort_ids=("new-cache", "new-cache"),
+        sampling_designs=("population_random", "healthy_reference"),
+        lat=(0.0, 5.0),
+        lon=(-8.0, 8.0),
+    )
+    before = fit.predict_new_cohort_parameters(queries)
+    live_values = fit.idata.posterior["concentration"].data
+    live_dtype = fit.idata.posterior["concentration"].dtype
+    groups = fit.idata.groups
+    save_fit(fit, tmp_path / "observation-surface.pkl")
+    assert fit.idata.posterior["concentration"].data is live_values
+    assert fit.idata.posterior["concentration"].dtype == live_dtype
+
+    reloaded = load_fit(tmp_path / "observation-surface.pkl")
+    assert reloaded.idata.groups == groups
+    for original_node in fit.idata.subtree:
+        xr.testing.assert_identical(
+            original_node.dataset, reloaded.idata[original_node.path].dataset
+        )
+    np.savez(
+        tmp_path / "before.npz",
+        mean_draws=before.mean_draws,
+        concentration=before.concentration,
+        draw_ids=np.asarray(before.draw_ids, dtype=np.int64),
+    )
+    script = """
+import sys
+from pathlib import Path
+import numpy as np
+from genomeos.surfaces.fit import load_fit
+from genomeos.surfaces.observation import ObservationModelMetadata, SurveyQueries
+
+directory = Path(sys.argv[1])
+fitted = load_fit(directory / "observation-surface.pkl")
+expected_metadata = ObservationModelMetadata(
+    convention="new_cohort_count_v1",
+    fitted_designs=("population_random", "healthy_reference"),
+    training_cohort_ids=("cohort-0", "cohort-1", "cohort-2", "cohort-3"),
+    cohort_effect_applied=True,
+    nugget_applied=False,
+    likelihood="beta_binomial",
+)
+assert fitted.prediction_metadata == expected_metadata
+queries = SurveyQueries(
+    observation_ids=("cache-a", "cache-b"),
+    cohort_ids=("new-cache", "new-cache"),
+    sampling_designs=("population_random", "healthy_reference"),
+    lat=(0.0, 5.0),
+    lon=(-8.0, 8.0),
+)
+parameters = fitted.predict_new_cohort_parameters(queries)
+np.savez(
+    directory / "after.npz",
+    mean_draws=parameters.mean_draws,
+    concentration=parameters.concentration,
+    draw_ids=np.asarray(parameters.draw_ids, dtype=np.int64),
+)
+"""
+    subprocess.run([sys.executable, "-c", script, str(tmp_path)], check=True)
+    after = np.load(tmp_path / "after.npz")
+
+    np.testing.assert_array_equal(after["draw_ids"], np.asarray(before.draw_ids))
+    np.testing.assert_array_equal(after["mean_draws"], before.mean_draws)
+    np.testing.assert_array_equal(after["concentration"], before.concentration)
+
+
+def test_save_fit_materializes_legacy_inference_data_containers(fit, tmp_path):
+    class LegacyInferenceData:
+        def __init__(self, posterior):
+            self.posterior = posterior
+
+        def copy(self):
+            return LegacyInferenceData(self.posterior.copy(deep=True))
+
+        def groups(self):
+            return ("posterior",)
+
+    posterior = xr.Dataset(
+        {"parameter": (("chain", "draw"), np.array([[1.25, 2.5]]))},
+        coords={"chain": [7], "draw": [11, 13]},
+        attrs={"source": "controlled legacy container"},
+    )
+    legacy_fit = replace(fit, idata=LegacyInferenceData(posterior))
+    reloaded = load_fit(save_fit(legacy_fit, tmp_path / "legacy-container.pkl"))
+
+    xr.testing.assert_identical(reloaded.idata.posterior, posterior)
 def test_loading_something_that_is_not_a_fit_is_refused(tmp_path):
     """A cache file is environment-coupled and can be stale after a PyMC upgrade. Refusing beats
     returning a half-initialised object that fails later, somewhere less obvious."""
@@ -387,6 +655,8 @@ def test_a_cohort_per_observation_is_not_estimated_as_a_cohort_effect():
         fit = fit_surface(obs, FitConfig(draws=400, tune=600, chains=4))
     assert fit.beta_cohort_applied is False
     assert "cohort_sd" not in fit.idata.posterior
+    assert fit.prediction_metadata.cohort_effect_applied is False
+    assert fit.prediction_metadata.training_cohort_ids == tuple(sorted(obs["cohort_id"]))
 
 
 def test_grouped_cohorts_are_still_estimated():
