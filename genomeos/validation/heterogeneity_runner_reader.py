@@ -245,7 +245,7 @@ def read_collected_b0h_snapshot(
 ) -> CollectedB0HSnapshot:
     from genomeos.validation.heterogeneity_runner_binding import (
         require_paired_generations,
-        validate_case_evidence,
+        validate_case_evidence_batch,
     )
 
     for digest in (expected_database_sha256, expected_inventory_sha256):
@@ -326,8 +326,7 @@ def read_collected_b0h_snapshot(
         cases = tuple(
             CaseEvidence(reader.campaign_sha256, case, reader.stages(case)) for case in manifest.cases
         )
-        for case in cases:
-            validate_case_evidence(manifest, case)
+        validate_case_evidence_batch(manifest, cases)
         indexed = {case.case: case for case in cases}
         for case in cases:
             if case.case.study_id != 0 and case.case.track_id == 0:

@@ -44,6 +44,29 @@ def test_511_or_zero_ranks_never_get_a_full_n_test():
                                  RankNullReference(511, 1653499886, (100,) * 100000))
 
 
+def test_batch_evidence_validation_hashes_and_indexes_manifest_once(tmp_path, monkeypatch):
+    binding = importlib.import_module("genomeos.validation.heterogeneity_runner_binding")
+    manifest, _, _ = campaign(tmp_path)
+    campaign_sha256 = record_digest(manifest)
+    cases = tuple(CaseEvidence(campaign_sha256, case, ()) for case in manifest.cases)
+    original = binding.record_digest
+    manifest_digest_calls = 0
+
+    def counted_digest(value):
+        nonlocal manifest_digest_calls
+        if value is manifest:
+            manifest_digest_calls += 1
+        return original(value)
+
+    monkeypatch.setattr(binding, "record_digest", counted_digest)
+    validated = binding.validate_case_evidence_batch(manifest, cases)
+    assert validated.campaign_sha256 == campaign_sha256
+    assert len(validated.next_stage_keys) == 1938
+    assert all(key is not None and key.stage == "generation"
+               for key in validated.next_stage_keys)
+    assert manifest_digest_calls == 1
+
+
 def test_empty_campaign_accounts_all_records_without_science(tmp_path, monkeypatch):
     reduction = importlib.import_module("genomeos.validation.heterogeneity_reduction")
     manifest, _, null = campaign(tmp_path)

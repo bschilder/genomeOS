@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import struct
+from dataclasses import dataclass
 
 from genomeos.validation.heterogeneity_attempts import (
     FitAttemptResult,
@@ -24,8 +25,17 @@ from genomeos.validation.heterogeneity_simulation_types import (
     AllUnavailableDataset,
     GeneratedDataset,
     GenerationFailure,
+    SbcCaseId,
 )
 from genomeos.validation.heterogeneity_summary_types import HeterogeneityFitSummary
+
+
+@dataclass(frozen=True, slots=True)
+class ValidatedCaseEvidenceBatch:
+    """One manifest digest and next-stage result per validated evidence item."""
+
+    campaign_sha256: str
+    next_stage_keys: tuple[StageKey | None, ...]
 
 
 def _equal_float(left: float, right: float) -> bool:
@@ -121,10 +131,16 @@ def _bind_root(
                 raise ValueError("summary truth/targets/backend binding mismatch")
 
 
-def validate_case_evidence(manifest: CampaignManifest, evidence: CaseEvidence) -> None:
-    if type(evidence) is not CaseEvidence or evidence.campaign_sha256 != record_digest(manifest):
+def _validate_case_evidence(
+    manifest: CampaignManifest,
+    evidence: CaseEvidence,
+    *,
+    campaign_sha256: str,
+    case_membership: frozenset[SbcCaseId],
+) -> StageKey | None:
+    if type(evidence) is not CaseEvidence or evidence.campaign_sha256 != campaign_sha256:
         raise ValueError("case campaign identity mismatch")
-    if evidence.case not in manifest.cases or type(evidence.stages) is not tuple:
+    if evidence.case not in case_membership or type(evidence.stages) is not tuple:
         raise ValueError("case membership or stage sequence mismatch")
     prior = CaseEvidence(evidence.campaign_sha256, evidence.case, ())
     dataset, accepted = None, None
@@ -179,11 +195,35 @@ def validate_case_evidence(manifest: CampaignManifest, evidence: CaseEvidence) -
         if type(stage.value) is FitAttemptResult and stage.value.status == "accepted":
             accepted = stage.value
         prior = CaseEvidence(prior.campaign_sha256, prior.case, prior.stages + (stage,))
+    return _next(manifest, evidence)
+
+
+def validate_case_evidence_batch(
+    manifest: CampaignManifest, evidence: tuple[CaseEvidence, ...]
+) -> ValidatedCaseEvidenceBatch:
+    """Validate many cases while hashing and indexing their manifest once."""
+    if type(evidence) is not tuple:
+        raise ValueError("case evidence batch must be an exact tuple")
+    campaign_sha256 = record_digest(manifest)
+    case_membership = frozenset(manifest.cases)
+    next_keys = tuple(
+        _validate_case_evidence(
+            manifest,
+            item,
+            campaign_sha256=campaign_sha256,
+            case_membership=case_membership,
+        )
+        for item in evidence
+    )
+    return ValidatedCaseEvidenceBatch(campaign_sha256, next_keys)
+
+
+def validate_case_evidence(manifest: CampaignManifest, evidence: CaseEvidence) -> None:
+    validate_case_evidence_batch(manifest, (evidence,))
 
 
 def next_stage_key(manifest: CampaignManifest, evidence: CaseEvidence) -> StageKey | None:
-    validate_case_evidence(manifest, evidence)
-    return _next(manifest, evidence)
+    return validate_case_evidence_batch(manifest, (evidence,)).next_stage_keys[0]
 
 
 def require_paired_generations(left: StoredStage, right: StoredStage) -> None:
