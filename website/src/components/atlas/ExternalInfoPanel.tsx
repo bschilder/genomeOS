@@ -5,9 +5,10 @@ import { createPortal } from 'react-dom';
 
 import type { ArtifactRef, ExternalInfo } from '../../atlas/contracts';
 import { downloadExternalInfo } from '../../atlas/external-info';
+import { AlphagenomeEvidence } from './AlphagenomeEvidence';
 import { GnomadEvidence } from './GnomadEvidence';
 
-type ExternalSource = 'gnomad' | 'dbsnp';
+type ExternalSource = 'gnomad' | 'dbsnp' | 'alphagenome';
 
 interface ExternalInfoPanelProps {
   artifact: ArtifactRef;
@@ -15,7 +16,9 @@ interface ExternalInfoPanelProps {
 }
 
 function sourceLabel(source: ExternalSource): string {
-  return source === 'gnomad' ? 'gnomAD' : 'dbSNP';
+  if (source === 'gnomad') return 'gnomAD';
+  if (source === 'dbsnp') return 'dbSNP';
+  return 'AlphaGenome';
 }
 
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -169,6 +172,7 @@ function ExternalDetails({
         )}
         {info?.source === 'gnomad' && <GnomadEvidence info={info} />}
         {info?.source === 'dbsnp' && <DbsnpRecord info={info} />}
+        {info?.source === 'alphagenome' && <AlphagenomeEvidence info={info} />}
 
         {info && (
           <section className="atlas-external-provenance">
