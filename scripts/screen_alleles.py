@@ -26,6 +26,7 @@ from pathlib import Path
 from genomeos.observations.sources import afnd_frequencies as afnd_freq
 from genomeos.surfaces.batch import VariantJob, run_batch, write_exclusions
 from genomeos.surfaces.fit import FitConfig, save_fit
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
 
 
 def main() -> None:
@@ -79,7 +80,9 @@ def main() -> None:
         save_fit(fit, args.out / f"{stem}.fit.pkl")
         summary[variant_id] = {
             "correlation_range_km": round(float(fit.correlation_range_km), 1),
-            "prior_frequency_sd": round(float(fit.prior_frequency_sd), 5),
+            "prior_normalization": PRIOR_NORMALIZATION,
+            "prior_draws": PRIOR_DRAWS,
+            "prior_seed": fit.config.seed,
             "n_observations": len(jobs[chosen.index(variant_id)].observations),
             "inducing_spacing_ratio": (
                 round(float(fit.inducing_spacing_ratio), 3)

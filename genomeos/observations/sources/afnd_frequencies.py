@@ -8,11 +8,21 @@ variants rather than two.
 
 **Counts are reconstructed, and that is the main caveat.** AFND publishes a *frequency*
 (`alleles_over_2n`) and a sample size (`n`), not the underlying allele count, so
-``ac = round(af * 2n)``. The frequency is printed to four decimal places, which bounds the
+``ac = round(af * 2n)``. Most rows print the frequency to four decimal places, which bounds the
 reconstruction error at ``0.00005 * 2n`` — under half an allele for any sample below 10,000, so
 the recovered integer is almost always exact. It is still a reconstruction, and a binomial
 likelihood over a reconstructed count is not quite the same object as one over a measured count.
 Recorded in `assay` as ``frequency_reconstructed`` rather than left to be inferred.
+
+Four decimals is the **worst case across the corpus, not a description of every row**. About 8% of
+rows — 10,040 of 123,502 in the 2026-08 harvest, all `hla` — print to seven decimals for rare
+alleles, e.g. ``0.0000980``. The bound above is therefore conservative for those rows rather than
+violated, so the reconstruction claim is unaffected. **Never format this column to fixed decimals
+for an identity or an equality comparison.** ``f"{af:.4f}"`` maps ``0.0000980`` and ``0.0000900``
+onto one string and ``0.0000050`` onto ``"0.0000"`` — collapsing distinct measurements and
+publishing an observed rare allele as absent (#231, and #228 where that was proposed and rejected).
+`str()` of the parsed float is the shortest round-tripping form and is lossless at any precision
+AFND publishes.
 
 **Ascertainment is inherited from the population, and refused where AFND does not state it.**
 §7.1 gives `sampling_design` and `disease_ascertainment_excluded` no defaults. The registry keeps
@@ -230,7 +240,21 @@ def load(
 
     refuse(freq["af"].isna(), "no_frequency_reported")
     refuse(freq["n_indiv"].isna() | (freq["n_indiv"] <= 0), "no_sample_size")
+    # A fraction of an individual is not a sample size. Truncating one would invent a measurement
+    # nobody made, and it would do so inconsistently: `an` rounds 100.5 to 201 while an identity
+    # keyed on `int()` truncates it to 100, so the same row would claim 100.5 individuals in its
+    # counts and 100 in its identity. Worse, 100.0 and 100.5 differ as floats — passing the
+    # duplicate check below — and then collide once truncated, which is the `unique=True` failure
+    # #154 exists to prevent. Refused here rather than coerced, and before the duplicate check, so
+    # such a row is reported for what is actually wrong with it.
+    refuse(freq["n_indiv"].notna() & (freq["n_indiv"] % 1 != 0), "fractional_sample_size")
     refuse(~freq["af"].between(0.0, 1.0), "frequency_outside_unit_interval")
+
+    # One canonical integer, built after the checks that guarantee it is safe to take, and the
+    # only sample size anything downstream reads. The duplicate check, the count reconstruction
+    # and the record identity all consume this column, so they cannot disagree about how many
+    # individuals a row describes. Rows still refused at this point never reach it.
+    freq["n_individuals"] = freq["n_indiv"].where(keep).astype("Int64")
 
     # The join is on population name, which is AFND's own public key and the key both sides
     # already use — so this is an exact join, not a fuzzy match. Unmatched names are almost all
@@ -256,7 +280,7 @@ def load(
     # Exact repeats carry no distinguishable evidence, but must be counted as
     # refusals rather than disappearing through an unreported drop.
     refuse(
-        freq.duplicated(subset=["group", "gene", "allele", "population", "af", "n_indiv"]),
+        freq.duplicated(subset=["group", "gene", "allele", "population", "af", "n_individuals"]),
         "duplicate_source_record",
     )
 
@@ -267,7 +291,7 @@ def load(
         refusals["below_min_populations"] = int(below.sum())
         rows = rows[~below]
 
-    an = (2 * rows["n_indiv"]).round().astype(int)
+    an = (2 * rows["n_individuals"]).astype(int)
     designs = rows["population"].map(lambda p: ascertainment[p])
     ids = rows["population"].map(name_to_id)
     geo = placed.reindex(ids.to_numpy())
@@ -286,6 +310,10 @@ def load(
             "ac": (rows["af"] * an).round().astype(int),
             "an": an,
             "source_record_id": [
+                # `int(n)` cannot truncate: a non-integral sample size was already refused
+                # as `fractional_sample_size`. It keeps NumPy out of the identity — an `Int64`
+                # column iterates as `np.int64`, and the hash is `str()` of each part, so a
+                # future NumPy `__str__` change would otherwise re-mint every published id.
                 stable_source_record_id("afnd-frequencies", group, gene, allele, population, af, int(n))
                 for group, gene, allele, population, af, n in zip(
                     rows["group"],
@@ -293,7 +321,7 @@ def load(
                     rows["allele"],
                     rows["population"],
                     rows["af"],
-                    rows["n_indiv"],
+                    rows["n_individuals"],
                     strict=True,
                 )
             ],
@@ -316,6 +344,6 @@ def load(
         refusals=refusals,
         n_variants=int(obs["variant_id"].nunique()),
         n_populations=int(obs["population_id"].nunique()),
-        reconstructed_beyond_exact=int((rows["n_indiv"] > EXACT_RECONSTRUCTION_MAX_N).sum()),
+        reconstructed_beyond_exact=int((rows["n_individuals"] > EXACT_RECONSTRUCTION_MAX_N).sum()),
     )
     return obs, report

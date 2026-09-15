@@ -246,8 +246,8 @@ def national_totals_propagating_masked(
     coverage gets an interval wide enough to be visibly untrustworthy.
 
     That argument rests entirely on the caller's draws actually being near-prior in masked cells.
-    They are for a posterior sampled at those cells (`SurfaceFit.prior_frequency_sd` is the prior
-    scale the mask's `posterior_contraction` is measured against). They are not if a caller
+    They are for a posterior sampled at those cells (`SurfaceFit.prior_frequency_sd_at` supplies
+    the local prior scales the mask's `posterior_contraction` is measured against). They are not if a caller
     passes draws that were narrowed, clipped or filled elsewhere — and this function cannot tell,
     which is one of the arguments against adopting it.
 

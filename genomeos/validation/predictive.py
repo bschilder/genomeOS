@@ -9,9 +9,9 @@ Their endpoints lie on the ``1 / AN`` frequency grid and coverage can therefore 
 nominal level, especially for small denominators or boundary-heavy predictions. Width and
 coverage must be interpreted together rather than treating nominal coverage as exactly attainable.
 
-Beta-binomial CDFs are summed exactly in fixed-size chunks, normally using the shorter support
-tail. If its log sum rounds to zero, the small complementary tail is summed directly rather than
-erased by subtraction. This keeps memory bounded independently of ``AN`` but does not hide the
+Beta-binomial CDFs are summed exactly in fixed-size chunks, starting with the shorter support
+tail. If that tail has probability above one half, the small complementary tail is summed
+directly. This keeps memory bounded independently of ``AN`` but does not hide the
 computational cost: an exact interior CDF or quantile can still require time proportional to a
 support-tail length.
 
@@ -43,6 +43,7 @@ _MAX_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
 _CDF_CHUNK_SIZE = 4096
 MAX_BETA_SCORING_COUNT = 65_536
 _MASS_DRAW_CHUNK_SIZE = 128
+_LOG_HALF = float(np.log(0.5))
 
 
 def _beta_product_log_mass(k: int, n: int, mean: np.ndarray, c: np.ndarray) -> np.ndarray:
@@ -178,15 +179,20 @@ def _beta_binomial_cdf(k: int, n: int, mean: float, concentration: float) -> flo
     upper_terms = n - k
     if lower_terms <= upper_terms:
         log_cdf = _beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)
-        if log_cdf < 0.0:
-            return float(np.exp(log_cdf))
+        if log_cdf <= _LOG_HALF:
+            result = float(np.exp(log_cdf))
+        else:
+            log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
+            result = float(-np.expm1(log_survival))
+    else:
         log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
-        return float(-np.expm1(log_survival))
-
-    log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
-    if log_survival < 0.0:
-        return float(-np.expm1(log_survival))
-    return float(np.exp(_beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)))
+        if log_survival <= _LOG_HALF:
+            result = float(-np.expm1(log_survival))
+        else:
+            result = float(np.exp(_beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)))
+    if not np.isfinite(result) or not 0.0 <= result <= 1.0:
+        raise FloatingPointError("beta-binomial CDF is outside the stable numeric domain")
+    return result
 
 
 def _validate_beta_shapes(mean: np.ndarray, concentration: np.ndarray) -> None:
