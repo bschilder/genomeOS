@@ -50,16 +50,35 @@ from genomeos.validation.reference_counts import (  # noqa: E402
 
 COUNT_COLUMNS = ("record_id", "variant_id", "group_id", "region_id", "variant_group", "ac", "an")
 DIAGNOSTIC_COLUMNS = (
-    "log_score", "absolute_error", "squared_error", "coverage_50", "interval_width_50",
-    "coverage_80", "interval_width_80", "coverage_95", "interval_width_95", "randomized_pit",
+    "log_score",
+    "absolute_error",
+    "squared_error",
+    "coverage_50",
+    "interval_width_50",
+    "coverage_80",
+    "interval_width_80",
+    "coverage_95",
+    "interval_width_95",
+    "randomized_pit",
 )
 PREDICTION_COLUMNS = (
-    "split_id", "source_record_id", "variant_id", "region_id", "variant_group", "cohort_id",
-    "observed_ac", "observed_an",
+    "split_id",
+    "source_record_id",
+    "variant_id",
+    "region_id",
+    "variant_group",
+    "cohort_id",
+    "observed_ac",
+    "observed_an",
 ) + DIAGNOSTIC_COLUMNS
 POSTERIOR_COLUMNS = (
-    "split_id", "variant_id", "training_observation_count", "training_ac", "training_an",
-    "posterior_alpha", "posterior_beta",
+    "split_id",
+    "variant_id",
+    "training_observation_count",
+    "training_ac",
+    "training_an",
+    "posterior_alpha",
+    "posterior_beta",
 )
 ROW_STATUS_COLUMNS = ("split_id", "record_id", "status", "reason")
 OUTPUT_FILENAMES = ("splits.json", "row_status.tsv", "predictions.tsv", "posteriors.tsv", "summary.json")
@@ -102,10 +121,55 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--evidence-role", required=True, choices=("development", "synthetic"))
     parser.add_argument("--prior-alpha", required=True, type=_positive_float)
     parser.add_argument("--prior-beta", required=True, type=_positive_float)
+    parser.add_argument(
+        "--model",
+        choices=("pooled_beta_counts", "B0H_population_heterogeneity"),
+        default="pooled_beta_counts",
+    )
+    parser.add_argument("--rho-prior-alpha", type=_positive_float)
+    parser.add_argument("--rho-prior-beta", type=_positive_float)
+    parser.add_argument("--draws", type=_positive_integer)
+    parser.add_argument("--tune", type=_positive_integer)
+    parser.add_argument("--chains", type=_positive_integer)
+    parser.add_argument("--target-accept", type=_positive_float)
+    parser.add_argument("--cdf-backend", choices=("scipy", "cupy"))
     parser.add_argument("--folds", type=_positive_integer, default=5)
     parser.add_argument("--seed", type=_nonnegative_integer, default=42)
     parser.add_argument("--out", required=True, type=Path)
     return parser
+
+
+def _model_config(args: argparse.Namespace):
+    """Distinguish absent options from explicit assertions before importing B0H."""
+    fields = ("rho_prior_alpha", "rho_prior_beta", "draws", "tune", "chains", "target_accept")
+    if args.model == "pooled_beta_counts":
+        supplied = [field for field in fields if getattr(args, field) is not None]
+        if supplied:
+            raise ValueError(f"pooled_beta_counts rejects explicit B0H settings: {supplied}")
+        if args.cdf_backend not in (None, "scipy"):
+            raise ValueError("pooled_beta_counts uses scipy and rejects cdf_backend=cupy")
+        return None
+    if args.model != "B0H_population_heterogeneity":
+        raise ValueError("unknown reference-count model")
+    if args.folds != 5:
+        raise ValueError("B0H_population_heterogeneity requires exactly five folds")
+    if args.rho_prior_alpha is None or args.rho_prior_beta is None:
+        raise ValueError("B0H_population_heterogeneity requires both rho prior shapes")
+    if args.cdf_backend not in (None, "scipy", "cupy"):
+        raise ValueError("cdf_backend must be scipy or cupy")
+    from genomeos.surfaces.heterogeneity_types import PopulationHeterogeneityConfig
+
+    return PopulationHeterogeneityConfig(
+        args.prior_alpha,
+        args.prior_beta,
+        args.rho_prior_alpha,
+        args.rho_prior_beta,
+        draws=500 if args.draws is None else args.draws,
+        tune=1000 if args.tune is None else args.tune,
+        chains=4 if args.chains is None else args.chains,
+        target_accept=0.9 if args.target_accept is None else args.target_accept,
+        seed=args.seed,
+    )
 
 
 def _sha(path: Path) -> dict[str, object]:
@@ -153,7 +217,10 @@ def _read_dependencies(data: bytes) -> tuple[tuple[tuple[str, str], ...], str]:
 
 
 def _json_write(path: Path, value: object) -> None:
-    path.write_text(json.dumps(value, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    path.write_text(
+        json.dumps(value, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _write_tsv(frame: pd.DataFrame, path: Path) -> None:
@@ -169,17 +236,16 @@ def _git_record() -> dict[str, object]:
     revision = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True, check=True
     ).stdout.strip()
-    dirty = bool(subprocess.run(
-        ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout)
+    dirty = bool(
+        subprocess.run(
+            ["git", "status", "--porcelain"], cwd=ROOT, capture_output=True, text=True, check=True
+        ).stdout
+    )
     return {"head": revision, "dirty": dirty}
 
 
 def _package_versions() -> dict[str, str]:
-    return {
-        name: importlib.metadata.version(name)
-        for name in ("numpy", "scipy", "pandas")
-    }
+    return {name: importlib.metadata.version(name) for name in ("numpy", "scipy", "pandas")}
 
 
 def _science_hashes() -> dict[str, str]:
@@ -208,9 +274,10 @@ def _seeds(seed: int, count: int) -> tuple[int, tuple[int, ...]]:
 
 
 def run(args: argparse.Namespace) -> int:
-    """Validate structure first, then publish a complete deterministic outcome ledger."""
+    """Publish deterministic B0/B0H evidence (design §§5, 7–8, 12; integration §§2–7)."""
     if args.out.exists():
         raise ValueError(f"output directory already exists: {args.out}")
+    config = _model_config(args)
     for field in ("source_release", "cohort_stage"):
         value = getattr(args, field)
         if not isinstance(value, str) or not value.strip():
@@ -220,14 +287,28 @@ def run(args: argparse.Namespace) -> int:
     package_versions = _package_versions()
     counts_bytes = args.counts.read_bytes()
     dependency_bytes = args.dependencies.read_bytes()
-    input_files = {
-        "counts": _bytes_record(counts_bytes),
-        "dependencies": _bytes_record(dependency_bytes),
-    }
+    input_files = {"counts": _bytes_record(counts_bytes), "dependencies": _bytes_record(dependency_bytes)}
     rows = _read_counts(counts_bytes)
     edges, qualification = _read_dependencies(dependency_bytes)
-    split_seed, pit_seeds = _seeds(args.seed, args.folds)
+    if config is None:
+        split_seed, pit_seeds = _seeds(args.seed, args.folds)
+    else:
+        from genomeos.validation.reference_b0h_artifacts import (
+            B0H_OUTPUT_FILENAMES,
+            encode_b0h,
+            json_bytes,
+            validate_b0h_publication,
+        )
+        from genomeos.validation.reference_b0h_fold import b0h_seeds, run_b0h_fold
+        from scripts.reference_b0h_provenance import b0h_package_versions, b0h_runtime, b0h_source_hashes
+
+        split_seed, pit_seeds, fit_seeds = b0h_seeds(args.seed)
     folds = reference_group_folds(rows, dependency_edges=edges, n_folds=args.folds, seed=split_seed)
+    if config is not None:
+        backend = args.cdf_backend or "scipy"
+        sources.update(b0h_source_hashes(ROOT, cdf_backend=backend))
+        package_versions.update(b0h_package_versions(cdf_backend=backend))
+        runtime = b0h_runtime()
 
     by_id = {row.record_id: row for row in rows}
     predictions: list[dict[str, object]] = []
@@ -235,45 +316,80 @@ def run(args: argparse.Namespace) -> int:
     row_status: list[dict[str, object]] = []
     statuses: list[BenchmarkFoldStatus] = []
     split_records = []
+    b0h_results = []
     for index, fold in enumerate(folds):
         training = tuple(by_id[key] for key in fold.train_ids)
         testing = tuple(by_id[key] for key in fold.test_ids)
         unavailable = tuple(row.record_id for row in testing if row.an == 0)
         scoreable = tuple(row for row in testing if row.an > 0)
-        try:
-            fitted = fit_reference_b0(
-                training, testing, prior_alpha=args.prior_alpha, prior_beta=args.prior_beta
+        if config is not None:
+            outcome = run_b0h_fold(
+                training,
+                testing,
+                config=config,
+                initial_seed=fit_seeds[index][0],
+                retry_seed=fit_seeds[index][1],
+                pit_seed=pit_seeds[index],
+                cdf_backend=backend,
             )
-            scored = tuple(by_id[key] for key in fitted.observation_ids)
-            diagnostics = predictive_diagnostics(
-                fitted.marginal_predictive,
-                [row.ac for row in scored],
-                [row.an for row in scored],
-                seed=pit_seeds[index],
-            )
-            diagnostics = validate_predictive_diagnostics(diagnostics)
-            for position, row in enumerate(scored):
-                record = {
-                    "split_id": fold.split_id, "source_record_id": row.record_id,
-                    "variant_id": row.variant_id, "region_id": row.region_id,
-                    "variant_group": row.variant_group, "cohort_id": row.group_id,
-                    "observed_ac": row.ac, "observed_an": row.an,
-                }
-                record.update(diagnostics.iloc[position].to_dict())
-                predictions.append(record)
-            for posterior in fitted.posteriors:
-                record = asdict(posterior)
-                record.update({
-                    "split_id": fold.split_id,
-                    "posterior_alpha": record.pop("alpha"),
-                    "posterior_beta": record.pop("beta"),
-                })
-                posteriors.append(record)
-            state, reason = "completed", None
-        except (B0InfeasibleError, ReferenceInfeasibleError) as error:
-            state, reason = "infeasible", str(error)
-        except (ArithmeticError, FloatingPointError, ValueError) as error:
-            state, reason = "failed", f"{type(error).__name__}: {error}"
+            b0h_results.append((fold.split_id, outcome))
+            state, reason = outcome.status, outcome.reason
+            if state == "completed":
+                for position, row in enumerate(scoreable):
+                    record = {
+                        "split_id": fold.split_id,
+                        "source_record_id": row.record_id,
+                        "variant_id": row.variant_id,
+                        "region_id": row.region_id,
+                        "variant_group": row.variant_group,
+                        "cohort_id": row.group_id,
+                        "observed_ac": row.ac,
+                        "observed_an": row.an,
+                    }
+                    record.update(outcome.diagnostics.iloc[position].to_dict())
+                    predictions.append(record)
+        else:
+            try:
+                fitted = fit_reference_b0(
+                    training, testing, prior_alpha=args.prior_alpha, prior_beta=args.prior_beta
+                )
+                scored = tuple(by_id[key] for key in fitted.observation_ids)
+                diagnostics = validate_predictive_diagnostics(
+                    predictive_diagnostics(
+                        fitted.marginal_predictive,
+                        [row.ac for row in scored],
+                        [row.an for row in scored],
+                        seed=pit_seeds[index],
+                    )
+                )
+                for position, row in enumerate(scored):
+                    record = {
+                        "split_id": fold.split_id,
+                        "source_record_id": row.record_id,
+                        "variant_id": row.variant_id,
+                        "region_id": row.region_id,
+                        "variant_group": row.variant_group,
+                        "cohort_id": row.group_id,
+                        "observed_ac": row.ac,
+                        "observed_an": row.an,
+                    }
+                    record.update(diagnostics.iloc[position].to_dict())
+                    predictions.append(record)
+                for posterior in fitted.posteriors:
+                    record = asdict(posterior)
+                    record.update(
+                        {
+                            "split_id": fold.split_id,
+                            "posterior_alpha": record.pop("alpha"),
+                            "posterior_beta": record.pop("beta"),
+                        }
+                    )
+                    posteriors.append(record)
+                state, reason = "completed", None
+            except (B0InfeasibleError, ReferenceInfeasibleError) as error:
+                state, reason = "infeasible", str(error)
+            except (ArithmeticError, FloatingPointError, ValueError) as error:
+                state, reason = "failed", f"{type(error).__name__}: {error}"
 
         expected = tuple(row.record_id for row in scoreable) if state == "completed" else fold.test_ids
         statuses.append(BenchmarkFoldStatus(fold.split_id, state, expected, reason))
@@ -292,36 +408,63 @@ def run(args: argparse.Namespace) -> int:
                     "reason": row_reason,
                 }
             )
-        split_records.append({
-            **asdict(fold), "status": state, "failure_reason": reason, "pit_seed": pit_seeds[index]
-        })
+        split_records.append(
+            {**asdict(fold), "status": state, "failure_reason": reason, "pit_seed": pit_seeds[index]}
+        )
 
-    prediction_frame = pd.DataFrame.from_records(predictions, columns=PREDICTION_COLUMNS).sort_values(
-        ["split_id", "source_record_id"]
-    ).reset_index(drop=True)
-    posterior_frame = pd.DataFrame.from_records(posteriors, columns=POSTERIOR_COLUMNS).sort_values(
-        ["split_id", "variant_id"]
-    ).reset_index(drop=True)
-    status_frame = pd.DataFrame.from_records(row_status, columns=ROW_STATUS_COLUMNS).sort_values(
-        ["split_id", "record_id"]
-    ).reset_index(drop=True)
+    prediction_frame = (
+        pd.DataFrame.from_records(predictions, columns=PREDICTION_COLUMNS)
+        .sort_values(["split_id", "source_record_id"])
+        .reset_index(drop=True)
+    )
+    if config is None:
+        posterior_frame = (
+            pd.DataFrame.from_records(posteriors, columns=POSTERIOR_COLUMNS)
+            .sort_values(["split_id", "variant_id"])
+            .reset_index(drop=True)
+        )
+    else:
+        diagnostic_bytes, posterior_bytes, posterior_frame = encode_b0h(b0h_results)
+    status_frame = (
+        pd.DataFrame.from_records(row_status, columns=ROW_STATUS_COLUMNS)
+        .sort_values(["split_id", "record_id"])
+        .reset_index(drop=True)
+    )
     summary = summarize_benchmark(prediction_frame, statuses, tuple(fold.split_id for fold in folds))
-    summary.update({
-        "target": "reference_panel_within_resource", "evidence_role": args.evidence_role,
-        "joint_prediction_supported": False,
-        "weighting_unit": "source_population_group_not_independent_study",
-        "total_row_count": len(rows),
-        "unavailable_row_count": int(
-            (status_frame.status == "unavailable_denominator").sum()
-        ),
-        "failed_row_count": int(status_frame.status.isin(["failed", "infeasible"]).sum()),
-    })
+    summary.update(
+        {
+            "target": "reference_panel_within_resource",
+            "evidence_role": args.evidence_role,
+            "joint_prediction_supported": False,
+            "weighting_unit": "source_population_group_not_independent_study",
+            "total_row_count": len(rows),
+            "unavailable_row_count": int((status_frame.status == "unavailable_denominator").sum()),
+            "failed_row_count": int(status_frame.status.isin(["failed", "infeasible"]).sum()),
+        }
+    )
     configuration = {
-        "source_release": args.source_release, "cohort_stage": args.cohort_stage,
-        "count_kind": args.count_kind, "evidence_role": args.evidence_role,
-        "prior_alpha": args.prior_alpha, "prior_beta": args.prior_beta,
-        "folds": args.folds, "seed": args.seed,
+        "source_release": args.source_release,
+        "cohort_stage": args.cohort_stage,
+        "count_kind": args.count_kind,
+        "evidence_role": args.evidence_role,
+        "prior_alpha": args.prior_alpha,
+        "prior_beta": args.prior_beta,
+        "folds": args.folds,
+        "seed": args.seed,
     }
+    if config is not None:
+        configuration.update(
+            {
+                "model": args.model,
+                "rho_prior_alpha": config.rho_prior_alpha,
+                "rho_prior_beta": config.rho_prior_beta,
+                "draws": config.draws,
+                "tune": config.tune,
+                "chains": config.chains,
+                "target_accept": config.target_accept,
+                "cdf_backend": backend,
+            }
+        )
     split_document = {"configuration": configuration, "split_seed": split_seed, "folds": split_records}
     args.out.mkdir(parents=True, exist_ok=False)
     _json_write(args.out / "splits.json", split_document)
@@ -329,8 +472,13 @@ def run(args: argparse.Namespace) -> int:
     _write_tsv(prediction_frame, args.out / "predictions.tsv")
     _write_tsv(posterior_frame, args.out / "posteriors.tsv")
     _json_write(args.out / "summary.json", summary)
+    if config is not None:
+        (args.out / "fit_diagnostics.json").write_bytes(diagnostic_bytes)
+        (args.out / "posterior_draws.npz").write_bytes(posterior_bytes)
+    filenames = OUTPUT_FILENAMES if config is None else B0H_OUTPUT_FILENAMES
     manifest = {
-        "schema_version": 1, "target": "reference_panel_within_resource",
+        "schema_version": 1,
+        "target": "reference_panel_within_resource",
         "joint_prediction_supported": False,
         "limitations": [
             "Reference-resource operational groups are not certified independent studies.",
@@ -343,15 +491,22 @@ def run(args: argparse.Namespace) -> int:
         "seeds": {
             "root": args.seed,
             "split": split_seed,
-            "pit_by_fold": dict(
-                zip((fold.split_id for fold in folds), pit_seeds, strict=True)
-            ),
+            "pit_by_fold": dict(zip((fold.split_id for fold in folds), pit_seeds, strict=True)),
         },
         "git": git_record,
         "science_source_sha256": sources,
         "package_versions": package_versions,
-        "output_files": {name: _sha(args.out / name) for name in OUTPUT_FILENAMES},
+        "output_files": {name: _sha(args.out / name) for name in filenames},
     }
+    if config is not None:
+        manifest.update({"schema_version": 2, "model": args.model, "runtime": runtime})
+        manifest["seeds"]["fit_by_fold"] = {
+            fold.split_id: {"initial": pair[0], "retry": pair[1]}
+            for fold, pair in zip(folds, fit_seeds, strict=True)
+        }
+        files = {name: (args.out / name).read_bytes() for name in filenames}
+        files["manifest.json"] = json_bytes(manifest)
+        validate_b0h_publication(files)
     _json_write(args.out / "manifest.json", manifest)
     return 0 if summary["comparison_complete"] else 2
 
