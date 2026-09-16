@@ -89,6 +89,19 @@ Two gates, so neither depends on convention:
 checks that the catalog which actually shipped still agrees with the allowlist a human edits — a
 stale export is otherwise how a restriction quietly disappears from the published data.
 
+### The tripwire list is not a complete list
+
+`KNOWN_NON_COMMERCIAL_FIELDS` holds the restrictions we happen to know about. It is not, and cannot
+be, exhaustive — gnomAD's own terms say so:
+
+> **Some** annotations may have restrictions on usage. **For instance,** SpliceAI annotations [...]
+> are provided [...] under a CC BY NC 4.0 license for academic and non-commercial use. It is the
+> responsibility of users to abide by all relevant licensing requirements.
+
+So the tripwire catches a repeat of a restriction someone already found. It cannot catch the first
+occurrence of a new one. **A field arriving in a payload for the first time needs its own check**,
+and the declaration's `checked_at` should move when it does.
+
 ## Finding it in the code
 
 Code that handles restricted data carries a `NON-COMMERCIAL:` comment, so a plain search finds
@@ -109,7 +122,8 @@ Run the inventory for the live answer. As of the commit that introduced this doc
   known restriction and it is not currently in any payload. Its licensing record is in
   [`docs/audits/alphagenome-avi-licensing.md`](audits/alphagenome-avi-licensing.md), and the
   machinery here is what would let it be added and stay findable.
-- **Unchecked sources: gnomAD and dbSNP.** Issue #3 records gnomAD as CC0 with a policies link, but
-  no dated check exists in this repository for either source, so they are `not_checked` rather than
-  a finding transcribed from memory. Resolving them is tracked in
-  [#294](https://github.com/bschilder/genomeOS/issues/294).
+- **Unchecked sources: none.** gnomAD and dbSNP were read on 2026-09-15 and both permit commercial
+  use of what we publish. gnomAD is `explicitly_open` under a Creative Commons Zero dedication;
+  dbSNP is `no_restriction_found`, because NCBI states it imposes no restrictions but explicitly
+  declines to grant permission, holding no rights to transfer. The quotes and the reasoning are in
+  [`docs/audits/gnomad-dbsnp-commercial-use.md`](audits/gnomad-dbsnp-commercial-use.md).
