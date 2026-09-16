@@ -51,8 +51,10 @@ committed in this PR. CI fails if it is stale.
 
 ## For data and evidence PRs only
 
-- [ ] Discovery used an existing tool (`scripts/fetch_pubmed_manifest.py` for literature) rather
-      than a new fetcher. If you wrote capture code, say why the existing tool did not fit.
+- [ ] **How did this source reach you?** A search, a collaborator, prior knowledge — any of these
+      is fine; just say which. There is no requirement that a paper was found by searching.
+- [ ] *If you searched*: used `scripts/fetch_pubmed_manifest.py` rather than a new fetcher, and
+      committed the raw payload. Skip this line if no search was involved.
 - [ ] Raw source payloads are committed alongside the manifest, so it can be replayed.
 - [ ] Every timestamp that feeds an identifier is pinned, not read from the clock.
 - [ ] Screening decisions are a separate, versioned manifest revision over an all-`pending`
@@ -64,6 +66,10 @@ committed in this PR. CI fails if it is stale.
       `not_checked`) rather than a plausible substitute. Notes never stand in for a structured field.
 - [ ] Automated or LLM output is `automated_proposal` / `pending`. The extractor is not the verifier.
 - [ ] Source reuse terms inspected and logged for every contributing source.
+- [ ] **Does this add data under a non-commercial licence?** If yes, apply the
+      `licence:non-commercial` label, declare the restricted fields in the publish allowlist,
+      and paste `python scripts/check_commercial_use.py --list` below. Non-commercial data is
+      welcome here; it just has to be findable. See `docs/non-commercial-data.md`.
 - [ ] Coverage totals reconcile, and the report counts what it says it counts (manifest rows and
       unique papers are different numbers).
 

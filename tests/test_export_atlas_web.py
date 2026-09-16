@@ -138,6 +138,12 @@ def test_public_catalog_inventory_has_two_map_and_twenty_eight_afnd_entries() ->
     assert sum(entry["variant_id"].startswith("cyt:") for entry in entries) == 4
     assert sum(entry["variant_id"].startswith("hla:") for entry in entries) == 20
     assert sum(entry["variant_id"].startswith("kir:") for entry in entries) == 4
+    rs334 = next(entry for entry in entries if entry["id"] == "hbs-rs334")
+    assert {r["source"] for r in rs334["external_resources"]} == {
+        "gnomad",
+        "dbsnp",
+        "alphagenome",
+    }
 
 
 def test_every_declared_external_resource_resolves_against_the_real_registry() -> None:
@@ -200,6 +206,13 @@ def _write_allowlist(path: Path) -> None:
                                 "normalized_variant_id": VARIANT_ID,
                                 "dataset": "gnomad_r4",
                                 "cache_file": "external/gnomad/chr11-5227002-t-a.json",
+                                "commercial_use": {
+                                    "finding": "explicitly_open",
+                                    "restricted_fields": [],
+                                    "checked_at": "2026-09-15",
+                                    "terms_url": "https://gnomad.broadinstitute.org/policies",
+                                    "recorded_in": "docs/non-commercial-data.md",
+                                },
                             }
                         ],
                     }
@@ -285,6 +298,13 @@ def test_export_preserves_support_versions_and_observation_evidence(
         {
             "cache_sha256": catalog["artifacts"][0]["external_resources"][0]["cache_sha256"],
             "cache_url": "external/gnomad/chr11-5227002-t-a.json",
+            "commercial_use": {
+                "checked_at": "2026-09-15",
+                "finding": "explicitly_open",
+                "recorded_in": "docs/non-commercial-data.md",
+                "restricted_fields": [],
+                "terms_url": "https://gnomad.broadinstitute.org/policies",
+            },
             "dataset": "gnomad_r4",
             "normalized_variant_id": VARIANT_ID,
             "source": "gnomad",
@@ -306,6 +326,205 @@ def test_export_is_byte_deterministic(export_inputs: dict[str, Path]) -> None:
         if path.is_file()
     }
     assert after == before
+
+
+def test_export_publishes_alphagenome_cache_with_pinned_model_version(
+    tmp_path: Path,
+) -> None:
+    model_version = "AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09"
+    store = tmp_path / "store"
+    out = tmp_path / "web"
+    cache_dir = store / "external" / "alphagenome"
+    cache_dir.mkdir(parents=True)
+    cache_path = cache_dir / "chr11-5227002-t-a.json"
+    cache_path.write_text(
+        json.dumps(
+            {
+                "query": {"normalized_variant_id": VARIANT_ID},
+                "record": {
+                    "avi_phred": 11.77,
+                    "avi_raw_score": 0.2093,
+                    "avi_tail_quantile": 0.0665,
+                    "deep_link": (
+                        "https://deepmind.google.com/science/alphagenome/atlas"
+                        "?q=chr11:5227002:T%3EA&m=variant"
+                    ),
+                    "dominant_modality": "ALPHAMISSENSE",
+                    "model_version": model_version,
+                    "prediction_class": "predicted_impact",
+                },
+                "method": "atlas_lookup",
+                "retrieved_at": "2026-09-09T06:39:18.081934Z",
+                "schema_version": 1,
+                "source": "alphagenome",
+                "source_release": "AlphaGenome Atlas AVI (2026-09)",
+            }
+        )
+    )
+    entry = {
+        "external_resources": [
+            {
+                "source": "alphagenome",
+                "method": "atlas_lookup",
+                "normalized_variant_id": VARIANT_ID,
+                "model_version": model_version,
+                "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+                "commercial_use": {
+                    "finding": "explicitly_open",
+                    "restricted_fields": [],
+                    "checked_at": "2026-09-10",
+                    "terms_url": "https://deepmind.google.com/science/alphagenome/terms",
+                    "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+                },
+            }
+        ]
+    }
+    resources, written = export_atlas_web._external_resources(
+        entry,
+        artifact_id="hbs-test",
+        variant_id=VARIANT_ID,
+        entity_type="variant",
+        source_root=store,
+        out_dir=out,
+        variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
+    )
+    assert len(resources) == 1
+    assert resources[0]["source"] == "alphagenome"
+    assert resources[0]["method"] == "atlas_lookup"
+    assert resources[0]["model_version"] == model_version
+    assert resources[0]["cache_sha256"]
+    assert written[0].exists()
+
+    # a model-version mismatch must fail loudly
+    import pytest
+
+    with pytest.raises(ValueError, match="model_version mismatch"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "method": "atlas_lookup",
+                        "normalized_variant_id": VARIANT_ID,
+                        "model_version": "stale-model",
+                        "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+                        "commercial_use": {
+                            "finding": "explicitly_open",
+                            "restricted_fields": [],
+                            "checked_at": "2026-09-10",
+                            "terms_url": "https://deepmind.google.com/science/alphagenome/terms",
+                            "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+                        },
+                    }
+                ]
+            },
+            artifact_id="hbs-test",
+            variant_id=VARIANT_ID,
+            entity_type="variant",
+            source_root=store,
+            out_dir=out,
+            variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
+        )
+
+
+def test_export_refuses_a_lookup_for_a_row_that_is_not_yet_verified(tmp_path: Path) -> None:
+    """The registry is the single gate for a coordinate-keyed external resource.
+
+    A composite locus id is typed `variant` but names a promoter offset, so it can carry a
+    coordinate-keyed lookup only once its reviewed mapping row is `verified`; until then
+    `normalized_identity` returns None and the export refuses. This replaces the shape regex this
+    PR first carried: the coordinate shape was a proxy for "resolved", and the registry states
+    that directly, so a locus the registry has not resolved is refused on the fact rather than on
+    the spelling of its id (#207 review). The browser contract is unchanged and still enforces the
+    shape on what is published.
+    """
+    registry = load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH)
+    composite_id = "cyt:il-6-174-c"
+    row = registry.loc[registry["variant_id"] == composite_id].iloc[0]
+    if row["verification_status"] == "verified":
+        pytest.skip("mapping row is now verified, so this locus is eligible on purpose")
+    with pytest.raises(ValueError, match="no reviewed normalization"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "method": "atlas_lookup",
+                        "normalized_variant_id": composite_id,
+                        "model_version": "AlphaGenome (Avsec et al. 2026); Atlas AVI",
+                        "cache_file": "external/alphagenome/cyt-il-6-174-c.json",
+                        "commercial_use": {
+                            "finding": "explicitly_open",
+                            "restricted_fields": [],
+                            "checked_at": "2026-09-10",
+                            "terms_url": "https://deepmind.google.com/science/alphagenome/terms",
+                            "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+                        },
+                    }
+                ]
+            },
+            artifact_id="cyt-il-6-174-c",
+            variant_id=composite_id,
+            entity_type="variant",
+            source_root=tmp_path,
+            out_dir=tmp_path / "out",
+            variant_registry=registry,
+        )
+
+
+def test_export_refuses_an_alphagenome_method_mismatch(tmp_path: Path) -> None:
+    store = tmp_path / "store"
+    out = tmp_path / "web"
+    cache_dir = store / "external" / "alphagenome"
+    cache_dir.mkdir(parents=True)
+    (cache_dir / "chr11-5227002-t-a.json").write_text(
+        json.dumps(
+            {
+                "query": {"normalized_variant_id": VARIANT_ID},
+                "method": "model_inference",
+                "record": {
+                    "avi_phred": 11.77,
+                    "avi_raw_score": 0.2093,
+                    "avi_tail_quantile": 0.0665,
+                    "deep_link": "https://deepmind.google.com/science/alphagenome/atlas",
+                    "dominant_modality": "ALPHAMISSENSE",
+                    "model_version": "v",
+                    "prediction_class": "predicted_impact",
+                },
+                "retrieved_at": "2026-09-09T06:39:18.081934Z",
+                "schema_version": 1,
+                "source": "alphagenome",
+                "source_release": "AlphaGenome Atlas AVI (2026-09)",
+            }
+        )
+    )
+    with pytest.raises(ValueError, match="method mismatch"):
+        export_atlas_web._external_resources(
+            {
+                "external_resources": [
+                    {
+                        "source": "alphagenome",
+                        "method": "atlas_lookup",
+                        "normalized_variant_id": VARIANT_ID,
+                        "model_version": "v",
+                        "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+                        "commercial_use": {
+                            "finding": "explicitly_open",
+                            "restricted_fields": [],
+                            "checked_at": "2026-09-10",
+                            "terms_url": "https://deepmind.google.com/science/alphagenome/terms",
+                            "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+                        },
+                    }
+                ]
+            },
+            artifact_id="hbs-test",
+            variant_id=VARIANT_ID,
+            entity_type="variant",
+            source_root=store,
+            out_dir=out,
+            variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
+        )
 
 
 def test_export_refuses_an_artifact_outside_the_allowlist(
@@ -516,3 +735,215 @@ def test_a_coordinate_keyed_resource_needs_a_reviewed_normalization(tmp_path):
             out_dir=tmp_path / "out",
             variant_registry=empty,
         )
+
+
+# ---------------------------------------------------------------------------
+# Commercial-use marking
+#
+# genomeOS may publish data under a non-commercial licence, but every such field has to be
+# declared where a human reviews it, so a future commercial component can find and remove all of
+# it with one command. The tests below pin the two halves that make that work: a declaration
+# travels with the published resource, and restricted data can never ship undeclared.
+# ---------------------------------------------------------------------------
+
+AVI_MODEL_VERSION = "AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09"
+ALPHAGENOME_TERMS = "https://deepmind.google.com/science/alphagenome/terms"
+AVI_BREAKDOWN = [{"feature": "ALPHAMISSENSE", "value": 0.1662}]
+
+
+def _alphagenome_store(root: Path, **record_extra: object) -> Path:
+    """A minimal AlphaGenome cache tree; `record_extra` adds fields to the record."""
+    store = root / "store"
+    cache_dir = store / "external" / "alphagenome"
+    cache_dir.mkdir(parents=True)
+    record: dict[str, object] = {
+        "avi_phred": 11.77,
+        "avi_raw_score": 0.2093,
+        "avi_tail_quantile": 0.0665,
+        "deep_link": (
+            "https://deepmind.google.com/science/alphagenome/atlas?q=chr11:5227002:T%3EA&m=variant"
+        ),
+        "dominant_modality": "ALPHAMISSENSE",
+        "model_version": AVI_MODEL_VERSION,
+        "prediction_class": "predicted_impact",
+    }
+    record.update(record_extra)
+    (cache_dir / "chr11-5227002-t-a.json").write_text(
+        json.dumps(
+            {
+                "query": {"normalized_variant_id": VARIANT_ID},
+                "method": "atlas_lookup",
+                "record": record,
+                "retrieved_at": "2026-09-09T06:39:18.081934Z",
+                "schema_version": 1,
+                "source": "alphagenome",
+                "source_release": "AlphaGenome Atlas AVI (2026-09)",
+            }
+        )
+    )
+    return store
+
+
+def _alphagenome_entry(commercial_use: object) -> dict[str, object]:
+    resource: dict[str, object] = {
+        "source": "alphagenome",
+        "method": "atlas_lookup",
+        "normalized_variant_id": VARIANT_ID,
+        "model_version": AVI_MODEL_VERSION,
+        "cache_file": "external/alphagenome/chr11-5227002-t-a.json",
+    }
+    if commercial_use is not _OMIT:
+        resource["commercial_use"] = commercial_use
+    return {"external_resources": [resource]}
+
+
+_OMIT = object()
+
+
+def _run_external(entry: dict[str, object], store: Path, out: Path):
+    return export_atlas_web._external_resources(
+        entry,
+        artifact_id="hbs-test",
+        variant_id=VARIANT_ID,
+        entity_type="variant",
+        source_root=store,
+        out_dir=out,
+        variant_registry=load_variant_registry(export_atlas_web.VARIANT_REGISTRY_PATH),
+    )
+
+
+def _restricted_breakdown() -> dict[str, object]:
+    return {
+        "finding": "restricted",
+        "restricted_fields": ["top_attributions"],
+        "checked_at": "2026-09-10",
+        "terms_url": ALPHAGENOME_TERMS,
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+    }
+
+
+def test_export_publishes_marked_non_commercial_data_and_carries_the_marking(
+    tmp_path: Path,
+) -> None:
+    """Non-commercial data may ship, but the published entry has to say so.
+
+    The marking travels with the resource rather than living only in the exporter, so a consumer
+    of the published catalog — including a future commercial build of this project — can select
+    the restricted rows without reading our source.
+    """
+    store = _alphagenome_store(tmp_path, top_attributions=AVI_BREAKDOWN)
+    resources, _ = _run_external(
+        _alphagenome_entry(_restricted_breakdown()), store, tmp_path / "web"
+    )
+    assert resources[0]["commercial_use"] == {
+        "checked_at": "2026-09-10",
+        "finding": "restricted",
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+        "restricted_fields": ["top_attributions"],
+        "terms_url": ALPHAGENOME_TERMS,
+    }
+
+
+def test_export_refuses_a_known_restricted_field_that_was_not_declared(tmp_path: Path) -> None:
+    """The tripwire. Restricted data may ship marked; it may never ship unmarked.
+
+    This is what the old blanket refusal of `top_attributions` becomes. Dropping the refusal
+    entirely would let the breakdown re-enter the payload silently, which is the failure the
+    original gate existed to prevent.
+    """
+    store = _alphagenome_store(tmp_path, top_attributions=AVI_BREAKDOWN)
+    undeclared = {
+        "finding": "explicitly_open",
+        "restricted_fields": [],
+        "checked_at": "2026-09-10",
+        "terms_url": ALPHAGENOME_TERMS,
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+    }
+    with pytest.raises(ValueError, match="undeclared non-commercial field"):
+        _run_external(_alphagenome_entry(undeclared), store, tmp_path / "web")
+
+
+def test_export_refuses_an_external_resource_with_no_commercial_use_declaration(
+    tmp_path: Path,
+) -> None:
+    store = _alphagenome_store(tmp_path)
+    with pytest.raises(ValueError, match="commercial_use"):
+        _run_external(_alphagenome_entry(_OMIT), store, tmp_path / "web")
+
+
+def test_export_refuses_a_finding_outside_the_closed_vocabulary(tmp_path: Path) -> None:
+    store = _alphagenome_store(tmp_path)
+    bogus = {
+        "finding": "probably_fine",
+        "restricted_fields": [],
+        "checked_at": "2026-09-10",
+        "terms_url": ALPHAGENOME_TERMS,
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+    }
+    with pytest.raises(ValueError, match="commercial_use finding must be one of"):
+        _run_external(_alphagenome_entry(bogus), store, tmp_path / "web")
+
+
+def test_export_refuses_a_restricted_field_that_is_not_in_the_record(tmp_path: Path) -> None:
+    """A declaration naming a field the payload does not carry is rot, not caution.
+
+    Left unchecked it would inflate the extraction list with fields that do not exist, and hide a
+    rename of a field that does.
+    """
+    store = _alphagenome_store(tmp_path)  # no top_attributions in the record
+    with pytest.raises(ValueError, match="names a field absent from the record"):
+        _run_external(_alphagenome_entry(_restricted_breakdown()), store, tmp_path / "web")
+
+
+def test_export_refuses_a_restricted_finding_that_names_no_fields(tmp_path: Path) -> None:
+    store = _alphagenome_store(tmp_path, top_attributions=AVI_BREAKDOWN)
+    empty = {
+        "finding": "restricted",
+        "restricted_fields": [],
+        "checked_at": "2026-09-10",
+        "terms_url": ALPHAGENOME_TERMS,
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+    }
+    with pytest.raises(ValueError, match="must name at least one restricted field"):
+        _run_external(_alphagenome_entry(empty), store, tmp_path / "web")
+
+
+def test_export_refuses_restricted_fields_on_an_unrestricted_finding(tmp_path: Path) -> None:
+    store = _alphagenome_store(tmp_path, top_attributions=AVI_BREAKDOWN)
+    contradictory = {
+        "finding": "explicitly_open",
+        "restricted_fields": ["top_attributions"],
+        "checked_at": "2026-09-10",
+        "terms_url": ALPHAGENOME_TERMS,
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+    }
+    with pytest.raises(ValueError, match="only a restricted finding may name fields"):
+        _run_external(_alphagenome_entry(contradictory), store, tmp_path / "web")
+
+
+def test_export_accepts_not_checked_without_a_date_or_terms_url(tmp_path: Path) -> None:
+    """`not_checked` stays publishable, and stays honest.
+
+    Refusing it would push a contributor to invent a licence finding to make the export run, which
+    is exactly the fabrication the publication-evidence safeguards forbid. The check script lists
+    these as unresolved instead, so they are still visible to an extraction.
+    """
+    store = _alphagenome_store(tmp_path)
+    resources, _ = _run_external(
+        _alphagenome_entry({"finding": "not_checked", "restricted_fields": []}),
+        store,
+        tmp_path / "web",
+    )
+    assert resources[0]["commercial_use"] == {"finding": "not_checked", "restricted_fields": []}
+
+
+def test_export_refuses_a_checked_finding_with_no_terms_url(tmp_path: Path) -> None:
+    store = _alphagenome_store(tmp_path)
+    no_url = {
+        "finding": "explicitly_open",
+        "restricted_fields": [],
+        "checked_at": "2026-09-10",
+        "recorded_in": "docs/audits/alphagenome-avi-licensing.md",
+    }
+    with pytest.raises(ValueError, match="checked_at, terms_url and recorded_in"):
+        _run_external(_alphagenome_entry(no_url), store, tmp_path / "web")

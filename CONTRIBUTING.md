@@ -61,9 +61,10 @@ output.
 Data contributions have a stricter bar than code, because a wrong number is harder to detect than a
 broken build and can be cited before anyone notices.
 
-- **Use the existing tools.** Discovery for a literature corpus goes through
-  `scripts/fetch_pubmed_manifest.py`; do not write your own fetcher. Check `scripts/` before
-  building anything that captures or transcribes a source.
+- **A paper does not need a search to be contributed.** A collaborator naming one, an expert
+  bringing a dataset, a reference you already knew — all legitimate, and often better than a keyword
+  query. Just say how it reached you. **If you did search**, use `scripts/fetch_pubmed_manifest.py`
+  rather than writing your own fetcher, and check `scripts/` before building any capture code.
 - **Missing is a valid state.** Never invent, estimate, borrow, interpolate, or pick a
   "conservative" value for a field the source does not give you. Refusal is a valid output.
 - **The extractor cannot be its own verifier.** Automated and LLM output is always

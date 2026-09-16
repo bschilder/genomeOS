@@ -7,6 +7,9 @@ import argparse
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+# `scripts/` holds production code, not just entry points — the Atlas exporter alone is over 700
+# logical lines and enforces publication policy. Leaving it out of the budget is how that file
+# reached 870 lines, past the hard cap, with every gate green: nothing was looking at it.
 DEFAULT_ROOTS = (ROOT / "genomeos", ROOT / "scripts")
 
 
@@ -14,11 +17,11 @@ def logical_lines(path: Path) -> int:
     return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if line.strip())
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--max-lines", type=int, default=800)
     parser.add_argument("--max-bytes", type=int, default=50 * 1024)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     failures: list[str] = []
     checked = 0

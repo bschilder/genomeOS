@@ -1,14 +1,20 @@
-"""Plot the synthetic pointwise-prior contraction counterexample (design §7.1b; #266).
+"""Plot the geography-aware pointwise-prior contraction counterexample (design §7.1b; #266).
 
-The fixed geometry isolates normalization from fitting: the hypothetical posterior SD equals
-the independently calculated local approximate-prior SD at every evaluated query. Any apparent
-contraction under a scalar reference therefore comes only from comparing different locations.
+Reviewed MAP HbS survey coordinates determine the approximation geometry, but no allele-frequency
+value enters the calculation. The hypothetical posterior SD equals the independently calculated
+local approximate-prior SD at every query, so any apparent contraction under a scalar reference
+comes only from comparing different locations.
+
+    python scripts/plot_prior_normalization.py \
+        --observations data/raw/map_hbs_surveys.csv \
+        --out docs/figures/prior_normalization.png
 """
 
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 
@@ -17,7 +23,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.colors import Normalize  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
 
+from genomeos.observations.sources import map_surveys  # noqa: E402
 from genomeos.surfaces.fit import (  # noqa: E402
     EARTH_RADIUS_KM,
     JITTER,
@@ -34,7 +42,7 @@ SEED = 42
 LENGTHSCALE_KM = 1500.0
 SUPPORT_THRESHOLD = 0.9
 REGION = (-20.0, 68.0, -30.0, 40.0)
-N_SUPPORT_SITES = 16
+N_INDUCING = 64
 
 
 def _matern52(left: np.ndarray, right: np.ndarray) -> np.ndarray:
@@ -109,12 +117,12 @@ def _spatially_balanced_sites(
     lon: np.ndarray,
     n_sites: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Choose deterministic synthetic sites that cover the authored land domain."""
+    """Select deterministic maximin centers from survey-supported H3 cells."""
     if not 1 <= n_sites <= len(cells):
         raise ValueError("n_sites must be between 1 and the number of candidate cells")
 
-    # Compute all geographic distances once. The maximin traversal is sequential because each
-    # choice changes the next score, while its expensive distance work stays vectorized.
+    # Each selection depends on the previous one, but the expensive geographic work is one
+    # vectorized distance matrix. Millimetre rounding makes numerical ties platform-stable.
     lat1 = np.radians(lat[:, None])
     lon1 = np.radians(lon[:, None])
     lat2 = np.radians(lat[None, :])
@@ -124,59 +132,134 @@ def _spatially_balanced_sites(
         + np.cos(lat1) * np.cos(lat2) * np.sin((lon2 - lon1) / 2.0) ** 2
     )
     pairwise_km = 2.0 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(np.clip(a, 0.0, 1.0)))
-
     west, east, south, north = REGION
-    centre_lat, centre_lon = (south + north) / 2.0, (west + east) / 2.0
+    centre_lat = np.asarray([(south + north) / 2.0])
+    centre_lon = np.asarray([(west + east) / 2.0])
+    centre_distance = _haversine_to_grid(lat, lon, centre_lat, centre_lon)
+
     chosen = np.empty(n_sites, dtype=int)
-    chosen[0] = int(np.argmin((lat - centre_lat) ** 2 + (lon - centre_lon) ** 2))
+    chosen[0] = int(np.argmin(np.round(centre_distance, 6)))
     available = np.ones(len(cells), dtype=bool)
     available[chosen[0]] = False
     nearest_km = pairwise_km[:, chosen[0]].copy()
     for index in range(1, n_sites):
-        chosen[index] = int(np.argmax(np.where(available, nearest_km, -np.inf)))
+        score = np.where(available, np.round(nearest_km, 6), -np.inf)
+        chosen[index] = int(np.argmax(score))
         available[chosen[index]] = False
         nearest_km = np.minimum(nearest_km, pairwise_km[:, chosen[index]])
     return cells[chosen], lat[chosen], lon[chosen]
 
 
-def compute_counterexample() -> dict[str, np.ndarray | float | int]:
-    """Return the fully authored fixed-geometry no-update counterexample from issue #266."""
-    anchor_cells, anchor_lat, anchor_lon = _regional_land_cells(1)
-    anchor_cells, anchor_lat, anchor_lon = _spatially_balanced_sites(
-        anchor_cells, anchor_lat, anchor_lon, N_SUPPORT_SITES
+def _survey_supported_sites(
+    observation_lat: np.ndarray,
+    observation_lon: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Derive balanced res-4 model centers from cells containing measured surveys."""
+    import h3
+
+    cells = np.asarray(
+        sorted(
+            {
+                h3.latlng_to_cell(float(lat), float(lon), 4)
+                for lat, lon in zip(observation_lat, observation_lon, strict=True)
+            }
+        )
+    )
+    centres = np.asarray([h3.cell_to_latlng(cell) for cell in cells], dtype=float)
+    return _spatially_balanced_sites(
+        cells,
+        centres[:, 0],
+        centres[:, 1],
+        min(N_INDUCING, len(cells)),
+    )
+
+
+def _load_regional_geometry(observations: Path) -> tuple[np.ndarray, np.ndarray]:
+    """Load reviewed observation coordinates without using their measured values."""
+    frame, _report = map_surveys.load(observations, "prior-normalization-figure")
+    west, east, south, north = REGION
+    regional = frame[
+        frame["lat"].between(south, north) & frame["lon"].between(west, east)
+    ]
+    if len(regional) < 2:
+        raise ValueError("at least two retained observations are required in the map region")
+    return regional["lat"].to_numpy(float), regional["lon"].to_numpy(float)
+
+
+def compute_counterexample(
+    observation_lat: np.ndarray,
+    observation_lon: np.ndarray,
+) -> dict[str, np.ndarray | float | int]:
+    """Return the fixed no-update counterexample for an explicit sampling geography."""
+    observation_lat = np.asarray(observation_lat, dtype=float)
+    observation_lon = np.asarray(observation_lon, dtype=float)
+    if (
+        observation_lat.ndim != 1
+        or observation_lon.ndim != 1
+        or observation_lat.shape != observation_lon.shape
+        or len(observation_lat) < 2
+        or not np.isfinite(observation_lat).all()
+        or not np.isfinite(observation_lon).all()
+    ):
+        raise ValueError("observation coordinates must be matching finite vectors of length >= 2")
+    support_cells, support_lat, support_lon = _survey_supported_sites(
+        observation_lat,
+        observation_lon,
     )
     inducing = h3_inducing_points(
-        anchor_lat, anchor_lon, N_SUPPORT_SITES, reach_km=1500.0
+        support_lat,
+        support_lon,
+        len(support_cells),
+        reach_km=1500.0,
     )
     inducing_lat, inducing_lon = _from_unit_sphere(inducing)
+    inducing_order = np.lexsort((inducing_lon, inducing_lat))
+    inducing = inducing[inducing_order]
+    inducing_lat, inducing_lon = inducing_lat[inducing_order], inducing_lon[inducing_order]
     query_cells, query_lat, query_lon = _regional_land_cells(2)
     local_sd = _conditional_frequency_sd(inducing, query_lat, query_lon)
+    nearest_observation_distance_km = _haversine_to_grid(
+        query_lat, query_lon, observation_lat, observation_lon
+    )
     nearest_inducing_distance_km = _haversine_to_grid(
         query_lat, query_lon, inducing_lat, inducing_lon
     )
-    # The old implementation used whichever observation happened to come first. Fix that
-    # otherwise arbitrary ordering to a support cell near (20 N, 2 E), which is collocated with
-    # an inducing location and therefore makes the scalar-denominator failure easy to inspect.
-    reference_index = int(np.argmin((anchor_lat - 20.0) ** 2 + (anchor_lon - 2.0) ** 2))
+    # The old implementation used whichever observation happened to come first. Make the
+    # arbitrariness of a single scalar denominator visible by pinning the reference to a fixed
+    # interior point instead, so it does not move with input order.
+    #
+    # (5 N, 20 E) is a fixed point inside REGION, not its centroid — that would be (5, 24). Any
+    # fixed interior point demonstrates the same thing, so this is left as it is rather than
+    # regenerating a published figure to move a reference marker four degrees east (#298).
+    REFERENCE_LAT, REFERENCE_LON = 5.0, 20.0
+    reference_index = int(
+        np.argmin(
+            (observation_lat - REFERENCE_LAT) ** 2 + (observation_lon - REFERENCE_LON) ** 2
+        )
+    )
     scalar_sd = float(
         _conditional_frequency_sd(
-            inducing, anchor_lat[reference_index : reference_index + 1],
-            anchor_lon[reference_index : reference_index + 1],
+            inducing,
+            observation_lat[reference_index : reference_index + 1],
+            observation_lon[reference_index : reference_index + 1],
         )[0]
     )
     controls = np.array([[-75.0, -150.0], [-70.0, 150.0], [75.0, -150.0], [80.0, 160.0]])
     control_distance = _haversine_to_grid(
-        controls[:, 0], controls[:, 1], anchor_lat, anchor_lon
+        controls[:, 0], controls[:, 1], observation_lat, observation_lon
     )
     return {
-        "anchor_cells": anchor_cells,
-        "anchor_lat": anchor_lat,
-        "anchor_lon": anchor_lon,
+        "observation_lat": observation_lat,
+        "observation_lon": observation_lon,
+        "support_cells": support_cells,
+        "support_lat": support_lat,
+        "support_lon": support_lon,
         "inducing_lat": inducing_lat,
         "inducing_lon": inducing_lon,
         "query_cells": query_cells,
         "query_lat": query_lat,
         "query_lon": query_lon,
+        "nearest_observation_distance_km": nearest_observation_distance_km,
         "nearest_inducing_distance_km": nearest_inducing_distance_km,
         "local_sd": local_sd,
         "scalar_sd": scalar_sd,
@@ -189,133 +272,229 @@ def compute_counterexample() -> dict[str, np.ndarray | float | int]:
     }
 
 
-def render(out: Path) -> Path:
-    """Map the approximation geometry, resulting scalar error, and corrected statistic."""
-    result = compute_counterexample()
+def build_figure(observations: Path) -> tuple[Figure, dict[str, Any]]:
+    """Map sampling geography, resulting scalar error, and its computational mechanism.
+
+    Returns the figure alongside the values it was drawn from, so a test can check that each panel
+    is bound to the quantity it claims to show. Saving is `render`'s job. Splitting the two is what
+    makes the panel bindings testable at all: a figure that has already been written and closed can
+    only be checked by looking at it (#298).
+    """
+    observation_lat, observation_lon = _load_regional_geometry(observations)
+    result = compute_counterexample(observation_lat, observation_lon)
     scalar_ratio = result["scalar_ratio"]
     inducing_distance = result["nearest_inducing_distance_km"]
     distance_correlation = float(np.corrcoef(inducing_distance, scalar_ratio)[0, 1])
     false_support = scalar_ratio < SUPPORT_THRESHOLD
     polygons, kept = h3_polygons(result["query_cells"])
     kept = np.asarray(kept)
-    fig, (geometry_ax, old_ax, local_ax) = plt.subplots(1, 3, figsize=(18.2, 5.7))
+    result["kept"] = kept
+    fig, (geometry_ax, old_ax, mechanism_ax) = plt.subplots(1, 3, figsize=(18.2, 5.7))
     norm = Normalize(vmin=0.75, vmax=1.0)
-    for axis in (geometry_ax, old_ax, local_ax):
+    for axis in (geometry_ax, old_ax):
         axis.set_facecolor("#eceff1")
         axis.set(xlim=(-25, 73), ylim=(-35, 45), xlabel="longitude")
         axis.grid(color="white", linewidth=0.45, alpha=0.4)
 
     distance_surface = PolyCollection(
-        polygons, array=inducing_distance[kept], cmap="viridis_r",
-        norm=Normalize(vmin=0.0, vmax=2250.0), edgecolors="none", zorder=2,
+        polygons,
+        array=result["nearest_inducing_distance_km"][kept],
+        cmap="viridis_r",
+        norm=Normalize(vmin=0.0, vmax=1500.0),
+        edgecolors="none",
+        zorder=2,
     )
     geometry_ax.add_collection(distance_surface)
     draw_countries(geometry_ax, color="#374151", linewidth=0.55, zorder=3)
     geometry_ax.scatter(
-        result["anchor_lon"], result["anchor_lat"], s=8, facecolor="#4b5563",
-        edgecolor="none", zorder=4, label="16 spatially balanced synthetic support sites",
+        result["observation_lon"],
+        result["observation_lat"],
+        s=5,
+        facecolor="#111827",
+        edgecolor="none",
+        alpha=0.55,
+        zorder=4,
+        label=f"{len(observation_lat)} retained MAP HbS survey sites",
     )
     geometry_ax.scatter(
-        result["inducing_lon"], result["inducing_lat"], s=24,
-        facecolor="white", edgecolor="#111827", linewidth=0.8, zorder=5,
-        label="16 computational inducing locations",
+        result["support_lon"],
+        result["support_lat"],
+        s=24,
+        facecolor="white",
+        edgecolor="#111827",
+        linewidth=0.75,
+        zorder=5,
+        label=f"{len(result['support_lat'])} balanced model centers derived from survey cells",
     )
     geometry_ax.set(
         ylabel="latitude",
-        title="A. Computational geometry\nnearest inducing distance",
+        title="A. Evidence defines the model geometry\ndistance to nearest retained model location",
     )
     geometry_ax.legend(loc="lower left", fontsize=7.2, frameon=True)
     distance_colorbar = fig.colorbar(
         distance_surface, ax=geometry_ax, shrink=0.78, pad=0.025
     )
-    distance_colorbar.set_label("distance to nearest inducing location (km)", fontsize=8.5)
+    distance_colorbar.set_label("distance to nearest model location (km)", fontsize=8.5)
 
     surface = PolyCollection(
-        polygons, array=scalar_ratio[kept], cmap="Blues_r", norm=norm,
-        edgecolors="none", zorder=2,
+        polygons,
+        array=scalar_ratio[kept],
+        cmap="Blues_r",
+        norm=norm,
+        edgecolors="none",
+        zorder=2,
     )
     old_ax.add_collection(surface)
-    false_polygons = [polygon for polygon, index in zip(polygons, kept, strict=True)
-                      if false_support[index]]
+    false_polygons = [
+        polygon
+        for polygon, index in zip(polygons, kept, strict=True)
+        if false_support[index]
+    ]
     old_ax.add_collection(
         PolyCollection(
-            false_polygons, facecolors="#7f1d1d20", edgecolors="#7f1d1d",
-            linewidths=0.8, zorder=3,
+            false_polygons,
+            facecolors="#7f1d1d20",
+            edgecolors="#7f1d1d",
+            linewidths=0.8,
+            zorder=3,
         )
     )
     draw_countries(old_ax, color="#374151", linewidth=0.55, zorder=4)
     old_ax.scatter(
-        result["anchor_lon"], result["anchor_lat"], s=8, facecolor="#4b5563",
-        edgecolor="none", zorder=5, label="16 spatially balanced synthetic support sites",
+        result["observation_lon"],
+        result["observation_lat"],
+        s=3,
+        facecolor="#111827",
+        edgecolor="none",
+        alpha=0.28,
+        zorder=5,
     )
     old_ax.scatter(
-        result["inducing_lon"], result["inducing_lat"], s=24,
-        facecolor="white", edgecolor="#111827", linewidth=0.8, zorder=6,
-        label="16 computational inducing locations",
+        result["inducing_lon"],
+        result["inducing_lat"],
+        s=24,
+        facecolor="white",
+        edgecolor="#111827",
+        linewidth=0.75,
+        zorder=6,
+        label="retained model locations",
     )
     reference_index = int(result["reference_index"])
-    reference_lat = float(result["anchor_lat"][reference_index])
-    reference_lon = float(result["anchor_lon"][reference_index])
+    reference_lat = float(result["observation_lat"][reference_index])
+    reference_lon = float(result["observation_lon"][reference_index])
     old_ax.scatter(
-        [reference_lon], [reference_lat], marker="*", s=150, facecolor="#111827",
-        edgecolor="white", linewidth=0.7, zorder=7, label="old denominator location",
+        [reference_lon],
+        [reference_lat],
+        marker="*",
+        s=150,
+        facecolor="#111827",
+        edgecolor="white",
+        linewidth=0.7,
+        zorder=7,
+        label="old denominator location",
     )
     old_ax.annotate(
         "one denominator site",
-        xy=(reference_lon, reference_lat), xytext=(reference_lon + 8.0, reference_lat + 5.0),
-        fontsize=7.5, color="#111827", ha="left",
+        xy=(reference_lon, reference_lat),
+        xytext=(reference_lon + 8.0, reference_lat + 5.0),
+        fontsize=7.5,
+        color="#111827",
+        ha="left",
         arrowprops={"arrowstyle": "->", "color": "#111827", "linewidth": 0.7},
         zorder=8,
     )
     old_ax.text(
-        0.02, 0.97,
+        0.02,
+        0.97,
         f"{int(false_support.sum())}/{len(scalar_ratio)} land cells falsely cross 0.9\n"
         "Red borders mark the invented support",
-        transform=old_ax.transAxes, va="top", fontsize=8.5,
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.9, "edgecolor": "#7f1d1d"},
+        transform=old_ax.transAxes,
+        va="top",
+        fontsize=8.5,
+        bbox={
+            "boxstyle": "round,pad=0.35",
+            "facecolor": "white",
+            "alpha": 0.9,
+            "edgecolor": "#7f1d1d",
+        },
     )
     old_ax.set(
-        title="B. Old scalar denominator\ninvented posterior contraction",
+        title="B. The same model geometry\ncreates an artificial spatial pattern",
     )
+    old_ax.legend(loc="lower left", fontsize=7.2, frameon=True)
     colorbar = fig.colorbar(surface, ax=old_ax, shrink=0.78, pad=0.025)
     colorbar.set_label("posterior SD / old scalar prior SD", fontsize=8.5)
     colorbar.set_ticks([0.76, 0.8, 0.9, 1.0])
 
-    local_ax.add_collection(
-        PolyCollection(polygons, facecolors="#d1fae5", edgecolors="none", zorder=2)
+    mechanism_ax.scatter(
+        inducing_distance,
+        scalar_ratio,
+        s=14,
+        color="#2a9d8f",
+        alpha=0.75,
+        edgecolor="none",
+        label="old scalar denominator",
     )
-    draw_countries(local_ax, color="#374151", linewidth=0.55, zorder=3)
-    local_ax.scatter(
-        result["anchor_lon"], result["anchor_lat"], s=8, facecolor="#4b5563",
-        edgecolor="none", zorder=4,
+    mechanism_ax.axhline(
+        1.0,
+        color="#047857",
+        linewidth=2.0,
+        label="correct local denominator",
     )
-    local_ax.scatter(
-        result["inducing_lon"], result["inducing_lat"], s=20,
-        facecolor="white", edgecolor="#6b7280", linewidth=0.7, zorder=5,
+    mechanism_ax.axhline(
+        SUPPORT_THRESHOLD,
+        color="#7f1d1d",
+        linewidth=0.9,
+        linestyle="--",
+        label="support threshold",
     )
-    local_ax.text(
-        0.5, 0.52, "posterior SD / local prior SD\n= 1.0 everywhere",
-        transform=local_ax.transAxes, ha="center", va="center", fontsize=12,
-        color="#065f46", weight="bold",
+    mechanism_ax.set(
+        xlabel="distance to nearest inducing location (km)",
+        ylabel="posterior SD / prior SD",
+        ylim=(0.75, 1.01),
+        title="C. Mechanism check\nerror follows computational distance",
     )
-    local_ax.text(
-        0.02, 0.97, f"{len(scalar_ratio)}/{len(scalar_ratio)} land cells remain prior-dominated",
-        transform=local_ax.transAxes, va="top", fontsize=8.5,
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "white", "alpha": 0.9,
-              "edgecolor": "#047857"},
+    mechanism_ax.grid(color="#e5e7eb", linewidth=0.6)
+    mechanism_ax.legend(loc="lower left", fontsize=7.5, frameon=True)
+    mechanism_ax.text(
+        0.98,
+        0.04,
+        f"Pearson r = {distance_correlation:.3f}\nlocal ratio = 1.0 in every cell",
+        transform=mechanism_ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=8.5,
+        color="#374151",
     )
-    local_ax.set(title="C. Correct local denominator\nno invented contraction")
     fig.suptitle(
-        "A spatial approximation artifact must not look like learning",
+        "Uneven sampling geography exposes a scalar prior-normalization artifact",
         fontsize=13.5,
     )
     fig.text(
-        0.5, 0.91,
-        "Land is the evaluation domain. Great-circle distance to the inducing locations drives "
-        f"the old ratio (Pearson r = {distance_correlation:.3f}).",
-        ha="center", fontsize=9.2, color="#374151",
+        0.5,
+        0.91,
+        "Dots are measured survey coordinates; rings are the retained model locations that "
+        "generate both mapped distance and error. Allele frequencies are not used.",
+        ha="center",
+        fontsize=9.2,
+        color="#374151",
     )
-    fig.subplots_adjust(left=0.045, right=0.985, bottom=0.12, top=0.82, wspace=0.22)
+    fig.text(
+        0.5,
+        0.025,
+        "Country borders are orientation only; the covariance uses spherical distance and the "
+        "display is clipped to land.",
+        ha="center",
+        fontsize=8.2,
+        color="#4b5563",
+    )
+    fig.subplots_adjust(left=0.045, right=0.985, bottom=0.14, top=0.82, wspace=0.22)
+    return fig, result
+
+
+def render(out: Path, observations: Path) -> Path:
+    """Write the review figure to `out` and return the path written."""
+    fig, _ = build_figure(observations)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)
@@ -325,9 +504,10 @@ def render(out: Path) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--observations", type=Path, required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    print(render(args.out))
+    print(render(args.out, args.observations))
 
 
 if __name__ == "__main__":

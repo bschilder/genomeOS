@@ -83,10 +83,31 @@ const downloadRefSchema = z.strictObject({
   url: nonEmpty,
 });
 
+// NON-COMMERCIAL: the commercial-use marking published with every external resource. genomeOS may
+// publish data under a non-commercial licence, but `restricted_fields` has to name every field
+// carrying the restriction, so a consumer — including a future commercial build of this project —
+// can select and drop exactly those without reading our source. `not_checked` means nobody has read
+// this source's terms yet: honest rather than permissive, and it carries no evidence fields.
+// The register is docs/non-commercial-data.md; the inventory is scripts/check_commercial_use.py.
+const commercialUseSchema = z.strictObject({
+  checked_at: nonEmpty.optional(),
+  finding: z.enum([
+    'explicitly_open',
+    'permission_granted',
+    'no_restriction_found',
+    'restricted',
+    'not_checked',
+  ]),
+  recorded_in: nonEmpty.optional(),
+  restricted_fields: z.array(nonEmpty),
+  terms_url: z.url().optional(),
+});
+
 const externalResourceSchema = z.discriminatedUnion('source', [
   z.strictObject({
     cache_sha256: sha256,
     cache_url: nonEmpty,
+    commercial_use: commercialUseSchema,
     dataset: nonEmpty,
     normalized_variant_id: z
       .string()
@@ -96,6 +117,21 @@ const externalResourceSchema = z.discriminatedUnion('source', [
   z.strictObject({
     cache_sha256: sha256,
     cache_url: nonEmpty,
+    commercial_use: commercialUseSchema,
+    // `method` carries the lookup-versus-inference split. `source` names the provider and stays
+    // 'alphagenome' for both, so a future model-inference entry is also legitimately AlphaGenome
+    // without inheriting the coordinate requirement below.
+    method: z.literal('atlas_lookup'),
+    model_version: nonEmpty,
+    normalized_variant_id: z
+      .string()
+      .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
+    source: z.literal('alphagenome'),
+  }),
+  z.strictObject({
+    cache_sha256: sha256,
+    cache_url: nonEmpty,
+    commercial_use: commercialUseSchema,
     normalized_variant_id: z
       .string()
       .regex(/^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/),
@@ -413,6 +449,32 @@ export const externalInfoSchema = z.discriminatedUnion('source', [
     }),
     source: z.literal('dbsnp'),
   }),
+  z.strictObject({
+    ...externalBaseSchema,
+    schema_version: z.literal(1),
+    // The coordinate shape belongs to the Atlas AVI lookup, which is keyed by coordinate and
+    // ref/alt. It is not a property of AlphaGenome the model: the model is sequence-to-function, so
+    // it could in principle score an allele that carries no coordinate. A model-inference method
+    // would be a separate member without this regex.
+    method: z.literal('atlas_lookup'),
+    query: z.strictObject({
+      normalized_variant_id: z
+        .string()
+        .regex(
+          /^chr(?:[1-9]|1[0-9]|2[0-2]|X|Y|MT)-[1-9][0-9]*-[ACGT]+-[ACGT]+$/,
+        ),
+    }),
+    record: z.strictObject({
+      avi_phred: finiteNumber.nonnegative(),
+      avi_raw_score: finiteNumber,
+      avi_tail_quantile: probability,
+      deep_link: z.url(),
+      dominant_modality: nonEmpty,
+      model_version: nonEmpty,
+      prediction_class: z.literal('predicted_impact'),
+    }),
+    source: z.literal('alphagenome'),
+  }),
 ]);
 
 export type Support = z.infer<typeof supportSchema>;
@@ -424,5 +486,6 @@ export type SurfaceCell = z.infer<typeof surfaceCellSchema>;
 export type SurfaceArtifact = z.infer<typeof surfaceArtifactSchema>;
 export type Observation = z.infer<typeof observationSchema>;
 export type ObservationArtifact = z.infer<typeof observationArtifactSchema>;
+export type CommercialUse = z.infer<typeof commercialUseSchema>;
 export type ExternalResource = z.infer<typeof externalResourceSchema>;
 export type ExternalInfo = z.infer<typeof externalInfoSchema>;
