@@ -28,7 +28,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.export_atlas_web import (  # noqa: E402  (path set above)
+from genomeos.publication.commercial_use import (  # noqa: E402  (path set above)
     COMMERCIAL_USE_EVIDENCE_FIELDS,
     COMMERCIAL_USE_FINDINGS,
     KNOWN_NON_COMMERCIAL_FIELDS,
