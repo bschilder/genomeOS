@@ -196,8 +196,9 @@ These runners are reusable WP0/WP1 engineering prerequisites. They do not comple
 input inventory, certify dependencies or a present-day resident target, establish genuinely
 sealed external evidence, implement all required holdout tracks/strata/joint-site scores, or
 provide an empirical B0/B1/B2 comparison. The current HbS development table also exceeds the
-admitted beta-binomial scorer domain, so the current-GP runner truthfully produces an incomplete
-ledger before fitting. Those WP0 and WP1 gates remain required on reviewed, permitted data.
+old beta-binomial finite-product work limit, but the bounded scorer now admits its complete count
+domain without dropping rows. A fitted current-GP comparison is still pending. Those WP0 and WP1
+gates remain required on reviewed, permitted data.
 
 WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
 admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
@@ -210,15 +211,19 @@ permission does not qualify any source or publish any scientific result in this 
 
 ## Count-scoring numerical domain
 
-`CountPredictive.log_prob` evaluates interior beta-binomial draws by finite products of paired
-probability factors, using `log1p` near one instead of subtracting nearly equal log-beta
-normalizers. Its deterministic work is O(draws × AN); it refuses AN above 65,536 for any interior
-beta-binomial draw. This cap limits each draw batch to 16 support chunks, with temporary factor
-arrays bounded by 128 draws × 4,096 terms (524,288 float64 elements each). It is an engineering
-work budget, not a scientific threshold or a binomial approximation. Diagnostics call this scorer
-first and inherit its refusal. Binomial and exact p=0/1 draws retain the existing AN maximum
-2,147,483,647, as do CDF/quantile-only queries with their existing bounded tail-sum arithmetic.
-The existing beta shape/concentration checks also remain in force.
+`CountPredictive.log_prob` evaluates interior beta-binomial draws from the nearer endpoint mass
+and a shorter-side adjustment. Each term is a directly paired rising-factorial ratio with a
+16-factor exact prefix and a fixed Euler--Maclaurin tail. Its work and temporary arrays are bounded
+independently of AN; it never materializes `0, ..., AN` or substitutes a binomial distribution.
+An independent 160-digit Decimal oracle covers the actual 2,571,112-allele HbS maximum and the
+declared 2,147,483,647 count ceiling. Measured absolute log-mass error is at most `5e-9` across the
+million-scale benchmark cases and `2e-8` at the declared ceiling. Mixture integration, allele
+complement symmetry, small-support normalization, exact Bernoulli identities, and boundary-heavy
+means remain regression-tested. The existing beta shape/concentration checks remain in force.
+
+CDF/quantile queries retain their exact bounded-memory tail-sum arithmetic. Their memory does not
+grow with AN, but runtime can grow with the shorter queried support tail; log-mass acceleration does
+not imply constant-time quantiles.
 
 The accepted quantile levels remain `0 < q <= 1`; the 100% endpoint is the exact mixture support
 maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Earlier

@@ -226,20 +226,23 @@ def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
         }
 
 
-def test_real_cli_preserves_global_scoring_refusal_without_fitting(tmp_path):
+def test_runner_scores_denominator_above_old_limit(tmp_path, monkeypatch):
     paths = _write_inputs(tmp_path, large_denominator=True)
-    output = tmp_path / "refused"
+    output = tmp_path / "large-denominator"
+    runner = _load_runner("spatial_gp_runner_large_denominator")
+    _install_fake_fit(runner, monkeypatch)
+    args = runner._parser().parse_args(_command(paths, output)[2:])
 
-    completed = _run(_command(paths, output))
+    result = runner.run(args)
 
-    assert completed.returncode == 1, completed.stderr
+    assert result == 0
     statuses = pd.read_csv(output / "fold_status.tsv", sep="\t", keep_default_na=False)
-    assert set(statuses["status"]) == {"failed"}
-    assert all("65,536" in reason for reason in statuses["failure_reason"])
-    assert pd.read_csv(output / "predictions.tsv", sep="\t").empty
+    assert set(statuses["status"]) == {"completed"}
+    predictions = pd.read_csv(output / "predictions.tsv", sep="\t")
+    assert 65_537 in set(predictions["observed_an"])
     summary = json.loads((output / "summary.json").read_text())
-    assert summary["benchmark"]["comparison_complete"] is False
-    assert summary["benchmark"]["split_counts"]["failed"] == 4
+    assert summary["benchmark"]["comparison_complete"] is True
+    assert summary["benchmark"]["split_counts"]["completed"] == 4
 
 
 def test_runner_refuses_implicit_config_defaults_and_existing_output(tmp_path):
@@ -265,7 +268,7 @@ def test_runner_refuses_implicit_config_defaults_and_existing_output(tmp_path):
 
 
 def test_runner_bootstraps_the_checked_out_science_sources(tmp_path):
-    paths = _write_inputs(tmp_path, large_denominator=True)
+    paths = _write_inputs(tmp_path)
     conflicting = tmp_path / "conflicting"
     package = conflicting / "genomeos"
     package.mkdir(parents=True)
@@ -273,7 +276,9 @@ def test_runner_bootstraps_the_checked_out_science_sources(tmp_path):
         'raise RuntimeError("synthetic wrong-checkout genomeos imported")\n'
     )
 
-    completed = _run(_command(paths, tmp_path / "run"), pythonpath=conflicting)
+    command = _command(paths, tmp_path / "run")
+    command[command.index("--buffer-km") + 1] = "20000"
+    completed = _run(command, pythonpath=conflicting)
 
     assert completed.returncode == 1, completed.stderr
     assert "synthetic wrong-checkout" not in completed.stderr

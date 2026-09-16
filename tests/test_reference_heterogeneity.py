@@ -22,7 +22,6 @@ from genomeos.surfaces.reference_heterogeneity import (
     predict_reference_population_heterogeneity,
 )
 from genomeos.validation.count_baseline import B0InfeasibleError
-from genomeos.validation.predictive import MAX_BETA_SCORING_COUNT
 from genomeos.validation.reference_counts import ReferenceCount, ReferenceInfeasibleError
 
 
@@ -223,11 +222,17 @@ def test_fit_refuses_empty_or_all_unavailable_training(training: list[ReferenceC
         fit_reference_population_heterogeneity(training, config=config())
 
 
-def test_fit_refuses_training_denominator_above_scoring_domain() -> None:
-    with pytest.raises(ValueError, match=str(MAX_BETA_SCORING_COUNT)):
-        fit_reference_population_heterogeneity(
-            [row("too-large", ac=1, an=MAX_BETA_SCORING_COUNT + 1)], config=config()
-        )
+def test_fit_accepts_training_denominator_above_old_scoring_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fit_config = config()
+    install_sampler(monkeypatch, idata_for(("v",), draws=fit_config.draws))
+
+    fitted = fit_reference_population_heterogeneity(
+        [row("large-survey", ac=1, an=65_537)], config=fit_config
+    )
+
+    assert fitted.training_counts[0].training_an == 65_537
 
 
 def _missing_mean(data: xr.DataTree) -> None:

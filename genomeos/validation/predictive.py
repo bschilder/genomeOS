@@ -1,4 +1,4 @@
-"""Exact posterior-predictive scoring for allele counts (design §7, §8; #189).
+"""Exact posterior-predictive scoring for allele counts (design §7, §8; #189, #314).
 
 ``CountPredictive`` represents a mixture over draw-aligned observation distributions. Callers
 must provide probabilities after every intended latent, cohort, and sampling-design effect has
@@ -21,11 +21,10 @@ tested domain far beyond any individual survey. Interior beta-binomial concentra
 ``1 / sqrt(float epsilon)`` are refused because subtracting their log-beta normalizers no longer
 retains reliable probability-scale precision; callers must explicitly select binomial semantics
 rather than obtain that distribution through an unstable finite-concentration approximation.
-Log mass uses finite rising-factorial products instead of subtracting beta normalizers. For
-interior beta-binomial draws, ``log_prob`` (and hence diagnostics) additionally requires
-``AN <= 65_536``: its O(draws * AN) work is bounded to 16 support chunks per draw batch.
-CDF/quantile-only queries retain the larger count domain and their existing tail-sum arithmetic;
-binomial and exactly degenerate draws do not need the product and retain the larger domain too.
+Log mass uses a fixed exact prefix followed by a controlled Euler--Maclaurin tail for each
+rising factorial. Its work and temporary arrays are bounded independently of ``AN``. CDF and
+quantile queries retain their exact tail-sum arithmetic, whose runtime can still depend on the
+queried support tail.
 """
 
 from __future__ import annotations
@@ -41,44 +40,115 @@ SEED = 42
 MAX_COUNT = int(np.iinfo(np.int32).max)
 _MAX_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
 _CDF_CHUNK_SIZE = 4096
-MAX_BETA_SCORING_COUNT = 65_536
-_MASS_DRAW_CHUNK_SIZE = 128
 _LOG_HALF = float(np.log(0.5))
+_RISING_EXACT_PREFIX = 16
+_RISING_PREFIX_INDEX = np.arange(_RISING_EXACT_PREFIX, dtype=float)
+_STIRLING_POWERS = np.asarray((1, 3, 5, 7, 9, 11), dtype=float)
+_STIRLING_COEFFICIENTS = np.asarray(
+    (1.0 / 12.0, -1.0 / 360.0, 1.0 / 1260.0, -1.0 / 1680.0, 1.0 / 1188.0, -691.0 / 360360.0)
+)
 
 
-def _beta_product_log_mass(k: int, n: int, mean: np.ndarray, c: np.ndarray) -> np.ndarray:
-    """Log[choose(n,k) (p*c)_k ((1-p)*c)_(n-k) / (c)_n], in bounded chunks.
+def _log_ratio(
+    numerator: np.ndarray,
+    denominator: np.ndarray,
+    difference: np.ndarray | None = None,
+) -> np.ndarray:
+    """Return ``log(numerator / denominator)`` accurately near and far from one."""
+    if difference is None:
+        difference = numerator - denominator
+    near_one = np.abs(difference) < 0.5 * denominator
+    log1p_difference = np.where(near_one, difference, 0.0)
+    stable = np.log1p(log1p_difference / denominator)
+    direct = np.log(numerator) - np.log(denominator)
+    return np.where(near_one, stable, direct)
 
-    Pair numerator factors with denominator factors before taking logs. Near-one factors use
-    log1p of the complementary ratio, so a nearly certain endpoint retains its tiny negative
-    log mass. Small factors use log(numerator)-log(denominator) to avoid ratio underflow.
+
+def _bounded_log_rising_ratio(
+    numerator: np.ndarray,
+    denominator: np.ndarray,
+    length: int,
+    *,
+    difference: np.ndarray | None = None,
+) -> np.ndarray:
+    """Evaluate ``log((numerator)_length / (denominator)_length)`` in bounded work.
+
+    The first 16 factors are direct log ratios. The remaining Euler--Maclaurin terms are
+    algebraically differenced before evaluation; separately evaluating two large rising
+    factorials would erase a small but valid log probability through cancellation.
     """
-    result = np.zeros(mean.shape)
-    smaller = min(k, n - k)
-    log_choose = 0.0
-    for start in range(1, smaller + 1, _CDF_CHUNK_SIZE):
-        index = np.arange(start, min(start + _CDF_CHUNK_SIZE, smaller + 1))
-        log_choose += float(np.sum(np.log1p((n - smaller) / index)))
-    for draw_start in range(0, mean.size, _MASS_DRAW_CHUNK_SIZE):
-        stop = draw_start + _MASS_DRAW_CHUNK_SIZE
-        p = mean[draw_start:stop, None]
-        concentration = c[draw_start:stop, None]
-        alpha, beta = p * concentration, (1.0 - p) * concentration
-        total = np.full(p.shape[0], log_choose)
-        for start in range(0, n, _CDF_CHUNK_SIZE):
-            index = np.arange(start, min(start + _CDF_CHUNK_SIZE, n))[None, :]
-            success = index < k
-            numerator = np.where(success, alpha + index, beta + (index - k))
-            denominator = concentration + index
-            complement = np.where(success, beta, alpha + k) / denominator
-            terms = np.log(numerator) - np.log(denominator)
-            near_one = complement < 0.5
-            terms[near_one] = np.log1p(-complement[near_one])
-            # At the first factor, use p itself before shape multiplication can round it.
-            if start == 0:
-                terms[:, 0] = np.log(p[:, 0]) if k else np.log1p(-p[:, 0])
-            total += np.sum(terms, axis=1)
-        result[draw_start:stop] = total
+    if difference is None:
+        difference = numerator - denominator
+    result = np.zeros(np.broadcast_shapes(numerator.shape, denominator.shape))
+    prefix = _RISING_PREFIX_INDEX[: min(length, _RISING_EXACT_PREFIX)]
+    if prefix.size:
+        result += np.sum(
+            _log_ratio(
+                numerator[..., np.newaxis] + prefix,
+                denominator[..., np.newaxis] + prefix,
+                difference[..., np.newaxis],
+            ),
+            axis=-1,
+        )
+
+    remaining = max(length - _RISING_EXACT_PREFIX, 0)
+    numerator_start = numerator + _RISING_EXACT_PREFIX
+    denominator_start = denominator + _RISING_EXACT_PREFIX
+    log_start_ratio = _log_ratio(
+        numerator_start, denominator_start, difference
+    )
+    denominator_tail_log = np.log1p(remaining / denominator_start)
+    # log1p(remaining / numerator_start) - log1p(remaining / denominator_start)
+    tail_log_difference = np.log1p(
+        -(difference / numerator_start)
+        * (remaining / (denominator_start + remaining))
+    )
+    tail = (
+        remaining * log_start_ratio
+        + difference * denominator_tail_log
+        + (numerator_start + remaining - 0.5) * tail_log_difference
+    )
+    shifted_log_ratio = np.log1p(difference / denominator_start)[..., np.newaxis]
+    tail_shifted_log_ratio = np.log1p(
+        difference / (denominator_start + remaining)
+    )[..., np.newaxis]
+    powers = _STIRLING_POWERS.reshape((1,) * result.ndim + (-1,))
+    coefficients = _STIRLING_COEFFICIENTS.reshape((1,) * result.ndim + (-1,))
+    correction = np.sum(
+        coefficients
+        * (
+            np.expm1(-powers * tail_shifted_log_ratio)
+            / (denominator_start[..., np.newaxis] + remaining) ** powers
+            - np.expm1(-powers * shifted_log_ratio)
+            / denominator_start[..., np.newaxis] ** powers
+        ),
+        axis=-1,
+    )
+    return result + tail + correction
+
+
+def _bounded_beta_log_mass(
+    k: int, n: int, mean: np.ndarray, concentration: np.ndarray
+) -> np.ndarray:
+    """Evaluate normalized beta-binomial log masses with work independent of ``n``."""
+    if n == 1:
+        return np.log(mean) if k else np.log1p(-mean)
+    alpha = mean * concentration
+    beta = (1.0 - mean) * concentration
+    log_choose = _log_combination(n, np.asarray(k))
+    if k <= n - k:
+        # P(k) = P(0) choose(n,k) (alpha)_k / (beta+n-k)_k.
+        endpoint = _bounded_log_rising_ratio(
+            beta, concentration, n, difference=-alpha
+        )
+        adjustment = _bounded_log_rising_ratio(alpha, beta + n - k, k)
+    else:
+        # Reflect the same identity around n to start from P(n).
+        endpoint = _bounded_log_rising_ratio(
+            alpha, concentration, n, difference=-beta
+        )
+        adjustment = _bounded_log_rising_ratio(beta, alpha + k, n - k)
+    result = log_choose + endpoint + adjustment
     if np.any(~np.isfinite(result)) or np.any(result > 0.0):
         raise FloatingPointError("beta-binomial log mass is outside the stable numeric domain")
     return result
@@ -290,15 +360,10 @@ class CountPredictive:
         result[at_zero & (count == 0)] = 0.0
         result[at_one & (count == denominator)] = 0.0
         interior = ~(at_zero | at_one)
-        if np.any(interior & (denominator > MAX_BETA_SCORING_COUNT)):
-            raise ValueError(
-                f"interior beta-binomial log_prob requires AN <= {MAX_BETA_SCORING_COUNT}; "
-                "stable finite-product scoring exceeds its supported work budget"
-            )
         for observation, n in enumerate(an):
             selected = interior[:, observation]
             if np.any(selected):
-                result[selected, observation] = _beta_product_log_mass(
+                result[selected, observation] = _bounded_beta_log_mass(
                     int(ac[observation]), int(n), mean[selected, observation],
                     self.concentration[selected, observation],
                 )
