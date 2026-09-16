@@ -68,9 +68,15 @@ def test_cli_writes_a_reproducible_nonpublication_comparison(tmp_path: Path) -> 
         "piel_printed_2013",
         "uniform_binomial_conjugate",
     }
+    assert set(report["stukel_arms"]) == set(report["arms"])
+    assert all(
+        arm["positive_branch_fitted"] is False
+        for arm in report["stukel_arms"].values()
+    )
     assert report["configuration"]["normal_fit"] == "plug_in_mle"
     assert report["configuration"]["plotting_position"] == "hazen_rank_average"
     assert report["diagnostics"]["latent"] == [-4.6]
+    assert set(report["diagnostics"]["stukel_aligned_frequency"]) == set(report["arms"])
     assert report["inputs"]["observations"]["sha256"] == hashlib.sha256(
         input_path.read_bytes()
     ).hexdigest()
@@ -81,6 +87,8 @@ def test_cli_writes_a_reproducible_nonpublication_comparison(tmp_path: Path) -> 
         "inverse_logit",
         "piel_printed_2013",
         "uniform_binomial_conjugate",
+        "stukel_piel_printed_2013",
+        "stukel_uniform_binomial_conjugate",
     ]:
         assert np.all(np.diff(curves[column]) > 0)
     assert (first / "piel-flexible-link-preflight.png").stat().st_size > 10_000

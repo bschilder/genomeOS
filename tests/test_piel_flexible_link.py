@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from scipy.special import expit
 
 from genomeos.surfaces.piel_flexible_link import (
     SMOOTHING_RULES,
+    StukelLink,
     fit_piel_flexible_link,
+    fit_stukel_link,
     smooth_piel_frequencies,
 )
 
@@ -124,3 +127,74 @@ def test_link_refuses_nonfinite_latent_values() -> None:
         result.link.frequency([0.0, np.nan])
     with pytest.raises(ValueError, match="finite"):
         result.link.derivative([np.inf])
+
+
+def test_stukel_link_matches_published_reference_values() -> None:
+    """The sirt documentation gives these four values for α1=0, α2=0.6."""
+    link = StukelLink(alpha_positive=0.0, alpha_negative=0.6)
+
+    actual = link.frequency([-0.3, 0.0, 0.25, 1.0])
+
+    np.testing.assert_allclose(
+        actual,
+        [0.4185580, 0.5, 0.5621765, 0.7310586],
+        rtol=0.0,
+        atol=5e-8,
+    )
+
+
+@pytest.mark.parametrize(
+    ("alpha_positive", "alpha_negative"),
+    [(-1.0, -1.0), (-0.5, 0.6), (0.0, 0.0), (0.5, -0.5), (1.0, 1.0)],
+)
+def test_stukel_link_is_continuous_and_increasing(alpha_positive, alpha_negative) -> None:
+    link = StukelLink(alpha_positive=alpha_positive, alpha_negative=alpha_negative)
+    grid = np.linspace(-8.0, 8.0, 20_001)
+
+    transformed = link.transform(grid)
+    frequency = link.frequency(grid)
+
+    assert link.transform(0.0) == pytest.approx(0.0)
+    assert np.all(np.diff(transformed) > 0.0)
+    assert np.all(np.diff(frequency) >= 0.0)
+    assert np.all((frequency >= 0.0) & (frequency <= 1.0))
+
+
+def test_zero_shape_stukel_is_exact_inverse_logit() -> None:
+    latent = np.linspace(-8.0, 8.0, 101)
+    np.testing.assert_array_equal(
+        StukelLink(alpha_positive=0.0, alpha_negative=0.0).frequency(latent),
+        expit(latent),
+    )
+
+
+@pytest.mark.parametrize("rule", SMOOTHING_RULES)
+def test_stukel_fit_is_deterministic_and_aligns_empirical_quantiles(rule) -> None:
+    ac, an = _counts()
+    first = fit_stukel_link(ac, an, rule=rule)
+    order = np.array([8, 2, 10, 0, 5, 11, 3, 6, 1, 9, 4, 7])
+    second = fit_stukel_link(ac[order], an[order], rule=rule)
+
+    assert first == second
+    assert first.link.alpha_positive == 0.0
+    assert first.positive_branch_fitted is False
+    assert first.maximum_fitted_latent <= 0.0
+    assert first.successful_starts == first.optimization_starts
+    assert first.optimization_objective_spread < 1e-8
+
+    baseline = np.array([-4.6, -3.0, -2.0, -1.0])
+    aligned = first.stukel_location + first.stukel_scale * (
+        (baseline - first.normal_location) / first.normal_scale
+    )
+    np.testing.assert_array_equal(
+        first.aligned_frequency(baseline),
+        first.link.frequency(aligned),
+    )
+
+
+def test_stukel_link_refuses_nonfinite_inputs_and_parameters() -> None:
+    with pytest.raises(ValueError, match="finite"):
+        StukelLink(alpha_positive=np.nan, alpha_negative=0.0)
+    link = StukelLink(alpha_positive=0.0, alpha_negative=0.0)
+    with pytest.raises(ValueError, match="finite"):
+        link.frequency([0.0, np.inf])

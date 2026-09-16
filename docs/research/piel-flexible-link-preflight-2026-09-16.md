@@ -1,4 +1,4 @@
-# Piel flexible-link preflight: do not advance to a spatial fit
+# Piel cubic and Stukel link preflight: do not advance to a spatial fit
 
 Status: `automated_analysis` / `pending_expert_review`, 2026-09-16. Advances
 [#103](https://github.com/bschilder/genomeOS/issues/103), Atlas design §§7–8, and
@@ -7,28 +7,26 @@ This is a method preflight, not a fitted surface or publication result.
 
 ## Scientific contract
 
-The objective was to determine whether Piel et al.'s unpublished empirical cubic
-link is promising enough to justify another full HbS spatial fit. The measurable
-output is a deterministic reconstruction of two explicit readings of the paper's
-ambiguous smoothing equation, evaluated at the canonical fit's posterior-median
-intercept and against empirical quantiles. The acceptance decision is whether the
-link suppresses the diffuse non-endemic floor without making the weak-peak problem
-worse.
+The objective was to determine whether either Piel et al.'s unpublished empirical
+cubic or Stukel's generalized logistic link is promising enough to justify another
+full HbS spatial fit. The measurable output is a deterministic reconstruction under
+both explicit readings of Piel's ambiguous smoothing equation. A candidate advances
+only if it suppresses the diffuse non-endemic floor without making the weak-peak
+problem worse.
 
-The engineering components are the pure
-`genomeos.surfaces.piel_flexible_link` module and the offline
-`scripts/preflight_piel_flexible_link.py` runner. They emit coefficients, link
-curves, aggregate quantiles, source and input hashes, and a review figure. They do
-not modify the production surface fitter, serve data, or make any artifact
+The engineering component is the pure `genomeos.surfaces.piel_flexible_link`
+module and offline `scripts/preflight_piel_flexible_link.py` runner. They emit
+coefficients, aggregate curves and quantiles, source and input hashes, and a review
+figure. They do not alter the production fitter, serve data, or make an artifact
 publication eligible.
 
-Piel's fitted coefficients are unavailable. Web Appendix 1 does not completely
-specify its posterior-CDF fitting procedure, and its printed equation conflicts
-with the stated uniform-prior binomial model. The reconstruction therefore names
-every added choice and preserves both equation arms. A favorable fixed-latent
-diagnostic would still require a spatial fit with held-out count and burden
-validation; an unfavorable diagnostic can avoid that compute. Downstream consumers
-are issue #103 and the model-selection ladder, not the serving path.
+Piel's cubic coefficients are unavailable. The appendix also leaves details of its
+empirical-CDF fit implicit and prints a smoothing equation that conflicts with its
+stated uniform-prior binomial model. The reconstruction names every added choice and
+preserves both equation arms. Stukel's positive-latent branch is outside the observed
+HbS range, so its shape is fixed at the inverse-logit value zero and reported as
+unfitted. A favorable preflight would still require a spatial fit with held-out count
+and burden validation; an unfavorable result can avoid that compute.
 
 ## Frozen reconstruction
 
@@ -38,54 +36,79 @@ input SHA-256 is
 `466034e22015ce5f4e0b90067adb2232491b625591d50c8ac83d955565345b4b`.
 No row-level observation is committed.
 
-The two preserved smoothing rules are:
+The preserved smoothing rules are:
 
 - appendix equation as printed: `(AC + 1) / (AN + AC + 2)`;
 - uniform-binomial conjugate equation: `(AC + 1) / (AN + 2)`.
 
 Each arm uses average ranks, Hazen plotting positions, a plug-in normal MLE on
-smoothed logits, and a five-start least-squares fit. The cubic derivative is a
-strictly positive floor plus the square of a linear function, so monotonicity holds
-globally rather than only at sampled points. Input frequencies are sorted before
-floating reductions, making the result exactly invariant to row order.
+smoothed logits, and five deterministic optimization starts. The cubic derivative is
+a strictly positive floor plus the square of a line, so it is globally monotone.
+Stukel uses the published two-piece transform. Its fitted negative-tail parameter is
+`0.64441` under the printed equation and `0.44682` under the conjugate equation; all
+five starts converge, and every fitted latent quantile remains below zero.
+
+The Stukel fit has its own location and scale. It is evaluated at the same empirical
+quantile as the inverse-logit baseline:
+
+`z_stukel = μ_stukel + σ_stukel × (x_baseline - μ_logit) / σ_logit`.
+
+This alignment prevents a raw latent value from being given two different empirical
+meanings.
 
 ## Result
 
-| Reconstruction | Normal location | Normal scale | Logit RMSE | Frequency at `x = -4.599069` |
+| Smoothing arm | Cubic logit RMSE | Stukel logit RMSE | Cubic at background | Stukel at background |
 | --- | ---: | ---: | ---: | ---: |
-| Current inverse-logit | — | — | — | 0.9961% |
-| Appendix equation as printed | -3.8138 | 1.5123 | 0.19424 | 1.2126% |
-| Uniform-binomial conjugate | -3.7674 | 1.5542 | 0.19459 | 1.1939% |
+| Appendix equation as printed | 0.19424 | 0.21247 | 1.2126% | 1.2046% |
+| Uniform-binomial conjugate | 0.19459 | 0.21033 | 1.1939% | 1.1878% |
 
-At the canonical fit's posterior-median intercept, the reconstructed links raise
-the frequency by 21.7% and 19.9% relative to inverse-logit. They agree closely
-through most of the observed distribution and differ mainly in upper-tail
-compression. That compression addresses the implausibly heavy right tail described
-by Piel et al.; it does not address this campaign's combination of an overly high
-background and under-resolved peaks. At the tested operating point, it moves the
-background in the wrong direction.
+The current inverse-logit background at `x = -4.599069` is 0.9961%. Both cubic
+reconstructions raise it by about 20%. The aligned Stukel candidates also raise it,
+by 20.9% and 19.2%, while fitting the empirical logit quantiles worse than the cubic.
 
-![Piel flexible-link preflight](../figures/piel_flexible_link_preflight.png)
+| Inverse-logit operating point | Printed-equation Stukel | Conjugate-equation Stukel |
+| ---: | ---: | ---: |
+| 5% | 5.404% | 5.465% |
+| 10% | 9.087% | 9.377% |
+| 15% | 11.995% | 12.543% |
+| 20% | 14.480% | 15.292% |
+
+The 20% point is a mild diagnostic extrapolation for the printed-equation arm,
+whose maximum smoothed observation is 18.26%. The rejection already holds at the
+10% and 15% points inside the observed range of both arms.
+
+The two arms therefore give the same directional answer: Stukel raises the diffuse
+background and compresses the peaks. It worsens both parts of the current
+high-background, weak-peak failure.
+
+![Piel cubic and Stukel link preflight](../figures/piel_flexible_link_preflight.png)
 
 The committed aggregate receipt and tables are in
 [`piel-flexible-link-preflight-2026-09-16/`](piel-flexible-link-preflight-2026-09-16/).
 The receipt records `spatial_fit_performed: false`,
-`publication_eligible: false`, and an empty list of environmental covariates.
+`publication_eligible: false`, and an empty environmental-covariate list.
 
 ## Decision and source scope
 
-Do **not** spend a GPU fit on this link now. This is a bounded negative result, not
-proof that every refitted flexible-link model must fail: a joint refit could move
-the latent intercept and spatial field. Revisit only if the original coefficients
-or a fully specified fitting procedure become available, or if the link is tested
-inside a model that separately targets low background and localized peaks. Any
-such candidate must beat the unchanged inverse-logit baseline on held-out counts,
-calibration, supported-only national burden, and peak/background contrasts.
+Do **not** spend a GPU fit on either link now. This bounded negative result does not
+prove that every joint refit must fail, because a spatial refit could move the latent
+intercept and field. Revisit only with the original cubic coefficients, a fully
+specified fitting procedure, or a model that separately targets low background and
+localized peaks. Any candidate must beat the unchanged inverse-logit baseline on
+held-out counts, calibration, supported-only national burden, and peak/background
+contrasts.
 
-This analysis does not grant MAP data special status. The count-bearing HbS survey
-observations are used because they directly instantiate the Piel benchmark. MAP
-malaria-risk, EVI, friction, and other modeled environmental layers are neither
-inputs nor implied next steps. A MAP layer should enter WP3 only when a named
-variant-specific mechanism, source/dependency audit, unchanged holdouts, and a
-controlled incremental comparison show that it adds useful information beyond the
-qualified baseline.
+This analysis grants no special status to the Malaria Atlas Project. The HbS surveys
+are used because they contain count-bearing observations and instantiate the Piel
+benchmark. MAP malaria-risk, vegetation, friction, and other modeled layers are not
+inputs or implied next steps. Like every other covariate source, a named asset must
+add out-of-region predictive value beyond simpler baselines under a pre-registered
+comparison before it earns further work.
+
+## Method sources
+
+- Piel et al., *Lancet* 2013, doi:10.1016/S0140-6736(12)61229-X, Web Appendix 1.
+- Stukel, *JASA* 1988, doi:10.1080/01621459.1988.10478613.
+- The `sirt::pgenlogis` reference values are used as an independent executable test
+  of the published Stukel transform.
