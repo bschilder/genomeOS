@@ -66,6 +66,10 @@ committed in this PR. CI fails if it is stale.
       `not_checked`) rather than a plausible substitute. Notes never stand in for a structured field.
 - [ ] Automated or LLM output is `automated_proposal` / `pending`. The extractor is not the verifier.
 - [ ] Source reuse terms inspected and logged for every contributing source.
+- [ ] **Does this add data under a non-commercial licence?** If yes, apply the
+      `licence:non-commercial` label, declare the restricted fields in the publish allowlist,
+      and paste `python scripts/check_commercial_use.py --list` below. Non-commercial data is
+      welcome here; it just has to be findable. See `docs/non-commercial-data.md`.
 - [ ] Coverage totals reconcile, and the report counts what it says it counts (manifest rows and
       unique papers are different numbers).
 

@@ -194,6 +194,7 @@ ruff check .                              # lint; CI runs this
 python scripts/freeze_contract.py --check # contract drift; CI runs this
 python scripts/check_module_size.py        # agent-readable module budget; CI runs this
 python scripts/check_private_files.py      # tracked-file privacy gate; CI runs this
+python scripts/check_commercial_use.py     # non-commercial data marking; CI runs this
 python scripts/smoke.py                    # mandatory fast verification; CI runs this
 pytest                                    # CI runs this
 
@@ -324,6 +325,28 @@ These are hard constraints, not preferences:
   or restriction is `no_restriction_found` and is not a blocker; missing due diligence remains
   `not_checked`. Explicit restrictions are binding. gnomAD is CC0, but its bundled SpliceAI
   annotations are CC BY-NC.
+
+### Non-commercial data must be marked, not refused
+
+genomeOS **may** publish data under a non-commercial licence. The condition is that every restricted
+field is declared, so that if a commercial component of this project ever exists, one command lists
+everything that has to come out. Full rules in
+[`docs/non-commercial-data.md`](docs/non-commercial-data.md).
+
+- Restrictions are **field-level, not source-level**. DeepMind carves the AlphaGenome AVI Score out
+  for commercial use while leaving the AVI Score Feature Breakdown non-commercial; gnomAD is CC0
+  while its bundled SpliceAI annotations are CC BY-NC. Tagging a whole source is wrong in both
+  directions.
+- Every external resource in the publish allowlist carries a `commercial_use` block naming its
+  `finding` and its `restricted_fields`. The exporter refuses a missing or self-contradictory one.
+- `KNOWN_NON_COMMERCIAL_FIELDS` in `scripts/export_atlas_web.py` is a tripwire: a field already
+  known to be restricted may ship **marked**, and may never ship **unmarked**. Never delete an entry
+  to make an export pass.
+- `not_checked` is publishable and stays honest. Refusing it would push a contributor to invent a
+  licence finding, which the publication-evidence safeguards above forbid. The gate lists unchecked
+  sources as unresolved instead.
+- Mark the code with a `NON-COMMERCIAL:` comment so `grep -rn "NON-COMMERCIAL:"` finds every site,
+  and label the issue or PR `licence:non-commercial`.
 
 ## Working the board
 

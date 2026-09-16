@@ -1,6 +1,7 @@
 # AlphaGenome AVI — licensing record for the external reference tab
 
-Why the Atlas publishes the AVI score and its identifying metadata but not the feature breakdown.
+Why the Atlas publishes the AVI score freely, and what has to happen before it publishes the
+feature breakdown alongside it.
 Every statement below was read from the primary source on 2026-09-10.
 
 ## The governing terms
@@ -34,21 +35,33 @@ Published in the AVI card: `avi_phred`, `avi_raw_score`, `avi_tail_quantile`, `d
 `deep_link`, `model_version`, `prediction_class`. These are the AVI Score and the metadata that
 identifies it.
 
-Not published: the per-feature attribution breakdown. That is the AVI Score Feature Breakdown, which
-the first definition places outside the AVI Score, and which DeepMind's own download listing carries
-under "Downloadable artifacts for non-commercial use only". It is the restricted half of a source
-that is otherwise permissively licensed, which is the same shape as gnomAD shipping CC0 data with
-CC BY-NC SpliceAI annotations bundled in.
+Not currently published: the per-feature attribution breakdown. That is the AVI Score Feature
+Breakdown, which the first definition places outside the AVI Score, and which DeepMind's own
+download listing carries under "Downloadable artifacts for non-commercial use only". It is the
+restricted half of a source that is otherwise permissively licensed, which is the same shape as
+gnomAD shipping CC0 data with CC BY-NC SpliceAI annotations bundled in.
+
+### It may be published, marked
+
+genomeOS is a non-commercial open atlas, so the non-commercial grant covers publishing the
+breakdown. The maintainer's ruling is that we may include it **provided it is marked clearly enough
+that a future commercial component can extract all of it at once**. The mechanism for that is in
+[`docs/non-commercial-data.md`](../non-commercial-data.md): the resource's `commercial_use` block
+declares `finding: "restricted"` and names `top_attributions` in `restricted_fields`, and
+`python scripts/check_commercial_use.py --list` then reports it as data a commercial build must
+remove.
+
+Adding it is a separate data change from the marking machinery, and it is gated on the acquisition
+question below rather than on the licence.
 
 Enforced in two places, so the two gates agree rather than one relying on convention:
 
-- `NON_REDISTRIBUTABLE_ALPHAGENOME_FIELDS` in `scripts/export_atlas_web.py` refuses a cache payload
-  that carries the field, so it cannot be published even if someone re-adds it to the JSON.
+- `KNOWN_NON_COMMERCIAL_FIELDS` in `scripts/export_atlas_web.py` refuses a cache payload carrying
+  the field unless the declaration names it. Marked it may ship; unmarked it may not, whoever
+  re-adds it to the JSON.
 - The `record` object in `website/src/atlas/contracts.ts` is a strict object, so the browser
-  contract rejects an unexpected field at parse time.
-
-If DeepMind ever licenses the breakdown for redistribution, the fix is a deliberate change to both
-of those, not a payload edit.
+  contract rejects a field it does not know at parse time. Publishing the breakdown means adding it
+  there deliberately, in the same change that declares it.
 
 ## Acquisition path, still to confirm
 

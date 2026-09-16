@@ -292,6 +292,10 @@ describe('StaticAtlasDataProvider', () => {
         {
           cache_sha256: 'd'.repeat(64),
           cache_url: 'external/gnomad/chr11-5227002-t-a.json',
+          commercial_use: {
+            finding: 'not_checked' as const,
+            restricted_fields: [],
+          },
           dataset: 'gnomad_r4',
           normalized_variant_id: ref.variant_id,
           source: 'gnomad' as const,

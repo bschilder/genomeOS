@@ -339,6 +339,10 @@ describe('atlas browser contracts', () => {
         {
           cache_sha256: 'd'.repeat(64),
           cache_url: 'external/gnomad/chr11-5227002-t-a.json',
+          commercial_use: {
+            finding: 'not_checked' as const,
+            restricted_fields: [],
+          },
           dataset: 'gnomad_r4',
           normalized_variant_id: artifact.variant_id,
           source: 'gnomad',
@@ -448,6 +452,10 @@ describe('atlas browser contracts', () => {
               {
                 cache_sha256: 'd'.repeat(64),
                 cache_url: 'external/gnomad/kir.json',
+                commercial_use: {
+                  finding: 'not_checked' as const,
+                  restricted_fields: [],
+                },
                 dataset: 'gnomad_r4',
                 normalized_variant_id: 'chr11-1-A-C',
                 source: 'gnomad',
@@ -517,6 +525,10 @@ describe('atlas browser contracts', () => {
       cache_sha256:
         'dda009906a7d6c9835f75858cbb960d81b0ae0b008a874f0fb46f7583d63e497',
       cache_url: 'external/alphagenome/chr11-5227002-t-a.json',
+      commercial_use: {
+        finding: 'not_checked' as const,
+        restricted_fields: [],
+      },
       method: 'atlas_lookup',
       model_version:
         'AlphaGenome (Avsec et al. 2026); Atlas AVI, accessed 2026-09-09',
