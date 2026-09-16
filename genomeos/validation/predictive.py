@@ -8,6 +8,10 @@ Predictive intervals are central, equal-tail intervals of a finite discrete coun
 Their endpoints lie on the ``1 / AN`` frequency grid and coverage can therefore exceed the
 nominal level, especially for small denominators or boundary-heavy predictions. Width and
 coverage must be interpreted together rather than treating nominal coverage as exactly attainable.
+Quantile search starts from a Cantelli upper bracket derived from the exact predictive-mixture
+moments, verifies that bracket with the selected exact CDF backend, and only then bisects. This
+avoids probing the middle of a million-count support for a rare allele without approximating the
+returned quantile (#316).
 
 Beta-binomial CDFs are summed exactly in fixed-size chunks, starting with the shorter support
 tail. If that tail has probability above one half, the small complementary tail is summed
@@ -465,6 +469,25 @@ class CountPredictive:
             probability[interior] = rng.beta(alpha, beta)
         return rng.binomial(denominator[np.newaxis, :], probability)
 
+    def _count_moments(self, denominator: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Return exact mean and variance of each posterior-predictive count mixture."""
+        n = denominator[np.newaxis, :].astype(float)
+        probability = self.mean_draws
+        conditional_mean = n * probability
+        if self.concentration is None:
+            conditional_variance = n * probability * (1.0 - probability)
+        else:
+            conditional_variance = (
+                n
+                * probability
+                * (1.0 - probability)
+                * (n + self.concentration)
+                / (1.0 + self.concentration)
+            )
+        mean = np.mean(conditional_mean, axis=0)
+        variance = np.mean(conditional_variance + conditional_mean**2, axis=0) - mean**2
+        return mean, np.maximum(variance, 0.0)
+
     def quantiles(self, an: object, probabilities: object) -> np.ndarray:
         """Exact left-continuous count quantiles without materializing ``0, ..., AN``."""
         denominator = _validated_an(an, self.n_observations)
@@ -474,10 +497,23 @@ class CountPredictive:
         if not np.all(np.isfinite(levels)) or np.any((levels <= 0.0) | (levels > 1.0)):
             raise ValueError("probabilities must be finite and between 0 (exclusive) and 1")
 
+        cdf = self._cdf_evaluator()
         low = np.full((len(levels), self.n_observations), -1, dtype=np.int64)
         high = np.broadcast_to(denominator, low.shape).copy()
-        cdf = self._cdf_evaluator()
         at_one = levels == 1.0
+        mean, variance = self._count_moments(denominator)
+        bounded_levels = levels[~at_one, np.newaxis]
+        # Cantelli: P(Y - E[Y] >= a) <= Var(Y) / (Var(Y) + a**2). Choosing
+        # a**2 = Var(Y) * q / (1 - q) makes this an upper bracket for quantile q.
+        # The exact CDF check below is still authoritative over the floating calculation.
+        cantelli_distance = np.sqrt(
+            variance[np.newaxis, :] * bounded_levels / (1.0 - bounded_levels)
+        )
+        bracket = np.ceil(mean[np.newaxis, :] + cantelli_distance).astype(np.int64)
+        high[~at_one] = np.clip(bracket, 0, denominator[np.newaxis, :])
+        bracket_cdf = cdf(high, denominator)
+        failed_bracket = (~at_one[:, np.newaxis]) & (bracket_cdf < levels[:, np.newaxis])
+        high = np.where(failed_bracket, denominator[np.newaxis, :], high)
         upper_support = np.where(np.any(self.mean_draws > 0.0, axis=0), denominator, 0)
         high[at_one] = upper_support
         low[at_one] = upper_support - 1
