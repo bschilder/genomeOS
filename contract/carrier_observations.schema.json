@@ -24,7 +24,7 @@
       }
     },
     "carriers": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "cohort_id": {
@@ -36,11 +36,11 @@
       }
     },
     "date_lower": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "date_upper": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "disease_ascertainment_excluded": {
@@ -73,7 +73,7 @@
       }
     },
     "n_individuals": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than": 0
     },
     "population_id": {
