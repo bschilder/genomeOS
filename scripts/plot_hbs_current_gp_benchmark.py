@@ -216,6 +216,8 @@ def build_report(
 def _symmetric_limit(values: pd.Series, *, floor: float) -> float:
     finite = np.abs(values.astype(float).to_numpy())
     finite = finite[np.isfinite(finite)]
+    if not finite.size:
+        return floor
     return max(floor, float(np.quantile(finite, 0.95)))
 
 
@@ -230,11 +232,18 @@ def build_figure(report: dict[str, object], matched: pd.DataFrame):
         axis.grid(color="#eceff1", linewidth=0.5, zorder=0)
 
     log_limit = _symmetric_limit(matched["log_score_delta"], floor=1.0)
-    log_order = np.argsort(np.abs(matched["log_score_delta"].to_numpy(dtype=float)))
+    raw_log_values = matched["log_score_delta"].to_numpy(dtype=float)
+    plotted_log_values = np.nan_to_num(
+        raw_log_values, nan=0.0, posinf=log_limit, neginf=-log_limit
+    )
+    log_order = np.argsort(np.abs(plotted_log_values))
+    log_edgecolors = np.zeros((len(matched), 4), dtype=float)
+    log_edgecolors[np.isnan(raw_log_values)] = (0.15, 0.15, 0.15, 1.0)
+    log_linewidths = np.where(np.isnan(raw_log_values), 0.8, 0.0)
     log_scatter = log_ax.scatter(
         matched.iloc[log_order]["lon"],
         matched.iloc[log_order]["lat"],
-        c=matched.iloc[log_order]["log_score_delta"],
+        c=plotted_log_values[log_order],
         s=16,
         marker="o",
         cmap="RdBu",
@@ -244,7 +253,8 @@ def build_figure(report: dict[str, object], matched: pd.DataFrame):
             vmax=log_limit,
             base=10,
         ),
-        linewidths=0,
+        edgecolors=log_edgecolors[log_order],
+        linewidths=log_linewidths[log_order],
         alpha=0.82,
         zorder=2,
     )

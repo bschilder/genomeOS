@@ -112,7 +112,7 @@ def test_both_negative_infinite_scores_remain_visible_and_disable_interval():
     candidate = _predictions([-np.inf, -4.0, -4.0, -4.0, -4.0], [0.1] * 5)
     statuses, split_ids = _statuses()
 
-    report, _ = compare_paired_benchmarks(candidate, baseline, statuses, split_ids)
+    report, matched = compare_paired_benchmarks(candidate, baseline, statuses, split_ids)
 
     zero = report["matched_row_count_strata"]["zero"]
     assert zero["candidate_mean_log_score"] == "-Infinity"
@@ -138,7 +138,7 @@ def test_one_sided_negative_infinity_is_catastrophic_and_disables_interval():
     candidate = _predictions([-np.inf, -4.0, -4.0, -4.0, -4.0], [0.1] * 5)
     statuses, split_ids = _statuses()
 
-    report, _ = compare_paired_benchmarks(candidate, baseline, statuses, split_ids)
+    report, matched = compare_paired_benchmarks(candidate, baseline, statuses, split_ids)
 
     paired = report["matched_row_count_strata"]["zero"]["paired_mean_log_score_delta"]
     assert paired == {
@@ -152,6 +152,21 @@ def test_one_sided_negative_infinity_is_catastrophic_and_disables_interval():
     assert interval["reason"] == "paired_log_score_contains_infinite_differences"
     assert interval["positive_infinity_count"] == 0
     assert interval["negative_infinity_count"] == 1
+
+    matched["lon"] = [-75.0, -20.0, 10.0, 35.0, 80.0]
+    matched["lat"] = [40.0, 5.0, 10.0, -5.0, 20.0]
+    figure = build_figure({"comparison": report}, matched)
+    try:
+        points = [
+            collection
+            for collection in figure.axes[0].collections
+            if hasattr(collection, "get_offsets")
+        ]
+        assert len(points) == 1
+        assert len(points[0].get_offsets()) == 5
+        assert np.isfinite(points[0].get_array()).all()
+    finally:
+        plt.close(figure)
 
 
 def test_figure_maps_metrics_to_actual_coordinates_with_circle_markers_only():
