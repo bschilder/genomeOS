@@ -12,7 +12,7 @@ claim of calibrated fitted uncertainty or better geographic predictions.
 2. **Output/evidence:** per-query prior frequency SD, aligned with posterior SD;
    reproducible prior draws across order, batch boundaries and saved-fit reload;
    unchanged-distribution controls; auditable cell tables and versioned metadata;
-   legacy artifact preservation and a synthetic review figure.
+   legacy artifact preservation and a geography-aware review figure.
 3. **Component/interface:** `SurfaceFit.prior_frequency_sd_at(lat, lon)` returns
    a one-dimensional float64 array. Masking, artifact publication and plotting
    use it offline. Serving reads precomputed results and performs no inference.
@@ -110,9 +110,11 @@ for an additional retained Parquet column; test that it survives the build.
 - Plot-cache alignment and legacy refusals are executed tests. Export/browser
   validation accepts format 3, preserves grid provenance, and refuses unknown
   versions. Existing formats remain tested.
-- A deterministic script produces a committed synthetic geographic figure of
-  the conditional no-update counterexample. Label it synthetic, mark unevaluated
-  and unknown locations, and do not portray geometry anchors as measured people.
+- A deterministic script uses reviewed public MAP HbS survey coordinates to produce a committed
+  conditional no-update figure. It uses coordinates only, labels measured sites separately from
+  balanced survey-supported model centers and the synthetic normalization result, and does not
+  portray the result as a fitted genetic surface. This figure-only construction leaves #280's
+  production placement decision open.
 - Run smoke and focused tests, full Python CI gates, affected browser tests/type
   check, privacy/staged-path review and independent task/whole-branch reviews.
 

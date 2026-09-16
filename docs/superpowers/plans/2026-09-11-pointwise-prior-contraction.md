@@ -19,7 +19,9 @@
 - Existing fitted posteriors, model graphs, cache files and cited artifacts must be preserved. No real data acquisition, fit, publication, overwrite or resource restart is part of this task.
 - Science modules have no filesystem, network, HTTP or environment dependency. Stochastic modules declare `SEED = 42`. Every changed scientific module cites the relevant design section.
 - Keep production modules at most 800 logical lines and 50 KiB; do not refactor unrelated fitting or observation-centre logic.
-- No private/session/history files, personal paths, credentials or real genomic records enter commits. All test/figure inputs are authored synthetic data.
+- No private/session/history files, personal paths, credentials or real genomic records enter
+  commits. Tests use authored fixture data. The review figure may use reviewed public MAP HbS
+  coordinates to define sampling geometry, but no measured allele-frequency value enters it.
 - Use a dedicated branch and PR. Before commit/push run the privacy gate and inspect staged paths. Run smoke and focused checks after changes, and the full required gates before delivery.
 - The controller handles review and PR delivery. The implementer must not spawn agents, push, merge, remove worktrees or delete retained evidence.
 
@@ -39,7 +41,7 @@ results. Review the complete migration as one unit.
 - Modify: `scripts/plot_surface.py`, `scripts/publish_artifacts.py`, `scripts/screen_alleles.py` — consume/record the new protocol.
 - Modify: `scripts/export_atlas_web.py`, `website/src/atlas/contracts.ts` — format-3 compatibility.
 - Modify documentation: `genomeos/burden/national.py` scalar-prior comment only; add `docs/research/pointwise-prior-contraction-2026-09-11.md` explaining the scientific and migration limits.
-- Create: `scripts/plot_prior_normalization.py`, `docs/figures/prior_normalization.png` — reproducible synthetic figure.
+- Create: `scripts/plot_prior_normalization.py`, `docs/figures/prior_normalization.png` — reproducible geography-aware synthetic control.
 - Tests: `tests/test_surface_fit.py`, `tests/test_surface_mask.py`, `tests/test_artifacts.py`, `tests/test_publish_artifacts.py`, `tests/test_export_atlas_web.py`, `tests/test_build_atlas_catalog.py`, `website/tests/atlas-contracts.test.ts`; create focused `tests/test_surface_prior.py`, `tests/test_surface_plot_cache.py`, `tests/test_plot_prior_normalization.py` as needed by the responsibilities above.
 - If small helpers make plot-cache logic directly testable, keep them in `scripts/plot_surface.py`; no generic cache framework or new runtime settings.
 
@@ -205,28 +207,32 @@ Add Python export and Vitest format-3 success/refusal cases while retaining lega
 tests. Verify the serving-catalog builder preserves the extra prior-SD Parquet
 column without changing its separate read API schema or doing inference.
 
-- [ ] **Step 6: Generate the synthetic review figure and focused note.**
+- [x] **Step 6: Generate the geography-aware review figure and focused note.**
 
-Use an authored conditional counterexample on African and southwest-Asian land. Select 16
-resolution-1 H3 land support sites with deterministic maximin distance, then use the production
-H3 placement at budget16 and reach1500 km so each inducing location is visibly collocated with a
-support site. Evaluate every resolution-2 H3 land cell in the displayed extent. Use Matérn-5/2
-length1500 km, amplitude1, production jitter and intercept Normal(-3.5,1.5). Retain four far
-controls at (-75,-150), (-70,150), (75,-150), (80,160), and test their actual distance-based
-unknown status. This is fixed-parameter synthetic geometry, not population observations or fitted
-posterior evidence.
+Use reviewed MAP HbS survey coordinates to define the sampling geometry on African and
+southwest-Asian land, without reading measured allele frequencies. Convert the surveys to unique
+resolution-4 H3 cells and use a deterministic maximin calculation over a vectorized distance matrix
+to select up to 64 geographically balanced, survey-supported centers. Pass them through production
+H3 placement with an equal budget and reach1500 km so model locations remain collocated with the
+selected cells; this figure-only construction must not claim to resolve #280's production tie
+behavior. Evaluate every resolution-2 H3 land cell in the displayed extent. Use Matérn-5/2
+length1500 km, amplitude1, production jitter and intercept Normal(-3.5,1.5). Retain four far controls
+at (-75,-150), (-70,150), (75,-150), (80,160), and test their actual distance-based unknown status.
+This is a fixed-parameter synthetic no-update result driven by real sampling locations, not fitted
+posterior evidence or an allele-frequency surface.
 
 Calculate conditional SD with an independent covariance solve and 256-point
-Gauss-Hermite logistic-normal moments, using the exact equation in issue #266.
-For the no-update comparison set hypothetical posterior SD equal to each local
-prior SD. Show nearest-inducing great-circle distance, the old ratio on the same H3 cells and the
-corrected uniform control, with the unchanged-distribution assumption visible. Use country
-outlines for orientation only, exclude ocean cells and never mark a synthetic support site as
-measured genetic data. If showing numeric uncertainty, use a sequential low-to-high ramp. Plotting
-tests verify the authored geometry, numeric controls and successful creation of the standalone
-PNG, not pixel-perfect duplication.
+Gauss-Hermite logistic-normal moments, using the exact equation in issue #266. For the no-update
+comparison set hypothetical posterior SD equal to each local prior SD. Map distance to the nearest
+retained model location separately from the old ratio, show the survey coordinates that define the
+candidate geography, then plot old-ratio error against nearest-inducing distance with the corrected
+ratio at one. Repeat the retained model locations over both maps so the relationship is directly
+readable. Use country outlines for orientation, exclude ocean cells, and label measured coordinate
+marks explicitly. If showing numeric uncertainty, use a
+sequential low-to-high ramp. Plotting tests verify cell/model collocation, input-order invariance,
+numeric controls and successful creation of the standalone PNG, not pixel-perfect duplication.
 
-Run `python scripts/plot_prior_normalization.py --out docs/figures/prior_normalization.png`.
+Run `python scripts/plot_prior_normalization.py --observations data/raw/map_hbs_surveys.csv --out docs/figures/prior_normalization.png`.
 The note explains the conditional counterexample, actual-model API validation,
 finite Monte Carlo denominator, format migration, and untested omitted covariance/
 real-map impact. Embed the figure using the repository raw URL. Report observed
