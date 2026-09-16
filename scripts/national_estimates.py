@@ -4,7 +4,9 @@ The pipeline #94 specifies, end to end: predict per H3 cell → weight each cell
 sum inside each country boundary → compare against Piel et al.'s published national estimates.
 
     python scripts/national_estimates.py --draws draws.npz \
-        --population-cells data/worldpop_res4.csv --method both --out data/national_ss.csv
+        --population-cells data/worldpop_res4.csv \
+        --population-source worldpop-1km-unconstrained --population-version 2020 \
+        --method both --out data/national_ss.csv
 
 `--method` selects how partial coverage is handled: `supported_only` (the default, §4/§10 as
 written — masked cells excluded, low-coverage countries refused), `propagate_masked` (the #113
@@ -16,11 +18,14 @@ question, which is why both can be run at once.
 
 - `--population-cells` is a CSV of `h3_index,population`, from
   `genomeos.geo.population.aggregate_raster_to_h3` over a WorldPop mosaic
-  (`scripts/fetch_worldpop.py`). The mosaic is ~870 MB and is fetched, never committed.
+  (`scripts/fetch_worldpop.py`). The mosaic is ~870 MB and is fetched, never committed. Its
+  values are spatial weights: before parity scoring each country's cells are rescaled to the
+  Piel table's 2010 national population, because a 2020 denominator cannot reproduce a 2010
+  burden estimate (#300).
 - `--draws` is an `.npz` holding `h3_index` (n_cells), `support` (n_cells) and `draws`
   (n_draws × n_cells) of posterior allele frequency. **`SurfaceFit` exposes posterior summaries
-  per cell but not the draws**, and summaries cannot be re-summed into a national interval —
-  medians do not sum (#92) — so this file has no producer yet. See #112.
+  and coherent draws**, but summaries cannot be re-summed into a national interval — medians do
+  not sum (#92). An offline exporter must retain identical posterior rows across every cell.
 
 `--synthetic` substitutes a deterministic stand-in for both, so the plumbing, the refusals and
 the figures can be exercised without either. **Its numbers are not estimates of anything.** The
@@ -45,6 +50,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from genomeos.burden.denominators import align_country_populations
 from genomeos.burden.national import (
     COVERAGE_METHODS,
     MIN_MAPPED_POPULATION_FRACTION,
@@ -56,7 +62,7 @@ from genomeos.burden.national import (
 from genomeos.burden.propagate import BurdenConfig
 from genomeos.geo.countries import assign_countries
 from genomeos.geo.population import births_from_population
-from genomeos.reference.piel2013 import national_estimates
+from genomeos.reference.piel2013 import CITATION, REFERENCE_YEAR, national_estimates
 from genomeos.surfaces.mask import MaskConfig, classify_support
 from genomeos.validation.hbs_parity import score_parity, to_parity_frame
 
@@ -232,6 +238,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--draws", type=Path, help="npz of h3_index, support, draws")
     ap.add_argument("--population-cells", type=Path, help="csv of h3_index,population")
+    ap.add_argument("--population-source", help="named gridded population source")
+    ap.add_argument("--population-version", help="explicit gridded population release/year")
     ap.add_argument("--synthetic", action="store_true", help="stand-in inputs; NOT an estimate")
     ap.add_argument("--metric", choices=sorted(METRICS), default="ss")
     ap.add_argument("--h3-res", type=int, default=4, help="resolution for --synthetic")
@@ -253,6 +261,8 @@ def main() -> None:
         cells, draws = synthetic_inputs(args.h3_res, args.draws_n)
         source = SYNTHETIC
     elif args.draws and args.population_cells:
+        if not args.population_source or not args.population_version:
+            ap.error("real runs require --population-source and --population-version")
         cells, draws = load_inputs(args)
         source = f"{args.draws.name}+{args.population_cells.name}"
     else:
@@ -267,11 +277,42 @@ def main() -> None:
     )
     cells, draws = cells[in_a_country].reset_index(drop=True), draws[:, in_a_country]
 
-    # §9's births: cell population × the country's crude birth rate, which the published Piel
-    # table already carries per country — so the parity run needs no separate UN WPP fetch.
     published = national_estimates()
     if args.synthetic:
         cells["population"] = synthetic_population(cells, published)
+        weight_source = SYNTHETIC
+    else:
+        weight_source = f"{args.population_source}@{args.population_version}"
+
+    # Parity is defined against the reference's countries and year. Cells assigned to a country
+    # absent from Web Table 1 cannot be aligned and cannot be scored; name them and exclude them
+    # together with their draw columns rather than silently retaining their raster-year totals.
+    in_reference = cells["iso3"].isin(published["iso3"]).to_numpy()
+    excluded_iso3 = sorted(cells.loc[~in_reference, "iso3"].unique().tolist())
+    if excluded_iso3:
+        print(f"country cells absent from the Piel reference excluded explicitly: {excluded_iso3}")
+    cells, draws = cells.loc[in_reference].reset_index(drop=True), draws[:, in_reference]
+
+    targets = published[["iso3", "population_thousands"]].rename(
+        columns={"population_thousands": "target_population"}
+    )
+    targets["target_population"] *= 1_000.0
+    target_source = f"Piel et al. 2013 Web Table 1; {CITATION}"
+    alignment = align_country_populations(
+        cells,
+        targets,
+        weight_source=weight_source,
+        target_source=target_source,
+        target_year=REFERENCE_YEAR,
+    )
+    cells = alignment.cells
+    print(
+        f"aligned {len(alignment.scales)} countries to {alignment.target_year}; "
+        f"reference countries without cells: {list(alignment.unused_target_iso3)}"
+    )
+
+    # §9's births: aligned cell population × the country's crude birth rate, which the published
+    # Piel table already carries per country — so the parity run needs no separate UN WPP fetch.
     birth_rate = cells["iso3"].map(published.set_index("iso3")["crude_birth_rate"])
     if birth_rate.isna().any():
         # Web Table 1 has no row for these, so there is no birth rate and therefore no
@@ -286,7 +327,9 @@ def main() -> None:
         inheritance="autosomal_recessive",
         metric=metric,
         penetrance=penetrance,
-        denominator_source=f"{source}+piel2013-cbr",
+        denominator_source=(
+            f"{weight_source}->piel2013-population-{REFERENCE_YEAR}+piel2013-cbr"
+        ),
     )
 
     methods = COVERAGE_METHODS if args.method == "both" else (args.method,)
@@ -311,14 +354,22 @@ def main() -> None:
 
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
+        scale_columns = alignment.scales.rename(
+            columns={"scale_factor": "population_scale_factor"}
+        )
         pd.concat(
             [
-                rollup.per_country.assign(
+                rollup.per_country.merge(
+                    scale_columns, on="iso3", how="left", validate="one_to_one"
+                ).assign(
                     metric=rollup.metric,
                     method=rollup.method,
                     denominator_source=rollup.denominator_source,
                     min_mapped_population=rollup.min_mapped_population,
                     source=source,
+                    population_weight_source=alignment.weight_source,
+                    population_target_source=alignment.target_source,
+                    population_target_year=alignment.target_year,
                 )
                 for rollup in rollups.values()
             ]
