@@ -40,6 +40,9 @@ atlas = [
 # following the documented install to disagree about what the code does while both being right
 # about their own environment. See `requirements.lock` and `scripts/env_report.py`.
 surfaces = [
+  # Some PyTensor/Numba versions admitted by this extra reach NumPy's row_stack alias, which
+  # NumPy 2.5 removed. Keep the declared extras install on the verified side of that boundary.
+  "numpy<2.5",
   "pymc>=5.16,<7",
   "arviz>=0.18,<2",
   # JAX-compiled NUTS. Not optional in practice: the spherical HSGP is ~80x faster through it
