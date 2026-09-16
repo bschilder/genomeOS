@@ -49,6 +49,13 @@ PLACEHOLDER_USERS = frozenset(
     }
 )
 
+# A `/home/` or `/Users/` segment inside a URL is a web route, not a filesystem path. NCBI publishes
+# its reuse policy under `/home/about/`, which the patterns above read as a home directory belonging
+# to a user called "about". Blocking that would teach contributors to truncate a citation URL to get
+# past the gate, which trades real evidence for a false positive. Matched per line and scoped to the
+# URL itself, so a genuine path sitting beside a link is still reported.
+_URL = re.compile(r"""\b[a-zA-Z][a-zA-Z0-9+.-]*://[^\s"'`)\]]+""")
+
 # A scanner and its own tests must contain the shapes they detect, so they cannot scan themselves.
 SELF_EXEMPT = frozenset({"scripts/check_private_files.py", "tests/test_check_private_files.py"})
 
@@ -63,10 +70,13 @@ def personal_paths(text: str) -> list[tuple[int, str]]:
     findings: list[tuple[int, str]] = []
     for number, line in enumerate(text.splitlines(), start=1):
         accepted: list[tuple[int, int]] = []
+        urls = [(m.start(), m.end()) for m in _URL.finditer(line)]
         for pattern in PERSONAL_PATH_PATTERNS:
             for match in pattern.finditer(line):
                 segment = [part for part in re.split(r"[\\/]+", match.group()) if part][-1]
                 if segment.lower() in PLACEHOLDER_USERS or segment[:1] in {"<", "{", "$", "%", "["}:
+                    continue
+                if any(start <= match.start() < end for start, end in urls):
                     continue
                 if any(start <= match.start() and match.end() <= end for start, end in accepted):
                     continue

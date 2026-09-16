@@ -15,8 +15,11 @@
           "dataset": "gnomad_r4",
           "cache_file": "external/gnomad/chr11-5227002-t-a.json",
           "commercial_use": {
-            "finding": "not_checked",
-            "restricted_fields": []
+            "finding": "explicitly_open",
+            "restricted_fields": [],
+            "checked_at": "2026-09-15",
+            "terms_url": "https://gnomad.broadinstitute.org/policies",
+            "recorded_in": "docs/audits/gnomad-dbsnp-commercial-use.md"
           }
         },
         {
@@ -25,8 +28,11 @@
           "rsid": "rs334",
           "cache_file": "external/dbsnp/rs334.json",
           "commercial_use": {
-            "finding": "not_checked",
-            "restricted_fields": []
+            "finding": "no_restriction_found",
+            "restricted_fields": [],
+            "checked_at": "2026-09-15",
+            "terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/",
+            "recorded_in": "docs/audits/gnomad-dbsnp-commercial-use.md"
           }
         },
         {

@@ -82,3 +82,33 @@ def test_the_repository_itself_is_clean():
     """
     main = MODULE["main"]
     assert main() == 0
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "read from https://www.ncbi.nlm.nih.gov/home/about/policies/ on 2026-09-15",
+        '"terms_url": "https://www.ncbi.nlm.nih.gov/home/about/policies/"',
+        "see http://example.org/Users/guide for details",
+        "https://example.com/home/andrea/notes and nothing else",
+    ],
+)
+def test_url_path_segments_are_not_home_directories(text):
+    """A `/home/` or `/Users/` segment inside a URL names a web route, not somebody's machine.
+
+    NCBI publishes its reuse policy at a path beginning `/home/about/`, which the pattern read as a
+    home directory belonging to a user called "about". That is not a privacy leak and not a
+    portability bug, and a gate that blocks a correct citation URL teaches people to truncate their
+    evidence to get past it.
+    """
+    assert personal_paths(text) == []
+
+
+def test_a_real_path_is_still_reported_when_a_url_appears_on_the_same_line():
+    """The URL exemption must be scoped to the URL, not to the whole line.
+
+    Otherwise one citation anywhere on a line would blind the check to a genuine leak beside it.
+    """
+    text = "see https://www.ncbi.nlm.nih.gov/home/about/ then run /Users/andrea/code/build.sh"
+    findings = personal_paths(text)
+    assert [match for _, match in findings] == ["/Users/andrea"]
