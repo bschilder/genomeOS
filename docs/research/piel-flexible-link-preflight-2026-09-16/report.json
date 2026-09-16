@@ -1,0 +1,113 @@
+{
+  "arms": {
+    "piel_printed_2013": {
+      "link": {
+        "coefficients": [
+          -1.1935355765078037,
+          0.357179270047146,
+          -0.059001971738364974,
+          0.0032488192553342585
+        ],
+        "derivative_floor": 1.427584950874319e-10
+      },
+      "min_an": 50,
+      "n_below_min_an": 31,
+      "n_distinct_frequencies": 854,
+      "n_eligible": 963,
+      "n_total": 994,
+      "normal_fit": "plug_in_mle",
+      "normal_location": -3.813757690595778,
+      "normal_scale": 1.5122739303586257,
+      "optimization_starts": 5,
+      "plotting_position": "hazen_rank_average",
+      "rmse_logit": 0.19424421816720372,
+      "smoothed_frequency_max": 0.1825726141078838,
+      "smoothed_frequency_min": 0.00011932462263588091,
+      "smoothing_formula": "(AC + 1) / (AN + AC + 2)",
+      "smoothing_rule": "piel_printed_2013"
+    },
+    "uniform_binomial_conjugate": {
+      "link": {
+        "coefficients": [
+          -1.0414507186189519,
+          0.4172991490335711,
+          -0.056906343037861615,
+          0.002586738943444074
+        ],
+        "derivative_floor": 2.153098809663012e-10
+      },
+      "min_an": 50,
+      "n_below_min_an": 31,
+      "n_distinct_frequencies": 820,
+      "n_eligible": 963,
+      "n_total": 994,
+      "normal_fit": "plug_in_mle",
+      "normal_location": -3.767386780495042,
+      "normal_scale": 1.5542454400811205,
+      "optimization_starts": 5,
+      "plotting_position": "hazen_rank_average",
+      "rmse_logit": 0.19458760281541235,
+      "smoothed_frequency_max": 0.2222222222222222,
+      "smoothed_frequency_min": 0.00011933174224343676,
+      "smoothing_formula": "(AC + 1) / (AN + 2)",
+      "smoothing_rule": "uniform_binomial_conjugate"
+    }
+  },
+  "artifact": "piel-flexible-link-method-preflight",
+  "configuration": {
+    "diagnostic_latent": [
+      -4.599069228154752
+    ],
+    "min_an": 50,
+    "normal_fit": "plug_in_mle",
+    "plotting_position": "hazen_rank_average"
+  },
+  "diagnostics": {
+    "frequency": {
+      "inverse_logit": [
+        0.009960976725976536
+      ],
+      "piel_printed_2013": [
+        0.012125566368418774
+      ],
+      "uniform_binomial_conjugate": [
+        0.011939173445185056
+      ]
+    },
+    "latent": [
+      -4.599069228154752
+    ]
+  },
+  "environmental_covariates_used": [],
+  "evidence_kind": "method_preflight",
+  "executed_source_sha256": {
+    "genomeos/surfaces/piel_flexible_link.py": "34f78f8080787dd8e3cbefa61721a3e65f622c481132b8ed52b01a69cfcc7ee9",
+    "scripts/preflight_piel_flexible_link.py": "7292047f31af8cacac5fbbc571db3e9f9fc87d641be683873563c4a4232df7a3"
+  },
+  "inputs": {
+    "observations": {
+      "artifact": "piel-comparable-observations.parquet",
+      "rows": 994,
+      "sha256": "466034e22015ce5f4e0b90067adb2232491b625591d50c8ac83d955565345b4b"
+    }
+  },
+  "issue": 103,
+  "limitations": [
+    "Piel's fitted cubic coefficients are unpublished.",
+    "The appendix's printed smoothing equation conflicts with its stated conjugate model.",
+    "The appendix does not fully specify the posterior CDF fitting procedure; this run uses a named plug-in MLE quantile interpretation.",
+    "This preflight does not test spatial held-out count prediction or national burden."
+  ],
+  "outputs": {
+    "link_curves.csv": "8d712edaffd5bde622887abb9f1b5bbf821a36aba440c27125a3b58df601ce0a",
+    "piel-flexible-link-preflight.png": "4a12eef8bf097e5ecbf9e1c7fd975b3588fffc13ff068336b8a762cf34e3176a",
+    "smoothed_frequency_quantiles.csv": "1975dd4fed07811a184a92e9ca81ac3a1e6195874f3e4963b13974024ef26d88"
+  },
+  "primary_source": {
+    "appendix": "Web Appendix 1 pp. 12-13; PMC3547249 supplementary file mmc1.pdf",
+    "article": "Piel FB et al. Lancet 2013;381:142-151; doi:10.1016/S0140-6736(12)61229-X"
+  },
+  "publication_eligible": false,
+  "schema_version": 1,
+  "spatial_fit_performed": false
+}
