@@ -82,6 +82,7 @@ PYTHONPATH=. python scripts/benchmark_spatial_gp.py \
   --evidence-kind observational_research \
   --assignment-review-status reviewed \
   --dependency-review-status not_checked \
+  --checkpoint-dir /new/checkpoint/directory \
   --out /new/output/directory
 ```
 
@@ -91,6 +92,20 @@ contracts. `assignment-review-status=algorithmic_development_unreviewed` and
 their qualification. Declaring either input `reviewed` is caller-supplied provenance, not an
 automated scientific decision. Every output remains `publication_eligible=false`, and the manifest
 sets `scientific_promotion_decision=not_made` even when all computational folds complete.
+
+The checkpoint directory must also be new. After each fold reaches `completed`, `failed`, or
+`infeasible`, the runner atomically publishes one integrity-hashed fold artifact before starting
+the next fit. The final output directory appears only after every planned fold is terminal and its
+manifest has been written successfully. Checkpoints are recovery artifacts and are never accepted
+as a complete benchmark publication.
+
+Resume is explicit: repeat every scientific and provenance argument unchanged, replace
+`--checkpoint-dir NEW_DIRECTORY` with `--resume-from EXISTING_DIRECTORY`, and provide a new
+`--out` path. Resume refuses changes to input-file hashes, resolved configuration or CDF backend,
+the planned split ledger, the complete fit/predictive seed schedule, Git revision, science-source
+hashes, package versions, evidence kind, or qualification fields. It also refuses corrupt,
+unknown, overwritten, or noncontiguous fold artifacts. Every terminal fold is reused, including a
+failed or infeasible fold; resume is not an implicit retry mechanism.
 
 Before fitting, the runner verifies that the selected likelihood's exact scorer can cover every
 denominator. A single unsupported row produces a failed status for every planned fold, zero fits,

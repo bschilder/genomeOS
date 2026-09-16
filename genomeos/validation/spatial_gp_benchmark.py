@@ -1,4 +1,4 @@
-"""Offline single-variant spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #314).
+"""Offline single-variant spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #314, #319).
 
 Scientific objective
     Measure the unchanged current GP's predictive distribution for geographically held-out
@@ -9,9 +9,10 @@ Acceptance evidence
     integrated count diagnostics that the shared benchmark reporter balances by declared cohort,
     region, and variant group.
 Engineering interface
-    :func:`evaluate_single_variant_gp` builds splits from reviewed assignments, fits each fold
-    offline, predicts genuinely unseen cohorts, and returns predictions, statuses, splits, and a
-    fail-closed summary. There is no serving or file I/O path here.
+    :func:`plan_single_variant_gp_benchmark`, :func:`evaluate_single_variant_gp_fold`, and
+    :func:`finalize_single_variant_gp_benchmark` expose the pure fold boundary used by the
+    checkpoint adapter. :func:`evaluate_single_variant_gp` preserves the original all-fold
+    interface. There is no serving or file I/O path here.
 Assumptions and refusals
     Inputs contain one modern allele, whole cohorts occupy one block, and every count lies in the
     selected likelihood's supported scoring domain. A global scoring-domain failure occurs before
@@ -86,6 +87,36 @@ class SpatialGPBenchmarkResult:
     summary: dict[str, object]
 
 
+@dataclass(frozen=True)
+class SpatialGPBenchmarkPlan:
+    """Validated immutable identities and in-memory inputs for one planned benchmark."""
+
+    observations: pd.DataFrame
+    assignments: pd.DataFrame
+    splits: tuple[BenchmarkSplit, ...]
+    config: FitConfig
+    seed: int
+    cdf_backend: str
+    scoring_refusal: str | None
+
+
+@dataclass(frozen=True)
+class SpatialGPFoldResult:
+    """One terminal fold status and its completed predictions, if any."""
+
+    status: BenchmarkFoldStatus
+    predictions: pd.DataFrame
+
+
+@dataclass(frozen=True)
+class SpatialGPFoldSeed:
+    """Deterministic fit and predictive seeds for one planned split."""
+
+    split_id: str
+    fit_seed: int
+    predictive_seed: int
+
+
 def _require_label(value: object, field: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} values must be nonempty strings")
@@ -155,6 +186,62 @@ def _scoring_refusal(observations: pd.DataFrame) -> str | None:
             f"{MAX_COUNT:,}"
         )
     return None
+
+
+def plan_single_variant_gp_benchmark(
+    observations: pd.DataFrame,
+    block_assignments: pd.DataFrame,
+    dependencies: Sequence[tuple[str, str]],
+    *,
+    buffer_km: float,
+    data_version: str,
+    config: FitConfig,
+    seed: int = SEED,
+    cdf_backend: str = "scipy",
+) -> SpatialGPBenchmarkPlan:
+    """Validate inputs and freeze the split ledger before any expensive fit."""
+    if not isinstance(config, FitConfig):
+        raise TypeError("config must be a FitConfig")
+    if isinstance(seed, (bool, np.bool_)) or not isinstance(seed, Integral) or seed < 0:
+        raise ValueError("seed must be a nonnegative integer, not a boolean")
+    if cdf_backend not in {"scipy", "cupy"}:
+        raise ValueError("cdf_backend must be either 'scipy' or 'cupy'")
+
+    validated = validate_allele_observations(observations)
+    _validate_scientific_scope(validated)
+    assignments = _validate_assignments(validated, block_assignments)
+    splits = build_buffered_splits(
+        validated,
+        assignments.loc[:, ["source_record_id", "block_id"]],
+        dependencies,
+        buffer_km=buffer_km,
+        data_version=data_version,
+    )
+    return SpatialGPBenchmarkPlan(
+        observations=validated,
+        assignments=assignments,
+        splits=splits,
+        config=config,
+        seed=int(seed),
+        cdf_backend=cdf_backend,
+        scoring_refusal=_scoring_refusal(validated),
+    )
+
+
+def spatial_gp_seed_schedule(
+    plan: SpatialGPBenchmarkPlan,
+) -> tuple[SpatialGPFoldSeed, ...]:
+    """Return the complete deterministic seed schedule stored by checkpoint adapters."""
+    if not isinstance(plan, SpatialGPBenchmarkPlan):
+        raise TypeError("plan must be a SpatialGPBenchmarkPlan")
+    return tuple(
+        SpatialGPFoldSeed(
+            split_id=split.split_id,
+            fit_seed=_fold_seed(plan.seed, split.split_id, "fit"),
+            predictive_seed=_fold_seed(plan.seed, split.split_id, "predictive"),
+        )
+        for split in plan.splits
+    )
 
 
 def _empty_predictions() -> pd.DataFrame:
@@ -238,6 +325,103 @@ def _fold_predictions(
     ).loc[:, PREDICTION_COLUMNS]
 
 
+def evaluate_single_variant_gp_fold(
+    plan: SpatialGPBenchmarkPlan,
+    split: BenchmarkSplit,
+    *,
+    fit_function: FitFunction = fit_surface,
+) -> SpatialGPFoldResult:
+    """Evaluate exactly one planned fold and return one terminal result."""
+    if not isinstance(plan, SpatialGPBenchmarkPlan):
+        raise TypeError("plan must be a SpatialGPBenchmarkPlan")
+    if not isinstance(split, BenchmarkSplit) or split not in plan.splits:
+        raise ValueError("split must be one of the benchmark plan's frozen splits")
+    if not callable(fit_function):
+        raise TypeError("fit_function must be callable")
+    if plan.scoring_refusal is not None:
+        return SpatialGPFoldResult(
+            status=BenchmarkFoldStatus(
+                split.split_id,
+                "failed",
+                split.test_ids,
+                plan.scoring_refusal,
+            ),
+            predictions=_empty_predictions(),
+        )
+    if not split.train_ids:
+        return SpatialGPFoldResult(
+            status=BenchmarkFoldStatus(
+                split.split_id,
+                "infeasible",
+                split.test_ids,
+                "split has no training observations after dependency and buffer exclusions",
+            ),
+            predictions=_empty_predictions(),
+        )
+    try:
+        predictions = _fold_predictions(
+            plan.observations,
+            plan.assignments,
+            split,
+            config=plan.config,
+            seed=plan.seed,
+            cdf_backend=plan.cdf_backend,
+            fit_function=fit_function,
+        )
+    except Exception as error:  # Every planned fold remains visible in the result ledger.
+        return SpatialGPFoldResult(
+            status=BenchmarkFoldStatus(
+                split.split_id,
+                "failed",
+                split.test_ids,
+                f"{type(error).__name__}: {error}",
+            ),
+            predictions=_empty_predictions(),
+        )
+    return SpatialGPFoldResult(
+        status=BenchmarkFoldStatus(split.split_id, "completed", split.test_ids, None),
+        predictions=predictions,
+    )
+
+
+def finalize_single_variant_gp_benchmark(
+    plan: SpatialGPBenchmarkPlan,
+    fold_results: Sequence[SpatialGPFoldResult],
+) -> SpatialGPBenchmarkResult:
+    """Validate a complete terminal fold ledger and build the unchanged public result."""
+    if not isinstance(plan, SpatialGPBenchmarkPlan):
+        raise TypeError("plan must be a SpatialGPBenchmarkPlan")
+    if isinstance(fold_results, (str, bytes)):
+        raise TypeError("fold_results must be a sequence of SpatialGPFoldResult values")
+    results = tuple(fold_results)
+    if not all(isinstance(result, SpatialGPFoldResult) for result in results):
+        raise TypeError("fold_results must contain only SpatialGPFoldResult values")
+    by_id = {result.status.split_id: result for result in results}
+    if len(by_id) != len(results):
+        raise ValueError("fold_results must contain exactly one result per split")
+    expected_ids = tuple(split.split_id for split in plan.splits)
+    if set(by_id) != set(expected_ids):
+        raise ValueError("fold_results must cover exactly the benchmark plan split IDs")
+
+    ordered = tuple(by_id[split_id] for split_id in expected_ids)
+    for split, result in zip(plan.splits, ordered, strict=True):
+        if result.status.expected_test_ids != split.test_ids:
+            raise ValueError("fold result expected_test_ids do not match the frozen split")
+    prediction_frames = [
+        result.predictions for result in ordered if not result.predictions.empty
+    ]
+    predictions = (
+        pd.concat(prediction_frames, ignore_index=True)
+        if prediction_frames
+        else _empty_predictions()
+    )
+    return _summarized_result(
+        predictions,
+        tuple(result.status for result in ordered),
+        plan.splits,
+    )
+
+
 def evaluate_single_variant_gp(
     observations: pd.DataFrame,
     block_assignments: pd.DataFrame,
@@ -255,76 +439,20 @@ def evaluate_single_variant_gp(
     ``fit_function`` is an offline dependency seam used by tests and controlled runners. Its
     production default is the unchanged :func:`genomeos.surfaces.fit.fit_surface` implementation.
     """
-    if not isinstance(config, FitConfig):
-        raise TypeError("config must be a FitConfig")
-    if isinstance(seed, (bool, np.bool_)) or not isinstance(seed, Integral) or seed < 0:
-        raise ValueError("seed must be a nonnegative integer, not a boolean")
-    if cdf_backend not in {"scipy", "cupy"}:
-        raise ValueError("cdf_backend must be either 'scipy' or 'cupy'")
     if not callable(fit_function):
         raise TypeError("fit_function must be callable")
-
-    validated = validate_allele_observations(observations)
-    _validate_scientific_scope(validated)
-    assignments = _validate_assignments(validated, block_assignments)
-    splits = build_buffered_splits(
-        validated,
-        assignments.loc[:, ["source_record_id", "block_id"]],
+    plan = plan_single_variant_gp_benchmark(
+        observations,
+        block_assignments,
         dependencies,
         buffer_km=buffer_km,
         data_version=data_version,
+        config=config,
+        seed=seed,
+        cdf_backend=cdf_backend,
     )
-
-    refusal = _scoring_refusal(validated)
-    if refusal is not None:
-        statuses = tuple(
-            BenchmarkFoldStatus(split.split_id, "failed", split.test_ids, refusal)
-            for split in splits
-        )
-        return _summarized_result(_empty_predictions(), statuses, splits)
-
-    statuses: list[BenchmarkFoldStatus] = []
-    prediction_frames: list[pd.DataFrame] = []
-    for split in splits:
-        if not split.train_ids:
-            statuses.append(
-                BenchmarkFoldStatus(
-                    split.split_id,
-                    "infeasible",
-                    split.test_ids,
-                    "split has no training observations after dependency and buffer exclusions",
-                )
-            )
-            continue
-        try:
-            prediction_frames.append(
-                _fold_predictions(
-                    validated,
-                    assignments,
-                    split,
-                    config=config,
-                    seed=int(seed),
-                    cdf_backend=cdf_backend,
-                    fit_function=fit_function,
-                )
-            )
-        except Exception as error:  # Every planned fold remains visible in the result ledger.
-            statuses.append(
-                BenchmarkFoldStatus(
-                    split.split_id,
-                    "failed",
-                    split.test_ids,
-                    f"{type(error).__name__}: {error}",
-                )
-            )
-        else:
-            statuses.append(
-                BenchmarkFoldStatus(split.split_id, "completed", split.test_ids, None)
-            )
-
-    predictions = (
-        pd.concat(prediction_frames, ignore_index=True)
-        if prediction_frames
-        else _empty_predictions()
+    fold_results = tuple(
+        evaluate_single_variant_gp_fold(plan, split, fit_function=fit_function)
+        for split in plan.splits
     )
-    return _summarized_result(predictions, statuses, splits)
+    return finalize_single_variant_gp_benchmark(plan, fold_results)

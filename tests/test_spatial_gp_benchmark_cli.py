@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 from genomeos.surfaces.config import FitConfig
@@ -78,8 +79,14 @@ def _write_inputs(root: Path, *, large_denominator: bool = False) -> dict[str, P
     return paths
 
 
-def _command(paths: dict[str, Path], out: Path) -> list[str]:
-    return [
+def _command(
+    paths: dict[str, Path],
+    out: Path,
+    *,
+    checkpoint: Path | None = None,
+    resume_from: Path | None = None,
+) -> list[str]:
+    command = [
         sys.executable,
         str(SCRIPT),
         "--observations",
@@ -104,9 +111,13 @@ def _command(paths: dict[str, Path], out: Path) -> list[str]:
         "reviewed",
         "--dependency-review-status",
         "not_checked",
-        "--out",
-        str(out),
     ]
+    if resume_from is None:
+        command.extend(("--checkpoint-dir", str(checkpoint or out.with_name(out.name + "-checkpoint"))))
+    else:
+        command.extend(("--resume-from", str(resume_from)))
+    command.extend(("--out", str(out)))
+    return command
 
 
 def _run(command: list[str], *, pythonpath: Path = ROOT) -> subprocess.CompletedProcess[str]:
@@ -127,10 +138,13 @@ def _load_runner(name: str):
 class _FakeFit:
     training_cohorts: tuple[str, ...]
     likelihood: str
+    fail_prediction: bool = False
 
     def predict_new_cohort_parameters(
         self, queries: SurveyQueries, *, seed: int
     ) -> ObservationParameters:
+        if self.fail_prediction:
+            raise RuntimeError("controlled terminal fold failure")
         assert not set(queries.cohort_ids) & set(self.training_cohorts)
         draws = 8
         mean = np.broadcast_to(
@@ -156,16 +170,36 @@ class _FakeFit:
         )
 
 
-def _install_fake_fit(runner, monkeypatch) -> None:
-    real_evaluate = runner.evaluate_single_variant_gp
+def _install_fake_fit(
+    runner,
+    monkeypatch,
+    *,
+    interrupt_once_after: int | None = None,
+    fail_on_call: int | None = None,
+):
+    real_evaluate = runner.evaluate_single_variant_gp_fold
+    calls: list[str] = []
+    interrupted = False
 
-    def evaluate(*args, **kwargs):
+    def evaluate(plan, split, **kwargs):
+        nonlocal interrupted
+        if interrupt_once_after == len(calls) and not interrupted:
+            interrupted = True
+            raise KeyboardInterrupt("controlled fold-boundary interruption")
+        call_index = len(calls)
+        calls.append(split.split_id)
+
         def fit(observations: pd.DataFrame, config: FitConfig) -> _FakeFit:
-            return _FakeFit(tuple(sorted(observations["cohort_id"].unique())), config.likelihood)
+            return _FakeFit(
+                tuple(sorted(observations["cohort_id"].unique())),
+                config.likelihood,
+                fail_prediction=call_index == fail_on_call,
+            )
 
-        return real_evaluate(*args, **kwargs, fit_function=fit)
+        return real_evaluate(plan, split, fit_function=fit, **kwargs)
 
-    monkeypatch.setattr(runner, "evaluate_single_variant_gp", evaluate)
+    monkeypatch.setattr(runner, "evaluate_single_variant_gp_fold", evaluate)
+    return calls
 
 
 def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
@@ -176,6 +210,7 @@ def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
 
     assert runner.run(args) == 0
     args.out = tmp_path / "second"
+    args.checkpoint_dir = tmp_path / "second-checkpoint"
     assert runner.run(args) == 0
 
     first = tmp_path / "first"
@@ -267,6 +302,20 @@ def test_runner_refuses_implicit_config_defaults_and_existing_output(tmp_path):
     assert marker.read_text() == "untouched"
 
 
+def test_runner_refuses_overlapping_checkpoint_and_output_directories(tmp_path):
+    paths = _write_inputs(tmp_path)
+    runner = _load_runner("spatial_gp_runner_overlapping_paths")
+    output = tmp_path / "same"
+    args = runner._parser().parse_args(
+        _command(paths, output, checkpoint=output)[2:]
+    )
+
+    with pytest.raises(ValueError, match="must be disjoint"):
+        runner.run(args)
+
+    assert not output.exists()
+
+
 def test_runner_bootstraps_the_checked_out_science_sources(tmp_path):
     paths = _write_inputs(tmp_path)
     conflicting = tmp_path / "conflicting"
@@ -292,3 +341,91 @@ def test_runner_bootstraps_the_checked_out_science_sources(tmp_path):
         ]
         == expected
     )
+
+
+def test_runner_resumes_a_terminal_fold_prefix_with_byte_identical_publication(
+    tmp_path, monkeypatch
+):
+    paths = _write_inputs(tmp_path)
+    checkpoint = tmp_path / "interrupted-checkpoint"
+    resumed_out = tmp_path / "resumed"
+    runner = _load_runner("spatial_gp_runner_resume")
+    calls = _install_fake_fit(runner, monkeypatch, interrupt_once_after=2)
+    interrupted = runner._parser().parse_args(
+        _command(paths, resumed_out, checkpoint=checkpoint)[2:]
+    )
+
+    with pytest.raises(KeyboardInterrupt, match="controlled"):
+        runner.run(interrupted)
+
+    assert not resumed_out.exists()
+    assert sorted(path.name for path in (checkpoint / "folds").iterdir()) == [
+        "0000.json",
+        "0001.json",
+    ]
+    resumed = runner._parser().parse_args(
+        _command(paths, resumed_out, resume_from=checkpoint)[2:]
+    )
+    assert runner.run(resumed) == 0
+    assert len(calls) == 4
+
+    uninterrupted_out = tmp_path / "uninterrupted"
+    uninterrupted_runner = _load_runner("spatial_gp_runner_uninterrupted")
+    uninterrupted_calls = _install_fake_fit(uninterrupted_runner, monkeypatch)
+    uninterrupted = uninterrupted_runner._parser().parse_args(
+        _command(paths, uninterrupted_out, checkpoint=tmp_path / "complete-checkpoint")[2:]
+    )
+    assert uninterrupted_runner.run(uninterrupted) == 0
+    assert len(uninterrupted_calls) == 4
+    assert {path.name: path.read_bytes() for path in resumed_out.iterdir()} == {
+        path.name: path.read_bytes() for path in uninterrupted_out.iterdir()
+    }
+
+
+def test_final_publication_is_atomic_when_manifest_write_fails(tmp_path, monkeypatch):
+    paths = _write_inputs(tmp_path)
+    output = tmp_path / "publication"
+    runner = _load_runner("spatial_gp_runner_atomic")
+    _install_fake_fit(runner, monkeypatch)
+    real_json_write = runner._json_write
+
+    def fail_manifest(path, value):
+        if path.name == "manifest.json":
+            raise OSError("controlled manifest failure")
+        real_json_write(path, value)
+
+    monkeypatch.setattr(runner, "_json_write", fail_manifest)
+    args = runner._parser().parse_args(_command(paths, output)[2:])
+
+    with pytest.raises(OSError, match="controlled manifest failure"):
+        runner.run(args)
+
+    assert not output.exists()
+    assert not list(tmp_path.glob(".publication.partial-*"))
+    assert len(list((tmp_path / "publication-checkpoint" / "folds").glob("*.json"))) == 4
+
+
+def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, monkeypatch):
+    paths = _write_inputs(tmp_path)
+    checkpoint = tmp_path / "failed-checkpoint"
+    first_out = tmp_path / "failed-first"
+    runner = _load_runner("spatial_gp_runner_failed_resume")
+    calls = _install_fake_fit(runner, monkeypatch, fail_on_call=1)
+    first = runner._parser().parse_args(
+        _command(paths, first_out, checkpoint=checkpoint)[2:]
+    )
+
+    assert runner.run(first) == 1
+    assert len(calls) == 4
+    statuses = pd.read_csv(first_out / "fold_status.tsv", sep="\t")
+    assert list(statuses["status"]).count("failed") == 1
+
+    resumed_out = tmp_path / "failed-resumed"
+    resumed = runner._parser().parse_args(
+        _command(paths, resumed_out, resume_from=checkpoint)[2:]
+    )
+    assert runner.run(resumed) == 1
+    assert len(calls) == 4
+    assert {path.name: path.read_bytes() for path in first_out.iterdir()} == {
+        path.name: path.read_bytes() for path in resumed_out.iterdir()
+    }
