@@ -1,10 +1,10 @@
 # Global allele-frequency benchmark runner
 
-This repository includes offline, deterministic runners for the B0 engineering baseline and the
-unchanged current single-variant spatial GP in issue #189. B0 updates an explicit Beta prior with
-pooled training allele counts separately for each variant, samples the resulting latent frequency,
-and scores held-out binomial allele counts. The sampled frequency is shared across held-out
-observations of the same variant within a draw.
+This repository includes offline, deterministic runners for the B0 engineering baseline, the B1
+local count comparator, and the unchanged current single-variant spatial GP in issue #189. B0
+updates an explicit Beta prior with pooled training allele counts separately for each variant,
+samples the resulting latent frequency, and scores held-out binomial allele counts. The sampled
+frequency is shared across held-out observations of the same variant within a draw.
 
 B0 is not a spatial/current-resident model and has no cohort, survey-design, or recruited-sample
 heterogeneity term. Its outputs always state `publication_eligible=false`. A successful synthetic
@@ -113,6 +113,60 @@ and a nonzero exit after writing the complete evidence record. It never drops th
 likelihoods, or reports a partial benchmark. Fit/prediction failures inside otherwise supported
 folds are likewise retained while later folds continue.
 
+## Local count comparator
+
+`scripts/benchmark_local_count.py` implements the source-neutral B1 comparator from issue #307.
+It uses a compact triweight kernel over great-circle distance between reviewed recruitment
+footprint edges. At each query, the same weight multiplies AC and `AN - AC`; those weighted counts
+update an explicit Beta generalized-Bayes power posterior. Fractional weighted evidence is never
+described as literal sampled alleles. No environmental layer, pathogen label, publisher identity,
+or held-out count enters the model.
+
+Candidate bandwidths are a finite, strictly increasing list declared on the command line. Each
+outer fold selects among them using only new buffered folds inside its training partition. A
+candidate is eligible only if every inner fold completes, it emits the declared minimum fraction
+of inner queries, and it has a valid normalized held-out count score. Ties prefer the narrower
+bandwidth. The outer test counts are used only after selection for scoring.
+
+The compact kernel, minimum local-row count, and minimum kernel-weighted allele denominator form
+the support rule. A query failing either evidence threshold is `unknown`; the runner does not
+substitute B0, a prior-only value, or the nearest observation. Every requested row remains in
+`support.tsv`, while `predictions.tsv` contains only emitted rows. `summary.json` reports requested,
+emitted, excluded, and excluded-fraction totals alongside an explicitly supported-only use of the
+shared hierarchical count summary.
+
+```bash
+PYTHONPATH=. python scripts/benchmark_local_count.py \
+  --observations /path/to/one-variant-observations.tsv \
+  --assignments /path/to/reviewed-assignments.tsv \
+  --dependencies /path/to/dependencies.tsv \
+  --data-version DATA_VERSION \
+  --bandwidth-km 500 \
+  --bandwidth-km 1000 \
+  --bandwidth-km 2000 \
+  --prior-alpha 1 \
+  --prior-beta 1 \
+  --buffer-km 300 \
+  --minimum-inner-emission-fraction 0.5 \
+  --minimum-training-observations 2 \
+  --minimum-effective-alleles 100 \
+  --posterior-draws 2048 \
+  --seed 42 \
+  --evidence-kind observational_research \
+  --analysis-role prespecified_primary \
+  --assignment-review-status reviewed \
+  --dependency-review-status reviewed \
+  --out /new/output/directory
+```
+
+The output manifest names the generalized posterior semantics and records
+`environmental_covariates=false`, `source_specific_features=false`, the complete configuration,
+input and source hashes, immutable outer splits, terminal fold outcomes, package versions, and
+`publication_eligible=false`. This comparator evaluates a local-count hypothesis; it does not
+privilege MAP or any other source family. `analysis_role` distinguishes the prespecified primary
+comparison from a post-hoc sensitivity, while the two review-status fields prevent algorithmic
+development blocks or an unchecked dependency file from being represented as reviewed evidence.
+
 ## Source-tree invocation
 
 Run from the repository root and explicitly select this checkout on `PYTHONPATH` so a shared
@@ -199,6 +253,13 @@ observed counts, and deterministic fit/prediction seeds instead of B0 posterior-
 Its manifest identifies `B2-current`, records the complete resolved `FitConfig`, both review-state
 declarations, the selected CDF backend, and hashes of the fitted observation/prediction modules.
 
+The local-count runner adds `support.tsv` and `bandwidth_selection.tsv`. The first retains every
+requested query and its support or refusal evidence. The second records every candidate's
+inner-fold requested and emitted counts, emission fraction, normalized log score, completion
+counts, and eligibility for every outer fold. Its prediction rows include the selected bandwidth,
+distance to the nearest training footprint, weighted evidence, posterior parameters, and
+deterministic seeds.
+
 For each completed fold and variant, the posterior is
 `Beta(prior_alpha + sum(AC), prior_beta + sum(AN - AC))` using training rows only. A held-out
 variant absent from training makes the fold infeasible; it is never assigned a prior-only result or
@@ -210,10 +271,13 @@ and recorded per fold.
 These runners are reusable WP0/WP1 engineering prerequisites. They do not complete the qualified
 input inventory, certify dependencies or a present-day resident target, establish genuinely
 sealed external evidence, implement all required holdout tracks/strata/joint-site scores, or
-provide an empirical B0/B1/B2 comparison. The current HbS development table also exceeds the
-old beta-binomial finite-product work limit, but the bounded scorer now admits its complete count
-domain without dropping rows. A fitted current-GP comparison is still pending. Those WP0 and WP1
-gates remain required on reviewed, permitted data.
+provide a completed B0/B1/B2 comparison. The first HbS B1 run is recorded in the
+[local-count evidence note](research/hbs-local-count-benchmark-2026-09-16.md): the prespecified
+local grid is infeasible for global geographic holdouts, while a post-hoc 2,000 km sensitivity
+finds positive-count gains on only 21.9% of rows and regresses zero counts. The bounded scorer now
+admits the complete count domain without dropping rows, but the current-GP B2 run hit its time
+cutoff before all folds completed. Those WP0 and WP1 gates remain required on reviewed, permitted
+data.
 
 WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
 admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
