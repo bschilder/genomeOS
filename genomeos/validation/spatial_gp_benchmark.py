@@ -1,4 +1,4 @@
-"""Offline single-variant spatial-GP benchmark (design §§4–5, 7–8, 12; #189).
+"""Offline single-variant spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #314).
 
 Scientific objective
     Measure the unchanged current GP's predictive distribution for geographically held-out
@@ -42,12 +42,7 @@ from genomeos.validation.benchmark import (
     validate_allele_observations,
     validate_predictive_diagnostics,
 )
-from genomeos.validation.predictive import (
-    MAX_BETA_SCORING_COUNT,
-    MAX_COUNT,
-    CountPredictive,
-    predictive_diagnostics,
-)
+from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
 from genomeos.validation.splits import BenchmarkSplit, build_buffered_splits
 
 SEED = 42
@@ -150,7 +145,7 @@ def _fold_seed(seed: int, split_id: str, purpose: str) -> int:
     return int.from_bytes(digest[:4], "big")
 
 
-def _scoring_refusal(observations: pd.DataFrame, likelihood: str) -> str | None:
+def _scoring_refusal(observations: pd.DataFrame) -> str | None:
     denominator = observations["an"].to_numpy(dtype=np.int64, copy=False)
     above_count_domain = denominator > MAX_COUNT
     if np.any(above_count_domain):
@@ -159,15 +154,6 @@ def _scoring_refusal(observations: pd.DataFrame, likelihood: str) -> str | None:
             f"{int(above_count_domain.sum())} denominators exceed the maximum supported count "
             f"{MAX_COUNT:,}"
         )
-    if likelihood == "beta_binomial":
-        above_scoring_domain = denominator > MAX_BETA_SCORING_COUNT
-        if np.any(above_scoring_domain):
-            return (
-                "benchmark preflight refused before fitting: "
-                f"{int(above_scoring_domain.sum())} beta-binomial denominators exceed the exact "
-                f"integrated log-score work limit of {MAX_BETA_SCORING_COUNT:,}; no observation "
-                "or fold was dropped"
-            )
     return None
 
 
@@ -289,7 +275,7 @@ def evaluate_single_variant_gp(
         data_version=data_version,
     )
 
-    refusal = _scoring_refusal(validated, config.likelihood)
+    refusal = _scoring_refusal(validated)
     if refusal is not None:
         statuses = tuple(
             BenchmarkFoldStatus(split.split_id, "failed", split.test_ids, refusal)

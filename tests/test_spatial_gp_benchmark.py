@@ -185,7 +185,29 @@ def test_evaluator_refuses_cohort_assignments_across_blocks_before_fitting():
     assert calls == []
 
 
-def test_large_beta_binomial_denominator_refuses_entire_ledger_before_fitting():
+def test_large_beta_binomial_denominator_reaches_every_fold(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def diagnostics(*args, **kwargs):
+        observations = len(args[1])
+        return pd.DataFrame(
+            {
+                "log_score": np.full(observations, -1.0),
+                "absolute_error": np.full(observations, 0.1),
+                "squared_error": np.full(observations, 0.01),
+                "coverage_50": np.ones(observations, dtype=bool),
+                "interval_width_50": np.full(observations, 0.1),
+                "coverage_80": np.ones(observations, dtype=bool),
+                "interval_width_80": np.full(observations, 0.2),
+                "coverage_95": np.ones(observations, dtype=bool),
+                "interval_width_95": np.full(observations, 0.3),
+                "randomized_pit": np.full(observations, 0.5),
+            }
+        )
+
+    monkeypatch.setattr(
+        "genomeos.validation.spatial_gp_benchmark.predictive_diagnostics", diagnostics
+    )
     calls: list[tuple[str, ...]] = []
     result = _evaluate(
         _observations(large_denominator=True),
@@ -193,15 +215,13 @@ def test_large_beta_binomial_denominator_refuses_entire_ledger_before_fitting():
         fit_function=_recording_fit(calls),
     )
 
-    assert calls == []
-    assert result.predictions.empty
-    assert [status.status for status in result.fold_status] == ["failed"] * 4
-    assert all("65,536" in status.failure_reason for status in result.fold_status)
-    assert result.summary["comparison_complete"] is False
+    assert len(calls) == 4
+    assert [status.status for status in result.fold_status] == ["completed"] * 4
+    assert result.summary["comparison_complete"] is True
     assert result.summary["split_counts"] == {
         "planned": 4,
-        "completed": 0,
-        "failed": 4,
+        "completed": 4,
+        "failed": 0,
         "infeasible": 0,
     }
 
