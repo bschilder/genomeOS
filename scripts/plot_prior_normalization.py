@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 import matplotlib
 
@@ -22,6 +23,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.colors import Normalize  # noqa: E402
+from matplotlib.figure import Figure  # noqa: E402
 
 from genomeos.observations.sources import map_surveys  # noqa: E402
 from genomeos.surfaces.fit import (  # noqa: E402
@@ -223,9 +225,17 @@ def compute_counterexample(
         query_lat, query_lon, inducing_lat, inducing_lon
     )
     # The old implementation used whichever observation happened to come first. Make the
-    # arbitrary scalar visible by selecting the retained survey nearest the regional centre.
+    # arbitrariness of a single scalar denominator visible by pinning the reference to a fixed
+    # interior point instead, so it does not move with input order.
+    #
+    # (5 N, 20 E) is a fixed point inside REGION, not its centroid — that would be (5, 24). Any
+    # fixed interior point demonstrates the same thing, so this is left as it is rather than
+    # regenerating a published figure to move a reference marker four degrees east (#298).
+    REFERENCE_LAT, REFERENCE_LON = 5.0, 20.0
     reference_index = int(
-        np.argmin((observation_lat - 5.0) ** 2 + (observation_lon - 20.0) ** 2)
+        np.argmin(
+            (observation_lat - REFERENCE_LAT) ** 2 + (observation_lon - REFERENCE_LON) ** 2
+        )
     )
     scalar_sd = float(
         _conditional_frequency_sd(
@@ -262,8 +272,14 @@ def compute_counterexample(
     }
 
 
-def render(out: Path, observations: Path) -> Path:
-    """Map sampling geography, resulting scalar error, and its computational mechanism."""
+def build_figure(observations: Path) -> tuple[Figure, dict[str, Any]]:
+    """Map sampling geography, resulting scalar error, and its computational mechanism.
+
+    Returns the figure alongside the values it was drawn from, so a test can check that each panel
+    is bound to the quantity it claims to show. Saving is `render`'s job. Splitting the two is what
+    makes the panel bindings testable at all: a figure that has already been written and closed can
+    only be checked by looking at it (#298).
+    """
     observation_lat, observation_lon = _load_regional_geometry(observations)
     result = compute_counterexample(observation_lat, observation_lon)
     scalar_ratio = result["scalar_ratio"]
@@ -272,6 +288,7 @@ def render(out: Path, observations: Path) -> Path:
     false_support = scalar_ratio < SUPPORT_THRESHOLD
     polygons, kept = h3_polygons(result["query_cells"])
     kept = np.asarray(kept)
+    result["kept"] = kept
     fig, (geometry_ax, old_ax, mechanism_ax) = plt.subplots(1, 3, figsize=(18.2, 5.7))
     norm = Normalize(vmin=0.75, vmax=1.0)
     for axis in (geometry_ax, old_ax):
@@ -472,6 +489,12 @@ def render(out: Path, observations: Path) -> Path:
         color="#4b5563",
     )
     fig.subplots_adjust(left=0.045, right=0.985, bottom=0.14, top=0.82, wspace=0.22)
+    return fig, result
+
+
+def render(out: Path, observations: Path) -> Path:
+    """Write the review figure to `out` and return the path written."""
+    fig, _ = build_figure(observations)
     out = Path(out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out, dpi=220)
