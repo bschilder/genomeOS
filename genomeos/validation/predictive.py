@@ -22,9 +22,11 @@ tested domain far beyond any individual survey. Interior beta-binomial concentra
 retains reliable probability-scale precision; callers must explicitly select binomial semantics
 rather than obtain that distribution through an unstable finite-concentration approximation.
 Log mass uses a fixed exact prefix followed by a controlled Euler--Maclaurin tail for each
-rising factorial. Its work and temporary arrays are bounded independently of ``AN``. CDF and
-quantile queries retain their exact tail-sum arithmetic, whose runtime can still depend on the
-queried support tail.
+rising factorial. Two equivalent factorizations are evaluated, and the one with the smaller
+sum of intermediate magnitudes is selected per draw to avoid cancellation at both high counts
+and high concentration. Work and temporary arrays remain bounded independently of ``AN``. CDF
+and quantile queries retain their exact tail-sum arithmetic, whose runtime can still depend on
+the queried support tail.
 """
 
 from __future__ import annotations
@@ -137,18 +139,46 @@ def _bounded_beta_log_mass(
     beta = (1.0 - mean) * concentration
     log_choose = _log_combination(n, np.asarray(k))
     if k <= n - k:
-        # P(k) = P(0) choose(n,k) (alpha)_k / (beta+n-k)_k.
         endpoint = _bounded_log_rising_ratio(
             beta, concentration, n, difference=-alpha
         )
-        adjustment = _bounded_log_rising_ratio(alpha, beta + n - k, k)
+        direct_adjustment = _bounded_log_rising_ratio(alpha, beta + n - k, k)
+        paired_first = _bounded_log_rising_ratio(
+            np.asarray(float(n - k + 1)),
+            beta + n - k,
+            k,
+            difference=np.asarray(1.0) - beta,
+        )
+        paired_second = _bounded_log_rising_ratio(
+            alpha,
+            np.asarray(1.0),
+            k,
+            difference=alpha - 1.0,
+        )
     else:
         # Reflect the same identity around n to start from P(n).
+        remainder = n - k
         endpoint = _bounded_log_rising_ratio(
             alpha, concentration, n, difference=-beta
         )
-        adjustment = _bounded_log_rising_ratio(beta, alpha + k, n - k)
-    result = log_choose + endpoint + adjustment
+        direct_adjustment = _bounded_log_rising_ratio(beta, alpha + k, remainder)
+        paired_first = _bounded_log_rising_ratio(
+            np.asarray(float(k + 1)),
+            alpha + k,
+            remainder,
+            difference=np.asarray(1.0) - alpha,
+        )
+        paired_second = _bounded_log_rising_ratio(
+            beta,
+            np.asarray(1.0),
+            remainder,
+            difference=beta - 1.0,
+        )
+    direct = endpoint + log_choose + direct_adjustment
+    paired = endpoint + paired_first + paired_second
+    direct_condition = np.abs(endpoint) + np.abs(log_choose) + np.abs(direct_adjustment)
+    paired_condition = np.abs(endpoint) + np.abs(paired_first) + np.abs(paired_second)
+    result = np.where(paired_condition < direct_condition, paired, direct)
     if np.any(~np.isfinite(result)) or np.any(result > 0.0):
         raise FloatingPointError("beta-binomial log mass is outside the stable numeric domain")
     return result

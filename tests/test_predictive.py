@@ -123,6 +123,10 @@ def test_beta_binomial_mass_matches_independent_decimal_products(
         (1e-12, 1e6, 0, 2_571_112, 5e-9),
         (np.nextafter(1.0, 0.0), 1e6, 2_571_112, 2_571_112, 5e-9),
         (0.25, 20.0, 0, MAX_COUNT, 2e-8),
+        (0.25, 20.0, 536_870_912, MAX_COUNT, 3e-8),
+        (0.01, 30.0, 21_474_836, MAX_COUNT, 3e-8),
+        (0.5, 2.0, 1_073_741_823, MAX_COUNT, 3e-8),
+        (1e-6, 1e6, 10_000, MAX_COUNT, 3e-8),
     ],
 )
 def test_beta_binomial_large_count_scoring_matches_independent_decimal_oracle(
