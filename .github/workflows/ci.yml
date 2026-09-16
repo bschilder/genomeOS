@@ -25,6 +25,8 @@ jobs:
         run: python scripts/check_private_files.py
       - name: Commercial-use marking
         run: python scripts/check_commercial_use.py
+      - name: Manifest/payload counts
+        run: python scripts/check_manifest_payload_counts.py
       - name: Smoke
         run: python scripts/smoke.py
       - name: Test
