@@ -1,4 +1,4 @@
-"""Durable spatial-benchmark fold checkpoints (design §§5, 7–8, 12; #319).
+"""Durable spatial-benchmark fold checkpoints (design §§5, 7–8, 12; #319, #333).
 
 Scientific objective
     Preserve terminal offline fold evidence across infrastructure interruption without changing,
@@ -22,6 +22,7 @@ import json
 import os
 import tempfile
 from collections.abc import Mapping, Sequence
+from dataclasses import asdict
 from math import isfinite
 from numbers import Integral, Real
 from pathlib import Path
@@ -30,6 +31,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from genomeos.surfaces.convergence import SamplerDiagnostics
 from genomeos.validation.benchmark import BenchmarkFoldStatus
 from genomeos.validation.spatial_gp_benchmark import (
     PREDICTION_COLUMNS,
@@ -37,7 +39,7 @@ from genomeos.validation.spatial_gp_benchmark import (
 )
 from genomeos.validation.splits import BenchmarkSplit
 
-CHECKPOINT_SCHEMA_VERSION = 1
+CHECKPOINT_SCHEMA_VERSION = 2
 HEADER_FILENAME = "checkpoint.json"
 FOLD_DIRECTORY = "folds"
 _HEADER_BODY_FIELDS = (
@@ -66,6 +68,7 @@ _ARTIFACT_BODY_FIELDS = (
     "expected_test_ids",
     "status",
     "failure_reason",
+    "sampler_diagnostics",
     "prediction_columns",
     "prediction_rows",
 )
@@ -273,6 +276,11 @@ def _artifact_document(
         "expected_test_ids": list(split.test_ids),
         "status": result.status.status,
         "failure_reason": result.status.failure_reason,
+        "sampler_diagnostics": (
+            asdict(result.sampler_diagnostics)
+            if result.sampler_diagnostics is not None
+            else None
+        ),
         "prediction_columns": list(PREDICTION_COLUMNS),
         "prediction_rows": rows,
     }
@@ -335,7 +343,25 @@ def _decode_artifact(
         )
     except (TypeError, ValueError) as error:
         raise ValueError(f"checkpoint fold status is invalid: {path.name}") from error
-    result = SpatialGPFoldResult(status=status, predictions=frame)
+    diagnostics_record = document["sampler_diagnostics"]
+    try:
+        diagnostics = (
+            None
+            if diagnostics_record is None
+            else SamplerDiagnostics(**diagnostics_record)
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(
+            f"checkpoint sampler diagnostics are invalid: {path.name}"
+        ) from error
+    try:
+        result = SpatialGPFoldResult(
+            status=status,
+            predictions=frame,
+            sampler_diagnostics=diagnostics,
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"checkpoint fold result is invalid: {path.name}") from error
     _validate_fold_result(split, result)
     return result
 

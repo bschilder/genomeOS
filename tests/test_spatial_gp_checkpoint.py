@@ -8,6 +8,7 @@ from copy import deepcopy
 import pandas as pd
 import pytest
 
+from genomeos.surfaces.convergence import SamplerDiagnostics
 from genomeos.validation.benchmark import BenchmarkFoldStatus
 from genomeos.validation.spatial_gp_benchmark import (
     PREDICTION_COLUMNS,
@@ -20,6 +21,9 @@ from genomeos.validation.spatial_gp_checkpoint import (
     write_fold_checkpoint,
 )
 from genomeos.validation.splits import BenchmarkSplit
+
+GOOD_DIAGNOSTICS = SamplerDiagnostics(1.01, "z", 300.0, "z", 260.0, "z", 0)
+BAD_DIAGNOSTICS = SamplerDiagnostics(1.08, "z", 150.0, "z", 180.0, "z", 1)
 
 
 def _split(index: int) -> BenchmarkSplit:
@@ -114,13 +118,19 @@ def _completed(split: BenchmarkSplit, *, log_score: float = -1.0) -> SpatialGPFo
     return SpatialGPFoldResult(
         status=BenchmarkFoldStatus(split.split_id, "completed", split.test_ids, None),
         predictions=pd.DataFrame([row], columns=PREDICTION_COLUMNS),
+        sampler_diagnostics=GOOD_DIAGNOSTICS,
     )
 
 
-def _terminal(split: BenchmarkSplit, state: str) -> SpatialGPFoldResult:
+def _terminal(
+    split: BenchmarkSplit,
+    state: str,
+    diagnostics: SamplerDiagnostics | None = None,
+) -> SpatialGPFoldResult:
     return SpatialGPFoldResult(
         status=BenchmarkFoldStatus(split.split_id, state, split.test_ids, f"{state} reason"),
         predictions=pd.DataFrame(columns=PREDICTION_COLUMNS),
+        sampler_diagnostics=diagnostics,
     )
 
 
@@ -130,7 +140,7 @@ def test_fold_checkpoints_round_trip_all_terminal_states_and_negative_infinity(t
     initialize_checkpoint(root, _header(splits))
     expected = (
         _completed(splits[0], log_score=float("-inf")),
-        _terminal(splits[1], "failed"),
+        _terminal(splits[1], "failed", BAD_DIAGNOSTICS),
         _terminal(splits[2], "infeasible"),
     )
     for ordinal, (split, result) in enumerate(zip(splits, expected, strict=True)):
@@ -143,8 +153,19 @@ def test_fold_checkpoints_round_trip_all_terminal_states_and_negative_infinity(t
     )
     for actual, wanted in zip(observed, expected, strict=True):
         pd.testing.assert_frame_equal(actual.predictions, wanted.predictions, check_dtype=False)
+        assert actual.sampler_diagnostics == wanted.sampler_diagnostics
     with pytest.raises(FileExistsError, match="immutable"):
         write_fold_checkpoint(root, 0, splits[0], expected[0])
+
+
+def test_completed_fold_cannot_exist_without_sampler_diagnostics():
+    split = _split(0)
+    with pytest.raises(ValueError, match="completed folds must retain"):
+        SpatialGPFoldResult(
+            status=BenchmarkFoldStatus(split.split_id, "completed", split.test_ids, None),
+            predictions=_completed(split).predictions,
+            sampler_diagnostics=None,
+        )
 
 
 @pytest.mark.parametrize(
