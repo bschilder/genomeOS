@@ -184,6 +184,82 @@ def test_registry_build_preserves_explicit_hgdp_support_in_parquet(tmp_path):
     ]
 
 
+def test_registry_build_can_add_reviewed_wbbc_regions(tmp_path):
+    out = tmp_path / "registry"
+    command = _registry_command(FIXTURES / "hgdp_populations.tsv", out)
+    command.extend(["--wbbc-regions", str(FIXTURES / "wbbc_regions.tsv")])
+
+    completed = _run(command)
+
+    assert completed.returncode == 0, completed.stderr
+    populations, aliases = _read_registry(out)
+    wbbc_populations = populations.loc[populations["population_id"].str.startswith("wbbc-")]
+    wbbc_aliases = aliases.loc[aliases["source"] == "wbbc"]
+    assert len(wbbc_populations) == 4
+    assert wbbc_populations["location_type"].eq("inferred").all()
+    assert wbbc_aliases["label"].tolist() == ["North", "Central", "South", "Lingnan"]
+
+
+def test_observations_build_can_add_requested_wbbc_counts(tmp_path):
+    registry = tmp_path / "registry"
+    registry_command = _registry_command(FIXTURES / "hgdp_populations.tsv", registry)
+    registry_command.extend(["--wbbc-regions", str(FIXTURES / "wbbc_regions.tsv")])
+    registry_build = _run(registry_command)
+    assert registry_build.returncode == 0, registry_build.stderr
+    variants = tmp_path / "wbbc-variants.txt"
+    variants.write_text(
+        "# Curated GRCh38 variants\nchr22-16050075-A-G\nchr22-16050080-C-T\n",
+        encoding="utf-8",
+    )
+    lines = (FIXTURES / "wbbc_sites.vcf").read_text(encoding="utf-8").splitlines()
+    header = "\n".join(line for line in lines if line.startswith("#")) + "\n"
+    records = [line for line in lines if not line.startswith("#")]
+    first_vcf = tmp_path / "wbbc-part-1.vcf"
+    second_vcf = tmp_path / "wbbc-part-2.vcf"
+    first_vcf.write_text(header + records[0] + "\n", encoding="utf-8")
+    second_vcf.write_text(header + "\n".join(records[1:]) + "\n", encoding="utf-8")
+    out = tmp_path / "observations"
+    command = [
+        sys.executable,
+        str(ROOT / "scripts" / "build_observations.py"),
+        "--registry",
+        str(registry),
+        "--gnomad",
+        str(FIXTURES / "gnomad_hgdp_1kg_freqs.tsv"),
+        "--map-surveys",
+        str(FIXTURES / "map_hbs_surveys.csv"),
+        "--wbbc-vcf",
+        str(first_vcf),
+        "--wbbc-vcf",
+        str(second_vcf),
+        "--wbbc-variants",
+        str(variants),
+        "--out",
+        str(out),
+    ]
+
+    completed = _run(command)
+
+    assert completed.returncode == 0, completed.stderr
+    observations = read_observations(out)
+    wbbc_observations = observations.loc[observations["source"] == "wbbc_wgs_frequencies"]
+    assert len(wbbc_observations) == 8
+    assert wbbc_observations["population_id"].nunique() == 4
+    assert "WBBC WGS frequencies: 8 observations" in completed.stdout
+
+
+def test_observations_build_requires_both_wbbc_inputs(tmp_path):
+    registry = tmp_path / "registry"
+    _write_registry(registry)
+    command = _command(registry, tmp_path / "observations")
+    command.extend(["--wbbc-vcf", str(FIXTURES / "wbbc_sites.vcf")])
+
+    completed = _run(command)
+
+    assert completed.returncode != 0
+    assert "--wbbc-vcf and --wbbc-variants must be supplied together" in completed.stderr
+
+
 def test_registry_repeat_build_preserves_every_existing_byte(tmp_path):
     out = tmp_path / "registry"
     first = _run(_registry_command(FIXTURES / "hgdp_populations.tsv", out))
