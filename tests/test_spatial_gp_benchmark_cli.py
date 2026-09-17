@@ -17,6 +17,8 @@ import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 from genomeos.surfaces.config import FitConfig
+from genomeos.surfaces.convergence import SamplerDiagnostics
+from genomeos.surfaces.fit import ConvergenceError
 from genomeos.surfaces.observation import (
     ObservationModelMetadata,
     ObservationParameters,
@@ -26,6 +28,8 @@ from genomeos.surfaces.observation import (
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "benchmark_spatial_gp.py"
 VARIANT = "chr11-5227002-T-A"
+GOOD_DIAGNOSTICS = SamplerDiagnostics(1.01, "z", 300.0, "z", 260.0, "z", 0)
+BAD_DIAGNOSTICS = SamplerDiagnostics(1.08, "z", 150.0, "z", 180.0, "z", 1)
 
 
 def _write_inputs(root: Path, *, large_denominator: bool = False) -> dict[str, Path]:
@@ -139,6 +143,7 @@ class _FakeFit:
     training_cohorts: tuple[str, ...]
     likelihood: str
     fail_prediction: bool = False
+    idata: object = None
 
     def predict_new_cohort_parameters(
         self, queries: SurveyQueries, *, seed: int
@@ -176,10 +181,15 @@ def _install_fake_fit(
     *,
     interrupt_once_after: int | None = None,
     fail_on_call: int | None = None,
+    convergence_failure_on_call: int | None = None,
 ):
     real_evaluate = runner.evaluate_single_variant_gp_fold
     calls: list[str] = []
     interrupted = False
+    monkeypatch.setattr(
+        "genomeos.validation.spatial_gp_benchmark.summarize_sampler_diagnostics",
+        lambda *_args, **_kwargs: GOOD_DIAGNOSTICS,
+    )
 
     def evaluate(plan, split, **kwargs):
         nonlocal interrupted
@@ -190,6 +200,11 @@ def _install_fake_fit(
         calls.append(split.split_id)
 
         def fit(observations: pd.DataFrame, config: FitConfig) -> _FakeFit:
+            if call_index == convergence_failure_on_call:
+                raise ConvergenceError(
+                    "sampler did not converge (synthetic gate failure)",
+                    diagnostics=BAD_DIAGNOSTICS,
+                )
             return _FakeFit(
                 tuple(sorted(observations["cohort_id"].unique())),
                 config.likelihood,
@@ -226,6 +241,7 @@ def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
         "summary.json",
     ]
     manifest = json.loads((first / "manifest.json").read_text())
+    assert manifest["schema_version"] == 2
     assert manifest["model"] == {
         "model_id": "B2-current",
         "name": "current_single_variant_spatial_gp",
@@ -239,10 +255,17 @@ def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
     }
     assert manifest["publication_eligible"] is False
     assert manifest["configuration"]["fit_config"]["likelihood"] == "beta_binomial"
+    assert manifest["configuration"]["sampler_convergence_gate"] == {
+        "maximum_divergences": 0,
+        "maximum_rhat": 1.05,
+        "minimum_bulk_ess": 200.0,
+        "minimum_tail_ess": 200.0,
+    }
     assert len(manifest["configuration_sha256"]) == 64
     assert len(manifest["inputs_sha256"]) == 64
     assert len(manifest["split_manifest_sha256"]) == 64
     assert set(manifest["science_source_sha256"]) >= {
+        "genomeos/surfaces/convergence.py",
         "genomeos/surfaces/fit.py",
         "genomeos/validation/spatial_gp_benchmark.py",
         "scripts/benchmark_spatial_gp.py",
@@ -250,6 +273,12 @@ def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
     predictions = pd.read_csv(first / "predictions.tsv", sep="\t")
     assert len(predictions) == 4
     assert set(predictions["variant_id"]) == {VARIANT}
+    statuses = pd.read_csv(first / "fold_status.tsv", sep="\t")
+    assert set(statuses["max_rhat"]) == {GOOD_DIAGNOSTICS.max_rhat}
+    assert set(statuses["min_bulk_ess"]) == {GOOD_DIAGNOSTICS.min_bulk_ess}
+    assert set(statuses["min_tail_ess"]) == {GOOD_DIAGNOSTICS.min_tail_ess}
+    assert set(statuses["divergence_count"]) == {0}
+    assert all(split["sampler_diagnostics"] for split in manifest["splits"])
     assert json.loads((first / "summary.json").read_text())["benchmark"][
         "comparison_complete"
     ] is True
@@ -410,7 +439,7 @@ def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, 
     checkpoint = tmp_path / "failed-checkpoint"
     first_out = tmp_path / "failed-first"
     runner = _load_runner("spatial_gp_runner_failed_resume")
-    calls = _install_fake_fit(runner, monkeypatch, fail_on_call=1)
+    calls = _install_fake_fit(runner, monkeypatch, convergence_failure_on_call=1)
     first = runner._parser().parse_args(
         _command(paths, first_out, checkpoint=checkpoint)[2:]
     )
@@ -419,6 +448,9 @@ def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, 
     assert len(calls) == 4
     statuses = pd.read_csv(first_out / "fold_status.tsv", sep="\t")
     assert list(statuses["status"]).count("failed") == 1
+    failed = statuses.loc[statuses["status"] == "failed"].iloc[0]
+    assert failed["max_rhat"] == BAD_DIAGNOSTICS.max_rhat
+    assert failed["divergence_count"] == BAD_DIAGNOSTICS.divergence_count
 
     resumed_out = tmp_path / "failed-resumed"
     resumed = runner._parser().parse_args(

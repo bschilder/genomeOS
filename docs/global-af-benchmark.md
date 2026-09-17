@@ -107,6 +107,13 @@ hashes, package versions, evidence kind, or qualification fields. It also refuse
 unknown, overwritten, or noncontiguous fold artifacts. Every terminal fold is reused, including a
 failed or infeasible fold; resume is not an implicit retry mechanism.
 
+Each fitted fold retains its maximum rank-normalized R-hat, minimum bulk ESS, minimum tail ESS,
+the parameter responsible for each extreme, and the number of post-tuning divergent transitions.
+A spatial-benchmark fold is `completed` only when maximum R-hat is at most the configured
+`max_rhat`, both ESS extrema are at least the configured `min_ess`, and the divergence count is
+zero. A diagnostic failure is an immutable `failed` checkpoint with no admissible predictions;
+resume reuses that failure and cannot selectively retry it under the same benchmark identity.
+
 Before fitting, the runner verifies that the selected likelihood's exact scorer can cover every
 denominator. A single unsupported row produces a failed status for every planned fold, zero fits,
 and a nonzero exit after writing the complete evidence record. It never drops that row, switches
@@ -237,7 +244,7 @@ content:
 | `inventory.json` | Public P1 inventory counts and unresolved qualification limitations. |
 | `manifest.json` | B0 identity, nonpublication label, exact configuration and hash, raw input and generated-output hashes/sizes, source counts, Git revision, package versions, hashes of the actual imported science files, immutable splits, fold statuses, and distinct posterior/PIT seeds. It is written last. |
 | `predictions.tsv` | One completed-fold row per held-out observation: identities and grouping labels, observed AC/AN, posterior parameters/mean, seeds, and all ten public predictive diagnostics. A true zero probability is written as `-Infinity`. |
-| `fold_status.tsv` | Every planned split with expected test IDs, `completed`/`failed`/`infeasible`, reason, and its two deterministic seeds. |
+| `fold_status.tsv` | Every planned split with expected test IDs, `completed`/`failed`/`infeasible`, reason, and retained R-hat, bulk/tail ESS, responsible parameter names, and divergence count when fitting reached diagnostics. |
 | `summary.json` | Explicit B0/evidence/nonpublication metadata plus the public hierarchical benchmark summary. |
 
 The configuration hash covers the model inputs, the combined input hash covers all raw bytes
@@ -252,6 +259,8 @@ The current-GP runner writes the same five files. Its prediction rows contain th
 observed counts, and deterministic fit/prediction seeds instead of B0 posterior-alpha/beta fields.
 Its manifest identifies `B2-current`, records the complete resolved `FitConfig`, both review-state
 declarations, the selected CDF backend, and hashes of the fitted observation/prediction modules.
+Every split record also carries the same sampler diagnostics as `fold_status.tsv`; these values are
+inside both the split-manifest hash and the per-fold checkpoint integrity hash.
 
 The local-count runner adds `support.tsv` and `bandwidth_selection.tsv`. The first retains every
 requested query and its support or refusal evidence. The second records every candidate's
