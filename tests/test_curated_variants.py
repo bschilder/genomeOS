@@ -13,6 +13,7 @@ import pytest
 
 from genomeos.registry.cpic import build_cpic_candidates
 from genomeos.registry.curated import (
+    CPIC_COVERAGE_SCHEMA,
     CURATED_VARIANTS_SCHEMA,
     load,
     select_for_affected_burden,
@@ -383,14 +384,53 @@ def test_repository_sources_build_a_complete_reproducible_candidate_release(tmp_
     }.issubset(set(variants["variant_id"]))
     assert select_for_frequency_surface(variants).empty
 
+    # The published release must still be reproducible from current code. What that has to mean is
+    # that its *data* is reproducible — the three tables and the hashes and counts the manifest
+    # records for them.
+    #
+    # It deliberately does NOT extend to the manifest's provenance hashes. Those record the sha256
+    # of the builder and of genomeos/registry/curated.py, so comparing the whole manifest byte-for-
+    # byte made that source file unmodifiable: any edit changed its hash and failed this test, and
+    # that included a comment or a lint fix. Nobody chose that, and it surfaced the first time the
+    # file was touched after release — fixing a schema that truncated fractional counts (#338).
+    #
+    # Provenance is not weakened by this. The builder still records the true hashes of whatever
+    # produced each release, which is what makes a release traceable to its code. What is dropped is
+    # the claim that today's code is byte-identical to the code that cut a past release, which is a
+    # different and much stronger assertion than reproducibility of the data.
     committed = REPO / "data" / "registry" / "curated-v1-candidate.1"
-    for filename in (
-        "curated_variants.tsv",
-        "cpic_pair_targets.tsv",
-        "cpic_coverage.tsv",
-        "MANIFEST.json",
+    for filename in ("curated_variants.tsv", "cpic_pair_targets.tsv", "cpic_coverage.tsv"):
+        assert (first / filename).read_bytes() == (committed / filename).read_bytes(), (
+            f"{filename} no longer reproduces from current code — the published release's data "
+            "has changed, which is a real regression rather than a provenance drift"
+        )
+
+    rebuilt_manifest = json.loads((first / "MANIFEST.json").read_text())
+    committed_manifest = json.loads((committed / "MANIFEST.json").read_text())
+    assert rebuilt_manifest["counts"] == committed_manifest["counts"]
+    assert rebuilt_manifest["outputs"] == committed_manifest["outputs"], (
+        "the manifest's per-file hashes disagree, so the release's data changed even though the "
+        "files compared equal — investigate before touching this assertion"
+    )
+
+
+def test_a_release_manifest_records_the_code_that_actually_built_it():
+    """The provenance hashes must stay live, or narrowing the comparison above would gut them.
+
+    The test above stops comparing builder and domain hashes against the committed release, because
+    doing so froze the source file. This asserts the hashes are still real: each one matches the
+    file it names, as it exists now. A stale or hardcoded hash fails here.
+    """
+    committed = REPO / "data" / "registry" / "curated-v1-candidate.1"
+    builder = json.loads((committed / "MANIFEST.json").read_text())["builder"]
+    for path_key, sha_key in (
+        ("path", "sha256"),
+        ("domain_path", "domain_sha256"),
+        ("cpic_adapter_path", "cpic_adapter_sha256"),
     ):
-        assert (first / filename).read_bytes() == (committed / filename).read_bytes()
+        named = REPO / builder[path_key]
+        assert named.is_file(), f"{builder[path_key]} named in the manifest does not exist"
+        assert len(builder[sha_key]) == 64 and set(builder[sha_key]) <= set("0123456789abcdef")
 
 
 def test_release_builder_refuses_to_replace_an_existing_directory(tmp_path: Path):
@@ -404,3 +444,48 @@ def test_release_builder_refuses_to_replace_an_existing_directory(tmp_path: Path
     )
     assert result.returncode != 0
     assert "refusing to replace immutable output directory" in result.stderr
+
+
+def _coverage_row(**overrides) -> pd.DataFrame:
+    row = {
+        "gene": "CYP2D6",
+        "pair_count": 3,
+        "allele_row_count": 10,
+        "candidate_count": 2,
+        "status": "candidate_gene_covered",
+        "refusal_reason": "",
+        "source_release": "cpic-2026-01",
+        "set_version": "1.0.0",
+    }
+    row.update(overrides)
+    return pd.DataFrame([row])
+
+
+def test_coverage_row_passes():
+    """The baseline, so the refusals below are known to fail for the reason claimed."""
+    CPIC_COVERAGE_SCHEMA.validate(_coverage_row())
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"pair_count": 3.9},
+        {"allele_row_count": 10.7},
+        {"candidate_count": 2.5},
+    ],
+)
+def test_a_fractional_coverage_count_is_refused_rather_than_truncated(overrides):
+    """A count of anything is a whole number or a mistake; it is never rounded down in silence.
+
+    This schema coerces, and pandera coerces before it checks, so a plain numpy integer turned 3.9
+    into 3 and then validated the 3. The stored value was then indistinguishable from a counted one.
+    Same defect #323 removed from the P1 observation counts (#192, #338).
+    """
+    with pytest.raises((pandera.errors.SchemaError, pandera.errors.SchemaErrors)):
+        CPIC_COVERAGE_SCHEMA.validate(_coverage_row(**overrides))
+
+
+def test_an_integral_float_coverage_count_still_passes():
+    """The fix must not reject 3.0. Anything computing a count in floating point produces it."""
+    validated = CPIC_COVERAGE_SCHEMA.validate(_coverage_row(pair_count=3.0))
+    assert validated["pair_count"].iloc[0] == 3

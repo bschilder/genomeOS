@@ -2,11 +2,11 @@
   "coerce": true,
   "columns": {
     "allele_row_count": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "candidate_count": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "gene": {
@@ -19,7 +19,7 @@
       "unique": true
     },
     "pair_count": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 1
     },
     "refusal_reason": {
