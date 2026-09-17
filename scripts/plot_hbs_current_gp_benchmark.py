@@ -28,7 +28,13 @@ from genomeos.viz.basemap import draw_countries  # noqa: E402
 PREREGISTRATION_URL = (
     "https://github.com/bschilder/genomeOS/issues/189#issuecomment-5705882045"
 )
-SHARED_INPUTS = ("observations", "assignments", "dependencies")
+BYTE_IDENTICAL_INPUTS = ("assignments", "dependencies")
+OBSERVATIONS_TSV_SHA256 = "820d725fae9859a6cebca98296676e8c525b103f7033aa5237b9aaa00f79b331"
+OBSERVATIONS_PARQUET_SHA256 = (
+    "466034e22015ce5f4e0b90067adb2232491b625591d50c8ac83d955565345b4b"
+)
+RHAT_WARNING = "The rhat statistic is larger than 1.01 for some parameters."
+DIVERGENCE_WARNING = "There was 1 divergence after tuning."
 CORE_SPLIT_FIELDS = (
     "split_id",
     "block_id",
@@ -48,6 +54,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--observations", required=True, type=Path)
     parser.add_argument("--b0", required=True, type=Path)
     parser.add_argument("--b2", required=True, type=Path)
+    parser.add_argument("--run-log", required=True, type=Path)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     return parser
@@ -123,9 +130,19 @@ def _statuses(manifest: dict[str, object]) -> tuple[tuple[BenchmarkFoldStatus, .
 def _verify_shared_identity(
     b0_manifest: dict[str, object], b2_manifest: dict[str, object]
 ) -> None:
-    for name in SHARED_INPUTS:
+    for name in BYTE_IDENTICAL_INPUTS:
         if b0_manifest["input_files"].get(name) != b2_manifest["input_files"].get(name):
             raise ValueError(f"B0 and B2 {name} inputs differ")
+    if (
+        b0_manifest["input_files"].get("observations", {}).get("sha256")
+        != OBSERVATIONS_TSV_SHA256
+    ):
+        raise ValueError("B0 observations are not the frozen TSV serialization")
+    if (
+        b2_manifest["input_files"].get("observations", {}).get("sha256")
+        != OBSERVATIONS_PARQUET_SHA256
+    ):
+        raise ValueError("B2 observations are not the frozen Parquet serialization")
     b0_configuration = b0_manifest["configuration"]
     b2_configuration = b2_manifest["configuration"]
     for field in ("buffer_km", "data_version", "seed"):
@@ -141,14 +158,61 @@ def _verify_shared_identity(
                 raise ValueError(f"B0 and B2 split identity differs at {field}")
 
 
-def _same_json(left: object, right: object) -> bool:
-    return json.dumps(left, allow_nan=False, sort_keys=True, separators=(",", ":")) == json.dumps(
-        right, allow_nan=False, sort_keys=True, separators=(",", ":")
-    )
+def _equivalent_summary(left: object, right: object) -> bool:
+    if type(left) is not type(right):
+        return False
+    if isinstance(left, dict):
+        return set(left) == set(right) and all(
+            _equivalent_summary(left[key], right[key]) for key in left
+        )
+    if isinstance(left, list):
+        return len(left) == len(right) and all(
+            _equivalent_summary(a, b) for a, b in zip(left, right, strict=True)
+        )
+    if isinstance(left, float):
+        return bool(np.isclose(left, right, rtol=1e-14, atol=1e-15, equal_nan=False))
+    return left == right
+
+
+def _compact_benchmark(summary: dict[str, object]) -> dict[str, object]:
+    return {
+        "comparison_complete": summary["comparison_complete"],
+        "split_counts": summary["split_counts"],
+        "scored_observation_count": summary["scored_observation_count"],
+        "represented_cell_count": summary["represented_cell_count"],
+        "represented_declared_cohort_cell_count": summary[
+            "represented_declared_cohort_cell_count"
+        ],
+        "zero_probability_count": summary["zero_probability_count"],
+        "metrics": summary["metrics"],
+    }
+
+
+def _run_diagnostics(path: Path) -> dict[str, object]:
+    text = path.read_text()
+    start_marker = "===== B2 CURRENT GP CHECKPOINTED "
+    done_marker = "===== DONE "
+    if start_marker not in text or done_marker not in text:
+        raise ValueError("terminal run log is missing start or completion markers")
+    science_log = text[text.index(start_marker) : text.rindex(done_marker)]
+    fit_count = science_log.count("NUTS[numpyro]:")
+    rhat_count = science_log.count(RHAT_WARNING)
+    divergence_count = science_log.count(DIVERGENCE_WARNING)
+    if fit_count != 5 or rhat_count != 5 or divergence_count != 1:
+        raise ValueError("terminal run log has unexpected sampler warning counts")
+    return {
+        "nuts_fit_invocation_count": fit_count,
+        "rhat_above_1_01_warning_count": rhat_count,
+        "reported_post_tuning_divergence_count": divergence_count,
+        "numerical_rhat_values_retained": False,
+        "per_fold_convergence_diagnostics_retained": False,
+        "convergence_acceptance": "not_met",
+        "scientific_implication": "predictive_result_requires_sampler_repair_and_recheck",
+    }
 
 
 def build_report(
-    observations_path: Path, b0_path: Path, b2_path: Path
+    observations_path: Path, b0_path: Path, b2_path: Path, run_log_path: Path
 ) -> tuple[dict[str, object], pd.DataFrame]:
     """Validate both immutable artifacts and return the frozen comparison plus plotting rows."""
     b0_manifest, b0_summary, b0_predictions = _artifact(b0_path, "B0")
@@ -158,10 +222,16 @@ def build_report(
     comparison, matched = compare_paired_benchmarks(
         b2_predictions, b0_predictions, statuses, split_ids
     )
-    if not _same_json(comparison["candidate_benchmark"], b2_summary["benchmark"]):
+    if not _equivalent_summary(comparison["candidate_benchmark"], b2_summary["benchmark"]):
         raise ValueError("recomputed B2 summary differs from the published B2 summary")
-    if not _same_json(comparison["baseline_benchmark"], b0_summary["benchmark"]):
+    if not _equivalent_summary(comparison["baseline_benchmark"], b0_summary["benchmark"]):
         raise ValueError("recomputed B0 summary differs from the published B0 summary")
+    comparison["candidate_benchmark"] = _compact_benchmark(
+        comparison["candidate_benchmark"]
+    )
+    comparison["baseline_benchmark"] = _compact_benchmark(
+        comparison["baseline_benchmark"]
+    )
 
     expected_observations = b0_manifest["input_files"]["observations"]
     if _file_record(observations_path) != expected_observations:
@@ -190,8 +260,13 @@ def build_report(
         "artifact_identity": {
             "candidate_manifest": _file_record(b2_path / "manifest.json"),
             "baseline_manifest": _file_record(b0_path / "manifest.json"),
-            "shared_inputs": {
-                name: b0_manifest["input_files"][name] for name in SHARED_INPUTS
+            "terminal_run_log": _file_record(run_log_path),
+            "byte_identical_inputs": {
+                name: b0_manifest["input_files"][name] for name in BYTE_IDENTICAL_INPUTS
+            },
+            "observation_serializations": {
+                "baseline_tsv": b0_manifest["input_files"]["observations"],
+                "candidate_parquet": b2_manifest["input_files"]["observations"],
             },
             "candidate_code_revision": b2_manifest["code_revision"],
             "baseline_code_revision": b0_manifest["code_revision"],
@@ -203,6 +278,14 @@ def build_report(
             "dependency_aware_promotion_evidence": False,
             "reason": "dependency_review_not_checked_and_assignments_unreviewed",
         },
+        "summary_replay_validation": {
+            "structure_and_symbolic_values": "exact",
+            "float_relative_tolerance": 1e-14,
+            "float_absolute_tolerance": 1e-15,
+            "candidate_passed": True,
+            "baseline_passed": True,
+        },
+        "sampler_diagnostics": _run_diagnostics(run_log_path),
         "comparison": comparison,
         "interpretation": {
             "status": "descriptive_development_evidence",
@@ -369,7 +452,7 @@ def main() -> int:
     args = _parser().parse_args()
     if args.out.exists() or args.report.exists():
         raise FileExistsError("output figure and report paths must be new")
-    report, matched = build_report(args.observations, args.b0, args.b2)
+    report, matched = build_report(args.observations, args.b0, args.b2, args.run_log)
     render(report, matched, args.out)
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(

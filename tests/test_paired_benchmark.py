@@ -11,7 +11,16 @@ from matplotlib.markers import MarkerStyle
 
 from genomeos.validation.benchmark import BenchmarkFoldStatus
 from genomeos.validation.paired_benchmark import compare_paired_benchmarks
-from scripts.plot_hbs_current_gp_benchmark import build_figure, plt
+from scripts.plot_hbs_current_gp_benchmark import (
+    OBSERVATIONS_PARQUET_SHA256,
+    OBSERVATIONS_TSV_SHA256,
+    _compact_benchmark,
+    _equivalent_summary,
+    _run_diagnostics,
+    _verify_shared_identity,
+    build_figure,
+    plt,
+)
 
 
 def _predictions(log_scores: list[float], errors: list[float]) -> pd.DataFrame:
@@ -50,6 +59,97 @@ def _statuses() -> tuple[tuple[BenchmarkFoldStatus, ...], tuple[str, ...]]:
         for index, split_id in enumerate(split_ids)
     )
     return statuses, split_ids
+
+
+def _manifest(observations_sha256: str) -> dict[str, object]:
+    split = {
+        "split_id": "split-0",
+        "block_id": "block-0",
+        "buffer_km": 300.0,
+        "data_version": "frozen",
+        "input_fingerprint": "fingerprint",
+        "train_ids": ["train"],
+        "test_ids": ["test"],
+        "excluded_ids": [],
+        "exclusion_reasons": [],
+        "min_edge_separation_km": 301.0,
+    }
+    return {
+        "input_files": {
+            "observations": {"sha256": observations_sha256, "size_bytes": 1},
+            "assignments": {"sha256": "assignments", "size_bytes": 2},
+            "dependencies": {"sha256": "dependencies", "size_bytes": 3},
+        },
+        "configuration": {"buffer_km": 300.0, "data_version": "frozen", "seed": 42},
+        "splits": [split],
+    }
+
+
+def test_artifact_identity_accepts_only_the_two_frozen_observation_serializations():
+    baseline = _manifest(OBSERVATIONS_TSV_SHA256)
+    candidate = _manifest(OBSERVATIONS_PARQUET_SHA256)
+    _verify_shared_identity(baseline, candidate)
+
+    candidate["input_files"]["observations"]["sha256"] = OBSERVATIONS_TSV_SHA256
+    with pytest.raises(ValueError, match="frozen Parquet"):
+        _verify_shared_identity(baseline, candidate)
+
+
+def test_summary_replay_allows_only_machine_level_float_rounding():
+    original = {"rows": [{"label": "kept", "count": 2, "score": -11268.527876612001}]}
+    replay = {"rows": [{"label": "kept", "count": 2, "score": -11268.527876612}]}
+    assert _equivalent_summary(original, replay)
+
+    replay["rows"][0]["score"] = -11268.52
+    assert not _equivalent_summary(original, replay)
+    replay = {"rows": [{"label": "changed", "count": 2, "score": -11268.527876612}]}
+    assert not _equivalent_summary(original, replay)
+
+
+def test_public_benchmark_summary_excludes_cohort_level_records():
+    summary = {
+        "comparison_complete": True,
+        "split_counts": {"planned": 5, "completed": 5, "failed": 0, "infeasible": 0},
+        "scored_observation_count": 994,
+        "represented_cell_count": 5,
+        "represented_declared_cohort_cell_count": 994,
+        "zero_probability_count": 0,
+        "metrics": {"mae": 0.1},
+        "fold_status": [{"expected_test_ids": ["private-row"]}],
+        "failure_reasons": [],
+        "cell_metrics": [{"region_id": "region"}],
+        "declared_cohort_cell_metrics": [{"cohort_id": "private-cohort"}],
+    }
+    compact = _compact_benchmark(summary)
+    assert compact["scored_observation_count"] == 994
+    assert compact["metrics"] == {"mae": 0.1}
+    assert "fold_status" not in compact
+    assert "cell_metrics" not in compact
+    assert "declared_cohort_cell_metrics" not in compact
+
+
+def test_terminal_run_log_retains_sampler_warning_counts(tmp_path):
+    run_log = tmp_path / "run.log"
+    fit = "NUTS[numpyro]: [lengthscale]\n"
+    rhat = "The rhat statistic is larger than 1.01 for some parameters.\n"
+    run_log.write_text(
+        "environment probe mentions NUTS[numpyro]: twice NUTS[numpyro]:\n"
+        + "===== B2 CURRENT GP CHECKPOINTED 2026-09-16T21:02:30Z =====\n"
+        + (fit + rhat) * 4
+        + fit
+        + "There was 1 divergence after tuning. Increase target_accept.\n"
+        + rhat
+        + "===== DONE 2026-09-17T00:07:56Z =====\n"
+    )
+    diagnostics = _run_diagnostics(run_log)
+    assert diagnostics["nuts_fit_invocation_count"] == 5
+    assert diagnostics["rhat_above_1_01_warning_count"] == 5
+    assert diagnostics["reported_post_tuning_divergence_count"] == 1
+    assert diagnostics["convergence_acceptance"] == "not_met"
+
+    run_log.write_text(run_log.read_text().replace(rhat, "", 1))
+    with pytest.raises(ValueError, match="unexpected sampler warning counts"):
+        _run_diagnostics(run_log)
 
 
 def test_comparison_uses_exact_matched_rows_and_exhaustive_outer_blocks():
