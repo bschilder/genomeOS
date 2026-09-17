@@ -41,6 +41,9 @@ def test_satellite_embedding_identity_and_joint_vector_are_frozen():
     assert asset.valid_time_end_exclusive.isoformat() == "2025-01-01"
     assert asset.temporal_resolution == "annual"
     assert asset.nominal_scale_m == 10.0
+    assert asset.collection_layout == "tiled_images"
+    assert asset.approximate_image_edge_m == 163_840.0
+    assert asset.crs_semantics == "per_image_local_utm"
     assert asset.vector_dimension == 64
     assert asset.band_names == tuple(f"A{index:02d}" for index in range(64))
     assert asset.band_units == "dimensionless"
@@ -139,6 +142,7 @@ def test_asset_contract_refuses_unknown_fields():
     [
         ("nominal_scale_m", True, "valid number"),
         ("nominal_scale_m", "10.0", "valid number"),
+        ("approximate_image_edge_m", "163840.0", "valid number"),
         ("vector_dimension", True, "valid integer"),
         ("vector_dimension", "64", "valid integer"),
         ("dataset_version", 1.1, "valid string"),

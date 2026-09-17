@@ -112,6 +112,8 @@ class CovariateAsset(BaseModel):
     valid_time_end_exclusive: date
     temporal_resolution: Literal["annual"]
     nominal_scale_m: StrictFloat = Field(gt=0.0)
+    collection_layout: Literal["tiled_images"]
+    approximate_image_edge_m: StrictFloat = Field(gt=0.0)
     empirically_observed_scale_m: StrictFloat | None = Field(default=None, gt=0.0)
     vector_dimension: StrictInt = Field(gt=0)
     band_names: tuple[StrictStr, ...] = Field(min_length=1)

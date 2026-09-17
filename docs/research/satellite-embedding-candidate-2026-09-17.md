@@ -28,6 +28,8 @@ The official Earth Engine catalog was inspected on 2026-09-17:
   `[2017-01-01, 2025-01-01)`;
 - 64 dimensionless bands `A00` through `A63`, nominally 10 m, with values in `[-1, 1]` and
   unit-length vector semantics;
+- a tiled collection whose source images cover approximately 163,840 m square and use their local
+  UTM projection; a calendar year is not one global source image;
 - per-image `DATASET_VERSION`, `MODEL_VERSION`, `PROCESSING_SOFTWARE_VERSION`, and `UTM_ZONE`
   properties, plus temporal bounds;
 - global terrestrial and shallow-water coverage, with limited polar coverage and remaining swath
@@ -48,7 +50,7 @@ Sources:
 
 The canonical registry is
 `genomeos/covariates/earth_engine_assets.json`, SHA-256
-`2d3b44f7a49f56c7402ce30c20996b2f780a0c53e6dfe07e390b81fde80dc121`.
+`fe29fc9721beaeed823a7ec8763ef67e0cdd8ad83724447f9f0ee11d4e506db2`.
 
 ```bash
 PYTHONPATH=. python scripts/inspect_covariate_asset.py --list
@@ -62,10 +64,13 @@ The registry is also included in the built wheel; `uv build --wheel` copied it t
 
 ## Remaining admission evidence
 
-The next slice must select one year using explicit observation-time semantics; inspect exact image
-properties; perform a vectorized footprint reduction over reviewed supports; and retain export,
-code, input, and output hashes in an immutable receipt. It must measure empirical scale and
-missingness rather than inheriting the 10 m catalog value. Only then may a frozen comparison test
+The next slice must select one year using explicit observation-time semantics; inspect one exact
+source image; perform one vectorized footprint reduction over several reviewed supports wholly
+contained by that image; and retain export, code, input, and output hashes in an immutable receipt.
+It must measure empirical scale and missingness rather than inheriting the 10 m catalog value. A
+later global extractor must batch by exact tile/UTM projection or validate an explicit
+mosaic/reprojection and overlap policy; it may not silently take the first intersecting image. Only
+then may a frozen comparison test
 the genomic baseline, coordinates, the 64-dimensional family, missingness, a structured negative
 control, and simpler interpretable environmental sources under unchanged buffered splits.
 

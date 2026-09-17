@@ -2,6 +2,7 @@
   "assets": [
     {
       "admission_status": "candidate_only",
+      "approximate_image_edge_m": 163840.0,
       "asset_id": "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL",
       "asset_key": "google_satellite_embedding_v1_annual",
       "attribution": "The AlphaEarth Foundations Satellite Embedding dataset is produced by Google and Google DeepMind.",
@@ -85,6 +86,7 @@
       "band_value_max": 1.0,
       "band_value_min": -1.0,
       "catalog_url": "https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL",
+      "collection_layout": "tiled_images",
       "commercial_compatibility": "compatible",
       "commercial_use": {
         "checked_at": "2026-09-17",
@@ -104,6 +106,7 @@
       "extraction_receipt_sha256": null,
       "extraction_status": "not_run",
       "interpretation_limits": [
+        "A calendar year is a tiled image collection; retain exact image identity and local UTM projection.",
         "Represents recent surface conditions, not historical ancestry or migration.",
         "Use all 64 bands jointly; individual axes are not independently interpretable.",
         "A 10 m pixel size does not establish 10 m validated genetic resolution.",
