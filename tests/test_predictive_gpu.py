@@ -7,11 +7,13 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
 import pytest
 
+from genomeos.validation import predictive_cupy as predictive_cupy_module
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
 from genomeos.validation.predictive_cupy import CuPyCDF
 
@@ -36,6 +38,80 @@ def _cupy_device_available() -> bool:
 
 GPU_AVAILABLE = _cupy_device_available()
 requires_gpu = pytest.mark.skipif(not GPU_AVAILABLE, reason="requires a working CUDA device")
+
+
+def test_mixed_high_concentration_routing_compacts_and_batches_draw_subgroups(monkeypatch):
+    """A shared extreme-draw mask must batch observations while preserving mixture weights."""
+
+    class NumpyDevice:
+        float64 = np.float64
+        int64 = np.int64
+
+        @staticmethod
+        def asarray(value, dtype=None):
+            return np.asarray(value, dtype=dtype)
+
+        @staticmethod
+        def asnumpy(value):
+            return np.asarray(value)
+
+    monkeypatch.setattr(
+        predictive_cupy_module,
+        "_load_cupy",
+        lambda: (NumpyDevice, SimpleNamespace()),
+    )
+    direct_calls: list[tuple[np.ndarray, np.ndarray]] = []
+
+    def direct_probabilities(mean, concentration, an, ac, **kwargs):
+        direct_calls.append((np.asarray(mean), np.asarray(concentration)))
+        return SimpleNamespace(lower=np.full(ac.shape, 0.8))
+
+    monkeypatch.setattr(
+        predictive_cupy_module,
+        "beta_binomial_probability_queries",
+        direct_probabilities,
+    )
+    monkeypatch.setattr(
+        predictive_cupy_module,
+        "probability_float64",
+        lambda value, **kwargs: value,
+    )
+    legacy_shapes: list[tuple[int, ...]] = []
+
+    def legacy_probabilities(self, ac, an, mean_draws, concentration_draws):
+        assert mean_draws.shape == concentration_draws.shape
+        legacy_shapes.append(mean_draws.shape)
+        value = 0.2 if mean_draws.shape[0] == 2 else 0.3
+        return np.full(ac.shape, value)
+
+    monkeypatch.setattr(
+        CuPyCDF,
+        "_legacy_beta_binomial_cdf_arrays",
+        legacy_probabilities,
+    )
+    means = np.asarray(
+        [[0.2, 0.3, 0.4], [0.5, 0.6, 0.7], [0.8, 0.9, 0.1]]
+    )
+    concentrations = np.asarray(
+        [[20.0, 20.0, 20.0], [2.0**27, 2.0**27, 30.0], [40.0, 40.0, 40.0]]
+    )
+    evaluator = CuPyCDF(means, concentrations)
+
+    result = evaluator._beta_binomial_cdf(
+        np.asarray([[0, 1, 2], [2, 3, 4]]),
+        np.asarray([4, 4, 5]),
+    )
+
+    assert len(direct_calls) == 1
+    np.testing.assert_array_equal(direct_calls[0][0], [[0.5, 0.6]])
+    np.testing.assert_array_equal(direct_calls[0][1], [[2.0**27, 2.0**27]])
+    assert legacy_shapes == [(2, 2), (3, 1)]
+    np.testing.assert_allclose(
+        result,
+        [[0.4, 0.4, 0.3], [0.4, 0.4, 0.3]],
+        rtol=0.0,
+        atol=1e-16,
+    )
 
 
 def _profile_command(out: Path) -> list[str]:
@@ -389,6 +465,32 @@ def test_gpu_high_concentration_complete_support_matches_cpu_diagnostics():
         predictive_diagnostics(cpu, ac, an),
         rtol=2e-14,
         atol=2e-15,
+    )
+
+
+@requires_gpu
+def test_gpu_mixed_high_concentration_draw_matches_cpu_quantiles():
+    """One extreme draw must recombine with ordinary draws on an actual device."""
+    means = np.asarray(
+        [
+            [0.2, 0.7],
+            [0.3, 0.6],
+            [0.4, 0.5],
+            [0.5, 0.4],
+            [0.6, 0.3],
+        ]
+    )
+    concentrations = np.full_like(means, 20.0)
+    concentrations[2, 0] = 2.0**27
+    an = np.asarray([20, 20])
+    ac = np.asarray([7, 11])
+    cpu = CountPredictive(means, concentrations, cdf_backend="scipy")
+    gpu = CountPredictive(means, concentrations, cdf_backend="cupy")
+
+    np.testing.assert_allclose(gpu.cdf(ac, an), cpu.cdf(ac, an), rtol=2e-14, atol=2e-15)
+    np.testing.assert_array_equal(
+        gpu.quantiles(an, np.asarray([0.025, 0.5, 0.975])),
+        cpu.quantiles(an, np.asarray([0.025, 0.5, 0.975])),
     )
 
 

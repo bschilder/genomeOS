@@ -59,16 +59,16 @@ class CuPyCDF:
 
     def __init__(self, mean_draws: np.ndarray, concentration: np.ndarray | None) -> None:
         self._cp, self._special = _load_cupy()
-        self._direct_observations = (
-            np.zeros(mean_draws.shape[1], dtype=bool)
+        self._high_concentration = (
+            np.zeros(mean_draws.shape, dtype=bool)
             if concentration is None
-            else np.any(
+            else (
                 (mean_draws > 0.0)
                 & (mean_draws < 1.0)
-                & (concentration > _DIRECT_CONCENTRATION),
-                axis=0,
+                & (concentration > _DIRECT_CONCENTRATION)
             )
         )
+        self._direct_observations = np.any(self._high_concentration, axis=0)
         self._mean = self._cp.asarray(mean_draws, dtype=self._cp.float64)
         self._concentration = (
             None
@@ -164,32 +164,61 @@ class CuPyCDF:
         direct = (an <= _DIRECT_MAX_COUNT) & self._direct_observations
         result = np.empty(ac.shape)
         if np.any(direct):
-            columns = np.flatnonzero(direct)
-            count = self._cp.asarray(ac[:, direct], dtype=self._cp.int64)
-            denominator = self._cp.asarray(an[direct], dtype=self._cp.int64)
-            probabilities = beta_binomial_probability_queries(
-                self._mean[:, columns],
-                self._concentration[:, columns],
-                denominator,
-                count,
-                array_module=self._cp,
-                max_count=int(np.max(an[direct])),
+            direct_columns = np.flatnonzero(direct).astype(np.int64, copy=False)
+            routing_masks, routing_groups = np.unique(
+                self._high_concentration[:, direct_columns].T,
+                axis=0,
+                return_inverse=True,
             )
-            result[:, direct] = self._cp.asnumpy(
-                probability_float64(probabilities.lower, array_module=self._cp)
-            )
+            for group_id, high in enumerate(routing_masks):
+                columns = direct_columns[routing_groups == group_id]
+                high_indices = np.flatnonzero(high).astype(np.int64, copy=False)
+                legacy_indices = np.flatnonzero(~high).astype(np.int64, copy=False)
+                count = self._cp.asarray(ac[:, columns], dtype=self._cp.int64)
+                denominator = self._cp.asarray(an[columns], dtype=self._cp.int64)
+                probabilities = beta_binomial_probability_queries(
+                    self._mean[high_indices][:, columns],
+                    self._concentration[high_indices][:, columns],
+                    denominator,
+                    count,
+                    array_module=self._cp,
+                    max_count=int(np.max(an[columns])),
+                )
+                high_result = self._cp.asnumpy(
+                    probability_float64(probabilities.lower, array_module=self._cp)
+                )
+                if legacy_indices.size == 0:
+                    result[:, columns] = high_result
+                    continue
+                legacy_result = self._legacy_beta_binomial_cdf_arrays(
+                    ac[:, columns],
+                    an[columns],
+                    self._mean[legacy_indices][:, columns],
+                    self._concentration[legacy_indices][:, columns],
+                )
+                result[:, columns] = (
+                    high_indices.size * high_result
+                    + legacy_indices.size * legacy_result
+                ) / self._mean.shape[0]
         if np.any(~direct):
             columns = np.flatnonzero(~direct).astype(np.int64, copy=False)
-            result[:, ~direct] = self._legacy_beta_binomial_cdf(
-                ac[:, ~direct], an[~direct], columns
+            result[:, ~direct] = self._legacy_beta_binomial_cdf_arrays(
+                ac[:, ~direct],
+                an[~direct],
+                self._mean[:, columns],
+                self._concentration[:, columns],
             )
         return result
 
-    def _legacy_beta_binomial_cdf(
-        self, ac: np.ndarray, an: np.ndarray, observation_ids: np.ndarray
+    def _legacy_beta_binomial_cdf_arrays(
+        self,
+        ac: np.ndarray,
+        an: np.ndarray,
+        mean_draws: Any,
+        concentration_draws: Any,
     ) -> np.ndarray:
         cp = self._cp
-        count, denominator, observation = self._query_arrays(ac, an, observation_ids)
+        count, denominator, observation = self._query_arrays(ac, an)
         output = cp.empty(count.shape, dtype=cp.float64)
         for row_start in range(0, count.size, CDF_ROW_CHUNK_SIZE):
             row_stop = min(row_start + CDF_ROW_CHUNK_SIZE, count.size)
@@ -197,10 +226,10 @@ class CuPyCDF:
             n = denominator[row_start:row_stop]
             obs = observation[row_start:row_stop]
             total = cp.zeros(row_stop - row_start, dtype=cp.float64)
-            for draw_start in range(0, self._mean.shape[0], CDF_DRAW_CHUNK_SIZE):
-                draw_stop = min(draw_start + CDF_DRAW_CHUNK_SIZE, self._mean.shape[0])
-                mean = self._mean[draw_start:draw_stop, obs].T
-                concentration = self._concentration[draw_start:draw_stop, obs].T
+            for draw_start in range(0, mean_draws.shape[0], CDF_DRAW_CHUNK_SIZE):
+                draw_stop = min(draw_start + CDF_DRAW_CHUNK_SIZE, mean_draws.shape[0])
+                mean = mean_draws[draw_start:draw_stop, obs].T
+                concentration = concentration_draws[draw_start:draw_stop, obs].T
                 boundary_zero = mean == 0.0
                 boundary_one = mean == 1.0
                 interior = ~(boundary_zero | boundary_one)
@@ -249,5 +278,5 @@ class CuPyCDF:
                         "CuPy CDF produced a non-finite or out-of-range component probability"
                     )
                 total += cp.sum(values, axis=1)
-            output[row_start:row_stop] = total / self._mean.shape[0]
+            output[row_start:row_stop] = total / mean_draws.shape[0]
         return cp.asnumpy(output).reshape(ac.shape)
