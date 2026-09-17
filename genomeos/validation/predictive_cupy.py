@@ -5,8 +5,9 @@ host-resident draw and count arrays through a public typed interface; validation
 owned by ``genomeos.validation.predictive``. CuPy is imported only when ``CuPyCDF`` is explicitly
 constructed, and a missing library or CUDA device is an error rather than a CPU fallback.
 
-Beta-binomial tails are exact finite sums, pivoting at probability one half so subtraction always
-uses the directly summed smaller tail. Temporary log-mass grids are bounded by
+Beta-binomial queries through ``AN=65_536`` use the shared complete-support scaled-probability
+core with a CuPy namespace. Larger denominators retain exact finite tail sums, pivoting at
+probability one half so subtraction uses the directly summed smaller tail. Temporary grids are bounded by
 ``CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE`` float64 elements and no
 array dimension depends on the complete allele-number support.
 """
@@ -17,6 +18,11 @@ from typing import Any
 
 import numpy as np
 
+from genomeos.validation.count_probability_adapter import (
+    beta_binomial_probability_queries,
+    probability_float64,
+)
+
 CDF_ROW_CHUNK_SIZE = 4
 CDF_DRAW_CHUNK_SIZE = 128
 CDF_SUPPORT_CHUNK_SIZE = 1024
@@ -24,6 +30,8 @@ MAX_TEMPORARY_ELEMENTS = (
     CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE
 )
 LOG_HALF = float(np.log(0.5))
+_DIRECT_CONCENTRATION = 67_108_864.0
+_DIRECT_MAX_COUNT = 65_536
 
 
 def _load_cupy() -> tuple[Any, Any]:
@@ -51,6 +59,16 @@ class CuPyCDF:
 
     def __init__(self, mean_draws: np.ndarray, concentration: np.ndarray | None) -> None:
         self._cp, self._special = _load_cupy()
+        self._direct_observations = (
+            np.zeros(mean_draws.shape[1], dtype=bool)
+            if concentration is None
+            else np.any(
+                (mean_draws > 0.0)
+                & (mean_draws < 1.0)
+                & (concentration > _DIRECT_CONCENTRATION),
+                axis=0,
+            )
+        )
         self._mean = self._cp.asarray(mean_draws, dtype=self._cp.float64)
         self._concentration = (
             None
@@ -70,16 +88,22 @@ class CuPyCDF:
             raise FloatingPointError("CuPy CDF produced a non-finite or out-of-range probability")
         return result
 
-    def _query_arrays(self, ac: np.ndarray, an: np.ndarray) -> tuple[Any, Any, Any]:
+    def _query_arrays(
+        self, ac: np.ndarray, an: np.ndarray, observation_ids: np.ndarray | None = None
+    ) -> tuple[Any, Any, Any]:
         queries = ac.shape[0]
         observations = ac.shape[1]
+        if observation_ids is None:
+            observation_ids = np.arange(observations, dtype=np.int64)
+        if observation_ids.shape != (observations,) or observation_ids.dtype != np.int64:
+            raise ValueError("observation_ids must identify every query column")
         count = self._cp.asarray(ac.reshape(-1), dtype=self._cp.int64)
         denominator = self._cp.asarray(
             np.broadcast_to(an, (queries, observations)).reshape(-1),
             dtype=self._cp.int64,
         )
         observation = self._cp.asarray(
-            np.tile(np.arange(observations, dtype=np.int64), queries)
+            np.tile(observation_ids, queries)
         )
         return count, denominator, observation
 
@@ -137,8 +161,35 @@ class CuPyCDF:
         return total
 
     def _beta_binomial_cdf(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
+        direct = (an <= _DIRECT_MAX_COUNT) & self._direct_observations
+        result = np.empty(ac.shape)
+        if np.any(direct):
+            columns = np.flatnonzero(direct)
+            count = self._cp.asarray(ac[:, direct], dtype=self._cp.int64)
+            denominator = self._cp.asarray(an[direct], dtype=self._cp.int64)
+            probabilities = beta_binomial_probability_queries(
+                self._mean[:, columns],
+                self._concentration[:, columns],
+                denominator,
+                count,
+                array_module=self._cp,
+                max_count=int(np.max(an[direct])),
+            )
+            result[:, direct] = self._cp.asnumpy(
+                probability_float64(probabilities.lower, array_module=self._cp)
+            )
+        if np.any(~direct):
+            columns = np.flatnonzero(~direct).astype(np.int64, copy=False)
+            result[:, ~direct] = self._legacy_beta_binomial_cdf(
+                ac[:, ~direct], an[~direct], columns
+            )
+        return result
+
+    def _legacy_beta_binomial_cdf(
+        self, ac: np.ndarray, an: np.ndarray, observation_ids: np.ndarray
+    ) -> np.ndarray:
         cp = self._cp
-        count, denominator, observation = self._query_arrays(ac, an)
+        count, denominator, observation = self._query_arrays(ac, an, observation_ids)
         output = cp.empty(count.shape, dtype=cp.float64)
         for row_start in range(0, count.size, CDF_ROW_CHUNK_SIZE):
             row_stop = min(row_start + CDF_ROW_CHUNK_SIZE, count.size)

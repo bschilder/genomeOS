@@ -372,6 +372,27 @@ def test_gpu_near_one_short_lower_tail_matches_repaired_cpu_cdf(
 
 
 @requires_gpu
+def test_gpu_high_concentration_complete_support_matches_cpu_diagnostics():
+    """The B0H failure neighborhood must use the same finite law on both array namespaces."""
+    means = np.asarray([[0.2, 0.37], [0.8, 0.63]])
+    concentrations = np.asarray([[2.0**27, 1e12], [1e12, 2.0**27]])
+    an = np.asarray([20, 20])
+    ac = np.asarray([3, 13])
+    cpu = CountPredictive(means, concentrations, cdf_backend="scipy")
+    gpu = CountPredictive(means, concentrations, cdf_backend="cupy")
+
+    np.testing.assert_array_equal(gpu.cdf(ac, an), cpu.cdf(ac, an))
+    levels = np.asarray([0.025, 0.5, 0.975])
+    np.testing.assert_array_equal(gpu.quantiles(an, levels), cpu.quantiles(an, levels))
+    pd.testing.assert_frame_equal(
+        predictive_diagnostics(gpu, ac, an),
+        predictive_diagnostics(cpu, ac, an),
+        rtol=2e-14,
+        atol=2e-15,
+    )
+
+
+@requires_gpu
 def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch):
     """A negative draw CDF can cancel in the mixture and evade aggregate validation."""
     evaluator = CuPyCDF(np.array([[0.2], [0.3]]), np.ones((2, 1)))
@@ -388,7 +409,7 @@ def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch)
     monkeypatch.setattr(evaluator, "_tail_logsum", injected_tail)
 
     with pytest.raises(FloatingPointError, match="component"):
-        evaluator(np.array([[0]]), np.array([2]))
+        evaluator(np.array([[0]]), np.array([65_537]))
 
 
 @requires_gpu
@@ -403,7 +424,7 @@ def test_gpu_refuses_nan_cdf_component_before_accumulation(monkeypatch):
     )
 
     with pytest.raises(FloatingPointError, match="component"):
-        evaluator(np.array([[0]]), np.array([2]))
+        evaluator(np.array([[0]]), np.array([65_537]))
 
 
 @requires_gpu
@@ -418,7 +439,7 @@ def test_gpu_exact_boundaries_override_irrelevant_invalid_tail_components(monkey
     )
 
     np.testing.assert_array_equal(
-        evaluator(np.array([[-1], [2]]), np.array([2])),
+        evaluator(np.array([[-1], [65_537]]), np.array([65_537])),
         np.array([[0.0], [1.0]]),
     )
 

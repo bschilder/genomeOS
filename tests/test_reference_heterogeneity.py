@@ -386,12 +386,23 @@ def test_nonfinite_diagnostic_error_retains_other_finite_variant_diagnostics(
     assert raised.value.divergence_count == 0
 
 
-def test_fit_refuses_concentration_outside_count_predictive_domain(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_fit_retains_draws_beyond_old_predictive_concentration_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     inference_data = idata_for(("v",))
     inference_data.posterior["rho"].values[:] *= 1e-10
+    expected_rho = inference_data.posterior["rho"].values.copy()
     install_sampler(monkeypatch, inference_data)
-    with pytest.raises(ValueError, match="stable numeric domain"):
-        fit_reference_population_heterogeneity([row("train")], config=config())
+
+    fitted = fit_reference_population_heterogeneity([row("train")], config=config())
+
+    concentration = (1.0 - fitted.rho_draws) / fitted.rho_draws
+    assert float(concentration.max()) > 1.0 / np.sqrt(np.finfo(float).eps)
+    np.testing.assert_array_equal(fitted.rho_draws, expected_rho)
+    predicted = predict_reference_population_heterogeneity(
+        fitted, [row("test", ac=0, an=20)]
+    )
+    assert predicted.marginal_predictive.cdf([0], [20]).shape == (1,)
 
 
 def fitted_for_prediction(monkeypatch: pytest.MonkeyPatch):
