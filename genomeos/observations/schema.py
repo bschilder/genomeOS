@@ -88,16 +88,25 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         "lat": pa.Column(float, pa.Check.in_range(-90.0, 90.0), nullable=False),
         "lon": pa.Column(float, pa.Check.in_range(-180.0, 180.0), nullable=False),
         "radius_km": pa.Column(float, pa.Check.gt(0.0), nullable=False),
-        "ac": pa.Column(int, pa.Check.ge(0), nullable=False),
-        "an": pa.Column(int, pa.Check.gt(0), nullable=False),
+        # pandas' nullable "Int64" rather than numpy int, for the same reason as the boolean
+        # below: schema-level coercion runs before every check, and numpy int casting truncates.
+        # Under `int` an `an` of 200.5 silently became 200 — the coercion §12 forbids. Worse, the
+        # cross-field checks then ran on the truncated value, so `ac=200.9, an=200` passed
+        # `ac_le_an` after being cut down to 200: truncation manufactured conformance to the
+        # invariant rather than merely losing precision. `Int64` casting is safe — it raises on a
+        # non-integral value — while still accepting an integral float like 200.0, which every
+        # adapter computing `2 * n` in floating point produces (#192).
+        "ac": pa.Column("Int64", pa.Check.ge(0), nullable=False),
+        "an": pa.Column("Int64", pa.Check.gt(0), nullable=False),
         # Stable identity in the source system, and the only join from compact P1 rows back to
         # verbose evidence. Local dataframe positions and random UUIDs are not source identities.
         "source_record_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False, unique=True),
         "source": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
         "assay": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        # Years before present; modern = 0, ancient from AADR (§7 time axis).
-        "date_lower": pa.Column(int, pa.Check.ge(0), nullable=False),
-        "date_upper": pa.Column(int, pa.Check.ge(0), nullable=False),
+        # Years before present; modern = 0, ancient from AADR (§7 time axis). "Int64" for the
+        # reason given above the counts: a date bound of 3.9 must not become 3 unremarked.
+        "date_lower": pa.Column("Int64", pa.Check.ge(0), nullable=False),
+        "date_upper": pa.Column("Int64", pa.Check.ge(0), nullable=False),
         "sampling_design": pa.Column(str, pa.Check.isin(SAMPLING_DESIGNS), nullable=False),
         # pandas' nullable "boolean" rather than numpy bool, deliberately. Under numpy bool a
         # null coerces silently to False — i.e. "this cohort was not disease-depleted", the
@@ -141,14 +150,16 @@ CARRIER_OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         "lat": pa.Column(float, pa.Check.in_range(-90.0, 90.0), nullable=False),
         "lon": pa.Column(float, pa.Check.in_range(-180.0, 180.0), nullable=False),
         "radius_km": pa.Column(float, pa.Check.gt(0.0), nullable=False),
-        # The two columns that differ, and the reason this schema exists.
-        "carriers": pa.Column(int, pa.Check.ge(0), nullable=False),
-        "n_individuals": pa.Column(int, pa.Check.gt(0), nullable=False),
+        # The two columns that differ, and the reason this schema exists. "Int64" for the reason
+        # given above `ac` in OBSERVATIONS_SCHEMA: a fraction of a person is not a count, and
+        # numpy int coercion would truncate one into a plausible-looking measurement (#192).
+        "carriers": pa.Column("Int64", pa.Check.ge(0), nullable=False),
+        "n_individuals": pa.Column("Int64", pa.Check.gt(0), nullable=False),
         "source_record_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False, unique=True),
         "source": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
         "assay": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        "date_lower": pa.Column(int, pa.Check.ge(0), nullable=False),
-        "date_upper": pa.Column(int, pa.Check.ge(0), nullable=False),
+        "date_lower": pa.Column("Int64", pa.Check.ge(0), nullable=False),
+        "date_upper": pa.Column("Int64", pa.Check.ge(0), nullable=False),
         "sampling_design": pa.Column(str, pa.Check.isin(SAMPLING_DESIGNS), nullable=False),
         "disease_ascertainment_excluded": pa.Column("boolean", nullable=False),
         "cohort_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),

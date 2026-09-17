@@ -16,11 +16,11 @@
   "coerce": true,
   "columns": {
     "ac": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "an": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than": 0
     },
     "assay": {
@@ -40,11 +40,11 @@
       }
     },
     "date_lower": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "date_upper": {
-      "dtype": "int64",
+      "dtype": "Int64",
       "greater_than_or_equal_to": 0
     },
     "disease_ascertainment_excluded": {
