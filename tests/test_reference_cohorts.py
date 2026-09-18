@@ -2,17 +2,41 @@
 
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 
 import pytest
 
 from genomeos.validation.reference_cohorts import (
     CohortExclusions,
+    QualifiedCohortInputs,
     Sample,
     cohort_columns,
+    qualify_cohort_inputs,
     qualify_real_cohorts,
     select_cohorts,
 )
+
+
+def _qualified_synthetic_inputs() -> QualifiedCohortInputs:
+    metadata = (
+        b"s\tpopulation\thgdp_tgp_meta.Genetic.region\tsample_filters.hard_filtered\n"
+        b"bad1\tp\tr\tfalse\n"
+        b"bad2\tp\tr\tfalse\n"
+        b"s1\tHan\tEast Asia\tfalse\n"
+        b"s2\tNorthernHan\tEast Asia\tfalse\n"
+    )
+    exclusions = (
+        b'{"contamination_ids":["bad1","bad2"],"control_id":"control",'
+        b'"schema_version":"reference_cohort_exclusions_v1"}\n'
+    )
+    return qualify_cohort_inputs(
+        metadata,
+        b"s2\n",
+        exclusions,
+        b"s1\ns2\n",
+        b"s1\n",
+        b"synthetic dependency audit\n",
+    )
 
 
 def test_literal_groups_and_reordered_header():
@@ -126,3 +150,23 @@ def test_real_qualification_hashes_every_private_input_before_parsing(changed_in
     inputs[changed_index] = b"\xffchanged"
     with pytest.raises(ValueError, match="input hash"):
         qualify_real_cohorts(*inputs)
+
+
+def test_qualified_inputs_bind_exact_bytes_cohorts_and_source_columns():
+    inputs = _qualified_synthetic_inputs()
+
+    assert [sample.sample_id for sample in inputs.technical.samples] == ["s1", "s2"]
+    assert [sample.sample_id for sample in inputs.paper.samples] == ["s1"]
+    assert inputs.source_samples == ("bad1", "bad2", "s1", "s2", "control")
+
+    with pytest.raises(ValueError, match="differ from retained bytes"):
+        replace(inputs, source_samples=("s1", "s2", "control"))
+
+
+def test_qualified_inputs_refuse_empty_or_substituted_retained_evidence():
+    inputs = _qualified_synthetic_inputs()
+
+    with pytest.raises(ValueError, match="nonempty bytes"):
+        replace(inputs, dependency_audit=b"")
+    with pytest.raises(ValueError, match="differ from retained bytes"):
+        replace(inputs, technical=inputs.paper)
