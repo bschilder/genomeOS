@@ -11,11 +11,16 @@ from pathlib import Path
 
 import pytest
 
-from genomeos.validation.reference_acquisition_codec import decode_acquisition, encode_acquisition
+from genomeos.validation.reference_acquisition_codec import (
+    decode_acquisition,
+    encode_acquisition,
+    encode_acquisition_review,
+)
 from genomeos.validation.reference_acquisition_types import (
     ACQUISITION_POLICY,
     AcquisitionInputs,
     AcquisitionManifest,
+    AcquisitionReviewBundle,
     AcquisitionSourceReceipt,
     AcquisitionTotals,
     AcquisitionWindowReceipt,
@@ -32,6 +37,12 @@ from genomeos.validation.reference_acquisition_types import (
     VerifiedSource,
 )
 from genomeos.validation.reference_byte_plan import BytePreflight
+from genomeos.validation.reference_cohorts import (
+    PAPER_STAGE,
+    TECHNICAL_STAGE,
+    Cohort,
+    Sample,
+)
 from genomeos.validation.reference_genotypes import (
     MissingOriginCount,
     PopulationCount,
@@ -57,8 +68,13 @@ from genomeos.validation.reference_preparation_types import (
     StageWindowSummary,
     TrackSummary,
 )
+from genomeos.validation.reference_vcf_tokens import HeaderEvidence
 from genomeos.validation.reference_window_manifest import decode_manifest, windows_tsv
 from genomeos.validation.reference_window_types import AUTOSOMES
+from scripts import reference_acquisition_artifacts as acquisition_artifacts
+from scripts import reference_count_replay as count_replay
+from scripts import reference_preparation_artifacts as preparation_artifacts
+from scripts.reference_runtime import campaign_source_hashes
 from scripts.reference_window_artifacts import (
     validate_acquisition,
     validate_preparation,
@@ -67,7 +83,117 @@ from scripts.reference_window_artifacts import (
 )
 from tests.reference_acquisition_fixture import synthetic_preflight_case
 
+_POPULATIONS = tuple(
+    sorted(
+        {
+            "CDX",
+            "Dai",
+            "Cambodian",
+            "Japanese",
+            "ITU",
+            "STU",
+            *(f"population-{index:02d}" for index in range(74)),
+        }
+    )
+)
 _BGZF_EOF = bytes.fromhex("1f8b08040000000000ff0600424302001b0003000000000000000000")
+
+
+def _artifact_cohort(stage: str, size: int) -> Cohort:
+    samples = tuple(
+        Sample(
+            f"sample-{index:04d}",
+            _POPULATIONS[index] if index < len(_POPULATIONS) else _POPULATIONS[0],
+            "synthetic-region",
+            False,
+        )
+        for index in range(size)
+    )
+    return Cohort(stage, samples)
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_artifact_adapters(monkeypatch):
+    technical = _artifact_cohort(TECHNICAL_STAGE, 4_117)
+    paper = _artifact_cohort(PAPER_STAGE, 4_094)
+    source_samples = tuple(value.sample_id for value in technical.samples)
+    def qualify_synthetic(root, hashes, expected=None):
+        for field, relative in acquisition_artifacts._COHORT_PATHS.items():
+            raw = (root / relative).read_bytes()
+            if hashlib.sha256(raw).hexdigest() != getattr(hashes, field):
+                raise ValueError(f"cohort {field} hash mismatch")
+        if expected is not None:
+            assert expected.technical == technical
+            assert expected.paper == paper
+            assert expected.source_samples == source_samples
+        return technical, paper, source_samples
+
+    monkeypatch.setattr(acquisition_artifacts, "_qualify_cohort_files", qualify_synthetic)
+    monkeypatch.setattr(preparation_artifacts, "_qualify_cohort_files", qualify_synthetic)
+    monkeypatch.setattr(
+        acquisition_artifacts,
+        "parse_header",
+        lambda raw, *, expected_contigs, source_chrom, expected_samples: HeaderEvidence(
+            expected_samples,
+            tuple(
+                [(source_chrom, dict(expected_contigs)[source_chrom], "gnomAD_GRCh38")]
+                + [
+                    (chrom, length, "gnomAD_GRCh38")
+                    for chrom, length in expected_contigs
+                    if chrom != source_chrom
+                ]
+            ),
+            (
+                ("GT", "1", "String"),
+                ("GQ", "1", "Integer"),
+                ("DP", "1", "Integer"),
+                ("AD", "R", "Integer"),
+            ),
+            hashlib.sha256(raw).hexdigest(),
+        ),
+    )
+
+    def load_source_header(
+        verified, plan, *, artifact_root, expected_contigs, expected_samples
+    ):
+        raw = (artifact_root / verified.sparse_path).read_bytes().splitlines(keepends=True)[0]
+        return raw, acquisition_artifacts.parse_header(
+            raw,
+            expected_contigs=expected_contigs,
+            source_chrom=plan.source.chrom,
+            expected_samples=expected_samples,
+        )
+
+    monkeypatch.setattr(acquisition_artifacts, "load_source_header", load_source_header)
+
+    def validate_original(*args, artifact_root, raw, offsets, native_keys, **kwargs):
+        del args, offsets, kwargs
+        retained = (artifact_root / raw.path).read_bytes().splitlines()
+        native = (artifact_root / native_keys.path).read_bytes().splitlines()
+        expected = []
+        for line in retained:
+            fields = line.split(b"\t")
+            expected.append(b"\t".join((fields[0], fields[1], fields[3], fields[4], fields[6])))
+        if expected != native:
+            raise ValueError("native_mismatch")
+        return len(retained)
+
+    def validate_original_evidence(*args, artifact_root, raw, offsets, **kwargs):
+        del args, kwargs
+        retained = (artifact_root / raw.path).read_bytes().splitlines(keepends=True)
+        evidence = (artifact_root / offsets.path).read_bytes().splitlines()
+        expected = [b"ordinal\tsource_virtual_offset\traw_sha256"]
+        expected.extend(
+            f"{index}\t{index}\t{hashlib.sha256(line).hexdigest()}".encode()
+            for index, line in enumerate(retained)
+        )
+        if expected != evidence:
+            raise ValueError("artifact_mismatch")
+        return len(retained)
+
+    monkeypatch.setattr(acquisition_artifacts, "validate_original_records", validate_original)
+    monkeypatch.setattr(acquisition_artifacts, "validate_original_evidence", validate_original_evidence)
+    monkeypatch.setattr(count_replay, "parse_header", acquisition_artifacts.parse_header)
 
 
 def _digest(label: str) -> str:
@@ -85,18 +211,22 @@ def _write(root: Path, path: str, raw: bytes) -> ArtifactRef:
     return _ref(path, raw)
 
 
+def _replace_file(files: tuple[ArtifactRef, ...], reference: ArtifactRef) -> tuple[ArtifactRef, ...]:
+    return tuple(reference if value.path == reference.path else value for value in files)
+
+
 def _review_raw(review) -> bytes:
-    value = {
-        "schema_version": review.schema_version,
-        "manifest_sha256": review.manifest_sha256,
-        "preflight_sha256": review.preflight_sha256,
-        "implementation_revision": review.implementation_revision,
-        "implementation_sha256": dict(review.implementation_sha256),
-        "review_locator": review.review_locator,
-        "review_sha256": review.review_sha256,
-        "status": review.status,
-    }
-    return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    return encode_acquisition_review(
+        AcquisitionReviewBundle(
+            "reference_acquisition_review_bundle_v1",
+            review,
+            "a" * 40,
+            campaign_source_hashes(),
+            "reviews/reference-acquisition.md",
+            "e" * 64,
+            "accepted",
+        )
+    )
 
 
 def _rows_raw(columns: tuple[str, ...], rows: tuple[tuple[str, ...], ...]) -> bytes:
@@ -121,20 +251,45 @@ def _cohort() -> CohortInputHashes:
     return CohortInputHashes(*(_digest(field) for field in CohortInputHashes.__dataclass_fields__))
 
 
-def _provenance() -> RunProvenance:
-    source_path = Path(__file__).parents[1] / "genomeos/validation/reference_preparation.py"
+def _provenance(phase: str = "acquisition") -> RunProvenance:
+    core_versions = {
+        "bcftools": "bcftools 1.23.1",
+        "bcftools_fill_tags": (
+            "bcftools  1.23.1 using htslib 1.23.1\n"
+            "plugin at 1.23.1 using htslib 1.23.1"
+        ),
+        "bcftools_htslib": "Using htslib 1.23.1",
+    }
+    if phase == "acquisition":
+        core_versions.update(
+            {
+                "tabix": "tabix (htslib) 1.23.1",
+                "bgzip": "bgzip (htslib) 1.23.1",
+                "gcloud": '{"Google Cloud SDK":"574.0.0"}',
+            }
+        )
+    sdk = (
+        tuple(
+            (name, _digest(name))
+            for name in (
+                "lib/googlecloudsdk/api_lib/storage/api_factory.py",
+                "lib/googlecloudsdk/api_lib/storage/gcs_download.py",
+                "lib/googlecloudsdk/api_lib/storage/gcs_json/download.py",
+                "lib/googlecloudsdk/api_lib/storage/retry_util.py",
+                "lib/surface/storage/cat.py",
+                "lib/surface/storage/objects/describe.py",
+            )
+        )
+        if phase == "acquisition"
+        else ()
+    )
     return RunProvenance(
         "a" * 40,
         platform.python_version(),
-        (
-            (
-                "genomeos/validation/reference_preparation.py",
-                hashlib.sha256(source_path.read_bytes()).hexdigest(),
-            ),
-        ),
-        (("bcftools", "bcftools 1.23.1"),),
-        (("bin/bcftools", _digest("bcftools")),),
-        (),
+        campaign_source_hashes(),
+        tuple(sorted(core_versions.items())),
+        tuple((name, _digest(name)) for name in sorted(core_versions)),
+        sdk,
     )
 
 
@@ -219,7 +374,7 @@ def refused_preparation() -> PreparationManifest:
             _cohort(),
             _ref("inputs/cohort/dependency-audit.json"),
         ),
-        _provenance(),
+        _provenance("preparation"),
         PREPARATION_POLICY,
         windows,
         (),
@@ -255,8 +410,20 @@ def _complete_acquisition_tree(
         "metadata": put("inputs/cohort/metadata.tsv", b"synthetic metadata\n"),
         "outliers": put("inputs/cohort/outliers.txt", b""),
         "exclusions": put("inputs/cohort/exclusions.json", b"{}\n"),
-        "technical_samples": put("inputs/cohort/technical.samples.txt", b""),
-        "paper_samples": put("inputs/cohort/paper.samples.txt", b""),
+        "technical_samples": put(
+            "inputs/cohort/technical.samples.txt",
+            "".join(
+                f"{value.sample_id}\n"
+                for value in _artifact_cohort(TECHNICAL_STAGE, 4_117).samples
+            ).encode(),
+        ),
+        "paper_samples": put(
+            "inputs/cohort/paper.samples.txt",
+            "".join(
+                f"{value.sample_id}\n"
+                for value in _artifact_cohort(PAPER_STAGE, 4_094).samples
+            ).encode(),
+        ),
         "dependency_audit": put("inputs/cohort/dependency-audit.json", b"{}\n"),
     }
     cohort = CohortInputHashes(
@@ -273,20 +440,35 @@ def _complete_acquisition_tree(
     for plan, index in zip(decoded.sources, retained, strict=True):
         chrom = plan.source.chrom
         sparse_relative = f"sources/{chrom}/INCOMPLETE.original.vcf.bgz"
-        prefix = f"synthetic-{chrom}\n".encode()
-        source_raw = prefix + b"x" * (4_096 - len(prefix) - len(_BGZF_EOF)) + _BGZF_EOF
+        header_raw = f"##contig=<ID={chrom}>\n".encode()
+        source_raw = header_raw + b"x" * (4_096 - len(header_raw) - len(_BGZF_EOF)) + _BGZF_EOF
         sparse = root / sparse_relative
         sparse.parent.mkdir(parents=True, exist_ok=True)
         sparse.write_bytes(source_raw)
         index_ref = put(f"{sparse_relative}.tbi", index.raw)
-        metadata_stdout = put(f"runtime/{chrom}.metadata.stdout", b"")
-        metadata_stderr = put(f"runtime/{chrom}.metadata.stderr", b"")
-        range_stderr = put(f"runtime/{chrom}.range.stderr", b"")
+        metadata_raw = (
+            json.dumps(
+                {
+                    "generation": plan.source.vcf.generation,
+                    "size": str(plan.source.vcf.size_bytes),
+                    "md5Hash": plan.source.vcf.md5_b64,
+                    "crc32c": plan.source.vcf.crc32c_b64,
+                },
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            + "\n"
+        ).encode()
+        metadata_stdout = put(f"runtime/{chrom}.metadata.stdout", metadata_raw)
+        metadata_stderr = put(f"runtime/{chrom}.metadata.stdout.stderr", b"")
         receipts = []
         verified_ranges = []
         for byte_range in plan.merged_vcf_ranges:
-            relative = f"ranges/{chrom}-{byte_range.first}-{byte_range.last}.bin"
+            relative = (
+                f"sources/{chrom}/ranges/{byte_range.first}-{byte_range.last}.bin"
+            )
             retained_range = put(relative, source_raw[byte_range.first : byte_range.last + 1])
+            range_stderr = put(f"{relative}.stderr", b"")
             receipts.append(
                 RangeReceipt(
                     chrom,
@@ -307,7 +489,7 @@ def _complete_acquisition_tree(
                 )
             )
             verified_ranges.append(VerifiedRange(byte_range.first, byte_range.last, retained_range))
-        header = put(f"sources/{chrom}/header.vcf", f"##contig=<ID={chrom}>\n".encode())
+        header = put(f"sources/{chrom}/header.vcf", header_raw)
         verified = VerifiedSource(
             plan.source,
             tuple(verified_ranges),
@@ -322,7 +504,15 @@ def _complete_acquisition_tree(
                 plan.source,
                 index_ref,
                 MetadataReceipt(
-                    "verified", None, 1, 0, metadata_stdout, metadata_stderr, 0, False, False
+                    "verified",
+                    None,
+                    1,
+                    len(metadata_raw),
+                    metadata_stdout,
+                    metadata_stderr,
+                    0,
+                    False,
+                    False,
                 ),
                 tuple(receipts),
                 "ready",
@@ -330,8 +520,13 @@ def _complete_acquisition_tree(
                 verified,
                 HeaderReceipt(
                     header,
-                    hashlib.sha256(b"").hexdigest(),
-                    0,
+                    hashlib.sha256(
+                        "".join(
+                            f"{value.sample_id}\n"
+                            for value in _artifact_cohort(TECHNICAL_STAGE, 4_117).samples
+                        ).encode()
+                    ).hexdigest(),
+                    4_117,
                     "exact_metadata_plus_control",
                     "frozen_manifest_assembly_and_lengths",
                     "verified",
@@ -343,11 +538,25 @@ def _complete_acquisition_tree(
         prefix = f"windows/{window.window_id}"
         retained = one_record and window.window_id == "chr1-s1"
         position = window.start0 + 1
-        raw_bytes = (
-            f"chr1\t{position}\t.\tA\tG\t.\tPASS\t.\n".encode()
-            if retained
-            else b""
-        )
+        raw_bytes = b""
+        if retained:
+            raw_bytes = (
+                "\t".join(
+                    (
+                        "chr1",
+                        str(position),
+                        ".",
+                        "A",
+                        "G",
+                        ".",
+                        "PASS",
+                        ".",
+                        "GT:GQ:DP:AD",
+                        *("." for _ in range(4_117)),
+                    )
+                )
+                + "\n"
+            ).encode()
         raw = put(f"{prefix}.original-records.tsv", raw_bytes)
         offsets_bytes = b"ordinal\tsource_virtual_offset\traw_sha256\n"
         if retained:
@@ -361,15 +570,28 @@ def _complete_acquisition_tree(
             f"{prefix}.native.keys.tsv",
             f"chr1\t{position}\tA\tG\tPASS\n".encode() if retained else b"",
         )
-        stderr = put(f"{prefix}.native.stderr", b"")
+        extract_stderr = put(f"{prefix}.extract.stderr", b"")
+        keys_stderr = put(f"{prefix}.keys.stderr", b"")
         runs = (
             NativeRunReceipt(
-                "extract_bcf", ("bcftools", "view", native_bcf.path), "complete", None, 0,
-                native_bcf, stderr, 2_147_483_648, 1_048_576, False, False,
+                "extract_bcf",
+                (
+                    "bcftools", "view", "--no-version", "-r",
+                    f"{window.chrom}:{window.start0 + 1}-{window.end0}",
+                    "--regions-overlap", "0", "-Ob",
+                    f"sources/{window.chrom}/INCOMPLETE.original.vcf.bgz",
+                ),
+                "complete", None, 0,
+                native_bcf, extract_stderr, 2_147_483_648, 1_048_576, False, False,
             ),
             NativeRunReceipt(
-                "query_keys", ("bcftools", "query", native_bcf.path), "complete", None, 0,
-                native_keys, stderr, 2_147_483_648, 1_048_576, False, False,
+                "query_keys",
+                (
+                    "bcftools", "query", "-f",
+                    r"%CHROM\t%POS\t%REF\t%ALT\t%FILTER\n", native_bcf.path,
+                ),
+                "complete", None, 0,
+                native_keys, keys_stderr, 2_147_483_648, 1_048_576, False, False,
             ),
         )
         windows.append(
@@ -535,7 +757,7 @@ def _complete_empty_preparation_tree(root: Path, acquisition_root: Path) -> Prep
     return PreparationManifest(
         "reference_window_counts_v1",
         inputs,
-        _provenance(),
+        _provenance("preparation"),
         PREPARATION_POLICY,
         tuple(windows),
         tuple(tracks),
@@ -554,15 +776,14 @@ def _complete_unavailable_preparation_tree(root: Path, acquisition_root: Path) -
         (acquisition_root / "inputs/window-manifest.json").read_bytes(),
         windows_bytes=(acquisition_root / "inputs/windows.tsv").read_bytes(),
     ).windows[0]
-    population_names = tuple(sorted((*{value for edge in DEPENDENCY_EDGES for value in edge},
-                                     *(f"population-{index:02d}" for index in range(74)))))
+    population_names = _POPULATIONS
     parent_bcf = validate_acquisition(acquisition_root).windows[0].native_bcf
     assert parent_bcf is not None
     stage_receipts = []
     table_refs = {}
     for stage, sample_count in (
-        ("technical_qc_4117", 4_117),
-        ("paper_ancestry_exclusion_4094", 4_094),
+        (TECHNICAL_STAGE, 4_117),
+        (PAPER_STAGE, 4_094),
     ):
         population_counts = tuple(
             PopulationCount(
@@ -602,37 +823,63 @@ def _complete_unavailable_preparation_tree(root: Path, acquisition_root: Path) -
             )
             table_refs[(stage, kind)] = _write(root, f"{stage}.{kind}.tsv", raw)
 
-        prefix = f"native/{stage}.chr1-s1"
-        requested = _write(root, f"{prefix}.requested.samples.txt", b"synthetic\n")
+        prefix = f"native/chr1-s1.{stage}"
+        requested_name = (
+            "technical.samples.txt" if stage == TECHNICAL_STAGE else "paper.samples.txt"
+        )
+        requested_path = root / "inputs/cohort" / requested_name
+        requested = _ref(f"inputs/cohort/{requested_name}", requested_path.read_bytes())
         selected = _write(root, f"{prefix}.selected.bcf", b"BCF\x04\x02")
         recomputed = _write(root, f"{prefix}.recomputed.bcf", b"BCF\x04\x02tags")
-        selected_samples = _write(root, f"{prefix}.selected.samples.txt", b"synthetic\n")
+        cohort = _artifact_cohort(stage, sample_count)
+        selected_samples = _write(
+            root,
+            f"{prefix}.samples.txt",
+            "".join(f"{value.sample_id}\n" for value in cohort.samples).encode(),
+        )
+        token_samples = _write(
+            root,
+            f"{prefix}.tokens.samples.txt",
+            "".join(f"{value.sample_id}\n" for value in cohort.samples).encode(),
+        )
         totals = _write(
             root,
             f"{prefix}.totals.tsv",
-            f"GRCh38:chr1:{selected_window.start0 + 1}:A:G\t0\t0\n".encode(),
+            f"chr1\t{selected_window.start0 + 1}\tA\tG\t0\t0\n".encode(),
         )
         tokens = _write(
             root,
-            f"{prefix}.tokens.tsv",
-            f"chr1\t{selected_window.start0 + 1}\tA\tG\t.\n".encode(),
+            f"{prefix}.tokens.tokens.tsv",
+            (
+                f"chr1\t{selected_window.start0 + 1}\tA\tG\t"
+                + "\t".join("." for _ in cohort.samples)
+                + "\n"
+            ).encode(),
         )
-        stderr = _write(root, f"{prefix}.stderr", b"")
+        stderrs = {
+            "select_cohort": _write(root, f"{prefix}.selected.bcf.stderr", b""),
+            "fill_tags": _write(root, f"{prefix}.recomputed.bcf.stderr", b""),
+            "query_samples": _write(root, f"{prefix}.samples.txt.stderr", b""),
+            "query_totals": _write(root, f"{prefix}.totals.tsv.stderr", b""),
+            "token_samples": _write(root, f"{prefix}.tokens.samples.stderr", b""),
+            "query_tokens": _write(root, f"{prefix}.tokens.tokens.stderr", b""),
+        }
 
         def run(
             operation: str,
             stdout: ArtifactRef,
-            stderr: ArtifactRef = stderr,
+            template: tuple[str, ...],
+            stderr: ArtifactRef,
         ) -> NativeRunReceipt:
             return NativeRunReceipt(
                 operation,
-                ("bcftools", operation, stdout.path),
+                template,
                 "complete",
                 None,
                 0,
                 stdout,
                 stderr,
-                2_147_483_648,
+                1_048_576 if operation == "query_samples" else 2_147_483_648,
                 1_048_576,
                 False,
                 False,
@@ -649,20 +896,65 @@ def _complete_unavailable_preparation_tree(root: Path, acquisition_root: Path) -
             selected_samples,
             totals,
             (
-                run("select_cohort", selected),
-                run("fill_tags", recomputed),
-                run("query_samples", selected_samples),
-                run("query_totals", totals),
+                run(
+                    "select_cohort",
+                    selected,
+                    (
+                        "bcftools", "view", "--no-version", "-S", requested.path,
+                        "-m2", "-M2", "-v", "snps", "-f", "PASS", "-Ob",
+                        external.path,
+                    ),
+                    stderrs["select_cohort"],
+                ),
+                run(
+                    "fill_tags",
+                    recomputed,
+                    (
+                        "bcftools", "+fill-tags", selected.path, "--no-version",
+                        "-Ob", "--", "-t", "AC,AN",
+                    ),
+                    stderrs["fill_tags"],
+                ),
+                run(
+                    "query_samples",
+                    selected_samples,
+                    ("bcftools", "query", "-l", recomputed.path),
+                    stderrs["query_samples"],
+                ),
+                run(
+                    "query_totals",
+                    totals,
+                    (
+                        "bcftools", "query", "-f",
+                        r"%CHROM\t%POS\t%REF\t%ALT\t%INFO/AC\t%INFO/AN\n",
+                        recomputed.path,
+                    ),
+                    stderrs["query_totals"],
+                ),
             ),
             "complete",
             None,
         )
         token_control = NativeTokenFiles(
             selected,
-            selected_samples,
+            token_samples,
             tokens,
-            run("query_samples", selected_samples),
-            run("query_tokens", tokens),
+            run(
+                "query_samples",
+                token_samples,
+                ("bcftools", "query", "-l", selected.path),
+                stderrs["token_samples"],
+            ),
+            run(
+                "query_tokens",
+                tokens,
+                (
+                    "bcftools", "query", "-f",
+                    r"%CHROM\t%POS\t%REF\t%ALT[\t%GT:%GQ:%DP:%AD]\n",
+                    selected.path,
+                ),
+                stderrs["query_tokens"],
+            ),
             "complete",
             None,
         )
@@ -693,7 +985,7 @@ def _complete_unavailable_preparation_tree(root: Path, acquisition_root: Path) -
             0,
             0,
         )
-        for stage in ("technical_qc_4117", "paper_ancestry_exclusion_4094")
+        for stage in (TECHNICAL_STAGE, PAPER_STAGE)
         for kind in ("called", "quality")
     )
     (root / "windows.tsv").write_bytes(
@@ -851,9 +1143,267 @@ def test_refused_ledger_keeps_all_expected_window_and_stage_outcomes():
     assert not acquisition.complete and not preparation.complete and preparation.tracks == ()
 
 
+def test_preparation_window_receipt_binds_stage_states_to_failure_point():
+    before_scan = refused_preparation().windows[0]
+    with pytest.raises(ValueError, match="failure point"):
+        replace(
+            before_scan,
+            stages=tuple(replace(stage, state="refused") for stage in before_scan.stages),
+        )
+
+    after_scan_stages = tuple(
+        PreparationStageReceipt(stage, "refused", "native_mismatch", None, None, None)
+        for stage in (TECHNICAL_STAGE, PAPER_STAGE)
+    )
+    after_scan = replace(
+        before_scan,
+        reason="native_mismatch",
+        raw_records=1,
+        stages=after_scan_stages,
+    )
+    with pytest.raises(ValueError, match="first stage outcome"):
+        replace(
+            after_scan,
+            stages=(
+                replace(after_scan.stages[0], reason="record_invalid"),
+                after_scan.stages[1],
+            ),
+        )
+
+
 def test_manifest_dataclass_rejects_mutated_policy_before_encoding():
     with pytest.raises(ValueError, match="policy"):
         replace(refused_acquisition(), policy=((*ACQUISITION_POLICY[:-1], ("source_complete", "true"))))
+
+
+@pytest.mark.parametrize("receipt_kind", ["metadata", "range", "native"])
+def test_process_receipts_reject_size_and_overflow_flag_disagreement(receipt_kind):
+    digest = "a" * 64
+    stderr = ArtifactRef("stderr.partial", 0, digest)
+    with pytest.raises(ValueError, match="size disagrees"):
+        if receipt_kind == "metadata":
+            MetadataReceipt(
+                "refused", "generation_unavailable", 1, 1_048_577,
+                ArtifactRef("metadata.partial", 1_048_577, digest), stderr,
+                1, False, False,
+            )
+        elif receipt_kind == "range":
+            RangeReceipt(
+                "chr1", "123", 0, 9, 10, 11, 1, "refused", "transfer_failed",
+                digest, ArtifactRef("range.partial", 11, digest), stderr,
+                1, False, False,
+            )
+        else:
+            NativeRunReceipt(
+                "query_keys", ("bcftools", "query"), "refused", "native_encoding_refused", 1,
+                ArtifactRef("stdout.partial", 11, digest), stderr,
+                10, 10, False, False,
+            )
+
+
+@pytest.mark.parametrize(
+    "factory,pattern",
+    [
+        (
+            lambda output, error: RangeReceipt(
+                "chr1", "123", 0, 9, 10, 10, 1, "partial", "transfer_failed",
+                output.sha256, output, error, 0, False, False,
+            ),
+            "zero-exit range refusal",
+        ),
+        (
+            lambda output, error: MetadataReceipt(
+                "refused", "generation_unavailable", 1, output.size_bytes,
+                output, error, 0, False, False,
+            ),
+            "zero-exit metadata refusal",
+        ),
+        (
+            lambda output, error: MetadataReceipt(
+                "refused", "metadata_mismatch", 1, output.size_bytes,
+                output, error, 1, False, False,
+            ),
+            "failed metadata process",
+        ),
+        (
+            lambda output, error: NativeRunReceipt(
+                "query_keys", ("bcftools", "query"), "refused", "native_mismatch", 1,
+                output, error, 10, 10, False, False,
+            ),
+            "failed native process",
+        ),
+    ],
+)
+def test_process_receipts_reject_reasons_contradicted_by_process_evidence(factory, pattern):
+    digest = hashlib.sha256(b"").hexdigest()
+    output = ArtifactRef("stdout.partial", 10, digest)
+    error = ArtifactRef("stderr.partial", 0, digest)
+    with pytest.raises(ValueError, match=pattern):
+        factory(output, error)
+
+
+def test_source_receipt_rejects_ranges_attempted_after_metadata_refusal(tmp_path):
+    manifest, _ = _complete_acquisition_tree(tmp_path)
+    source = manifest.sources[0]
+    refused_metadata = replace(
+        source.metadata,
+        state="refused",
+        reason="metadata_mismatch",
+        retained=replace(source.metadata.retained, path=f"{source.metadata.retained.path}.partial"),
+        stderr=replace(source.metadata.stderr, path=f"{source.metadata.stderr.path}.partial"),
+    )
+    with pytest.raises(ValueError, match="metadata refusal"):
+        replace(
+            source,
+            metadata=refused_metadata,
+            state="refused",
+            reason="metadata_mismatch",
+            verified=None,
+            header=None,
+        )
+
+
+def test_source_receipt_binds_its_reason_to_metadata_refusal(tmp_path):
+    manifest, _ = _complete_acquisition_tree(tmp_path)
+    source = manifest.sources[0]
+    refused_metadata = replace(
+        source.metadata,
+        state="refused",
+        reason="metadata_mismatch",
+        retained=replace(source.metadata.retained, path=f"{source.metadata.retained.path}.partial"),
+        stderr=replace(source.metadata.stderr, path=f"{source.metadata.stderr.path}.partial"),
+    )
+    not_attempted = tuple(
+        replace(
+            item,
+            requested_bytes=0,
+            received_bytes=0,
+            adapter_invocations=0,
+            state="not_attempted",
+            reason="metadata_mismatch",
+            sha256=None,
+            retained=None,
+            stderr=None,
+            exit_code=None,
+        )
+        for item in source.ranges
+    )
+    with pytest.raises(ValueError, match="source outcome"):
+        replace(
+            source,
+            metadata=refused_metadata,
+            ranges=not_attempted,
+            state="refused",
+            reason="generation_unavailable",
+            verified=None,
+            header=None,
+        )
+
+
+def test_acquisition_window_receipt_enforces_raw_then_native_state_machine(tmp_path):
+    manifest, _ = _complete_acquisition_tree(tmp_path, one_record=True)
+    window = manifest.windows[0]
+
+    with pytest.raises(ValueError, match="native execution disagrees"):
+        replace(
+            window,
+            state="refused",
+            reason="native_mismatch",
+            raw_records=None,
+            native_records=None,
+            raw=None,
+            offsets=None,
+        )
+
+    with pytest.raises(ValueError, match="native execution disagrees"):
+        replace(
+            window,
+            state="refused",
+            reason="record_invalid",
+            native_records=None,
+            native_bcf=None,
+            native_keys=None,
+            native_runs=(),
+        )
+
+    with pytest.raises(ValueError, match="invalid refusal"):
+        replace(
+            window,
+            state="refused",
+            reason="native_mismatch",
+            native_records=None,
+            native_keys=None,
+            native_runs=window.native_runs[:1],
+        )
+
+
+def test_source_receipt_rejects_range_attempt_after_first_failure(tmp_path):
+    manifest, _ = _complete_acquisition_tree(tmp_path)
+    source = manifest.sources[0]
+    first = source.ranges[0]
+    partial_ref = replace(first.retained, path=f"{first.retained.path}.partial")
+    partial_stderr = replace(first.stderr, path=f"{first.stderr.path}.partial")
+    partial = replace(
+        first,
+        state="partial",
+        reason="transfer_failed",
+        retained=partial_ref,
+        stderr=partial_stderr,
+        exit_code=1,
+    )
+    with pytest.raises(ValueError, match="continued after"):
+        replace(
+            source,
+            ranges=(partial, first),
+            state="refused",
+            reason="transfer_failed",
+            verified=None,
+            header=None,
+        )
+
+
+def test_verified_source_ranges_must_be_the_transport_receipts(tmp_path):
+    manifest, _ = _complete_acquisition_tree(tmp_path)
+    source = manifest.sources[0]
+    first = source.verified.ranges[0]
+    alternate = _write(tmp_path, "alternate-range.bin", b"z" * first.range_file.size_bytes)
+    changed_verified = replace(
+        source.verified,
+        ranges=(replace(first, range_file=alternate), *source.verified.ranges[1:]),
+    )
+    with pytest.raises(ValueError, match="transport receipts"):
+        replace(source, verified=changed_verified)
+
+
+def test_refused_preparation_window_cannot_retain_complete_stage_summaries(tmp_path):
+    acquisition_root = tmp_path / "acquisition"
+    counts_root = tmp_path / "counts"
+    acquisition_root.mkdir()
+    counts_root.mkdir()
+    acquisition, preflight = _complete_acquisition_tree(acquisition_root)
+    write_acquisition_manifest(acquisition_root, acquisition, preflight=preflight)
+    preparation = _complete_empty_preparation_tree(counts_root, acquisition_root)
+    window = preparation.windows[0]
+    with pytest.raises(ValueError, match="stage summaries"):
+        replace(
+            window,
+            state="refused",
+            reason="invalid_input",
+            retained_variants=None,
+            site_dispositions=None,
+        )
+
+
+def test_refused_preparation_manifest_requires_a_refused_window(tmp_path):
+    acquisition_root = tmp_path / "acquisition"
+    counts_root = tmp_path / "counts"
+    acquisition_root.mkdir()
+    counts_root.mkdir()
+    acquisition, preflight = _complete_acquisition_tree(acquisition_root)
+    write_acquisition_manifest(acquisition_root, acquisition, preflight=preflight)
+    preparation = _complete_empty_preparation_tree(counts_root, acquisition_root)
+    with pytest.raises(ValueError, match="requires a refused window"):
+        replace(preparation, tracks=(), status="refused", complete=False)
 
 
 def test_acquisition_writer_is_manifest_last_exact_and_read_back(tmp_path):
@@ -879,6 +1429,91 @@ def test_acquisition_writer_leaves_no_manifest_after_prewrite_failure(tmp_path):
     assert not (tmp_path / "acquisition.json").exists()
 
 
+def test_acquisition_writer_rejects_rehashed_unrelated_inventory_file(tmp_path):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    unrelated = _write(tmp_path, "unrelated.bin", b"not a campaign artifact\n")
+    changed = replace(
+        manifest,
+        files=tuple(sorted((*manifest.files, unrelated), key=lambda value: value.path)),
+    )
+
+    with pytest.raises(ValueError, match="noncanonical path"):
+        write_acquisition_manifest(tmp_path, changed, preflight=preflight)
+    assert not (tmp_path / "acquisition.json").exists()
+
+
+@pytest.mark.parametrize(
+    "role",
+    (
+        "retained_index",
+        "metadata_stdout",
+        "metadata_stderr",
+        "range_stdout",
+        "range_stderr",
+        "sparse_source",
+        "header",
+        "original_records",
+        "record_offsets",
+    ),
+)
+def test_acquisition_validator_rejects_relocated_role_artifacts(tmp_path, role):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    source = manifest.sources[0]
+    window = manifest.windows[0]
+    paths = {
+        "retained_index": source.retained_index.path,
+        "metadata_stdout": source.metadata.retained.path,
+        "metadata_stderr": source.metadata.stderr.path,
+        "range_stdout": source.ranges[0].retained.path,
+        "range_stderr": source.ranges[0].stderr.path,
+        "sparse_source": source.verified.sparse_path,
+        "header": source.header.header.path,
+        "original_records": window.raw.path,
+        "record_offsets": window.offsets.path,
+    }
+    old = paths[role]
+    new = f"{old}.moved"
+    (tmp_path / old).rename(tmp_path / new)
+    payload = json.loads((tmp_path / "acquisition.json").read_bytes())
+
+    def relocate(value):
+        if type(value) is dict:
+            return {key: relocate(item) for key, item in value.items()}
+        if type(value) is list:
+            return [relocate(item) for item in value]
+        return new if value == old else value
+
+    payload = relocate(payload)
+    payload["files"].sort(key=lambda value: value["path"])
+    (tmp_path / "acquisition.json").write_text(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
+    )
+    with pytest.raises(ValueError, match="fixed layout"):
+        validate_acquisition(tmp_path)
+
+
+def test_acquisition_writer_removes_its_manifest_after_postwrite_source_change(
+    tmp_path, monkeypatch
+):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    original = acquisition_artifacts._check_provenance
+    calls = 0
+
+    def changed(provenance, *, phase):
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise ValueError("imported source hash map is incomplete or changed")
+        return original(provenance, phase=phase)
+
+    monkeypatch.setattr(acquisition_artifacts, "_check_provenance", changed)
+    with pytest.raises(ValueError, match="source hash"):
+        write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    assert calls == 3
+    assert not (tmp_path / "acquisition.json").exists()
+
+
 def test_acquisition_validator_rejects_artifact_tamper_and_symlink(tmp_path):
     manifest, preflight = _complete_acquisition_tree(tmp_path)
     write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
@@ -893,6 +1528,151 @@ def test_acquisition_validator_rejects_artifact_tamper_and_symlink(tmp_path):
     target.unlink()
     os.symlink(real, target)
     with pytest.raises(ValueError, match="symlink"):
+        validate_acquisition(tmp_path)
+
+
+@pytest.mark.parametrize("mutation", ["tool_version", "executable_set", "sdk_set"])
+def test_acquisition_validator_rejects_runtime_provenance_mutation(tmp_path, mutation):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    provenance = manifest.provenance
+    if mutation == "tool_version":
+        versions = tuple(
+            (name, "bcftools 1.22" if name == "bcftools" else value)
+            for name, value in provenance.tool_versions
+        )
+        provenance = replace(provenance, tool_versions=versions)
+    elif mutation == "executable_set":
+        provenance = replace(
+            provenance,
+            executable_sha256=provenance.executable_sha256[:-1],
+        )
+    else:
+        provenance = replace(
+            provenance,
+            sdk_source_sha256=provenance.sdk_source_sha256[:-1],
+        )
+    (tmp_path / "acquisition.json").write_bytes(
+        encode_acquisition(replace(manifest, provenance=provenance))
+    )
+    with pytest.raises(ValueError, match="runtime|toolchain|SDK"):
+        validate_acquisition(tmp_path)
+
+
+def test_acquisition_validator_rejects_header_receipt_self_assertion(tmp_path):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    source = manifest.sources[0]
+    changed_source = replace(source, header=replace(source.header, sample_count=4_116))
+    changed = replace(manifest, sources=(changed_source, *manifest.sources[1:]))
+    (tmp_path / "acquisition.json").write_bytes(encode_acquisition(changed))
+    with pytest.raises(ValueError, match="header receipt"):
+        validate_acquisition(tmp_path)
+
+
+def test_acquisition_validator_rejects_sparse_allocation_mutation(tmp_path):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    source = manifest.sources[0]
+    changed_source = replace(
+        source,
+        verified=replace(
+            source.verified,
+            allocated_size_bytes=source.verified.allocated_size_bytes + 1,
+        ),
+    )
+    changed = replace(manifest, sources=(changed_source, *manifest.sources[1:]))
+    (tmp_path / "acquisition.json").write_bytes(encode_acquisition(changed))
+    with pytest.raises(ValueError, match="allocated|allocation"):
+        validate_acquisition(tmp_path)
+
+
+def test_acquisition_validator_binds_refused_source_child_windows(tmp_path):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    source = manifest.sources[0]
+    refused_source = replace(
+        source,
+        state="refused",
+        reason="header_invalid",
+        header=None,
+    )
+    changed = replace(
+        manifest,
+        sources=(refused_source, *manifest.sources[1:]),
+        complete=False,
+    )
+    (tmp_path / "acquisition.json").write_bytes(encode_acquisition(changed))
+    with pytest.raises(
+        ValueError,
+        match="noncanonical path|header failure is not reproduced|contradictory child",
+    ):
+        validate_acquisition(tmp_path)
+
+
+def test_acquisition_validator_rejects_dependency_audit_byte_mutation(tmp_path):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    _write(tmp_path, "inputs/cohort/dependency-audit.json", b'{"tampered":true}\n')
+    with pytest.raises(ValueError, match="cohort dependency_audit hash mismatch"):
+        validate_acquisition(tmp_path)
+
+
+@pytest.mark.parametrize("mutation", ["argv", "output_path"])
+def test_acquisition_validator_rejects_native_command_lineage_mutation(tmp_path, mutation):
+    manifest, preflight = _complete_acquisition_tree(tmp_path)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    window = manifest.windows[0]
+    extract, query = window.native_runs
+    files = manifest.files
+    if mutation == "argv":
+        extract = replace(
+            extract,
+            argv_template=tuple(
+                token for token in extract.argv_template if token != "--regions-overlap"
+            ),
+        )
+        changed_window = replace(window, native_runs=(extract, query))
+    else:
+        old = tmp_path / extract.stdout.path
+        moved_path = f"windows/{window.window_id}.moved.bcf"
+        old.rename(tmp_path / moved_path)
+        moved = _ref(moved_path, (tmp_path / moved_path).read_bytes())
+        extract = replace(extract, stdout=moved)
+        changed_window = replace(window, native_bcf=moved, native_runs=(extract, query))
+        files = tuple(moved if value.path == window.native_bcf.path else value for value in files)
+    changed = replace(manifest, windows=(changed_window, *manifest.windows[1:]), files=files)
+    (tmp_path / "acquisition.json").write_bytes(encode_acquisition(changed))
+    with pytest.raises(ValueError, match="argv|fixed layout"):
+        validate_acquisition(tmp_path)
+
+
+@pytest.mark.parametrize("mutation", ["false_reason", "false_artifact_reason", "raw_count"])
+def test_refused_acquisition_revalidates_known_window_evidence(tmp_path, mutation):
+    manifest, preflight = _complete_acquisition_tree(tmp_path, one_record=True)
+    write_acquisition_manifest(tmp_path, manifest, preflight=preflight)
+    window = manifest.windows[0]
+    refused = replace(
+        window,
+        state="refused",
+        reason="artifact_mismatch" if mutation == "false_artifact_reason" else "native_mismatch",
+        raw_records=2 if mutation == "raw_count" else window.raw_records,
+        native_records=None,
+    )
+    windows = (refused, *manifest.windows[1:])
+    ledger = _rows_raw(
+        ("window_id", "chrom", "state", "reason", "raw_records", "native_records"),
+        _window_rows(windows, "native_records"),
+    )
+    ledger_ref = _write(tmp_path, "windows.tsv", ledger)
+    changed = replace(
+        manifest,
+        windows=windows,
+        files=_replace_file(manifest.files, ledger_ref),
+        complete=False,
+    )
+    (tmp_path / "acquisition.json").write_bytes(encode_acquisition(changed))
+    with pytest.raises(ValueError, match="refused native (evidence|failure)|record count"):
         validate_acquisition(tmp_path)
 
 
@@ -934,6 +1714,25 @@ def test_complete_empty_preparation_writes_four_real_header_only_tracks(tmp_path
     assert all((counts_root / track.table.path).read_text().count("\n") == 1 for track in preparation.tracks)
 
 
+def test_preparation_writer_rejects_rehashed_unrelated_inventory_file(tmp_path):
+    acquisition_root = tmp_path / "acquisition"
+    counts_root = tmp_path / "counts"
+    acquisition_root.mkdir()
+    counts_root.mkdir()
+    acquisition, preflight = _complete_acquisition_tree(acquisition_root)
+    write_acquisition_manifest(acquisition_root, acquisition, preflight=preflight)
+    preparation = _complete_empty_preparation_tree(counts_root, acquisition_root)
+    unrelated = _write(counts_root, "work/unrelated.part", b"not a role artifact\n")
+    changed = replace(
+        preparation,
+        files=tuple(sorted((*preparation.files, unrelated), key=lambda value: value.path)),
+    )
+
+    with pytest.raises(ValueError, match="noncanonical path"):
+        write_preparation_manifest(counts_root, changed, acquisition_root=acquisition_root)
+    assert not (counts_root / "manifest.json").exists()
+
+
 def test_preparation_validator_rejects_parent_rebinding_and_table_tamper(tmp_path):
     acquisition_root = tmp_path / "acquisition"
     counts_root = tmp_path / "counts"
@@ -969,6 +1768,30 @@ def test_preparation_writer_failure_does_not_publish_manifest(tmp_path):
     (counts_root / "windows.tsv").write_bytes(b"broken\n")
     with pytest.raises(ValueError):
         write_preparation_manifest(counts_root, preparation, acquisition_root=acquisition_root)
+    assert not (counts_root / "manifest.json").exists()
+
+
+def test_preparation_writer_removes_its_manifest_after_failed_readback(
+    tmp_path, monkeypatch
+):
+    acquisition_root = tmp_path / "acquisition"
+    counts_root = tmp_path / "counts"
+    acquisition_root.mkdir()
+    counts_root.mkdir()
+    acquisition, preflight = _complete_acquisition_tree(acquisition_root)
+    write_acquisition_manifest(acquisition_root, acquisition, preflight=preflight)
+    preparation = _complete_empty_preparation_tree(counts_root, acquisition_root)
+    original = preparation_artifacts._write_exclusive
+
+    def changed(path, raw):
+        original(path, raw)
+        path.write_bytes(b"{}\n")
+
+    monkeypatch.setattr(preparation_artifacts, "_write_exclusive", changed)
+    with pytest.raises(ValueError, match="readback"):
+        write_preparation_manifest(
+            counts_root, preparation, acquisition_root=acquisition_root
+        )
     assert not (counts_root / "manifest.json").exists()
 
 
@@ -1027,7 +1850,8 @@ def test_writer_rejects_mutated_imported_source_hash(tmp_path):
     assert not (tmp_path / "acquisition.json").exists()
 
 
-def test_preparation_validator_rejects_rehashed_dependency_edge_mutation(tmp_path):
+@pytest.mark.parametrize("mutation", ["edge", "population", "audit"])
+def test_preparation_validator_rejects_rehashed_dependency_mutation(tmp_path, mutation):
     acquisition_root = tmp_path / "acquisition"
     counts_root = tmp_path / "counts"
     acquisition_root.mkdir()
@@ -1040,7 +1864,15 @@ def test_preparation_validator_rejects_rehashed_dependency_edge_mutation(tmp_pat
     relative = "technical_qc_4117.dependencies.json"
     path = counts_root / relative
     document = json.loads(path.read_bytes())
-    document["edges"][0] = ["CDX", "Japanese"]
+    if mutation == "edge":
+        document["edges"][0] = ["CDX", "Japanese"]
+    elif mutation == "population":
+        document["populations"] = sorted(
+            "population-renamed" if value == "population-73" else value
+            for value in document["populations"]
+        )
+    else:
+        document["audit_sha256"] = "0" * 64
     path.write_bytes((json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n").encode())
     reference = _ref(relative, path.read_bytes())
     tracks = tuple(
@@ -1091,5 +1923,8 @@ def test_preparation_validator_rejects_rehashed_semantic_mutation(tmp_path, muta
     files = tuple(reference if value.path == relative else value for value in preparation.files)
     changed = replace(preparation, tracks=tracks, files=files)
     (counts_root / "manifest.json").write_bytes(encode_preparation(changed))
-    with pytest.raises(ValueError, match="stage-window summary|frozen acquisition"):
+    with pytest.raises(
+        ValueError,
+        match="parent genotype evidence|stage-window summary|frozen acquisition",
+    ):
         validate_preparation(counts_root, acquisition_root=acquisition_root)

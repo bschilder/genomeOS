@@ -153,9 +153,23 @@ class PreparationStageReceipt:
                  "invalid native count control")
         _require(self.native_tokens is None or type(self.native_tokens) is NativeTokenFiles,
                  "invalid native token control")
-        if self.state != "complete":
+        if self.state == "not_attempted":
             _require(self.summary is None and self.native_control is None and self.native_tokens is None,
-                     "incomplete stage cannot carry admitted outputs")
+                     "not-attempted stage cannot carry outputs")
+        elif self.state == "refused":
+            _require(self.summary is None, "refused stage cannot carry an admitted summary")
+            nested_failure = (
+                self.native_control
+                if self.native_control is not None and self.native_control.state == "refused"
+                else self.native_tokens
+                if self.native_tokens is not None and self.native_tokens.state == "refused"
+                else None
+            )
+            if nested_failure is not None:
+                _require(
+                    self.reason == nested_failure.reason,
+                    "refused stage reason differs from its failed native evidence",
+                )
         else:
             _require(type(self.summary) is StageWindowSummary, "complete stage requires summary")
             expected_samples = 4_117 if self.stage == TECHNICAL_STAGE else 4_094
@@ -211,7 +225,31 @@ class PreparationWindowReceipt:
             if value is not None:
                 _count(value, field)
         if self.state == "refused":
-            _require(self.site_dispositions is None, "refused window cannot admit site dispositions")
+            _require(
+                self.retained_variants is None
+                and self.site_dispositions is None
+                and all(value.summary is None for value in self.stages),
+                "refused window cannot admit retained counts or stage summaries",
+            )
+            expected_stage_state = "not_attempted" if self.raw_records is None else "refused"
+            _require(
+                all(
+                    value.state == expected_stage_state
+                    for value in self.stages
+                ),
+                "refused window stage outcomes disagree with its failure point",
+            )
+            _require(
+                self.stages[0].reason == self.reason,
+                "refused window reason differs from the first stage outcome",
+            )
+            if expected_stage_state == "not_attempted":
+                _require(
+                    all(value.reason == self.reason for value in self.stages),
+                    "pre-scan refusal reason must propagate to both stages",
+                )
+            if self.raw_records is not None:
+                _require(self.raw_records > 0, "post-scan refusal requires observed records")
             return
         _require(self.raw_records is not None and self.retained_variants is not None,
                  "complete window requires known counts")
@@ -349,10 +387,22 @@ class PreparationManifest:
                  "preparation completeness disagrees with status")
         if self.status == "refused":
             _require(not self.tracks, "refused preparation cannot admit tracks")
+            _require(
+                any(value.state == "refused" for value in self.windows),
+                "refused preparation requires a refused window",
+            )
         else:
             expected_tracks = tuple((stage, kind) for stage in _STAGES for kind in _KINDS)
             _require(tuple((value.stage, value.kind) for value in self.tracks) == expected_tracks,
                      "complete preparation requires four ordered tracks")
+            _require(
+                all(
+                    track.table.path == f"{track.stage}.{track.kind}.tsv"
+                    and track.dependencies.path == f"{track.stage}.dependencies.json"
+                    for track in self.tracks
+                ),
+                "complete preparation track paths differ from the fixed layout",
+            )
             _require(
                 all(
                     value.state != "refused"
