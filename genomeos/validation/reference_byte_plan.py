@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Literal
 
@@ -548,12 +549,30 @@ def encode_preflight(preflight: BytePreflight) -> bytes:
     ).encode()
 
 
+def _crc32c_table() -> tuple[int, ...]:
+    values = []
+    for byte in range(256):
+        value = byte
+        for _ in range(8):
+            value = (value >> 1) ^ (0x82F63B78 if value & 1 else 0)
+        values.append(value)
+    return tuple(values)
+
+
+_CRC32C_TABLE = _crc32c_table()
+
+
+def crc32c_chunks(chunks: Iterable[bytes]) -> int:
+    """Return streaming RFC 3720 CRC32C using one table lookup per byte."""
+    value = 0xFFFFFFFF
+    for chunk in chunks:
+        _require(type(chunk) is bytes, "CRC32C chunks must be bytes")
+        for byte in chunk:
+            value = _CRC32C_TABLE[(value ^ byte) & 0xFF] ^ (value >> 8)
+    return value ^ 0xFFFFFFFF
+
+
 def crc32c(data: bytes) -> int:
     """Return the RFC 3720 CRC32C value using the reflected Castagnoli polynomial."""
     _require(type(data) is bytes, "CRC32C input must be bytes")
-    value = 0xFFFFFFFF
-    for byte in data:
-        value ^= byte
-        for _ in range(8):
-            value = (value >> 1) ^ (0x82F63B78 if value & 1 else 0)
-    return value ^ 0xFFFFFFFF
+    return crc32c_chunks((data,))
