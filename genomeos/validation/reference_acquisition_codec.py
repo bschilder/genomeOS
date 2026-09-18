@@ -7,7 +7,11 @@ import types
 from dataclasses import fields, is_dataclass
 from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
-from genomeos.validation.reference_acquisition_types import AcquisitionManifest
+from genomeos.validation.reference_acquisition_types import (
+    AcquisitionManifest,
+    AcquisitionReviewBundle,
+    ReviewReceipt,
+)
 
 _MAPPING_FIELDS = frozenset(
     {
@@ -117,6 +121,12 @@ def encode_acquisition(value: AcquisitionManifest) -> bytes:
                        allow_nan=False) + "\n").encode("utf-8")
 
 
+def _encode_record(value: object, expected: type, field_name: str) -> bytes:
+    _require(type(value) is expected, f"value must be {expected.__name__}")
+    return (json.dumps(_wire(value), sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+                       allow_nan=False) + "\n").encode("utf-8")
+
+
 def decode_acquisition(raw: bytes) -> AcquisitionManifest:
     """Decode canonical JSON with exact keys and reconstruct every nested record."""
     _require(type(raw) is bytes and bool(raw), "acquisition manifest must be nonempty bytes")
@@ -132,4 +142,52 @@ def decode_acquisition(raw: bytes) -> AcquisitionManifest:
     value = _typed(document, AcquisitionManifest, field_name="acquisition")
     _require(type(value) is AcquisitionManifest, "invalid acquisition manifest")
     _require(encode_acquisition(value) == raw, "acquisition JSON bytes are not canonical")
+    return value
+
+
+def encode_review(value: ReviewReceipt) -> bytes:
+    """Encode an independently supplied preflight review receipt."""
+    return _encode_record(value, ReviewReceipt, "review")
+
+
+def decode_review(raw: bytes) -> ReviewReceipt:
+    """Decode a canonical independently supplied preflight review receipt."""
+    _require(type(raw) is bytes and bool(raw), "review must be nonempty bytes")
+    try:
+        document = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_pairs,
+            parse_constant=_constant,
+            parse_float=lambda value: (_ for _ in ()).throw(ValueError(f"float is forbidden: {value}")),
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("invalid review JSON") from error
+    value = _typed(document, ReviewReceipt, field_name="review")
+    _require(type(value) is ReviewReceipt and encode_review(value) == raw,
+             "review JSON bytes are not canonical")
+    return value
+
+
+def encode_acquisition_review(value: AcquisitionReviewBundle) -> bytes:
+    """Encode the accepted preflight and current acquisition implementation reviews."""
+    return _encode_record(value, AcquisitionReviewBundle, "acquisition review")
+
+
+def decode_acquisition_review(raw: bytes) -> AcquisitionReviewBundle:
+    """Decode one canonical review bundle that binds both required review decisions."""
+    _require(type(raw) is bytes and bool(raw), "acquisition review must be nonempty bytes")
+    try:
+        document = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_pairs,
+            parse_constant=_constant,
+            parse_float=lambda value: (_ for _ in ()).throw(ValueError(f"float is forbidden: {value}")),
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise ValueError("invalid acquisition review JSON") from error
+    value = _typed(document, AcquisitionReviewBundle, field_name="acquisition review")
+    _require(
+        type(value) is AcquisitionReviewBundle and encode_acquisition_review(value) == raw,
+        "acquisition review JSON bytes are not canonical",
+    )
     return value
