@@ -69,7 +69,7 @@ genomeos = "genomeos.cli:main"
 include = ["genomeos*"]
 
 [tool.setuptools.package-data]
-genomeos = ["static/*.html"]
+genomeos = ["static/*.html", "covariates/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
