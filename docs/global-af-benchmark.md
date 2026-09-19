@@ -1,9 +1,10 @@
 # Global allele-frequency benchmark runner
 
-This repository includes an offline, deterministic runner for the B0 engineering baseline in
-issue #189. B0 updates an explicit Beta prior with pooled training allele counts separately for
-each variant, samples the resulting latent frequency, and scores held-out binomial allele counts.
-The sampled frequency is shared across held-out observations of the same variant within a draw.
+This repository includes offline, deterministic runners for the B0 engineering baseline and the
+unchanged current single-variant spatial GP in issue #189. B0 updates an explicit Beta prior with
+pooled training allele counts separately for each variant, samples the resulting latent frequency,
+and scores held-out binomial allele counts. The sampled frequency is shared across held-out
+observations of the same variant within a draw.
 
 B0 is not a spatial/current-resident model and has no cohort, survey-design, or recruited-sample
 heterogeneity term. Its outputs always state `publication_eligible=false`. A successful synthetic
@@ -50,6 +51,52 @@ geographic footprint, qualify recruitment as representative of present-day resid
 the fitted approximation or serving behavior, or demonstrate an accuracy improvement. The HbS, G6PD,
 carrier-screening, external-validation, redistribution and publication gates remain unchanged,
 and no serving-path inference is authorized.
+
+## Current spatial-GP runner
+
+`scripts/benchmark_spatial_gp.py` composes the same unseen-cohort interface with the reviewed
+split builder and exact count diagnostics. It accepts exactly one modern allele per run, keeps
+every declared cohort in one held-out block, and makes one batched query and scoring call per
+fitted fold. The loop over folds remains because every fold is a distinct posterior fit; the
+adapter adds no observation-by-draw loop.
+
+The fit configuration is a JSON object containing every `FitConfig` field. Requiring the complete
+resolved object prevents library or source defaults from silently changing a rerun. Generate a
+starting file from the installed checkout, inspect it, and commit or hash the reviewed copy with
+the research inputs:
+
+```bash
+PYTHONPATH=. python -c \
+  'import json; from dataclasses import asdict; from genomeos.surfaces.config import FitConfig; print(json.dumps(asdict(FitConfig()), indent=2, sort_keys=True))' \
+  > /tmp/current-gp-fit-config.json
+
+PYTHONPATH=. python scripts/benchmark_spatial_gp.py \
+  --observations /path/to/one-variant-observations.parquet \
+  --assignments /path/to/reviewed-assignments.tsv \
+  --dependencies /path/to/dependencies.tsv \
+  --fit-config /tmp/current-gp-fit-config.json \
+  --data-version DATA_VERSION \
+  --buffer-km 300 \
+  --seed 42 \
+  --cdf-backend scipy \
+  --evidence-kind observational_research \
+  --assignment-review-status reviewed \
+  --dependency-review-status not_checked \
+  --out /new/output/directory
+```
+
+The observations input may be TSV or Parquet. Assignments and dependencies remain literal TSV
+contracts. `assignment-review-status=algorithmic_development_unreviewed` and
+`dependency-review-status=not_checked` preserve useful development runs without misrepresenting
+their qualification. Declaring either input `reviewed` is caller-supplied provenance, not an
+automated scientific decision. Every output remains `publication_eligible=false`, and the manifest
+sets `scientific_promotion_decision=not_made` even when all computational folds complete.
+
+Before fitting, the runner verifies that the selected likelihood's exact scorer can cover every
+denominator. A single unsupported row produces a failed status for every planned fold, zero fits,
+and a nonzero exit after writing the complete evidence record. It never drops that row, switches
+likelihoods, or reports a partial benchmark. Fit/prediction failures inside otherwise supported
+folds are likewise retained while later folds continue.
 
 ## Source-tree invocation
 
@@ -101,9 +148,11 @@ The reviewed dependency TSV has exactly these columns:
 source_record_id_a  source_record_id_b
 ```
 
-Each row is an undirected dependency edge between known observation IDs. A header-only file means
-there are no reviewed explicit edges. Shared cohort IDs remain automatically connected by the
-public split builder; an empty dependency file does not certify participant independence.
+Each row is an undirected dependency edge between known observation IDs. For the B0 runner, a
+header-only file means there are no reviewed explicit edges. The current-GP runner additionally
+requires an explicit dependency review status, so an empty diagnostic file can remain
+`not_checked`. Shared cohort IDs remain automatically connected by the public split builder; an
+empty dependency file never certifies participant independence.
 
 `evidence_kind` is supplied explicitly as either `synthetic_fixture` or
 `observational_research`. This label does not verify permissions, study independence, registry
@@ -130,6 +179,11 @@ as the recorded Git revision. The runner puts its own checkout first on the impo
 that every imported science module resolves to the expected file under that root, and hashes those
 resolved files; a conflicting editable installation cannot silently change executed science.
 
+The current-GP runner writes the same five files. Its prediction rows contain the block, variant,
+observed counts, and deterministic fit/prediction seeds instead of B0 posterior-alpha/beta fields.
+Its manifest identifies `B2-current`, records the complete resolved `FitConfig`, both review-state
+declarations, the selected CDF backend, and hashes of the fitted observation/prediction modules.
+
 For each completed fold and variant, the posterior is
 `Beta(prior_alpha + sum(AC), prior_beta + sum(AN - AC))` using training rows only. A held-out
 variant absent from training makes the fold infeasible; it is never assigned a prior-only result or
@@ -138,11 +192,12 @@ and recorded per fold.
 
 ## Gates that remain open
 
-This fixture runner is only a reusable WP0/WP1 engineering prerequisite. It does not complete the
-qualified input inventory, certify dependencies or a present-day resident target, reproduce the
-current production model, establish genuinely sealed external evidence, implement all required
-holdout tracks/strata/joint-site scores, or provide an empirical B0/B1/B2 comparison. Those WP0 and
-WP1 gates remain required on reviewed, permitted data.
+These runners are reusable WP0/WP1 engineering prerequisites. They do not complete the qualified
+input inventory, certify dependencies or a present-day resident target, establish genuinely
+sealed external evidence, implement all required holdout tracks/strata/joint-site scores, or
+provide an empirical B0/B1/B2 comparison. The current HbS development table also exceeds the
+admitted beta-binomial scorer domain, so the current-GP runner truthfully produces an incomplete
+ledger before fitting. Those WP0 and WP1 gates remain required on reviewed, permitted data.
 
 WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
 admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
