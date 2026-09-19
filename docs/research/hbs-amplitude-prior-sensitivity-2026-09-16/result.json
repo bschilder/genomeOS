@@ -1,0 +1,233 @@
+{
+  "any_candidate_advances_to_full_refit": false,
+  "candidates": [
+    {
+      "advance_to_full_refit": false,
+      "decision_reason": "reference_prior",
+      "effective_sample_size": 500.0,
+      "half_normal_scale": 1.0,
+      "importance_diagnostics_pass": true,
+      "maximum_normalized_weight": 0.002,
+      "summaries": {
+        "amplitude": {
+          "mean": 1.673858856898017,
+          "median": 1.6599380944723854,
+          "q025": 1.3416013901216386,
+          "q25": 1.547487378699892,
+          "q75": 1.7979084062012942,
+          "q975": 2.0817762157863617
+        },
+        "endemic_minus_nordic_frequency": {
+          "mean": 0.10007956370582688,
+          "median": 0.09928064542304806,
+          "q025": 0.08121093741605517,
+          "q25": 0.09309412110171575,
+          "q75": 0.10666077327771921,
+          "q975": 0.1209571547685692
+        },
+        "intercept": {
+          "mean": -4.608473958062882,
+          "median": -4.601413274539313,
+          "q025": -5.10281455734454,
+          "q25": -4.728238621734969,
+          "q75": -4.453811897683233,
+          "q975": -4.246125623862202
+        },
+        "invlogit_intercept": {
+          "mean": 0.010078610679600123,
+          "median": 0.009937886846577178,
+          "q025": 0.006042872732621849,
+          "q25": 0.008764535197626358,
+          "q75": 0.011500337735732195,
+          "q975": 0.014117449793221989
+        },
+        "population_weighted_endemic_peak_frequency": {
+          "mean": 0.11022865530493448,
+          "median": 0.10971666211487821,
+          "q025": 0.0925987557772806,
+          "q25": 0.10338352425654442,
+          "q75": 0.11551111964735492,
+          "q975": 0.13117561235856806
+        },
+        "population_weighted_nordic_frequency": {
+          "mean": 0.010149091599107589,
+          "median": 0.009842939406449326,
+          "q025": 0.005054558416289726,
+          "q25": 0.008065286827079085,
+          "q75": 0.011843620810360944,
+          "q975": 0.017154750491579777
+        }
+      }
+    },
+    {
+      "advance_to_full_refit": false,
+      "decision_reason": "fails_importance_diagnostics_or_background_peak_direction",
+      "effective_sample_size": 473.6612860450597,
+      "half_normal_scale": 0.75,
+      "importance_diagnostics_pass": true,
+      "maximum_normalized_weight": 0.0034000775586867397,
+      "summaries": {
+        "amplitude": {
+          "mean": 1.6291489890734887,
+          "median": 1.6230615882987827,
+          "q025": 1.305196434751326,
+          "q25": 1.501680368898793,
+          "q75": 1.7451066599463383,
+          "q975": 2.011634415787243
+        },
+        "endemic_minus_nordic_frequency": {
+          "mean": 0.099562120808944,
+          "median": 0.0988796525881562,
+          "q025": 0.08064627921904334,
+          "q25": 0.09251927021607291,
+          "q75": 0.10590090768263188,
+          "q975": 0.1209571547685692
+        },
+        "intercept": {
+          "mean": -4.595062194571098,
+          "median": -4.585913153922309,
+          "q025": -5.075590513530287,
+          "q25": -4.718316527512865,
+          "q75": -4.446237293867348,
+          "q975": -4.246125623862202
+        },
+        "invlogit_intercept": {
+          "mean": 0.010200296663351312,
+          "median": 0.010091558692772364,
+          "q025": 0.006208608540918454,
+          "q25": 0.008851157046966887,
+          "q75": 0.011586765824876272,
+          "q975": 0.014117449793221989
+        },
+        "population_weighted_endemic_peak_frequency": {
+          "mean": 0.10981365566965211,
+          "median": 0.10929386708047965,
+          "q025": 0.09104292840058914,
+          "q25": 0.10300245761597553,
+          "q75": 0.11507457592255724,
+          "q975": 0.13180137694358435
+        },
+        "population_weighted_nordic_frequency": {
+          "mean": 0.010251534860708147,
+          "median": 0.00997941078666548,
+          "q025": 0.005191557993923818,
+          "q25": 0.008340906976859432,
+          "q75": 0.011889166230717455,
+          "q975": 0.017154750491579777
+        }
+      }
+    },
+    {
+      "advance_to_full_refit": false,
+      "decision_reason": "fails_importance_diagnostics_or_background_peak_direction",
+      "effective_sample_size": 285.56730225456016,
+      "half_normal_scale": 0.5,
+      "importance_diagnostics_pass": true,
+      "maximum_normalized_weight": 0.011782591644824635,
+      "summaries": {
+        "amplitude": {
+          "mean": 1.528665516590563,
+          "median": 1.526233309237624,
+          "q025": 1.2600942292027386,
+          "q25": 1.4041078756588263,
+          "q75": 1.6349151543061902,
+          "q975": 1.8564917798999903
+        },
+        "endemic_minus_nordic_frequency": {
+          "mean": 0.09848648870377658,
+          "median": 0.09833103083570462,
+          "q025": 0.07975693972589787,
+          "q25": 0.09087173094804944,
+          "q75": 0.1043794072639566,
+          "q975": 0.12102714082588109
+        },
+        "intercept": {
+          "mean": -4.566407826293291,
+          "median": -4.561772972089151,
+          "q025": -4.990890076364898,
+          "q25": -4.684126163371107,
+          "q75": -4.437751857807551,
+          "q975": -4.253762508673061
+        },
+        "invlogit_intercept": {
+          "mean": 0.010464409858768736,
+          "median": 0.010335586468049229,
+          "q025": 0.00675368718973747,
+          "q25": 0.009156195414076161,
+          "q75": 0.011684349228032133,
+          "q975": 0.014011551966945864
+        },
+        "population_weighted_endemic_peak_frequency": {
+          "mean": 0.10900713310194851,
+          "median": 0.1083113583146369,
+          "q025": 0.09038806692856576,
+          "q25": 0.10168241827956664,
+          "q75": 0.11457963022825735,
+          "q975": 0.1324875893889591
+        },
+        "population_weighted_nordic_frequency": {
+          "mean": 0.010520644398171863,
+          "median": 0.010223214618880627,
+          "q025": 0.005621208783266821,
+          "q25": 0.008719697956300378,
+          "q75": 0.012000150530649116,
+          "q975": 0.01794630865836965
+        }
+      }
+    }
+  ],
+  "claims_excluded": [
+    "full_refit_equivalence",
+    "heldout_predictive_improvement",
+    "calibration_improvement",
+    "golden_test_pass",
+    "model_promotion"
+  ],
+  "decision_rule": "A candidate is only worth a full refit if it passes both importance-weight diagnostics, lowers the Nordic frequency, and does not lower the endemic-minus-Nordic contrast. This preflight cannot establish held-out count improvement, calibration, or publication eligibility.",
+  "environmental_covariates_used": false,
+  "figure": {
+    "path": "amplitude-prior-sensitivity.png",
+    "sha256": "282aebf5ea7c854ed638b4ab82cbbdfb332c613afb3cbce42cbe3cef0eae36f6"
+  },
+  "inputs": {
+    "cells": {
+      "bytes": 10629496,
+      "sha256": "d20aeb9f70b57c6dccb1c21afd45708ac35d0b2b692aae480076be23dd06241e"
+    },
+    "draw_manifest": {
+      "bytes": 8656,
+      "sha256": "1acfb7c0b1fd11fb98e472a737caa26da9705a72a2457596d7cb192044f2b26e"
+    },
+    "fit": {
+      "bytes": 112500636,
+      "sha256": "004d6d3cd71cff861968cb091bbd9e97cd8b3a7548c1c9d10491b5da9d5c2a78"
+    },
+    "frequency_draws": {
+      "bytes": 155688128,
+      "sha256": "a3b6f12e6da45d713f3b6e6e3d784833f5ed5c1de28c977265fe5405c27b9fd5"
+    }
+  },
+  "method": "self_normalized_importance_reweighting",
+  "n_cells": 77844,
+  "n_selected_draws": 500,
+  "preregistration_sha256": "d38afa8e2246de7610af3dd12324a32cf4d26fdb159a3dfc1a999654a3626ecd",
+  "publication_eligible": false,
+  "schema": "hbs-amplitude-prior-sensitivity-result-v1",
+  "scientific_acceptance": false,
+  "sources": {
+    "runner": {
+      "path": "scripts/preflight_hbs_amplitude_prior.py",
+      "sha256": "f41ae7b460bde68e636dd4b488cf1a83e73808bf5132070b1f7282a9ff762de7"
+    },
+    "science_module": {
+      "path": "genomeos/validation/amplitude_prior_sensitivity.py",
+      "sha256": "5e66702de2612421227fde9efbcf0a8953faa7845607ae032a2c3bf6333c92dc"
+    }
+  },
+  "strata": {
+    "endemic_peak_cells": 2840,
+    "endemic_peak_population_weight": 469297217.41729176,
+    "nordic_supported_cells": 804,
+    "nordic_supported_population_weight": 36562481.13659091
+  }
+}
