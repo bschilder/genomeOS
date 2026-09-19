@@ -122,6 +122,7 @@ def load_fit(path: str | Path) -> SurfaceFit:
     if fit_format == FIT_FORMAT and isinstance(fit, SurfaceFit):
         return fit
     fields = {field: getattr(fit, field) for field in _FIT_FIELDS}
-    if hasattr(fit, "prediction_metadata"):
-        fields["prediction_metadata"] = fit.prediction_metadata
+    for metadata_field in ("prediction_metadata", "footprint_metadata"):
+        if hasattr(fit, metadata_field):
+            fields[metadata_field] = getattr(fit, metadata_field)
     return SurfaceFit(**fields)
