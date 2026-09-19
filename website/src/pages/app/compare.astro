@@ -1,0 +1,16 @@
+---
+import AtlasComparison from '../../components/atlas/AtlasComparison';
+import SiteLayout from '../../layouts/SiteLayout.astro';
+import { sitePath } from '../../lib/paths';
+---
+
+<SiteLayout
+  title="Compare geographic evidence"
+  description="Inspect independently published geographic evidence with synchronized navigation and explicit scientific limits."
+>
+  <AtlasComparison
+    client:load
+    dataBaseUrl={sitePath('/data/atlas/')}
+    cesiumToken={import.meta.env.CESIUM_TOKEN ?? ''}
+  />
+</SiteLayout>

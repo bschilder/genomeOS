@@ -1,5 +1,7 @@
 /** Inferred-surface presentation controls for Atlas design §11. */
 
+import { useAtlasControlId } from './AtlasScope';
+
 import type {
   EdgeColorMode,
   ExplorerState,
@@ -41,18 +43,21 @@ export function InferredSurfaceControls({
   onPalette,
   onSurfaceOpacity,
 }: InferredSurfaceControlsProps) {
+  const controlId = useAtlasControlId();
   return (
     <div className="atlas-control-grid atlas-control-grid--surface">
       <div className="atlas-field">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-surface-palette">Surface palette</label>
+          <label htmlFor={controlId('atlas-surface-palette')}>
+            Surface palette
+          </label>
           <InfoTip label="surface palette">
             Color changes presentation only. Posterior estimates default to
             Rainbow; uncertainty defaults to Plasma.
           </InfoTip>
         </span>
         <select
-          id="atlas-surface-palette"
+          id={controlId('atlas-surface-palette')}
           value={state.surfacePalette}
           disabled={disabled}
           onChange={(event) => onPalette(event.target.value as PaletteId)}
@@ -70,7 +75,9 @@ export function InferredSurfaceControls({
 
       <div className="atlas-field">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-surface-geometry">Surface geometry</label>
+          <label htmlFor={controlId('atlas-surface-geometry')}>
+            Surface geometry
+          </label>
           <InfoTip label="surface geometry">
             Triangles interpolate stored cell values. Hexagons preserve cells;
             Honmoon traces luminous value contours, with optional fill. All are
@@ -78,7 +85,7 @@ export function InferredSurfaceControls({
           </InfoTip>
         </span>
         <select
-          id="atlas-surface-geometry"
+          id={controlId('atlas-surface-geometry')}
           value={state.surfaceGeometry}
           disabled={disabled}
           onChange={(event) =>
@@ -95,7 +102,7 @@ export function InferredSurfaceControls({
 
       <div className="atlas-field atlas-field--range">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-surface-opacity">
+          <label htmlFor={controlId('atlas-surface-opacity')}>
             Surface opacity · {Math.round(state.surfaceOpacity * 100)}%
           </label>
           <InfoTip label="surface opacity">
@@ -104,7 +111,7 @@ export function InferredSurfaceControls({
           </InfoTip>
         </span>
         <input
-          id="atlas-surface-opacity"
+          id={controlId('atlas-surface-opacity')}
           type="range"
           min="0.2"
           max="1"
@@ -146,9 +153,9 @@ export function InferredSurfaceControls({
 
       <div className="atlas-elevation">
         <div className="atlas-check-row">
-          <label htmlFor="atlas-statistical-elevation">
+          <label htmlFor={controlId('atlas-statistical-elevation')}>
             <input
-              id="atlas-statistical-elevation"
+              id={controlId('atlas-statistical-elevation')}
               type="checkbox"
               checked={state.elevation}
               onChange={(event) => onElevation(event.target.checked)}

@@ -1,5 +1,8 @@
 /** Loading, correction, and refusal states for Atlas design §11. */
 
+import { useContext } from 'react';
+import { AtlasScope, atlasPortalTarget } from './AtlasScope';
+
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -31,11 +34,12 @@ function NavbarAtlasStatus({
   activity: ExplorerActivity | null;
   status: ExplorerLoadStatus;
 }) {
+  const scope = useContext(AtlasScope);
   const [target, setTarget] = useState<Element | null>(null);
 
   useEffect(() => {
-    setTarget(document.querySelector('[data-atlas-status-slot]'));
-  }, []);
+    setTarget(atlasPortalTarget(scope, '[data-atlas-status-slot]'));
+  }, [scope]);
 
   if (!target) return null;
   const ready = status === 'ready';
