@@ -1,0 +1,179 @@
+{
+  "arms": {
+    "piel_printed_2013": {
+      "link": {
+        "coefficients": [
+          -1.1935355765078037,
+          0.357179270047146,
+          -0.059001971738364974,
+          0.0032488192553342585
+        ],
+        "derivative_floor": 1.427584950874319e-10
+      },
+      "min_an": 50,
+      "n_below_min_an": 31,
+      "n_distinct_frequencies": 854,
+      "n_eligible": 963,
+      "n_total": 994,
+      "normal_fit": "plug_in_mle",
+      "normal_location": -3.813757690595778,
+      "normal_scale": 1.5122739303586257,
+      "optimization_starts": 5,
+      "plotting_position": "hazen_rank_average",
+      "rmse_logit": 0.19424421816720372,
+      "smoothed_frequency_max": 0.1825726141078838,
+      "smoothed_frequency_min": 0.00011932462263588091,
+      "smoothing_formula": "(AC + 1) / (AN + AC + 2)",
+      "smoothing_rule": "piel_printed_2013"
+    },
+    "uniform_binomial_conjugate": {
+      "link": {
+        "coefficients": [
+          -1.0414507186189519,
+          0.4172991490335711,
+          -0.056906343037861615,
+          0.002586738943444074
+        ],
+        "derivative_floor": 2.153098809663012e-10
+      },
+      "min_an": 50,
+      "n_below_min_an": 31,
+      "n_distinct_frequencies": 820,
+      "n_eligible": 963,
+      "n_total": 994,
+      "normal_fit": "plug_in_mle",
+      "normal_location": -3.767386780495042,
+      "normal_scale": 1.5542454400811205,
+      "optimization_starts": 5,
+      "plotting_position": "hazen_rank_average",
+      "rmse_logit": 0.19458760281541235,
+      "smoothed_frequency_max": 0.2222222222222222,
+      "smoothed_frequency_min": 0.00011933174224343676,
+      "smoothing_formula": "(AC + 1) / (AN + 2)",
+      "smoothing_rule": "uniform_binomial_conjugate"
+    }
+  },
+  "artifact": "piel-flexible-link-method-preflight",
+  "configuration": {
+    "diagnostic_latent": [
+      -4.599069228154752
+    ],
+    "min_an": 50,
+    "normal_fit": "plug_in_mle",
+    "plotting_position": "hazen_rank_average"
+  },
+  "diagnostics": {
+    "frequency": {
+      "inverse_logit": [
+        0.009960976725976536
+      ],
+      "piel_printed_2013": [
+        0.012125566368418774
+      ],
+      "stukel_piel_printed_2013": [
+        0.01204560314134028
+      ],
+      "stukel_uniform_binomial_conjugate": [
+        0.011877772040181016
+      ],
+      "uniform_binomial_conjugate": [
+        0.011939173445185056
+      ]
+    },
+    "latent": [
+      -4.599069228154752
+    ],
+    "stukel_aligned_frequency": {
+      "piel_printed_2013": [
+        0.01204560314134028
+      ],
+      "uniform_binomial_conjugate": [
+        0.011877772040181016
+      ]
+    }
+  },
+  "environmental_covariates_used": [],
+  "evidence_kind": "method_preflight",
+  "executed_source_sha256": {
+    "genomeos/surfaces/piel_flexible_link.py": "227b086d0cb580e699fdfd6d875ef6678156979f29c314ab16cb9bec0822bf00",
+    "scripts/preflight_piel_flexible_link.py": "0a6da56405528e0ba703ca55048d550593e56997a60815df9f59eaf2b0e0f98a"
+  },
+  "inputs": {
+    "observations": {
+      "artifact": "piel-comparable-observations.parquet",
+      "rows": 994,
+      "sha256": "466034e22015ce5f4e0b90067adb2232491b625591d50c8ac83d955565345b4b"
+    }
+  },
+  "issue": 103,
+  "limitations": [
+    "Piel's fitted cubic coefficients are unpublished.",
+    "The appendix's printed smoothing equation conflicts with its stated conjugate model.",
+    "The appendix does not fully specify the posterior CDF fitting procedure; this run uses a named plug-in MLE quantile interpretation.",
+    "This preflight does not test spatial held-out count prediction or national burden.",
+    "The observed HbS range does not identify Stukel's positive-latent branch; alpha_positive is fixed at zero and explicitly reported as unfitted."
+  ],
+  "outputs": {
+    "link_curves.csv": "3fd7dea5ae32d67955a5ba8d9c7ce6d0fa4c7851dd48b2a302a0b642872332df",
+    "piel-flexible-link-preflight.png": "1c2e734ff4ed60188a9dadc2121ebb3a58f799b22db50792cc2b9281e9caef42",
+    "smoothed_frequency_quantiles.csv": "9d49b14b9272adf3a8b6b761084ae3c43dc1a21e9bd9ae3e486a06d01a0cdfff"
+  },
+  "primary_source": {
+    "appendix": "Web Appendix 1 pp. 12-13; PMC3547249 supplementary file mmc1.pdf",
+    "article": "Piel FB et al. Lancet 2013;381:142-151; doi:10.1016/S0140-6736(12)61229-X",
+    "stukel_article": "Stukel TA. JASA 1988;83:426-431; doi:10.1080/01621459.1988.10478613"
+  },
+  "publication_eligible": false,
+  "schema_version": 2,
+  "spatial_fit_performed": false,
+  "stukel_arms": {
+    "piel_printed_2013": {
+      "link": {
+        "alpha_negative": 0.6444069361361099,
+        "alpha_positive": 0.0
+      },
+      "maximum_fitted_latent": -0.4712076252466244,
+      "min_an": 50,
+      "minimum_fitted_latent": -3.2625816042830946,
+      "n_below_min_an": 31,
+      "n_distinct_frequencies": 854,
+      "n_eligible": 963,
+      "n_total": 994,
+      "normal_location": -3.813757690595778,
+      "normal_scale": 1.5122739303586257,
+      "optimization_objective_spread": 1.2789769243681803e-13,
+      "optimization_starts": 5,
+      "positive_branch_fitted": false,
+      "rmse_logit": 0.21247288452895358,
+      "smoothing_formula": "(AC + 1) / (AN + AC + 2)",
+      "smoothing_rule": "piel_printed_2013",
+      "stukel_location": -1.8668946147648617,
+      "stukel_scale": 0.4255266906199752,
+      "successful_starts": 5
+    },
+    "uniform_binomial_conjugate": {
+      "link": {
+        "alpha_negative": 0.4468158362906432,
+        "alpha_positive": 0.0
+      },
+      "maximum_fitted_latent": -0.2829964973341246,
+      "min_an": 50,
+      "minimum_fitted_latent": -3.992522214874487,
+      "n_below_min_an": 31,
+      "n_distinct_frequencies": 820,
+      "n_eligible": 963,
+      "n_total": 994,
+      "normal_location": -3.767386780495042,
+      "normal_scale": 1.5542454400811205,
+      "optimization_objective_spread": 1.2079226507921703e-13,
+      "optimization_starts": 5,
+      "positive_branch_fitted": false,
+      "rmse_logit": 0.21032957401602045,
+      "smoothing_formula": "(AC + 1) / (AN + 2)",
+      "smoothing_rule": "uniform_binomial_conjugate",
+      "stukel_location": -2.1377593561043087,
+      "stukel_scale": 0.5654929128842523,
+      "successful_starts": 5
+    }
+  }
+}
