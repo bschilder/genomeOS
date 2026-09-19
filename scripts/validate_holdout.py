@@ -1,6 +1,6 @@
 """Held-out predictive validation of the HbS surface (design §7, §8).
 
-    python scripts/validate_holdout.py --observations data/raw/map_hbs_surveys.csv \
+    python scripts/validate_holdout.py --observations data/curated/map_hbs_surveys.csv \
         --out data/validation --n-folds 5 --n-inducing 150
 
 Runs both spatially blocked and random folds. The gap between them is the point: random folds
@@ -21,7 +21,12 @@ from genomeos.validation.crossval import cross_validate
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--observations", type=Path, required=True)
+    ap.add_argument(
+        "--observations",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--n-folds", type=int, default=5)
     # 150, not 800. Inducing points closer together than ~0.25 of the fitted correlation range

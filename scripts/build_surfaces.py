@@ -1,6 +1,6 @@
 """Fit every variant in one batch, and publish what was excluded (design §12, P2; #40).
 
-    python scripts/build_surfaces.py --hbs data/raw/map_hbs_surveys.csv \
+    python scripts/build_surfaces.py --hbs data/curated/map_hbs_surveys.csv \
         --g6pd data/raw/map_g6pd_surveys.csv --out data/surfaces
 
 This is the multi-variant entry point. It exists to make one property true: **every variant that
@@ -46,7 +46,7 @@ LENGTHSCALE_SIGMA: dict[str, float] = {"phenotype:g6pd-deficiency": 0.4}
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hbs", type=Path, help="MAP HbS survey export CSV")
+    ap.add_argument("--hbs", type=Path, help="curated MAP HbS CSV with explicit spatial support")
     ap.add_argument("--g6pd", type=Path, help="MAP G6PD survey export CSV")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--data-version", default="map-2026-08")

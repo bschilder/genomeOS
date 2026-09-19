@@ -792,7 +792,12 @@ def export_catalog(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--store", type=Path, required=True)
-    parser.add_argument("--hbs-csv", type=Path, required=True)
+    parser.add_argument(
+        "--hbs-csv",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     parser.add_argument("--g6pd-csv", type=Path, required=True)
     parser.add_argument("--afnd-frequencies", type=Path)
     parser.add_argument("--afnd-populations", type=Path)

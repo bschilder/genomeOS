@@ -1,7 +1,7 @@
 """Publish per-cell surface artifacts from saved fits (design §5, §6).
 
     python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
-        --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv \
+        --hbs data/curated/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv \
         --population-cells data/store/worldpop-res4-2020.parquet \
         --population-source worldpop-1km-unconstrained \
         --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif \
@@ -73,7 +73,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fits", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--hbs", type=Path)
+    ap.add_argument("--hbs", type=Path, help="curated MAP HbS CSV with explicit spatial support")
     ap.add_argument("--g6pd", type=Path)
     # AFND holds one file per corpus rather than per variant, so publishing it means publishing
     # every allele the adapter retains, not one named layer.
