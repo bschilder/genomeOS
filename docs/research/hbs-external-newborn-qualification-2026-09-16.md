@@ -19,11 +19,12 @@ through model and candidate selection.
 **Engineering component and public interface.** This is a methods/source qualification note only.
 It changes no observation, schema, fitter, benchmark, surface, burden result, or serving path.
 
-**Assumptions, refusals, and consumers.** Publication after Piel 2013 establishes that these
-participants were not reused in the Piel survey compilation, but does not establish population
-representativeness or independence from every later paper. Hospital location is not silently used as
-participant residence or ancestry. No coordinate, catchment footprint, uncertainty radius, allele
-count, or assay interpretation is invented. The consumers are the WP1 benchmark, #45, and #103.
+**Assumptions, refusals, and consumers.** The documented 2015–2025 recruitment windows all
+postdate the Piel 2013 survey compilation, so these participants could not have contributed to it.
+That timing does not establish population representativeness or independence from every later
+paper. Hospital location is not silently used as participant residence or ancestry. No coordinate,
+catchment footprint, uncertainty radius, allele count, or assay interpretation is invented. The
+consumers are the WP1 benchmark, #45, and #103.
 
 ## Determination
 
