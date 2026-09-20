@@ -74,6 +74,21 @@ def _decimal_beta_binomial_log_mass(
     return float(result)
 
 
+def _decimal_log_rising_ratio(numerator: float, denominator: float, length: int) -> float:
+    with localcontext() as context:
+        context.prec = 160
+        top = Decimal.from_float(numerator)
+        bottom = Decimal.from_float(denominator)
+        offset = Decimal(length)
+        result = (
+            _decimal_log_gamma(top + offset)
+            - _decimal_log_gamma(top)
+            - _decimal_log_gamma(bottom + offset)
+            + _decimal_log_gamma(bottom)
+        )
+    return float(result)
+
+
 @pytest.mark.parametrize("mean", [1e-16, 1e-12, 0.1, np.nextafter(1.0, 0.0)])
 @pytest.mark.parametrize("concentration", [1e-10, 2.0, 1e6, 2.0**26])
 def test_beta_binomial_one_trial_is_bernoulli_even_near_degeneracy(mean, concentration):
@@ -139,6 +154,87 @@ def test_beta_binomial_large_count_scoring_matches_independent_decimal_oracle(
     actual = predictive.log_prob([count], [denominator])
 
     np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=absolute_tolerance)
+
+
+@pytest.mark.parametrize("count", [644_245_094, 1_073_741_823])
+def test_beta_binomial_max_count_high_concentration_matches_decimal_oracle(count):
+    """The full declared domain has a ten-micro-log-unit absolute error envelope."""
+    mean = 0.3
+    concentration = 2.0**26
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, MAX_COUNT)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [MAX_COUNT])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+def test_high_shape_rising_ratio_matches_independent_decimal_oracle():
+    """The large positive paired factor must retain the small tail-log complement."""
+    mean = 0.3
+    concentration = 2.0**26
+    numerator = mean * concentration
+    length = 644_245_094
+    expected = _decimal_log_rising_ratio(numerator, 1.0, length)
+
+    actual = predictive_module._bounded_log_rising_ratio(
+        np.array([numerator]),
+        np.array([1.0]),
+        length,
+        difference=np.array([numerator - 1.0]),
+    )
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+def test_beta_binomial_million_count_high_concentration_matches_decimal_oracle():
+    mean = 0.01
+    concentration = 2.0**26
+    count = 1_285_556
+    denominator = 2_571_112
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, denominator)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [denominator])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+@pytest.mark.parametrize("mean", [0.01, 0.3, 0.5, 0.9, 0.99])
+@pytest.mark.parametrize("concentration", [2.0**20, 2.0**24, 2.0**26])
+@pytest.mark.parametrize("count_fraction", [0.0, 0.25, 0.5, 0.75, 1.0])
+def test_beta_binomial_high_shape_grid_matches_decimal_oracle(
+    mean, concentration, count_fraction
+):
+    """The declared maximum domain retains ten-micro-log-unit absolute accuracy."""
+    count = round(count_fraction * MAX_COUNT)
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, MAX_COUNT)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [MAX_COUNT])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+def test_beta_binomial_high_shape_mixture_matches_decimal_oracle_and_reflection():
+    count = 644_245_094
+    means = np.array([[0.3], [0.7]])
+    concentrations = np.full_like(means, 2.0**26)
+    expected_draws = np.array(
+        [
+            _decimal_beta_binomial_log_mass(mean, 2.0**26, count, MAX_COUNT)
+            for mean in means[:, 0]
+        ]
+    )
+    forward = CountPredictive(means, concentrations)
+    reflected = CountPredictive(1.0 - means, concentrations)
+
+    actual = forward.log_prob([count], [MAX_COUNT])
+    reverse = reflected.log_prob([MAX_COUNT - count], [MAX_COUNT])
+
+    expected = logsumexp(expected_draws) - np.log(len(expected_draws))
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+    np.testing.assert_allclose(actual, reverse, rtol=0.0, atol=1e-5)
 
 
 def test_beta_binomial_large_count_mixture_integrates_draw_masses():

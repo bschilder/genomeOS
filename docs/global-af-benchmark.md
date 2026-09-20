@@ -320,9 +320,13 @@ ratio uses a 16-factor exact prefix and a fixed Euler--Maclaurin tail. Work and 
 bounded independently of AN; the scorer never materializes `0, ..., AN` or substitutes a binomial
 distribution.
 An independent 160-digit Decimal oracle covers the actual 2,571,112-allele HbS maximum and the
-declared 2,147,483,647 count ceiling. Measured absolute log-mass error is at most `5e-9` across the
-million-scale benchmark cases and `3e-8` across endpoint and interior cases at the declared
-ceiling. Mixture integration, allele
+declared 2,147,483,647 count ceiling. The declared absolute log-mass error envelope is `1e-5`
+throughout that domain. A 75-case cross-product over five means, three concentrations through
+`2**26`, and five endpoint/interior count fractions measured a maximum error of
+`8.158385753631592e-6`; the million-scale high-concentration central case measured
+`9.313225746154785e-10`. The direct tail-log subtraction is used when the equivalent single-log
+argument approaches negative one, where forming its small complement would amplify float64
+rounding. Mixture integration, allele
 complement symmetry, small-support normalization, exact Bernoulli identities, and boundary-heavy
 means remain regression-tested. The existing beta shape/concentration checks remain in force.
 

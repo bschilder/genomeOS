@@ -26,11 +26,13 @@ tested domain far beyond any individual survey. Interior beta-binomial concentra
 retains reliable probability-scale precision; callers must explicitly select binomial semantics
 rather than obtain that distribution through an unstable finite-concentration approximation.
 Log mass uses a fixed exact prefix followed by a controlled Euler--Maclaurin tail for each
-rising factorial. Two equivalent factorizations are evaluated, and the one with the smaller
-sum of intermediate magnitudes is selected per draw to avoid cancellation at both high counts
-and high concentration. Work and temporary arrays remain bounded independently of ``AN``. CDF
-and quantile queries retain their exact tail-sum arithmetic, whose runtime can still depend on
-the queried support tail.
+rising factorial. Tail log ratios switch between an algebraically differenced ``log1p`` form near
+zero and direct ``log1p`` subtraction away from zero; the differenced form loses significant bits
+when its argument approaches negative one at high shape and count. Two equivalent factorizations
+are evaluated, and the one with the smaller sum of intermediate magnitudes is selected per draw to
+avoid cancellation at both high counts and high concentration. Work and temporary arrays remain
+bounded independently of ``AN``. CDF and quantile queries retain their exact tail-sum arithmetic,
+whose runtime can still depend on the queried support tail.
 """
 
 from __future__ import annotations
@@ -104,10 +106,19 @@ def _bounded_log_rising_ratio(
         numerator_start, denominator_start, difference
     )
     denominator_tail_log = np.log1p(remaining / denominator_start)
-    # log1p(remaining / numerator_start) - log1p(remaining / denominator_start)
-    tail_log_difference = np.log1p(
-        -(difference / numerator_start)
-        * (remaining / (denominator_start + remaining))
+    # log1p(remaining / numerator_start) - log1p(remaining / denominator_start).
+    # The single-log identity is accurate near zero, but its argument can approach -1 when
+    # one rising-factorial base is much larger than the other. In that regime, forming 1+x
+    # loses bits before log1p sees it; the two direct log1p terms remain well conditioned.
+    tail_log_argument = -(difference / numerator_start) * (
+        remaining / (denominator_start + remaining)
+    )
+    use_differenced_log = np.abs(tail_log_argument) < 0.5
+    tail_log_difference = np.where(
+        use_differenced_log,
+        np.log1p(np.where(use_differenced_log, tail_log_argument, 0.0)),
+        np.log1p(remaining / numerator_start)
+        - np.log1p(remaining / denominator_start),
     )
     tail = (
         remaining * log_start_ratio
