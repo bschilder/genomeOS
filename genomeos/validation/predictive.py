@@ -21,18 +21,19 @@ support-tail length.
 
 The supported count domain is ``-1 <= AC <= AN <= 2**31 - 1`` (with ``AC=-1`` reserved for the
 CDF boundary). The upper bound keeps integer successor and floating log-mass arithmetic inside a
-tested domain far beyond any individual survey. Interior beta-binomial concentrations above
-``1 / sqrt(float epsilon)`` are refused because subtracting their log-beta normalizers no longer
-retains reliable probability-scale precision; callers must explicitly select binomial semantics
-rather than obtain that distribution through an unstable finite-concentration approximation.
-Log mass uses a fixed exact prefix followed by a controlled Euler--Maclaurin tail for each
-rising factorial. Tail log ratios switch between an algebraically differenced ``log1p`` form near
-zero and direct ``log1p`` subtraction away from zero; the differenced form loses significant bits
-when its argument approaches negative one at high shape and count. Two equivalent factorizations
-are evaluated, and the one with the smaller sum of intermediate magnitudes is selected per draw to
-avoid cancellation at both high counts and high concentration. Work and temporary arrays remain
-bounded independently of ``AN``. CDF and quantile queries retain their exact tail-sum arithmetic,
-whose runtime can still depend on the queried support tail.
+tested domain far beyond any individual survey. Concentrations through ``1e300`` are admitted
+when their derived beta shapes remain finite and positive. Draws above
+``1 / sqrt(float epsilon)`` use the complete-support scaled-probability core and therefore require
+``AN <= 65_536``; lower-concentration draws support the full count domain.
+
+Lower-concentration log mass uses a fixed exact prefix followed by a controlled
+Euler--Maclaurin tail for each rising factorial. Tail log ratios switch between an algebraically
+differenced ``log1p`` form near zero and direct ``log1p`` subtraction away from zero; the
+differenced form loses significant bits when its argument approaches negative one at high shape
+and count. Two equivalent factorizations are evaluated, and the one with the smaller sum of
+intermediate magnitudes is selected per draw to avoid cancellation. Work and temporary arrays
+remain bounded independently of ``AN``. CDF and quantile queries retain exact probability or
+tail-sum arithmetic, whose runtime can still depend on the queried support.
 """
 
 from __future__ import annotations
@@ -44,11 +45,18 @@ import pandas as pd
 from scipy.special import betaln, gammaln, logsumexp, xlog1py, xlogy
 from scipy.stats import binom
 
+from genomeos.validation.count_legacy import beta_binomial_cdf, beta_product_log_mass
+from genomeos.validation.count_probability_adapter import (
+    beta_binomial_probability_queries,
+    probability_float64,
+    probability_log,
+)
+
 SEED = 42
 MAX_COUNT = int(np.iinfo(np.int32).max)
-_MAX_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
-_CDF_CHUNK_SIZE = 4096
-_LOG_HALF = float(np.log(0.5))
+_LEGACY_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
+_MAX_BETA_CONCENTRATION = 1e300
+MAX_BETA_SCORING_COUNT = 65_536
 _RISING_EXACT_PREFIX = 16
 _RISING_PREFIX_INDEX = np.arange(_RISING_EXACT_PREFIX, dtype=float)
 _STIRLING_POWERS = np.asarray((1, 3, 5, 7, 9, 11), dtype=float)
@@ -256,66 +264,14 @@ def _log_combination(n: int | np.ndarray, k: np.ndarray) -> np.ndarray:
     return gammaln(np.asarray(n) + 1) - gammaln(k + 1) - gammaln(np.asarray(n) - k + 1)
 
 
-def _beta_binomial_log_mass(
-    k: np.ndarray, n: int, alpha: float, beta: float
-) -> np.ndarray:
-    return _log_combination(n, k) + betaln(k + alpha, n - k + beta) - betaln(alpha, beta)
-
-
-def _beta_binomial_tail_logsum(
-    start: int, stop: int, n: int, alpha: float, beta: float
-) -> float:
-    total = -np.inf
-    for chunk_start in range(start, stop, _CDF_CHUNK_SIZE):
-        chunk_stop = min(chunk_start + _CDF_CHUNK_SIZE, stop)
-        support = np.arange(chunk_start, chunk_stop, dtype=np.int64)
-        total = float(
-            np.logaddexp(
-                total,
-                logsumexp(_beta_binomial_log_mass(support, n, alpha, beta)),
-            )
-        )
-    return total
-
-
-def _beta_binomial_cdf(k: int, n: int, mean: float, concentration: float) -> float:
-    if k < 0:
-        return 0.0
-    if k >= n:
-        return 1.0
-    if mean == 0.0:
-        return 1.0
-    if mean == 1.0:
-        return 0.0
-
-    alpha = mean * concentration
-    beta = (1.0 - mean) * concentration
-    lower_terms = k + 1
-    upper_terms = n - k
-    if lower_terms <= upper_terms:
-        log_cdf = _beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)
-        if log_cdf <= _LOG_HALF:
-            result = float(np.exp(log_cdf))
-        else:
-            log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
-            result = float(-np.expm1(log_survival))
-    else:
-        log_survival = _beta_binomial_tail_logsum(k + 1, n + 1, n, alpha, beta)
-        if log_survival <= _LOG_HALF:
-            result = float(-np.expm1(log_survival))
-        else:
-            result = float(np.exp(_beta_binomial_tail_logsum(0, k + 1, n, alpha, beta)))
-    if not np.isfinite(result) or not 0.0 <= result <= 1.0:
-        raise FloatingPointError("beta-binomial CDF is outside the stable numeric domain")
-    return result
-
-
 def _validate_beta_shapes(mean: np.ndarray, concentration: np.ndarray) -> None:
     interior = (mean > 0.0) & (mean < 1.0)
     with np.errstate(over="ignore", under="ignore", invalid="ignore"):
         alpha = mean[interior] * concentration[interior]
         beta = (1.0 - mean[interior]) * concentration[interior]
-        log_normalizer = betaln(alpha, beta)
+        legacy = concentration[interior] <= _LEGACY_BETA_CONCENTRATION
+        log_normalizer = np.zeros(alpha.shape)
+        log_normalizer[legacy] = betaln(alpha[legacy], beta[legacy])
     unusable = (
         (alpha <= 0.0)
         | (beta <= 0.0)
@@ -388,36 +344,134 @@ class CountPredictive:
         count = _validated_ac(
             ac, denominator, self.n_observations, cdf_threshold=allow_cdf_boundary
         )
+        self._validate_count_domain(denominator)
         return count, denominator
 
-    def _draw_log_mass(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
+    def _validate_count_domain(self, an: np.ndarray) -> None:
+        if self.concentration is None:
+            return
+        high = self._high_concentration_draws()
+        if np.any(high & (an[np.newaxis, :] > MAX_BETA_SCORING_COUNT)):
+            raise ValueError(
+                f"high-concentration beta-binomial operations require "
+                f"AN <= {MAX_BETA_SCORING_COUNT}"
+            )
+
+    def _high_concentration_draws(self) -> np.ndarray:
+        if self.concentration is None:
+            return np.zeros(self.mean_draws.shape, dtype=bool)
+        return (
+            (self.mean_draws > 0.0)
+            & (self.mean_draws < 1.0)
+            & (self.concentration > _LEGACY_BETA_CONCENTRATION)
+        )
+
+    def _draw_binomial_log_mass(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
         count = ac[np.newaxis, :]
         denominator = an[np.newaxis, :]
         mean = self.mean_draws
         log_mass = _log_combination(denominator, count)
+        return log_mass + xlogy(count, mean) + xlog1py(denominator - count, -mean)
 
+    def _draw_legacy_beta_log_mass(
+        self, ac: np.ndarray, an: np.ndarray, high: np.ndarray
+    ) -> np.ndarray:
         if self.concentration is None:
-            return log_mass + xlogy(count, mean) + xlog1py(denominator - count, -mean)
-
+            raise RuntimeError("beta-binomial log mass requires concentration draws")
+        count = ac[np.newaxis, :]
+        denominator = an[np.newaxis, :]
+        mean = self.mean_draws
         result = np.full(mean.shape, -np.inf)
         at_zero = mean == 0.0
         at_one = mean == 1.0
         result[at_zero & (count == 0)] = 0.0
         result[at_one & (count == denominator)] = 0.0
-        interior = ~(at_zero | at_one)
+        legacy = ~(at_zero | at_one | high)
         for observation, n in enumerate(an):
-            selected = interior[:, observation]
+            selected = legacy[:, observation]
             if np.any(selected):
-                result[selected, observation] = _bounded_beta_log_mass(
-                    int(ac[observation]), int(n), mean[selected, observation],
+                scorer = (
+                    beta_product_log_mass
+                    if int(n) <= MAX_BETA_SCORING_COUNT
+                    else _bounded_beta_log_mass
+                )
+                result[selected, observation] = scorer(
+                    int(ac[observation]),
+                    int(n),
+                    mean[selected, observation],
                     self.concentration[selected, observation],
                 )
+        return result
+
+    @staticmethod
+    def _integrated_log_mass(masses: np.ndarray) -> float:
+        result = float(logsumexp(masses) - np.log(masses.size))
+        if np.all(masses > -np.log(2.0)):
+            result = float(np.log1p(np.mean(np.expm1(masses))))
         return result
 
     def log_prob(self, ac: object, an: object) -> np.ndarray:
         """Integrated log probability mass for each valid observed count."""
         count, denominator = self.validated_counts(ac, an)
-        masses = self._draw_log_mass(count, denominator)
+        if self.concentration is not None:
+            high = self._high_concentration_draws()
+            legacy_masses = self._draw_legacy_beta_log_mass(count, denominator, high)
+            if not np.any(high):
+                result = logsumexp(legacy_masses, axis=0) - np.log(self.n_draws)
+                near_one = np.all(legacy_masses > -np.log(2.0), axis=0)
+                result[near_one] = np.log1p(
+                    np.mean(np.expm1(legacy_masses[:, near_one]), axis=0)
+                )
+                if np.any(np.isnan(result) | (result > 0.0)):
+                    raise FloatingPointError(
+                        "integrated log mass is outside the stable numeric domain"
+                    )
+                return result
+
+            result = np.empty(self.n_observations)
+            for observation in range(self.n_observations):
+                selected = high[:, observation]
+                high_count = int(np.count_nonzero(selected))
+                if high_count == 0:
+                    result[observation] = self._integrated_log_mass(
+                        legacy_masses[:, observation]
+                    )
+                    continue
+                probabilities = beta_binomial_probability_queries(
+                    self.mean_draws[selected, observation, np.newaxis],
+                    self.concentration[selected, observation, np.newaxis],
+                    denominator[observation, np.newaxis],
+                    count[np.newaxis, observation, np.newaxis],
+                    array_module=np,
+                    max_count=int(denominator[observation]),
+                )
+                high_log = float(probability_log(probabilities.mass, array_module=np)[0, 0])
+                low_count = self.n_draws - high_count
+                if low_count == 0:
+                    result[observation] = high_log
+                    continue
+                low_log = self._integrated_log_mass(legacy_masses[~selected, observation])
+                if low_log > -np.log(2.0) and high_log > -np.log(2.0):
+                    result[observation] = np.log1p(
+                        (
+                            low_count * np.expm1(low_log)
+                            + high_count * np.expm1(high_log)
+                        )
+                        / self.n_draws
+                    )
+                else:
+                    result[observation] = (
+                        np.logaddexp(
+                            low_log + np.log(low_count),
+                            high_log + np.log(high_count),
+                        )
+                        - np.log(self.n_draws)
+                    )
+            if np.any(np.isnan(result) | (result > 0.0)):
+                raise FloatingPointError("integrated log mass is outside the stable numeric domain")
+            return result
+
+        masses = self._draw_binomial_log_mass(count, denominator)
         result = logsumexp(masses, axis=0) - np.log(self.n_draws)
         near_one = np.all(masses > -np.log(2.0), axis=0)
         result[near_one] = np.log1p(np.mean(np.expm1(masses[:, near_one]), axis=0))
@@ -434,14 +488,26 @@ class CountPredictive:
         if self.concentration is None:
             return float(np.mean(binom.cdf(ac, an, means)))
         concentrations = self.concentration[:, observation]
-        return float(
-            np.mean(
-                [
-                    _beta_binomial_cdf(ac, an, float(mean), float(concentration))
-                    for mean, concentration in zip(means, concentrations, strict=True)
-                ]
+        high = self._high_concentration_draws()[:, observation]
+        values = [
+            beta_binomial_cdf(ac, an, float(mean), float(concentration))
+            for mean, concentration in zip(means[~high], concentrations[~high], strict=True)
+        ]
+        total = float(np.sum(values))
+        high_count = int(np.count_nonzero(high))
+        if high_count:
+            probabilities = beta_binomial_probability_queries(
+                means[high, np.newaxis],
+                concentrations[high, np.newaxis],
+                np.asarray([an], dtype=np.int64),
+                np.asarray([[ac]], dtype=np.int64),
+                array_module=np,
+                max_count=an,
             )
-        )
+            total += high_count * float(
+                probability_float64(probabilities.lower, array_module=np)[0, 0]
+            )
+        return total / self.n_draws
 
     def _cdf_evaluator(self):
         if self.cdf_backend == "scipy":
@@ -470,6 +536,7 @@ class CountPredictive:
     def sample_counts(self, an: object, seed: int = SEED) -> np.ndarray:
         """One replicated count for every predictive draw and observation."""
         denominator = _validated_an(an, self.n_observations)
+        self._validate_count_domain(denominator)
         rng = np.random.default_rng(seed)
         probability = self.mean_draws
         if self.concentration is not None:
@@ -502,6 +569,7 @@ class CountPredictive:
     def quantiles(self, an: object, probabilities: object) -> np.ndarray:
         """Exact left-continuous count quantiles without materializing ``0, ..., AN``."""
         denominator = _validated_an(an, self.n_observations)
+        self._validate_count_domain(denominator)
         levels = _float_array(probabilities, "probabilities")
         if levels.ndim != 1 or len(levels) == 0:
             raise ValueError("probabilities must be a nonempty one-dimensional array")

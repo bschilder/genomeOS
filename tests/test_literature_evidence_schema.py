@@ -18,6 +18,7 @@ from genomeos.observations.evidence import (
     validate_literature_tables,
     validate_search_manifest,
 )
+from genomeos.schema_checks import FAKE_MISSING
 
 SOURCE_RECORD_ID = (
     "literature:lct-rs4988235:"
@@ -173,7 +174,6 @@ def test_complete_independently_verified_record_is_valid():
 @pytest.mark.parametrize(
     ("column", "value"),
     [
-        ("population_label", "unknown"),
         ("record_locator", "table:unknown"),
         ("citation_id", "doi:10.1000/UPPER"),
         ("source_record_id", "literature:lct-rs4988235:1234"),
@@ -183,9 +183,28 @@ def test_complete_independently_verified_record_is_valid():
     ],
 )
 def test_dishonest_or_inconsistent_main_values_are_hard_errors(column, value):
-    """Catches placeholder, identity, interval, and bound shortcuts at the staging boundary."""
+    """Catches locator, identity, interval, and bound shortcuts at the staging boundary."""
     with pytest.raises((ValueError, pandera.errors.SchemaError)):
         validate_literature_tables(_evidence_row(**{column: value}), _field_evidence())
+
+
+@pytest.mark.parametrize("value", sorted(FAKE_MISSING))
+def test_suspect_population_text_is_preserved_with_a_human_review_warning(value):
+    """A source literal survives staging, while its warning keeps it from looking trustworthy."""
+    import warnings
+
+    fields = _field_evidence()
+    fields.loc[fields["field_name"] == "population_label", "raw_value"] = value
+    with warnings.catch_warnings(record=True) as raised:
+        warnings.simplefilter("always")
+        evidence, field_evidence = validate_literature_tables(
+            _evidence_row(population_label=value), fields
+        )
+    assert evidence.loc[0, "population_label"] == value
+    assert field_evidence.loc[
+        field_evidence["field_name"] == "population_label", "raw_value"
+    ].item() == value
+    assert any("human review" in str(item.message) for item in raised)
 
 
 def test_placeholder_locator_variants_and_unstable_review_references_are_rejected():

@@ -58,6 +58,14 @@ from genomeos.surfaces.config import REFERENCE_DESIGN as REFERENCE_DESIGN
 from genomeos.surfaces.config import SEED as SEED
 from genomeos.surfaces.config import FitConfig as FitConfig
 from genomeos.surfaces.convergence import SamplerDiagnostics, summarize_sampler_diagnostics
+from genomeos.surfaces.footprint import (
+    ObservationSupport,
+    ObservationSupportMetadata,
+    add_observation_offset,
+    reshape_support_values,
+    resolve_observation_support,
+    weighted_mean_probability,
+)
 from genomeos.surfaces.observation import (
     ObservationModelMetadata,
     ObservationParameters,
@@ -186,6 +194,7 @@ class SurfaceFit:
     _centre: np.ndarray = field(repr=False)
     _scale: np.ndarray = field(repr=False)
     prediction_metadata: ObservationModelMetadata | None = None
+    footprint_metadata: ObservationSupportMetadata | None = None
 
     def predict_new_cohort_parameters(
         self, queries: SurveyQueries, *, seed: int = SEED
@@ -495,7 +504,12 @@ def _check_convergence(idata, config: FitConfig) -> SamplerDiagnostics:
     return diagnostics
 
 
-def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> SurfaceFit:
+def fit_surface(
+    observations: pd.DataFrame,
+    config: FitConfig | None = None,
+    *,
+    observation_support: ObservationSupport | None = None,
+) -> SurfaceFit:
     """Fit one variant's frequency surface. Deterministic given `(observations, config)`."""
     config = config or FitConfig()
     obs = OBSERVATIONS_SCHEMA.validate(observations).reset_index(drop=True)
@@ -538,7 +552,13 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
 
     # No per-axis standardisation: the unit sphere is already the right scale in all three
     # dimensions, and rescaling axes independently is what made the kernel anisotropic.
-    x = to_unit_sphere(obs["lat"], obs["lon"])
+    observation_centres = to_unit_sphere(obs["lat"], obs["lon"])
+    x, support_weights, footprint_metadata = resolve_observation_support(
+        tuple(obs["source_record_id"].astype(str)),
+        observation_centres,
+        observation_support,
+    )
+    support_points = None if support_weights is None else support_weights.shape[1]
     centre = np.zeros(3)
     scale = np.ones(3)
 
@@ -562,11 +582,16 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             config.n_inducing, config.inducing_reach_km,
         )
     else:
-        inducing = inducing_points(x, config.n_inducing, config.seed)
+        inducing = inducing_points(observation_centres, config.n_inducing, config.seed)
 
     with pm.Model() as model:
         x_data = pm.Data("x_obs", x)
-        x_pred = pm.Data("x_pred", x[:1])
+        x_pred = pm.Data("x_pred", observation_centres[:1])
+        footprint_weights = (
+            None
+            if support_weights is None
+            else pm.Data("footprint_weights", support_weights)
+        )
 
         # Matérn-5/2 spatial field. §7 names Matérn-3/2; 5/2 is used here because HSGP's
         # spectral density is better behaved for it, and the smoothness choice is calibrated
@@ -611,14 +636,14 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             # can silently disagree with the training one.
             f_pred_expr = intercept + cov(x_pred, inducing_t) @ weights
 
-        logit = f
+        logit = reshape_support_values(f, len(obs), support_points)
 
         if beta_design_applied:
             # Weakly informative and centred at zero: the correction is estimated and auditable,
             # never a hidden adjustment (§7.1a).
             beta_design = pm.Normal("beta_design", mu=0.0, sigma=1.5, shape=len(non_reference))
             padded = pm.math.concatenate([[0.0], beta_design])
-            logit = logit + padded[design_index]
+            logit = add_observation_offset(logit, padded[design_index], support_points)
 
         # β_cohort is hierarchical: it absorbs residual cohort-level effects, including the
         # founder over-sampling of §7.1d, without being free to absorb the spatial signal.
@@ -642,7 +667,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             cohort_sd = pm.HalfNormal("cohort_sd", sigma=0.5)
             cohort_z = pm.Normal("cohort_z", mu=0.0, sigma=1.0, shape=len(cohorts))
             beta_cohort = pm.Deterministic("beta_cohort", cohort_sd * cohort_z)
-            logit = logit + beta_cohort[cohort_index]
+            logit = add_observation_offset(logit, beta_cohort[cohort_index], support_points)
 
         if config.nugget:
             # Non-centred, like every other hierarchical term here (Neal's funnel). Competes with
@@ -650,9 +675,19 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             # `likelihood="binomial"` is the arm that tests the nugget alone (#137).
             nugget_sd = pm.HalfNormal("nugget_sd", sigma=1.0)
             nugget_z = pm.Normal("nugget_z", mu=0.0, sigma=1.0, shape=len(observations))
-            logit = logit + nugget_sd * nugget_z
+            logit = add_observation_offset(logit, nugget_sd * nugget_z, support_points)
 
-        p = pm.Deterministic("p", pm.math.invlogit(logit))
+        point_probability = pm.math.invlogit(logit)
+        p_expression = (
+            point_probability
+            if footprint_weights is None
+            else weighted_mean_probability(
+                point_probability,
+                footprint_weights,
+                array_module=pt,
+            )
+        )
+        p = pm.Deterministic("p", p_expression)
 
         if config.likelihood == "binomial":
             pm.Binomial("obs", n=an, p=p, observed=ac)
@@ -746,6 +781,7 @@ def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> 
             nugget_applied=config.nugget,
             likelihood=config.likelihood,
         ),
+        footprint_metadata=footprint_metadata,
     )
 
 

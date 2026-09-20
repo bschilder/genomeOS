@@ -17,6 +17,8 @@ from pathlib import Path
 import pandas as pd
 import pandera.pandas as pa
 
+from genomeos.schema_checks import REVIEWABLE_TEXT
+
 ENTITY_TYPES: tuple[str, ...] = (
     "sequence_variant",
     "named_allele",
@@ -59,7 +61,7 @@ PROPOSAL_METHODS: tuple[str, ...] = (
     "deterministic_import",
 )
 
-_NONEMPTY = pa.Check.str_length(min_value=1)
+_NONEMPTY = REVIEWABLE_TEXT
 _HTTPS_OR_EMPTY = pa.Check.str_matches(r"^https://.+|^$")
 
 CURATED_VARIANTS_SCHEMA = pa.DataFrameSchema(
@@ -132,9 +134,14 @@ CPIC_PAIR_TARGETS_SCHEMA = pa.DataFrameSchema(
 CPIC_COVERAGE_SCHEMA = pa.DataFrameSchema(
     {
         "gene": pa.Column(str, _NONEMPTY, nullable=False, unique=True),
-        "pair_count": pa.Column(int, pa.Check.ge(1), nullable=False),
-        "allele_row_count": pa.Column(int, pa.Check.ge(0), nullable=False),
-        "candidate_count": pa.Column(int, pa.Check.ge(0), nullable=False),
+        # pandas' nullable "Int64" rather than numpy int. This schema coerces, and pandera coerces
+        # before it checks, so a plain numpy integer turned a fractional count into a whole one and
+        # then validated the result — the silent repair §12 forbids. "Int64" casting raises on a
+        # non-integral value while still accepting an integral float like 3.0. Same change #323 made
+        # to the P1 observation counts, applied to the last columns that still had the shape (#338).
+        "pair_count": pa.Column("Int64", pa.Check.ge(1), nullable=False),
+        "allele_row_count": pa.Column("Int64", pa.Check.ge(0), nullable=False),
+        "candidate_count": pa.Column("Int64", pa.Check.ge(0), nullable=False),
         "status": pa.Column(
             str,
             pa.Check.isin(

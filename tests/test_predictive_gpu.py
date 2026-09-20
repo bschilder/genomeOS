@@ -7,6 +7,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -66,6 +67,81 @@ def test_cupy_chunk_plan_reduces_work_or_refuses_when_device_memory_is_tight():
             draws=2_000,
             free_device_bytes=511 * 1024**2,
         )
+
+
+def test_mixed_high_concentration_routing_compacts_and_batches_draw_subgroups(monkeypatch):
+    """A shared extreme-draw mask must batch observations while preserving mixture weights."""
+
+    class NumpyDevice:
+        float64 = np.float64
+        int64 = np.int64
+
+        @staticmethod
+        def asarray(value, dtype=None):
+            return np.asarray(value, dtype=dtype)
+
+        @staticmethod
+        def asnumpy(value):
+            return np.asarray(value)
+
+    monkeypatch.setattr(
+        predictive_cupy_module,
+        "_load_cupy",
+        lambda: (NumpyDevice, SimpleNamespace()),
+    )
+    direct_calls: list[tuple[np.ndarray, np.ndarray]] = []
+
+    def direct_probabilities(mean, concentration, an, ac, **kwargs):
+        direct_calls.append((np.asarray(mean), np.asarray(concentration)))
+        return SimpleNamespace(lower=np.full(ac.shape, 0.8))
+
+    monkeypatch.setattr(
+        predictive_cupy_module,
+        "beta_binomial_probability_queries",
+        direct_probabilities,
+    )
+    monkeypatch.setattr(
+        predictive_cupy_module,
+        "probability_float64",
+        lambda value, **kwargs: value,
+    )
+    legacy_shapes: list[tuple[int, ...]] = []
+
+    def legacy_probabilities(self, ac, an, mean_draws, concentration_draws, chunk_plan):
+        assert mean_draws.shape == concentration_draws.shape
+        assert chunk_plan == (8, 256, 2_048)
+        legacy_shapes.append(mean_draws.shape)
+        value = 0.2 if mean_draws.shape[0] == 2 else 0.3
+        return np.full(ac.shape, value)
+
+    monkeypatch.setattr(
+        CuPyCDF,
+        "_legacy_beta_binomial_cdf_arrays",
+        legacy_probabilities,
+    )
+    means = np.asarray(
+        [[0.2, 0.3, 0.4], [0.5, 0.6, 0.7], [0.8, 0.9, 0.1]]
+    )
+    concentrations = np.asarray(
+        [[20.0, 20.0, 20.0], [2.0**27, 2.0**27, 30.0], [40.0, 40.0, 40.0]]
+    )
+    evaluator = CuPyCDF(means, concentrations)
+
+    result = evaluator._beta_binomial_cdf(
+        np.asarray([[0, 1, 2], [2, 3, 4]]),
+        np.asarray([4, 4, 5]),
+    )
+
+    assert len(direct_calls) == 1
+    np.testing.assert_array_equal(direct_calls[0][0], [[0.5, 0.6]])
+    np.testing.assert_array_equal(direct_calls[0][1], [[2.0**27, 2.0**27]])
+    assert legacy_shapes == [(2, 2), (3, 1)]
+    np.testing.assert_allclose(
+        result,
+        [[0.4, 0.4, 0.3], [0.4, 0.4, 0.3]],
+        rtol=0.0,
+        atol=1e-16,
+    )
 
 
 def _profile_command(out: Path) -> list[str]:
@@ -402,6 +478,53 @@ def test_gpu_near_one_short_lower_tail_matches_repaired_cpu_cdf(
 
 
 @requires_gpu
+def test_gpu_high_concentration_complete_support_matches_cpu_diagnostics():
+    """The B0H failure neighborhood must use the same finite law on both array namespaces."""
+    means = np.asarray([[0.2, 0.37], [0.8, 0.63]])
+    concentrations = np.asarray([[2.0**27, 1e12], [1e12, 2.0**27]])
+    an = np.asarray([20, 20])
+    ac = np.asarray([3, 13])
+    cpu = CountPredictive(means, concentrations, cdf_backend="scipy")
+    gpu = CountPredictive(means, concentrations, cdf_backend="cupy")
+
+    np.testing.assert_array_equal(gpu.cdf(ac, an), cpu.cdf(ac, an))
+    levels = np.asarray([0.025, 0.5, 0.975])
+    np.testing.assert_array_equal(gpu.quantiles(an, levels), cpu.quantiles(an, levels))
+    pd.testing.assert_frame_equal(
+        predictive_diagnostics(gpu, ac, an),
+        predictive_diagnostics(cpu, ac, an),
+        rtol=2e-14,
+        atol=2e-15,
+    )
+
+
+@requires_gpu
+def test_gpu_mixed_high_concentration_draw_matches_cpu_quantiles():
+    """One extreme draw must recombine with ordinary draws on an actual device."""
+    means = np.asarray(
+        [
+            [0.2, 0.7],
+            [0.3, 0.6],
+            [0.4, 0.5],
+            [0.5, 0.4],
+            [0.6, 0.3],
+        ]
+    )
+    concentrations = np.full_like(means, 20.0)
+    concentrations[2, 0] = 2.0**27
+    an = np.asarray([20, 20])
+    ac = np.asarray([7, 11])
+    cpu = CountPredictive(means, concentrations, cdf_backend="scipy")
+    gpu = CountPredictive(means, concentrations, cdf_backend="cupy")
+
+    np.testing.assert_allclose(gpu.cdf(ac, an), cpu.cdf(ac, an), rtol=2e-14, atol=2e-15)
+    np.testing.assert_array_equal(
+        gpu.quantiles(an, np.asarray([0.025, 0.5, 0.975])),
+        cpu.quantiles(an, np.asarray([0.025, 0.5, 0.975])),
+    )
+
+
+@requires_gpu
 def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch):
     """A negative draw CDF can cancel in the mixture and evade aggregate validation."""
     evaluator = CuPyCDF(np.array([[0.2], [0.3]]), np.ones((2, 1)))
@@ -418,7 +541,7 @@ def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch)
     monkeypatch.setattr(evaluator, "_tail_logsum", injected_tail)
 
     with pytest.raises(FloatingPointError, match="component"):
-        evaluator(np.array([[0]]), np.array([2]))
+        evaluator(np.array([[0]]), np.array([65_537]))
 
 
 @requires_gpu
@@ -464,7 +587,7 @@ def test_gpu_refuses_nan_cdf_component_before_accumulation(monkeypatch):
     )
 
     with pytest.raises(FloatingPointError, match="component"):
-        evaluator(np.array([[0]]), np.array([2]))
+        evaluator(np.array([[0]]), np.array([65_537]))
 
 
 @requires_gpu
@@ -479,7 +602,7 @@ def test_gpu_exact_boundaries_override_irrelevant_invalid_tail_components(monkey
     )
 
     np.testing.assert_array_equal(
-        evaluator(np.array([[-1], [2]]), np.array([2])),
+        evaluator(np.array([[-1], [65_537]]), np.array([65_537])),
         np.array([[0.0], [1.0]]),
     )
 

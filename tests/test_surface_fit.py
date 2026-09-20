@@ -29,6 +29,7 @@ from genomeos.surfaces.fit import (
     save_fit,
     to_unit_sphere,
 )
+from genomeos.surfaces.footprint import ObservationSupportMetadata, uniform_area_disc_support
 from genomeos.surfaces.observation import SurveyQueries
 from genomeos.surfaces.prior import PRIOR_DRAWS
 from genomeos.validation.predictive import CountPredictive, predictive_diagnostics
@@ -399,6 +400,21 @@ def test_a_saved_fit_predicts_identically_to_the_original(fit, tmp_path):
     assert reloaded.design_levels == fit.design_levels
 
 
+def test_footprint_metadata_survives_save_and_load(fit, tmp_path):
+    metadata = ObservationSupportMetadata(
+        convention="footprint_probability_mean_v1",
+        weighting="population_weighted",
+        location_model="independent_location_per_trial",
+        support_version="reviewed-support-v7",
+        points_per_observation=32,
+    )
+    footprint_fit = replace(fit, footprint_metadata=metadata)
+
+    reloaded = load_fit(save_fit(footprint_fit, tmp_path / "footprint-surface.pkl"))
+
+    assert reloaded.footprint_metadata == metadata
+
+
 def test_owned_legacy_fit_is_reconstructed_without_refit_or_rewrite(fit, tmp_path):
     import cloudpickle
 
@@ -756,6 +772,80 @@ def test_the_configured_sampler_options_are_the_ones_passed_to_pm_sample():
 
     assert captured["target_accept"] == 0.95
     assert captured["nuts"] == {"chain_method": "vectorized"}
+
+
+def _footprint_support(observations, *, ids=None):
+    return uniform_area_disc_support(
+        tuple(observations["source_record_id"] if ids is None else ids),
+        observations["lat"].to_numpy(),
+        observations["lon"].to_numpy(),
+        observations["radius_km"].to_numpy(),
+        radial_order=2,
+        angular_order=4,
+        support_version="synthetic-disc-v1",
+    )
+
+
+def test_fit_refuses_footprint_support_bound_to_a_different_row_order():
+    observations = _observations(n=20)
+    support = _footprint_support(
+        observations,
+        ids=tuple(reversed(observations["source_record_id"].tolist())),
+    )
+
+    with pytest.raises(ValueError, match="observation IDs.*row order"):
+        fit_surface(
+            observations,
+            FitConfig(draws=5, tune=5, chains=2),
+            observation_support=support,
+        )
+
+
+@pytest.mark.parametrize("approximation", ["hsgp", "inducing"])
+def test_fit_builds_one_vectorized_footprint_graph_and_records_metadata(approximation):
+    observations = _observations(n=20)
+    support = _footprint_support(observations)
+    posterior = xr.Dataset(
+        {"lengthscale": (("chain", "draw"), np.array([[0.1]]))},
+        coords={"chain": [0], "draw": [0]},
+    )
+    config = FitConfig(
+        draws=5,
+        tune=5,
+        chains=2,
+        approximation=approximation,
+        inducing_placement="kmeans",
+        n_inducing=5,
+    )
+
+    with (
+        mock.patch("pymc.sample", return_value=SimpleNamespace(posterior=posterior)),
+        mock.patch("genomeos.surfaces.fit._check_convergence"),
+    ):
+        fitted = fit_surface(observations, config, observation_support=support)
+
+    assert fitted._model["x_obs"].get_value().shape == (20 * 8, 3)
+    assert fitted._model["footprint_weights"].get_value().shape == (20, 8)
+    assert fitted._model["p"].eval().shape == (20,)
+    assert fitted.footprint_metadata == support.metadata
+
+
+def test_point_fit_keeps_the_existing_observation_axis_and_no_footprint_metadata():
+    observations = _observations(n=20)
+    posterior = xr.Dataset(
+        {"lengthscale": (("chain", "draw"), np.array([[0.1]]))},
+        coords={"chain": [0], "draw": [0]},
+    )
+
+    with (
+        mock.patch("pymc.sample", return_value=SimpleNamespace(posterior=posterior)),
+        mock.patch("genomeos.surfaces.fit._check_convergence"),
+    ):
+        fitted = fit_surface(observations, FitConfig(draws=5, tune=5, chains=2))
+
+    assert fitted._model["x_obs"].get_value().shape == (20, 3)
+    assert "footprint_weights" not in fitted._model.named_vars
+    assert fitted.footprint_metadata is None
 
 
 def test_a_non_default_target_accept_still_produces_a_fit():

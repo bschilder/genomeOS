@@ -26,6 +26,12 @@ from genomeos.observations.sources import (
     map_surveys,
 )
 from genomeos.publication.atlas_discovery import validate_artifact_discovery, validate_discovery_groups
+from genomeos.publication.commercial_use import (
+    KNOWN_NON_COMMERCIAL_FIELDS,  # noqa: F401  (re-exported for the check script and tests)
+)
+from genomeos.publication.commercial_use import (
+    validate as validate_commercial_use,
+)
 from genomeos.registry.sources import afnd as afnd_registry
 from genomeos.registry.variants import load as load_variant_registry
 from genomeos.registry.variants import normalized_identity
@@ -33,38 +39,6 @@ from genomeos.surfaces.artifacts import read as read_surface_artifact
 
 SCHEMA_VERSION = 1
 
-# NON-COMMERCIAL: commercial-use marking. genomeOS may publish data under a non-commercial licence,
-# but every restricted field must be declared in the publish allowlist so a future commercial
-# component can find and remove all of it at once. The inventory is
-# `python scripts/check_commercial_use.py --list`; the register is docs/non-commercial-data.md.
-#
-# The vocabulary is the one the literature reuse checks already use (genomeos/observations/
-# evidence.py), so a source's terms read the same wherever they are recorded. `not_checked` stays
-# publishable on purpose: refusing it would push a contributor to invent a licence finding to make
-# an export run, which the publication-evidence safeguards forbid. The check script lists those as
-# unresolved instead, so an extraction still sees them.
-COMMERCIAL_USE_FINDINGS = (
-    "explicitly_open",
-    "permission_granted",
-    "no_restriction_found",
-    "restricted",
-    "not_checked",
-)
-COMMERCIAL_USE_EVIDENCE_FIELDS = ("checked_at", "terms_url", "recorded_in")
-
-# NON-COMMERCIAL: fields known to carry a non-commercial restriction inside a source that is
-# otherwise permissive. The restriction is field-level, not source-level: DeepMind carves the AVI
-# Score out for commercial use while leaving the AVI Score Feature Breakdown non-commercial, and
-# gnomAD is CC0 while the SpliceAI annotations it bundles are CC BY-NC (AGENTS.md, "Data and
-# access terms"). A source-level tag would wrongly condemn the permissive half.
-#
-# Presence in a published record without a matching `restricted_fields` entry is a hard error, so
-# restricted data can ship marked but never unmarked. Add to this list when a new restriction is
-# found; never remove an entry to make an export pass.
-KNOWN_NON_COMMERCIAL_FIELDS: dict[str, tuple[str, ...]] = {
-    "alphagenome": ("top_attributions",),
-    "gnomad": ("spliceai",),
-}
 SUPPORT_STATES = {"observed", "interpolated", "prior_dominated", "unknown"}
 SURFACE_COLUMNS = {
     "h3_index",
@@ -458,84 +432,6 @@ def _surface_payload(
     }
 
 
-def _commercial_use(
-    resource: Mapping[str, Any],
-    record: Mapping[str, Any],
-    source: str,
-    context: str,
-) -> dict[str, Any]:
-    """Validate the commercial-use declaration and return what gets published with the resource.
-
-    NON-COMMERCIAL: this is the single gate that decides whether restricted data may ship. It
-    permits publication and refuses concealment, which is the whole point: an unmarked restricted
-    field is invisible to an extraction, while a marked one is one grep away.
-    """
-    declared = resource.get("commercial_use")
-    if not isinstance(declared, Mapping):
-        raise ValueError(
-            f"{context}: commercial_use is required and must be an object; see "
-            "docs/non-commercial-data.md"
-        )
-    _require_fields(declared, {"finding", "restricted_fields"}, f"{context} commercial_use")
-    finding = declared["finding"]
-    if finding not in COMMERCIAL_USE_FINDINGS:
-        raise ValueError(
-            f"{context}: commercial_use finding must be one of {list(COMMERCIAL_USE_FINDINGS)}, "
-            f"got {finding!r}"
-        )
-    fields = declared["restricted_fields"]
-    if not isinstance(fields, list) or not all(isinstance(field, str) for field in fields):
-        raise ValueError(f"{context}: commercial_use restricted_fields must be a list of strings")
-    if len(set(fields)) != len(fields):
-        raise ValueError(f"{context}: commercial_use restricted_fields must be unique")
-
-    if finding == "restricted":
-        if not fields:
-            raise ValueError(
-                f"{context}: a restricted commercial_use finding must name at least one restricted "
-                "field, otherwise an extraction cannot tell what to remove"
-            )
-        absent = sorted(field for field in fields if field not in record)
-        if absent:
-            raise ValueError(
-                f"{context}: commercial_use names a field absent from the record: "
-                f"{absent}. A declaration that does not match the payload hides a rename."
-            )
-    elif fields:
-        raise ValueError(
-            f"{context}: only a restricted finding may name fields, got {finding!r} with {fields}"
-        )
-
-    published: dict[str, Any] = {"finding": finding, "restricted_fields": sorted(fields)}
-    if finding != "not_checked":
-        _require_fields(
-            declared,
-            set(COMMERCIAL_USE_EVIDENCE_FIELDS),
-            f"{context} commercial_use requires checked_at, terms_url and recorded_in for a "
-            "performed check",
-        )
-        terms_url = str(declared["terms_url"])
-        if not terms_url.startswith("https://"):
-            raise ValueError(f"{context}: commercial_use terms_url must be https")
-        for field in COMMERCIAL_USE_EVIDENCE_FIELDS:
-            published[field] = str(declared[field])
-
-    # NON-COMMERCIAL: the tripwire. A field we already know is restricted may not reach the
-    # published payload unless the declaration names it.
-    undeclared = sorted(
-        field
-        for field in KNOWN_NON_COMMERCIAL_FIELDS.get(source, ())
-        if field in record and field not in fields
-    )
-    if undeclared:
-        raise ValueError(
-            f"{context}: undeclared non-commercial field {undeclared}. {source} publishes this "
-            "under a non-commercial licence; declare it in commercial_use.restricted_fields with "
-            'finding "restricted", or drop it from the payload.'
-        )
-    return published
-
-
 def _external_resources(
     entry: Mapping[str, Any],
     *,
@@ -638,7 +534,7 @@ def _external_resources(
                 raise ValueError(f"{source_root / cache_file}: AlphaGenome model_version mismatch")
             published["method"] = method
             published["model_version"] = model_version
-        published["commercial_use"] = _commercial_use(
+        published["commercial_use"] = validate_commercial_use(
             resource,
             record,
             source,

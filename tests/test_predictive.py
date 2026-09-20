@@ -8,6 +8,7 @@ from math import comb
 import numpy as np
 import pytest
 from scipy.special import logsumexp
+from scipy.stats import binom
 
 from genomeos.validation import predictive as predictive_module
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
@@ -488,6 +489,107 @@ def _decimal_beta_binomial_cdf(mean: float, concentration: float, count: int, an
                 mass *= numerator / (c + index)
             total += mass
         return +total
+
+
+@pytest.mark.parametrize("concentration", [2.0**27, 1e12, 1e300])
+def test_high_concentration_complete_support_matches_decimal_diagnostics(concentration):
+    """The old B0H failure region must retain the finite law through every diagnostic."""
+    mean, count, an = 0.37, 7, 20
+    lower = _decimal_beta_binomial_cdf(mean, concentration, count - 1, an)
+    inclusive = _decimal_beta_binomial_cdf(mean, concentration, count, an)
+    mass = inclusive - lower
+    predictive = CountPredictive(
+        np.asarray([[mean]]), np.asarray([[concentration]])
+    )
+
+    assert predictive.log_prob([count], [an])[0] == pytest.approx(
+        float(mass.ln()), rel=2e-14, abs=2e-14
+    )
+    assert predictive.cdf([count], [an])[0] == pytest.approx(
+        float(inclusive), rel=2e-14, abs=0.0
+    )
+    levels = np.asarray([0.025, 0.5, 0.975])
+    oracle_cdf = [
+        _decimal_beta_binomial_cdf(mean, concentration, candidate, an)
+        for candidate in range(an + 1)
+    ]
+    expected_quantiles = [
+        next(index for index, value in enumerate(oracle_cdf) if value >= Decimal.from_float(level))
+        for level in levels
+    ]
+    np.testing.assert_array_equal(
+        predictive.quantiles([an], levels)[:, 0], expected_quantiles
+    )
+
+    diagnostics = predictive_diagnostics(predictive, [count], [an], seed=42)
+    expected_pit = lower + Decimal.from_float(np.random.default_rng(42).random()) * mass
+    assert diagnostics.loc[0, "randomized_pit"] == pytest.approx(
+        float(expected_pit), rel=0.0, abs=np.finfo(float).eps
+    )
+    assert 0.0 <= diagnostics.loc[0, "randomized_pit"] <= 1.0
+
+
+def test_one_high_concentration_draw_retains_original_mixture_weight():
+    """Routing one exceptional draw must not drop it or renormalize either subgroup."""
+    mean, count, an = 0.37, 7, 20
+    concentrations = (20.0, 2.0**27)
+    component_cdf = [
+        _decimal_beta_binomial_cdf(mean, concentration, count, an)
+        for concentration in concentrations
+    ]
+    component_mass = [
+        cdf - _decimal_beta_binomial_cdf(mean, concentration, count - 1, an)
+        for cdf, concentration in zip(component_cdf, concentrations, strict=True)
+    ]
+    expected_cdf = sum(component_cdf) / 2
+    expected_mass = sum(component_mass) / 2
+    predictive = CountPredictive(
+        np.asarray([[mean], [mean]]),
+        np.asarray([[concentrations[0]], [concentrations[1]]]),
+    )
+
+    assert predictive.log_prob([count], [an])[0] == pytest.approx(
+        float(expected_mass.ln()), rel=2e-14, abs=2e-14
+    )
+    assert predictive.cdf([count], [an])[0] == pytest.approx(
+        float(expected_cdf), rel=2e-14, abs=0.0
+    )
+
+
+def test_high_concentration_large_support_refuses_at_operation_boundary():
+    """A valid predictive artifact may exist even when one requested operation is unsupported."""
+    predictive = CountPredictive(np.asarray([[0.4]]), np.asarray([[2.0**27]]))
+
+    for operation in (
+        lambda: predictive.log_prob([0], [65_537]),
+        lambda: predictive.cdf([0], [65_537]),
+        lambda: predictive.quantiles([65_537], [0.5]),
+        lambda: predictive.sample_counts([65_537]),
+    ):
+        with pytest.raises(ValueError, match="high-concentration|65536"):
+            operation()
+
+
+def test_concentration_route_boundary_preserves_each_supported_count_domain():
+    """The exact legacy boundary stays full-domain; the next float takes the support-bounded route."""
+    mean = np.asarray([[0.4]])
+    threshold = 2.0**26
+    legacy = CountPredictive(mean, np.asarray([[threshold]]))
+    direct = CountPredictive(mean, np.asarray([[np.nextafter(threshold, np.inf)]]))
+
+    assert np.isfinite(legacy.log_prob([0], [65_537])[0])
+    assert direct.sample_counts([65_536], seed=42).shape == (1, 1)
+    with pytest.raises(ValueError, match="high-concentration|65536"):
+        direct.log_prob([0], [65_537])
+
+
+def test_high_concentration_converges_to_binomial_without_substitution():
+    mean, count, an = 0.37, 7, 20
+    predictive = CountPredictive(np.asarray([[mean]]), np.asarray([[1e300]]))
+    beta_mass = np.exp(predictive.log_prob([count], [an]))[0]
+    binomial_mass = float(binom.pmf(count, an, mean))
+
+    assert beta_mass == pytest.approx(binomial_mass, rel=2e-14, abs=0.0)
 
 
 @pytest.mark.parametrize(

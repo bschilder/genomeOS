@@ -19,6 +19,7 @@ import pandera.pandas as pa
 from pandas.api.types import is_bool
 
 from genomeos.observations.schema import SAMPLING_DESIGNS, VARIANT_ID_PATTERN
+from genomeos.schema_checks import FAKE_MISSING, REVIEWABLE_TEXT
 
 LITERATURE_SEARCH_COLUMNS = (
     "search_id", "corpus_id", "database", "query", "executed_at", "candidate_id",
@@ -99,7 +100,9 @@ _IDENTITY = (
 )
 _UTC_TIMESTAMP = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
 _DATE = r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
-_FAKE_MISSING = frozenset({"na", "n/a", "unknown", "none", "null", "-", "tbd", "not reported"})
+# The canonical list now lives in genomeos/schema_checks.py so the column check and these
+# imperative checks cannot drift apart. Re-exported under the original name (#340).
+_FAKE_MISSING = FAKE_MISSING
 _PLACEHOLDER_LOCATOR_VALUES = _FAKE_MISSING | frozenset(
     {"the paper", "the-paper", "the source", "the-source", "supplement", "somewhere"}
 )
@@ -118,11 +121,11 @@ LITERATURE_SEARCHES_SCHEMA = pa.DataFrameSchema(
         "search_id": _string(checks=pa.Check.str_matches(_SEARCH_ID)),
         "corpus_id": _string(checks=pa.Check.str_matches(rf"^{_CORPUS}$")),
         "database": _string(checks=pa.Check.isin(["pubmed"])),
-        "query": _string(checks=pa.Check.str_length(min_value=1)),
+        "query": _string(checks=REVIEWABLE_TEXT),
         "executed_at": _string(checks=pa.Check.str_matches(_UTC_TIMESTAMP)),
         "candidate_id": _string(checks=pa.Check.str_matches(r"^pmid:[1-9][0-9]*$")),
         "decision": _string(checks=pa.Check.isin(["included", "excluded", "pending"])),
-        "decision_reason": _string(nullable=True),
+        "decision_reason": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "manifest_version": _string(checks=pa.Check.str_matches(_VERSION)),
     },
     strict=True,
@@ -142,10 +145,10 @@ LITERATURE_EVIDENCE_SCHEMA = pa.DataFrameSchema(
         "normalization_status": _string(
             checks=pa.Check.isin(["verified", "ambiguous", "unresolved"])
         ),
-        "population_label": _string(checks=pa.Check.str_length(min_value=1)),
-        "sample_id": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "population_label": _string(checks=REVIEWABLE_TEXT),
+        "sample_id": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "cohort_id": _string(nullable=True, checks=pa.Check.str_matches(_COHORT)),
-        "assay": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "assay": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "sampling_design": _string(nullable=True, checks=pa.Check.isin(SAMPLING_DESIGNS)),
         "disease_ascertainment_excluded": pa.Column("boolean", nullable=True, required=True),
         "date_lower": pa.Column("Int64", pa.Check.ge(0), nullable=True, required=True),
@@ -153,7 +156,7 @@ LITERATURE_EVIDENCE_SCHEMA = pa.DataFrameSchema(
         "an": pa.Column("Int64", pa.Check.gt(0), nullable=True, required=True),
         "ac_lower": pa.Column("Int64", pa.Check.ge(0), nullable=True, required=True),
         "ac_upper": pa.Column("Int64", pa.Check.ge(0), nullable=True, required=True),
-        "reported_frequency": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "reported_frequency": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "count_basis": _string(
             nullable=True,
             checks=pa.Check.isin(["reported", "genotype_derived", "frequency_reconstructed"]),
@@ -165,7 +168,7 @@ LITERATURE_EVIDENCE_SCHEMA = pa.DataFrameSchema(
             ),
         ),
         "citation_id": _string(nullable=True, checks=pa.Check.str_matches(_CITATION)),
-        "citation_text": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "citation_text": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "record_source_id": _string(checks=pa.Check.str_matches(_SOURCE)),
         "record_locator": _string(checks=pa.Check.str_matches(_LOCATOR)),
         "record_source_url": _string(nullable=True, checks=pa.Check.str_matches(r"^https://")),
@@ -183,7 +186,7 @@ LITERATURE_EVIDENCE_SCHEMA = pa.DataFrameSchema(
         "extracted_at": _string(checks=pa.Check.str_matches(_UTC_TIMESTAMP)),
         "verified_by": _string(nullable=True, checks=pa.Check.str_matches(_IDENTITY)),
         "verified_at": _string(nullable=True, checks=pa.Check.str_matches(_UTC_TIMESTAMP)),
-        "verification_reference": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "verification_reference": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "reuse_status": _string(
             checks=pa.Check.isin(
                 [
@@ -192,9 +195,9 @@ LITERATURE_EVIDENCE_SCHEMA = pa.DataFrameSchema(
                 ]
             )
         ),
-        "reuse_evidence": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "reuse_evidence": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "reuse_checked_at": _string(nullable=True, checks=pa.Check.str_matches(_DATE)),
-        "notes": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "notes": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "ingest_version": _string(checks=pa.Check.str_matches(_VERSION)),
     },
     strict=True,
@@ -208,13 +211,13 @@ LITERATURE_FIELD_EVIDENCE_SCHEMA = pa.DataFrameSchema(
         "source_record_id": _string(checks=pa.Check.str_matches(_SOURCE_RECORD)),
         "field_name": _string(checks=pa.Check.isin(TRACKED_FIELDS)),
         "evidence_status": _string(checks=pa.Check.isin(EVIDENCE_STATUSES)),
-        "raw_value": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "raw_value": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "evidence_source_id": _string(nullable=True, checks=pa.Check.str_matches(_SOURCE)),
         "source_locator": _string(nullable=True, checks=pa.Check.str_matches(_LOCATOR)),
-        "checked_scope": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "checked_scope": _string(nullable=True, checks=REVIEWABLE_TEXT),
         "derivation_method": _string(nullable=True, checks=pa.Check.isin(DERIVATION_METHODS)),
         "decision_reference": _string(nullable=True, checks=pa.Check.str_matches(r"^https://github\.com/")),
-        "notes": _string(nullable=True, checks=pa.Check.str_length(min_value=1)),
+        "notes": _string(nullable=True, checks=REVIEWABLE_TEXT),
     },
     strict=True,
     ordered=True,
@@ -290,8 +293,6 @@ def _validate_text_and_anchors(evidence: pd.DataFrame, fields: pd.DataFrame) -> 
                 text = str(value)
                 if text != text.strip() or any(char in text for char in "\t\r\n"):
                     raise ValueError(f"{column} contains surrounding or control whitespace")
-                if text.casefold() in _FAKE_MISSING:
-                    raise ValueError(f"{column} contains fake missingness: {text!r}")
     for locator in pd.concat([evidence["record_locator"], fields["source_locator"]]).dropna():
         if _is_placeholder_locator(locator):
             raise ValueError(f"placeholder source locator: {locator}")
