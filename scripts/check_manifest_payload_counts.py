@@ -40,6 +40,7 @@ import argparse
 import csv
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
 
@@ -84,7 +85,7 @@ def payload_identifiers(path: Path) -> tuple[list[str], list[str]]:
         problems.append(f"{path.name}: payload count {count} does not equal its idlist length {len(idlist)}")
     if wrong := [pmid for pmid in idlist if not pmid.isdigit()]:
         problems.append(f"{path.name}: non-numeric PMIDs {wrong[:3]}")
-    if repeated := sorted({pmid for pmid in idlist if idlist.count(pmid) > 1}):
+    if repeated := sorted(pmid for pmid, occurrences in Counter(idlist).items() if occurrences > 1):
         problems.append(f"{path.name}: duplicate PMIDs {repeated[:3]}")
     return idlist, problems
 
