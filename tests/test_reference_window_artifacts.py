@@ -1886,7 +1886,7 @@ def test_preparation_validator_rejects_rehashed_dependency_mutation(tmp_path, mu
         validate_preparation(counts_root, acquisition_root=acquisition_root)
 
 
-@pytest.mark.parametrize("mutation", ["count_cell", "variant_window"])
+@pytest.mark.parametrize("mutation", ["count_cell", "region_label", "variant_window"])
 def test_preparation_validator_rejects_rehashed_semantic_mutation(tmp_path, mutation):
     acquisition_root = tmp_path / "acquisition"
     counts_root = tmp_path / "counts"
@@ -1910,6 +1910,23 @@ def test_preparation_validator_rejects_rehashed_semantic_mutation(tmp_path, muta
             replace(preparation.tracks[0], table=reference),
             *preparation.tracks[1:],
         )
+    elif mutation == "region_label":
+        replacements = {}
+        changed_tracks = []
+        for track in preparation.tracks:
+            relative = track.table.path
+            path = counts_root / relative
+            lines = path.read_text().splitlines()
+            changed_lines = [lines[0]]
+            for line in lines[1:]:
+                cells = line.split("\t")
+                cells[3] = "forged-region"
+                changed_lines.append("\t".join(cells))
+            path.write_text("\n".join(changed_lines) + "\n")
+            reference = _ref(relative, path.read_bytes())
+            replacements[relative] = reference
+            changed_tracks.append(replace(track, table=reference))
+        tracks = tuple(changed_tracks)
     else:
         relative = "variant-windows.tsv"
         path = counts_root / relative
@@ -1920,7 +1937,10 @@ def test_preparation_validator_rejects_rehashed_semantic_mutation(tmp_path, muta
         path.write_text("\n".join(lines) + "\n")
         reference = _ref(relative, path.read_bytes())
         tracks = preparation.tracks
-    files = tuple(reference if value.path == relative else value for value in preparation.files)
+    if mutation == "region_label":
+        files = tuple(replacements.get(value.path, value) for value in preparation.files)
+    else:
+        files = tuple(reference if value.path == relative else value for value in preparation.files)
     changed = replace(preparation, tracks=tracks, files=files)
     (counts_root / "manifest.json").write_bytes(encode_preparation(changed))
     with pytest.raises(
