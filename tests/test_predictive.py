@@ -317,6 +317,35 @@ def test_public_count_quantiles_are_exact_left_continuous_endpoints():
     np.testing.assert_array_equal(result, np.array([[0], [1]]))
 
 
+def test_rare_quantiles_bracket_predictive_mass_before_exact_search(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The first CDF probe must not traverse half of a million-count rare-allele support."""
+    predictive = CountPredictive(np.full((4, 1), 1e-6))
+    original_factory = CountPredictive._cdf_evaluator
+    probes: list[np.ndarray] = []
+
+    def instrumented_factory(self: CountPredictive):
+        evaluate = original_factory(self)
+
+        def record_and_evaluate(count: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+            probes.append(count.copy())
+            return evaluate(count, denominator)
+
+        return record_and_evaluate
+
+    monkeypatch.setattr(CountPredictive, "_cdf_evaluator", instrumented_factory)
+
+    result = predictive.quantiles(
+        an=np.array([1_000_000]),
+        probabilities=np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]),
+    )
+
+    np.testing.assert_array_equal(result[:, 0], np.array([0, 0, 0, 1, 2, 2, 3]))
+    assert probes
+    assert int(np.max(probes[0])) < 10_000
+
+
 def test_beta_binomial_cdf_handles_huge_denominators_with_a_short_exact_tail():
     """An AN-sized support array would make exact scoring unusable for large surveys."""
     an = 1_000_000_000
