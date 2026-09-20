@@ -57,7 +57,7 @@ def test_reconstructs_four_regional_counts_and_retains_zeros(registry):
     assert report.matched_variants == 2
     assert report.retained_observations == 8
     assert report.requested_variants == 2
-    assert report.maximum_regional_count_residual < 0.005
+    assert report.maximum_regional_count_residual < wbbc.MAX_REGIONAL_COUNT_RESIDUAL
 
 
 def test_geography_comes_from_the_registry(registry):
@@ -229,6 +229,22 @@ def test_refuses_an_ambiguous_regional_count_reconstruction(tmp_path: Path, regi
 
     with pytest.raises(ValueError, match="regional AF.*AN reconstruction"):
         wbbc.load(path, populations, aliases, "0.1.0", variant_ids=REQUESTED)
+
+
+def test_accepts_reviewed_missing_vqslod_tail(tmp_path: Path, registry):
+    path = _mutated_vcf(tmp_path, ";VQSLOD=5.5", ";")
+    populations, aliases = registry
+
+    observations, report = wbbc.load(
+        path,
+        populations,
+        aliases,
+        "0.1.0",
+        variant_ids=REQUESTED,
+    )
+
+    assert len(observations) == 8
+    assert report.matched_variants == 2
 
 
 def test_refuses_info_schema_drift_instead_of_defaulting(tmp_path: Path, registry):

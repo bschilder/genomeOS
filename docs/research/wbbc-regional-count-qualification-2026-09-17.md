@@ -31,14 +31,19 @@ WBBC reports regional `AF` and `AN`, but not regional `AC`. The reviewed derivat
 nearest-integer `AF × AN`, admitted only when both controls hold:
 
 1. reported global `AC` equals nearest-integer global `AF × AN`; and
-2. every retained regional product is within 0.005 of one integer.
+2. every retained regional product is within 0.000005 of one integer.
 
 The source's global genotype tallies provide a second independent check:
 `RR + RA + AA = NS` and `RA + 2×AA = AC`. A violation of either identity is a hard error.
 
-The full chr22 audit covered 1,091,904 records. Global reconstruction matched reported `AC` on
-every record. The largest regional residual was 0.00425 alleles. The adapter repeats both controls
-on every retained record and labels the assay `genome_frequency_reconstructed`.
+The full chr22 audit read the original VCF INFO strings for 1,091,904 records. Global
+reconstruction matched reported `AC` on every record. The largest regional residual was
+0.00000403 alleles. An earlier tabular audit export rounded frequencies to roughly six significant
+digits and overstated that residual as 0.00425; it is not the acceptance evidence. The source also
+has 324 records where `VQSLOD` is absent after `DP`. Because `VQSLOD` does not enter count
+reconstruction, the adapter accepts that reviewed source layout while continuing to refuse other
+INFO drift. It repeats both count controls on every retained record and labels the assay
+`genome_frequency_reconstructed`.
 
 ## Geographic support
 

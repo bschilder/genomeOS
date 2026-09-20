@@ -3,13 +3,13 @@
 The public GRCh38 VCF reports ``AF`` and ``AN`` for North, Central, South and Lingnan, but no
 regional ``AC``.  A full-chromosome audit in issue #325 established the source's rounding rule:
 reported global ``AC`` equals nearest-integer ``AF * AN`` on every chr22 record, and every regional
-product is within 0.005 of one integer.  This adapter rechecks those controls on every retained
+product is within 0.000005 of one integer.  This adapter rechecks those controls on every retained
 variant and labels the assay as reconstructed rather than presenting inferred counts as reported.
 
-The VCF omits INFO declarations.  Consequently this parser accepts one closed, ordered INFO
-contract and fails on drift.  It scans in pandas chunks, filters to an explicit curated variant
-set, and expands all four regions with array reshaping; it never builds a genome-wide fourfold
-table in memory.
+The VCF omits INFO declarations.  Consequently this parser accepts the reviewed ordered INFO
+contract, including its two observed tails (numeric or missing ``VQSLOD``), and fails on other
+drift.  It scans in pandas chunks, filters to an explicit curated variant set, and expands all four
+regions with array reshaping; it never builds a genome-wide fourfold table in memory.
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ COHORT_ID = "wbbc:wgs-frequency-release-v1"
 ASSAY = "genome_frequency_reconstructed"
 GLOBAL_AN = 8960
 GLOBAL_NS = 4480
-MAX_REGIONAL_COUNT_RESIDUAL = 0.005
+MAX_REGIONAL_COUNT_RESIDUAL = 0.000005
 REGIONAL_AN = {"North": 448, "Central": 100, "South": 8070, "Lingnan": 126}
 
 _VCF_COLUMNS = ("CHROM", "POS", "ID", "REF", "ALT", "QUAL", "FILTER", "INFO")
@@ -49,7 +49,7 @@ _INFO_PATTERN = re.compile(
     rf"South_AF=(?P<South_AF>{_FLOAT});South_AN=(?P<South_AN>{_INTEGER});"
     rf"Lingnan_AF=(?P<Lingnan_AF>{_FLOAT});Lingnan_AN=(?P<Lingnan_AN>{_INTEGER});"
     rf"RR=(?P<RR>{_INTEGER})\|RA=(?P<RA>{_INTEGER})\|AA=(?P<AA>{_INTEGER});"
-    rf"DP=(?P<DP>{_INTEGER});VQSLOD=(?P<VQSLOD>{_SIGNED_FLOAT})$"
+    rf"DP=(?P<DP>{_INTEGER});(?:VQSLOD=(?P<VQSLOD>{_SIGNED_FLOAT}))?$"
 )
 
 
@@ -151,7 +151,7 @@ def _variant_ids(frame: pd.DataFrame, path: Path) -> pd.Series:
 
 def _parse_info(frame: pd.DataFrame, path: Path) -> tuple[pd.DataFrame, np.ndarray, np.ndarray]:
     parsed = frame["INFO"].str.extract(_INFO_PATTERN, expand=True)
-    if parsed.isna().any(axis=None):
+    if parsed.drop(columns="VQSLOD").isna().any(axis=None):
         raise ValueError(f"{path}: WBBC INFO schema differs from the reviewed closed contract")
     numeric = parsed.apply(pd.to_numeric, errors="raise")
     frequencies = numeric[["AF", *(f"{region}_AF" for region in REGION_ORDER)]].to_numpy(float)
