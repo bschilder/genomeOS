@@ -21,11 +21,13 @@ that retained run, establish B0H superiority, or authorize publication.
    New pure numerical helpers provide complete-support beta-binomial mass, lower
    tail, and upper tail on an explicit NumPy or CuPy namespace.
 4. **Assumptions, refusals, and consumers.** Counts remain bounded by the public
-   int32 domain. Complete-support arithmetic is admitted only through
-   `AN=65,536`; the existing large-count CDF is retained only in its validated
-   lower-concentration domain. Inputs whose beta shapes underflow, overflow, or
-   exceed the proved concentration ceiling are refused. Consumers are the B0H
-   diagnostics, #211 comparison, #331, and later WP4 comparisons.
+   int32 domain. Complete-support arithmetic for high-concentration draws is
+   admitted only through `AN=65,536`. Lower-concentration log mass uses the
+   bounded rising-factorial route across the public count domain, while its
+   large-count CDF retains the validated shorter-tail route. Inputs whose beta
+   shapes underflow, overflow, or exceed the proved concentration ceiling are
+   refused. Consumers are the B0H diagnostics, #211 comparison, #331, and later
+   WP4 comparisons.
 
 ## Failure and scope
 
@@ -49,7 +51,10 @@ pair and a separate int64 binary exponent. This prevents physical underflow
 during products and summation. Partition every support into mass below the
 target, mass at the target, and mass above it, normalize once, and average the
 selected posterior draws with the same scaled arithmetic. Lower-concentration
-draws retain the existing finite-product log mass and shorter-tail CDF path.
+draws retain the existing finite-product log mass through `AN=65,536` and the
+shorter-tail CDF path. Above that count, log mass uses the independently
+qualified bounded rising-factorial formulation from #314; it evaluates a fixed
+prefix and Euler--Maclaurin tail without materializing the count support.
 
 The implementation is the independently reviewed direct-probability core whose
 frozen source hashes are:
@@ -94,7 +99,7 @@ Operation policy is explicit:
 
 | Operation | Complete-support route | Legacy route | Refusal |
 | --- | --- | --- | --- |
-| mass/log score | draws above `67,108,864`, `AN <= 65,536` | lower-concentration draws, `AN <= 65,536` | larger interior support |
+| mass/log score | draws above `67,108,864`, `AN <= 65,536` | lower-concentration draws through the public count bound | high concentration and larger `AN` |
 | CDF/quantile | draws above `67,108,864`, `AN <= 65,536` | lower-concentration draws through the public count bound | high concentration and larger `AN` |
 | sampling | NumPy beta then binomial after the same operation-domain check | lower concentration through public count bound | high concentration and larger `AN` |
 | exact mean endpoints | analytical point mass | analytical point mass | none within public count bound |

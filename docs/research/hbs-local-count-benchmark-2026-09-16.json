@@ -1,0 +1,203 @@
+{
+  "b2_current": {
+    "reason": "three_hour_cutoff_before_all_folds_completed",
+    "valid_comparison_available": false
+  },
+  "environmental_covariates": false,
+  "input_sha256": {
+    "assignments": "c922b240624c761f0752821d9e6986bb1479bbc97a0d9931da7db3a17ee20b20",
+    "dependencies": "fa7b4c093dc2f83a2ea3c7f0810b9130e65feac7c94dc80fb8475d03c2d3cf22",
+    "observations": "820d725fae9859a6cebca98296676e8c525b103f7033aa5237b9aaa00f79b331"
+  },
+  "interpretation": {
+    "primary": "prespecified_local_support_grid_infeasible_for_global_geographic_holdouts",
+    "promotion": "rejected_pending_broader_support_and_zero_count_repair",
+    "sensitivity": "local_signal_on_a_posthoc_support_limited_subset_only"
+  },
+  "primary": {
+    "analysis_role": "prespecified_primary",
+    "benchmark": {
+      "comparison_complete": false,
+      "emitted_observation_count": 0,
+      "excluded_fraction": 1.0,
+      "excluded_observation_count": 994,
+      "requested_observation_count": 994,
+      "supported_only": {
+        "metrics": {
+          "coverage_50": null,
+          "coverage_80": null,
+          "coverage_95": null,
+          "interval_width_50": null,
+          "interval_width_80": null,
+          "interval_width_95": null,
+          "mae": null,
+          "mean_log_score": null,
+          "mean_randomized_pit": null,
+          "rmse": null
+        },
+        "scored_observation_count": 0,
+        "split_counts": {
+          "completed": 0,
+          "failed": 0,
+          "infeasible": 5,
+          "planned": 5
+        }
+      }
+    },
+    "candidate_summary": [
+      {
+        "bandwidth_km": 500.0,
+        "eligible_outer_fold_count": 0,
+        "maximum_inner_emission_fraction": 0.0026246719160104,
+        "mean_inner_emission_fraction": 0.00147757995935416,
+        "minimum_inner_emission_fraction": 0.0,
+        "outer_fold_count": 5
+      },
+      {
+        "bandwidth_km": 1000.0,
+        "eligible_outer_fold_count": 0,
+        "maximum_inner_emission_fraction": 0.0774818401937046,
+        "mean_inner_emission_fraction": 0.04896082917128522,
+        "minimum_inner_emission_fraction": 0.0356652949245541,
+        "outer_fold_count": 5
+      },
+      {
+        "bandwidth_km": 2000.0,
+        "eligible_outer_fold_count": 0,
+        "maximum_inner_emission_fraction": 0.2627118644067797,
+        "mean_inner_emission_fraction": 0.17161488143477313,
+        "minimum_inner_emission_fraction": 0.0913907284768212,
+        "outer_fold_count": 5
+      }
+    ],
+    "configuration": {
+      "buffer_km": 300.0,
+      "candidate_bandwidths_km": [
+        500.0,
+        1000.0,
+        2000.0
+      ],
+      "data_version": "piel-comparable-20260916",
+      "minimum_effective_alleles": 100.0,
+      "minimum_inner_emission_fraction": 0.5,
+      "minimum_training_observations": 2,
+      "posterior_draws": 2048,
+      "prior_alpha": 1.0,
+      "prior_beta": 1.0,
+      "query_chunk_size": 256,
+      "seed": 42
+    },
+    "qualification": {
+      "assignment_review_status": "algorithmic_development_unreviewed",
+      "dependency_review_status": "not_checked",
+      "scientific_promotion_decision": "not_made"
+    }
+  },
+  "publication_eligible": false,
+  "schema_version": 1,
+  "scientific_promotion_decision": "not_made",
+  "sensitivity": {
+    "analysis_role": "posthoc_sensitivity",
+    "benchmark": {
+      "comparison_complete": false,
+      "emitted_observation_count": 218,
+      "excluded_fraction": 0.7806841046277666,
+      "excluded_observation_count": 776,
+      "requested_observation_count": 994,
+      "supported_only": {
+        "metrics": {
+          "coverage_50": 0.12035472972972973,
+          "coverage_80": 0.2360762548262548,
+          "coverage_95": 0.37146521521521525,
+          "interval_width_50": 0.017151885040250267,
+          "interval_width_80": 0.03270447801094866,
+          "interval_width_95": 0.04993308472675988,
+          "mae": 0.04981329902412989,
+          "mean_log_score": -87.17325990092505,
+          "mean_randomized_pit": 0.3373212362723777,
+          "rmse": 0.06074211321791975
+        },
+        "scored_observation_count": 218,
+        "split_counts": {
+          "completed": 4,
+          "failed": 0,
+          "infeasible": 1,
+          "planned": 5
+        }
+      }
+    },
+    "configuration": {
+      "buffer_km": 300.0,
+      "candidate_bandwidths_km": [
+        2000.0
+      ],
+      "data_version": "piel-comparable-20260916",
+      "minimum_effective_alleles": 100.0,
+      "minimum_inner_emission_fraction": 0.0,
+      "minimum_training_observations": 2,
+      "posterior_draws": 2048,
+      "prior_alpha": 1.0,
+      "prior_beta": 1.0,
+      "query_chunk_size": 256,
+      "seed": 42
+    },
+    "matched_b0_macro_metrics": {
+      "coverage_50": 0.03190958815958816,
+      "coverage_80": 0.15888299013299012,
+      "coverage_95": 0.2342235092235092,
+      "interval_width_50": 0.0067745657976625955,
+      "interval_width_80": 0.01250716301421653,
+      "interval_width_95": 0.01869054081989343,
+      "mae": 0.047779529153554545,
+      "mean_log_score": -206.76228790446734,
+      "mean_randomized_pit": 0.5318449910548212,
+      "rmse": 0.06908722781432435
+    },
+    "matched_count_strata": {
+      "positive": {
+        "b0_coverage_95": 0.1834319526627219,
+        "b0_mae": 0.06439075219972534,
+        "b0_mean_log_score": -202.49303763309842,
+        "b1_coverage_95": 0.5562130177514792,
+        "b1_mae": 0.035813087798672136,
+        "b1_mean_log_score": -54.4665179800154,
+        "mean_log_score_delta": 148.02651965308306,
+        "median_log_score_delta": 10.906641480380694,
+        "observation_count": 169
+      },
+      "zero": {
+        "b0_coverage_95": 0.6122448979591837,
+        "b0_mae": 0.013624284386787975,
+        "b0_mean_log_score": -4.0363098738032805,
+        "b1_coverage_95": 0.2653061224489796,
+        "b1_mae": 0.05311583735366436,
+        "b1_mean_log_score": -11.439863659034865,
+        "mean_log_score_delta": -7.403553785231587,
+        "median_log_score_delta": -5.8055427697509705,
+        "observation_count": 49
+      }
+    },
+    "matched_row_weighted": {
+      "b0_coverage_95": 0.2798165137614679,
+      "b0_mae": 0.052979940627092645,
+      "b0_mean_log_score": -157.88579148536695,
+      "b1_coverage_95": 0.4908256880733945,
+      "b1_mae": 0.03970223792800525,
+      "b1_mean_log_score": -44.795389256492264,
+      "mean_log_score_delta": 113.09040222887475,
+      "median_log_score_delta": 2.7147378217374687,
+      "observation_count": 218
+    },
+    "qualification": {
+      "assignment_review_status": "algorithmic_development_unreviewed",
+      "dependency_review_status": "not_checked",
+      "scientific_promotion_decision": "not_made"
+    },
+    "support_state_counts": {
+      "emitted": 218,
+      "insufficient_effective_alleles": 111,
+      "insufficient_local_training_observations": 665
+    }
+  },
+  "source_specific_features": false
+}

@@ -1,4 +1,4 @@
-"""Exact posterior-predictive scoring for allele counts (design §7, §8; #189).
+"""Exact posterior-predictive scoring for allele counts (design §7, §8; #189, #314).
 
 ``CountPredictive`` represents a mixture over draw-aligned observation distributions. Callers
 must provide probabilities after every intended latent, cohort, and sampling-design effect has
@@ -8,23 +8,32 @@ Predictive intervals are central, equal-tail intervals of a finite discrete coun
 Their endpoints lie on the ``1 / AN`` frequency grid and coverage can therefore exceed the
 nominal level, especially for small denominators or boundary-heavy predictions. Width and
 coverage must be interpreted together rather than treating nominal coverage as exactly attainable.
+Quantile search starts from a Cantelli upper bracket derived from the exact predictive-mixture
+moments, verifies that bracket with the selected exact CDF backend, and only then bisects. This
+avoids probing the middle of a million-count support for a rare allele without approximating the
+returned quantile (#316).
 
-Beta-binomial scoring through ``AN=65_536`` uses complete-support scaled-probability
-partitions for mass, lower tail, and upper tail. Posterior draws and query rows remain
-vectorized while support work uses bounded chunks selected from the validated count maximum.
-Larger-count CDFs retain the shorter-tail log-sum route in its lower-concentration domain.
+Beta-binomial CDFs are summed exactly in fixed-size chunks, starting with the shorter support
+tail. If that tail has probability above one half, the small complementary tail is summed
+directly. This keeps memory bounded independently of ``AN`` but does not hide the
+computational cost: an exact interior CDF or quantile can still require time proportional to a
+support-tail length.
 
 The supported count domain is ``-1 <= AC <= AN <= 2**31 - 1`` (with ``AC=-1`` reserved for the
 CDF boundary). The upper bound keeps integer successor and floating log-mass arithmetic inside a
-tested domain far beyond any individual survey. Interior beta-binomial concentrations through
-``1e300`` are admitted when their derived shapes remain finite and positive. Above
-``1 / sqrt(float epsilon)``, operations require ``AN <= 65_536`` because the larger-count
-log-beta route is not numerically qualified.
-Log mass uses finite rising-factorial products instead of subtracting beta normalizers. For
-interior beta-binomial draws, ``log_prob`` (and hence diagnostics) additionally requires
-``AN <= 65_536``: its O(draws * AN) work is bounded to 16 support chunks per draw batch.
-CDF/quantile-only queries retain the larger count domain and their existing tail-sum arithmetic;
-binomial and exactly degenerate draws do not need the product and retain the larger domain too.
+tested domain far beyond any individual survey. Concentrations through ``1e300`` are admitted
+when their derived beta shapes remain finite and positive. Draws above
+``1 / sqrt(float epsilon)`` use the complete-support scaled-probability core and therefore require
+``AN <= 65_536``; lower-concentration draws support the full count domain.
+
+Lower-concentration log mass uses a fixed exact prefix followed by a controlled
+Euler--Maclaurin tail for each rising factorial. Tail log ratios switch between an algebraically
+differenced ``log1p`` form near zero and direct ``log1p`` subtraction away from zero; the
+differenced form loses significant bits when its argument approaches negative one at high shape
+and count. Two equivalent factorizations are evaluated, and the one with the smaller sum of
+intermediate magnitudes is selected per draw to avoid cancellation. Work and temporary arrays
+remain bounded independently of ``AN``. CDF and quantile queries retain exact probability or
+tail-sum arithmetic, whose runtime can still depend on the queried support.
 """
 
 from __future__ import annotations
@@ -48,6 +57,154 @@ MAX_COUNT = int(np.iinfo(np.int32).max)
 _LEGACY_BETA_CONCENTRATION = float(1.0 / np.sqrt(np.finfo(float).eps))
 _MAX_BETA_CONCENTRATION = 1e300
 MAX_BETA_SCORING_COUNT = 65_536
+_RISING_EXACT_PREFIX = 16
+_RISING_PREFIX_INDEX = np.arange(_RISING_EXACT_PREFIX, dtype=float)
+_STIRLING_POWERS = np.asarray((1, 3, 5, 7, 9, 11), dtype=float)
+_STIRLING_COEFFICIENTS = np.asarray(
+    (1.0 / 12.0, -1.0 / 360.0, 1.0 / 1260.0, -1.0 / 1680.0, 1.0 / 1188.0, -691.0 / 360360.0)
+)
+
+
+def _log_ratio(
+    numerator: np.ndarray,
+    denominator: np.ndarray,
+    difference: np.ndarray | None = None,
+) -> np.ndarray:
+    """Return ``log(numerator / denominator)`` accurately near and far from one."""
+    if difference is None:
+        difference = numerator - denominator
+    near_one = np.abs(difference) < 0.5 * denominator
+    log1p_difference = np.where(near_one, difference, 0.0)
+    stable = np.log1p(log1p_difference / denominator)
+    direct = np.log(numerator) - np.log(denominator)
+    return np.where(near_one, stable, direct)
+
+
+def _bounded_log_rising_ratio(
+    numerator: np.ndarray,
+    denominator: np.ndarray,
+    length: int,
+    *,
+    difference: np.ndarray | None = None,
+) -> np.ndarray:
+    """Evaluate ``log((numerator)_length / (denominator)_length)`` in bounded work.
+
+    The first 16 factors are direct log ratios. The remaining Euler--Maclaurin terms are
+    algebraically differenced before evaluation; separately evaluating two large rising
+    factorials would erase a small but valid log probability through cancellation.
+    """
+    if difference is None:
+        difference = numerator - denominator
+    result = np.zeros(np.broadcast_shapes(numerator.shape, denominator.shape))
+    prefix = _RISING_PREFIX_INDEX[: min(length, _RISING_EXACT_PREFIX)]
+    if prefix.size:
+        result += np.sum(
+            _log_ratio(
+                numerator[..., np.newaxis] + prefix,
+                denominator[..., np.newaxis] + prefix,
+                difference[..., np.newaxis],
+            ),
+            axis=-1,
+        )
+
+    remaining = max(length - _RISING_EXACT_PREFIX, 0)
+    numerator_start = numerator + _RISING_EXACT_PREFIX
+    denominator_start = denominator + _RISING_EXACT_PREFIX
+    log_start_ratio = _log_ratio(
+        numerator_start, denominator_start, difference
+    )
+    denominator_tail_log = np.log1p(remaining / denominator_start)
+    # log1p(remaining / numerator_start) - log1p(remaining / denominator_start).
+    # The single-log identity is accurate near zero, but its argument can approach -1 when
+    # one rising-factorial base is much larger than the other. In that regime, forming 1+x
+    # loses bits before log1p sees it; the two direct log1p terms remain well conditioned.
+    tail_log_argument = -(difference / numerator_start) * (
+        remaining / (denominator_start + remaining)
+    )
+    use_differenced_log = np.abs(tail_log_argument) < 0.5
+    tail_log_difference = np.where(
+        use_differenced_log,
+        np.log1p(np.where(use_differenced_log, tail_log_argument, 0.0)),
+        np.log1p(remaining / numerator_start)
+        - np.log1p(remaining / denominator_start),
+    )
+    tail = (
+        remaining * log_start_ratio
+        + difference * denominator_tail_log
+        + (numerator_start + remaining - 0.5) * tail_log_difference
+    )
+    shifted_log_ratio = np.log1p(difference / denominator_start)[..., np.newaxis]
+    tail_shifted_log_ratio = np.log1p(
+        difference / (denominator_start + remaining)
+    )[..., np.newaxis]
+    powers = _STIRLING_POWERS.reshape((1,) * result.ndim + (-1,))
+    coefficients = _STIRLING_COEFFICIENTS.reshape((1,) * result.ndim + (-1,))
+    correction = np.sum(
+        coefficients
+        * (
+            np.expm1(-powers * tail_shifted_log_ratio)
+            / (denominator_start[..., np.newaxis] + remaining) ** powers
+            - np.expm1(-powers * shifted_log_ratio)
+            / denominator_start[..., np.newaxis] ** powers
+        ),
+        axis=-1,
+    )
+    return result + tail + correction
+
+
+def _bounded_beta_log_mass(
+    k: int, n: int, mean: np.ndarray, concentration: np.ndarray
+) -> np.ndarray:
+    """Evaluate normalized beta-binomial log masses with work independent of ``n``."""
+    if n == 1:
+        return np.log(mean) if k else np.log1p(-mean)
+    alpha = mean * concentration
+    beta = (1.0 - mean) * concentration
+    log_choose = _log_combination(n, np.asarray(k))
+    if k <= n - k:
+        endpoint = _bounded_log_rising_ratio(
+            beta, concentration, n, difference=-alpha
+        )
+        direct_adjustment = _bounded_log_rising_ratio(alpha, beta + n - k, k)
+        paired_first = _bounded_log_rising_ratio(
+            np.asarray(float(n - k + 1)),
+            beta + n - k,
+            k,
+            difference=np.asarray(1.0) - beta,
+        )
+        paired_second = _bounded_log_rising_ratio(
+            alpha,
+            np.asarray(1.0),
+            k,
+            difference=alpha - 1.0,
+        )
+    else:
+        # Reflect the same identity around n to start from P(n).
+        remainder = n - k
+        endpoint = _bounded_log_rising_ratio(
+            alpha, concentration, n, difference=-beta
+        )
+        direct_adjustment = _bounded_log_rising_ratio(beta, alpha + k, remainder)
+        paired_first = _bounded_log_rising_ratio(
+            np.asarray(float(k + 1)),
+            alpha + k,
+            remainder,
+            difference=np.asarray(1.0) - alpha,
+        )
+        paired_second = _bounded_log_rising_ratio(
+            beta,
+            np.asarray(1.0),
+            remainder,
+            difference=beta - 1.0,
+        )
+    direct = endpoint + log_choose + direct_adjustment
+    paired = endpoint + paired_first + paired_second
+    direct_condition = np.abs(endpoint) + np.abs(log_choose) + np.abs(direct_adjustment)
+    paired_condition = np.abs(endpoint) + np.abs(paired_first) + np.abs(paired_second)
+    result = np.where(paired_condition < direct_condition, paired, direct)
+    if np.any(~np.isfinite(result)) or np.any(result > 0.0):
+        raise FloatingPointError("beta-binomial log mass is outside the stable numeric domain")
+    return result
 
 
 def _numeric_array(value: object, name: str) -> np.ndarray:
@@ -233,7 +390,12 @@ class CountPredictive:
         for observation, n in enumerate(an):
             selected = legacy[:, observation]
             if np.any(selected):
-                result[selected, observation] = beta_product_log_mass(
+                scorer = (
+                    beta_product_log_mass
+                    if int(n) <= MAX_BETA_SCORING_COUNT
+                    else _bounded_beta_log_mass
+                )
+                result[selected, observation] = scorer(
                     int(ac[observation]),
                     int(n),
                     mean[selected, observation],
@@ -252,13 +414,6 @@ class CountPredictive:
         """Integrated log probability mass for each valid observed count."""
         count, denominator = self.validated_counts(ac, an)
         if self.concentration is not None:
-            interior = (self.mean_draws > 0.0) & (self.mean_draws < 1.0)
-            if np.any(np.any(interior, axis=0) & (denominator > MAX_BETA_SCORING_COUNT)):
-                raise ValueError(
-                    f"interior beta-binomial log_prob requires "
-                    f"AN <= {MAX_BETA_SCORING_COUNT}; complete-support scoring exceeds "
-                    "its supported work budget"
-                )
             high = self._high_concentration_draws()
             legacy_masses = self._draw_legacy_beta_log_mass(count, denominator, high)
             if not np.any(high):
@@ -272,6 +427,7 @@ class CountPredictive:
                         "integrated log mass is outside the stable numeric domain"
                     )
                 return result
+
             result = np.empty(self.n_observations)
             for observation in range(self.n_observations):
                 selected = high[:, observation]
@@ -312,10 +468,9 @@ class CountPredictive:
                         - np.log(self.n_draws)
                     )
             if np.any(np.isnan(result) | (result > 0.0)):
-                raise FloatingPointError(
-                    "integrated log mass is outside the stable numeric domain"
-                )
+                raise FloatingPointError("integrated log mass is outside the stable numeric domain")
             return result
+
         masses = self._draw_binomial_log_mass(count, denominator)
         result = logsumexp(masses, axis=0) - np.log(self.n_draws)
         near_one = np.all(masses > -np.log(2.0), axis=0)
@@ -392,6 +547,25 @@ class CountPredictive:
             probability[interior] = rng.beta(alpha, beta)
         return rng.binomial(denominator[np.newaxis, :], probability)
 
+    def _count_moments(self, denominator: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Return exact mean and variance of each posterior-predictive count mixture."""
+        n = denominator[np.newaxis, :].astype(float)
+        probability = self.mean_draws
+        conditional_mean = n * probability
+        if self.concentration is None:
+            conditional_variance = n * probability * (1.0 - probability)
+        else:
+            conditional_variance = (
+                n
+                * probability
+                * (1.0 - probability)
+                * (n + self.concentration)
+                / (1.0 + self.concentration)
+            )
+        mean = np.mean(conditional_mean, axis=0)
+        variance = np.mean(conditional_variance + conditional_mean**2, axis=0) - mean**2
+        return mean, np.maximum(variance, 0.0)
+
     def quantiles(self, an: object, probabilities: object) -> np.ndarray:
         """Exact left-continuous count quantiles without materializing ``0, ..., AN``."""
         denominator = _validated_an(an, self.n_observations)
@@ -402,10 +576,23 @@ class CountPredictive:
         if not np.all(np.isfinite(levels)) or np.any((levels <= 0.0) | (levels > 1.0)):
             raise ValueError("probabilities must be finite and between 0 (exclusive) and 1")
 
+        cdf = self._cdf_evaluator()
         low = np.full((len(levels), self.n_observations), -1, dtype=np.int64)
         high = np.broadcast_to(denominator, low.shape).copy()
-        cdf = self._cdf_evaluator()
         at_one = levels == 1.0
+        mean, variance = self._count_moments(denominator)
+        bounded_levels = levels[~at_one, np.newaxis]
+        # Cantelli: P(Y - E[Y] >= a) <= Var(Y) / (Var(Y) + a**2). Choosing
+        # a**2 = Var(Y) * q / (1 - q) makes this an upper bracket for quantile q.
+        # The exact CDF check below is still authoritative over the floating calculation.
+        cantelli_distance = np.sqrt(
+            variance[np.newaxis, :] * bounded_levels / (1.0 - bounded_levels)
+        )
+        bracket = np.ceil(mean[np.newaxis, :] + cantelli_distance).astype(np.int64)
+        high[~at_one] = np.clip(bracket, 0, denominator[np.newaxis, :])
+        bracket_cdf = cdf(high, denominator)
+        failed_bracket = (~at_one[:, np.newaxis]) & (bracket_cdf < levels[:, np.newaxis])
+        high = np.where(failed_bracket, denominator[np.newaxis, :], high)
         upper_support = np.where(np.any(self.mean_draws > 0.0, axis=0), denominator, 0)
         high[at_one] = upper_support
         low[at_one] = upper_support - 1

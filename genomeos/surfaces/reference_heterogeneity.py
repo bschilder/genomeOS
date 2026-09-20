@@ -1,4 +1,4 @@
-"""Training-only B0H fitter and withheld predictor (design §§5, 7–8, 12; #211)."""
+"""Training-only B0H fitter and withheld predictor (design §§5, 7–8, 12; #211, #314)."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ from genomeos.surfaces.heterogeneity_types import (
     VariantTrainingCounts,
 )
 from genomeos.validation.count_baseline import B0InfeasibleError
-from genomeos.validation.predictive import MAX_BETA_SCORING_COUNT, CountPredictive
+from genomeos.validation.predictive import MAX_COUNT, CountPredictive
 from genomeos.validation.reference_counts import (
     ReferenceCount,
     ReferenceInfeasibleError,
@@ -200,10 +200,10 @@ def fit_reference_population_heterogeneity(
     available = tuple(item for item in rows if item.an > 0)
     if not available:
         raise ReferenceInfeasibleError("training data have no available rows")
-    oversized = tuple(item.record_id for item in available if item.an > MAX_BETA_SCORING_COUNT)
+    oversized = tuple(item.record_id for item in available if item.an > MAX_COUNT)
     if oversized:
         raise ValueError(
-            f"training AN exceeds MAX_BETA_SCORING_COUNT={MAX_BETA_SCORING_COUNT}: {list(oversized)}"
+            f"training AN exceeds MAX_COUNT={MAX_COUNT}: {list(oversized)}"
         )
     variant_ids = tuple(sorted({item.variant_id for item in available}))
     by_variant = {variant_id: index for index, variant_id in enumerate(variant_ids)}

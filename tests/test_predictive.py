@@ -7,9 +7,87 @@ from math import comb
 
 import numpy as np
 import pytest
+from scipy.special import logsumexp
 from scipy.stats import binom
 
+from genomeos.validation import predictive as predictive_module
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
+
+_DECIMAL_PI = Decimal(
+    "3.141592653589793238462643383279502884197169399375105820974944592307816406286"
+)
+_BERNOULLI = (
+    (1, 6),
+    (-1, 30),
+    (1, 42),
+    (-1, 30),
+    (5, 66),
+    (-691, 2730),
+    (7, 6),
+    (-3617, 510),
+    (43867, 798),
+    (-174611, 330),
+    (854513, 138),
+)
+
+
+def _decimal_log_gamma(value: Decimal) -> Decimal:
+    """Independent oracle shifted well beyond the production expansion point."""
+    shifted_logs = Decimal(0)
+    while value < 128:
+        shifted_logs += value.ln()
+        value += 1
+    result = (value - Decimal(".5")) * value.ln() - value
+    result += (2 * _DECIMAL_PI).ln() / 2
+    for order, (numerator, denominator) in enumerate(_BERNOULLI, 1):
+        result += Decimal(numerator) / (
+            Decimal(denominator)
+            * 2
+            * order
+            * (2 * order - 1)
+            * value ** (2 * order - 1)
+        )
+    return result - shifted_logs
+
+
+def _decimal_beta_binomial_log_mass(
+    mean: float, concentration: float, count: int, denominator: int
+) -> float:
+    with localcontext() as context:
+        context.prec = 160
+        p = Decimal.from_float(mean)
+        c = Decimal.from_float(concentration)
+        k = Decimal(count)
+        n = Decimal(denominator)
+        alpha = p * c
+        beta = (1 - p) * c
+        result = (
+            _decimal_log_gamma(n + 1)
+            - _decimal_log_gamma(k + 1)
+            - _decimal_log_gamma(n - k + 1)
+            + _decimal_log_gamma(k + alpha)
+            - _decimal_log_gamma(alpha)
+            + _decimal_log_gamma(n - k + beta)
+            - _decimal_log_gamma(beta)
+            - _decimal_log_gamma(n + c)
+            + _decimal_log_gamma(c)
+        )
+    return float(result)
+
+
+def _decimal_log_rising_ratio(numerator: float, denominator: float, length: int) -> float:
+    with localcontext() as context:
+        context.prec = 160
+        top = Decimal.from_float(numerator)
+        bottom = Decimal.from_float(denominator)
+        offset = Decimal(length)
+        result = (
+            _decimal_log_gamma(top + offset)
+            - _decimal_log_gamma(top)
+            - _decimal_log_gamma(bottom + offset)
+            + _decimal_log_gamma(bottom)
+        )
+    return float(result)
 
 
 @pytest.mark.parametrize("mean", [1e-16, 1e-12, 0.1, np.nextafter(1.0, 0.0)])
@@ -54,18 +132,157 @@ def test_beta_binomial_mass_matches_independent_decimal_products(
     )
 
 
-def test_beta_binomial_large_count_scoring_refuses_before_diagnostics():
-    """A bounded stable scorer must refuse work beyond its budget without beta subtraction."""
-    predictive = CountPredictive(np.array([[1e-16]]), np.array([[1e6]]))
-    for operation in [
-        predictive.log_prob,
-        lambda ac, an: predictive_diagnostics(predictive, ac, an),
-    ]:
-        with pytest.raises(ValueError, match="beta-binomial.*65536"):
-            operation([0], [65_537])
-    # The exact support and boundary CDF do not require scoring this mass.
-    np.testing.assert_array_equal(predictive.cdf([-1], [65_537]), [0.0])
-    np.testing.assert_array_equal(predictive.quantiles([65_537], [1.0]), [[65_537]])
+@pytest.mark.parametrize(
+    ("mean", "concentration", "count", "denominator", "absolute_tolerance"),
+    [
+        (0.01, 30.0, 44_431, 2_571_112, 5e-9),
+        (1e-12, 1e6, 0, 2_571_112, 5e-9),
+        (np.nextafter(1.0, 0.0), 1e6, 2_571_112, 2_571_112, 5e-9),
+        (0.25, 20.0, 0, MAX_COUNT, 2e-8),
+        (0.25, 20.0, 536_870_912, MAX_COUNT, 3e-8),
+        (0.01, 30.0, 21_474_836, MAX_COUNT, 3e-8),
+        (0.5, 2.0, 1_073_741_823, MAX_COUNT, 3e-8),
+        (1e-6, 1e6, 10_000, MAX_COUNT, 3e-8),
+    ],
+)
+def test_beta_binomial_large_count_scoring_matches_independent_decimal_oracle(
+    mean, concentration, count, denominator, absolute_tolerance
+):
+    """Large survey counts must not trigger support-sized work or beta subtraction."""
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, denominator)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [denominator])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=absolute_tolerance)
+
+
+@pytest.mark.parametrize("count", [644_245_094, 1_073_741_823])
+def test_beta_binomial_max_count_high_concentration_matches_decimal_oracle(count):
+    """The full declared domain has a ten-micro-log-unit absolute error envelope."""
+    mean = 0.3
+    concentration = 2.0**26
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, MAX_COUNT)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [MAX_COUNT])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+def test_high_shape_rising_ratio_matches_independent_decimal_oracle():
+    """The large positive paired factor must retain the small tail-log complement."""
+    mean = 0.3
+    concentration = 2.0**26
+    numerator = mean * concentration
+    length = 644_245_094
+    expected = _decimal_log_rising_ratio(numerator, 1.0, length)
+
+    actual = predictive_module._bounded_log_rising_ratio(
+        np.array([numerator]),
+        np.array([1.0]),
+        length,
+        difference=np.array([numerator - 1.0]),
+    )
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+def test_beta_binomial_million_count_high_concentration_matches_decimal_oracle():
+    mean = 0.01
+    concentration = 2.0**26
+    count = 1_285_556
+    denominator = 2_571_112
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, denominator)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [denominator])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+@pytest.mark.parametrize("mean", [0.01, 0.3, 0.5, 0.9, 0.99])
+@pytest.mark.parametrize("concentration", [2.0**20, 2.0**24, 2.0**26])
+@pytest.mark.parametrize("count_fraction", [0.0, 0.25, 0.5, 0.75, 1.0])
+def test_beta_binomial_high_shape_grid_matches_decimal_oracle(
+    mean, concentration, count_fraction
+):
+    """The declared maximum domain retains ten-micro-log-unit absolute accuracy."""
+    count = round(count_fraction * MAX_COUNT)
+    expected = _decimal_beta_binomial_log_mass(mean, concentration, count, MAX_COUNT)
+    predictive = CountPredictive(np.array([[mean]]), np.array([[concentration]]))
+
+    actual = predictive.log_prob([count], [MAX_COUNT])
+
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+
+
+def test_beta_binomial_high_shape_mixture_matches_decimal_oracle_and_reflection():
+    count = 644_245_094
+    means = np.array([[0.3], [0.7]])
+    concentrations = np.full_like(means, 2.0**26)
+    expected_draws = np.array(
+        [
+            _decimal_beta_binomial_log_mass(mean, 2.0**26, count, MAX_COUNT)
+            for mean in means[:, 0]
+        ]
+    )
+    forward = CountPredictive(means, concentrations)
+    reflected = CountPredictive(1.0 - means, concentrations)
+
+    actual = forward.log_prob([count], [MAX_COUNT])
+    reverse = reflected.log_prob([MAX_COUNT - count], [MAX_COUNT])
+
+    expected = logsumexp(expected_draws) - np.log(len(expected_draws))
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=1e-5)
+    np.testing.assert_allclose(actual, reverse, rtol=0.0, atol=1e-5)
+
+
+def test_beta_binomial_large_count_mixture_integrates_draw_masses():
+    means = np.array([[1e-12], [0.01], [0.2], [np.nextafter(1.0, 0.0)]])
+    concentrations = np.array([[1e6], [30.0], [2.0], [1e6]])
+    count, denominator = 44_431, 2_571_112
+    expected_draws = np.array(
+        [
+            _decimal_beta_binomial_log_mass(float(mean), float(shape), count, denominator)
+            for mean, shape in zip(means[:, 0], concentrations[:, 0], strict=True)
+        ]
+    )
+    predictive = CountPredictive(means, concentrations)
+
+    actual = predictive.log_prob([count], [denominator])
+
+    expected = logsumexp(expected_draws) - np.log(len(expected_draws))
+    np.testing.assert_allclose(actual, [expected], rtol=0.0, atol=5e-9)
+
+
+def test_beta_binomial_large_count_scoring_preserves_allele_complement():
+    means = np.array([[1e-12], [0.01], [0.2], [0.8]])
+    concentrations = np.array([[1e6], [30.0], [2.0], [7.0]])
+    count, denominator = 44_431, 2_571_112
+    forward = CountPredictive(means, concentrations)
+    reverse = CountPredictive(1.0 - means, concentrations)
+
+    np.testing.assert_allclose(
+        forward.log_prob([count], [denominator]),
+        reverse.log_prob([denominator - count], [denominator]),
+        rtol=0.0,
+        atol=5e-9,
+    )
+
+
+def test_beta_binomial_large_count_log_mass_does_not_materialize_support(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    def refuse_support(*args, **kwargs):
+        raise AssertionError("log_prob must not materialize a count-support array")
+
+    monkeypatch.setattr(predictive_module.np, "arange", refuse_support)
+    predictive = CountPredictive(np.array([[0.01]]), np.array([[30.0]]))
+
+    result = predictive.log_prob([44_431], [2_571_112])
+
+    assert np.isfinite(result[0])
 
 
 def test_beta_scoring_cap_does_not_restrict_exact_degenerate_or_binomial_draws():
@@ -197,6 +414,35 @@ def test_public_count_quantiles_are_exact_left_continuous_endpoints():
     np.testing.assert_array_equal(result, np.array([[0], [1]]))
 
 
+def test_rare_quantiles_bracket_predictive_mass_before_exact_search(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """The first CDF probe must not traverse half of a million-count rare-allele support."""
+    predictive = CountPredictive(np.full((4, 1), 1e-6))
+    original_factory = CountPredictive._cdf_evaluator
+    probes: list[np.ndarray] = []
+
+    def instrumented_factory(self: CountPredictive):
+        evaluate = original_factory(self)
+
+        def record_and_evaluate(count: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+            probes.append(count.copy())
+            return evaluate(count, denominator)
+
+        return record_and_evaluate
+
+    monkeypatch.setattr(CountPredictive, "_cdf_evaluator", instrumented_factory)
+
+    result = predictive.quantiles(
+        an=np.array([1_000_000]),
+        probabilities=np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975]),
+    )
+
+    np.testing.assert_array_equal(result[:, 0], np.array([0, 0, 0, 1, 2, 2, 3]))
+    assert probes
+    assert int(np.max(probes[0])) < 10_000
+
+
 def test_beta_binomial_cdf_handles_huge_denominators_with_a_short_exact_tail():
     """An AN-sized support array would make exact scoring unusable for large surveys."""
     an = 1_000_000_000
@@ -322,6 +568,19 @@ def test_high_concentration_large_support_refuses_at_operation_boundary():
     ):
         with pytest.raises(ValueError, match="high-concentration|65536"):
             operation()
+
+
+def test_concentration_route_boundary_preserves_each_supported_count_domain():
+    """The exact legacy boundary stays full-domain; the next float takes the support-bounded route."""
+    mean = np.asarray([[0.4]])
+    threshold = 2.0**26
+    legacy = CountPredictive(mean, np.asarray([[threshold]]))
+    direct = CountPredictive(mean, np.asarray([[np.nextafter(threshold, np.inf)]]))
+
+    assert np.isfinite(legacy.log_prob([0], [65_537])[0])
+    assert direct.sample_counts([65_536], seed=42).shape == (1, 1)
+    with pytest.raises(ValueError, match="high-concentration|65536"):
+        direct.log_prob([0], [65_537])
 
 
 def test_high_concentration_converges_to_binomial_without_substitution():
