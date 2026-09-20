@@ -6,9 +6,9 @@ owned by ``genomeos.validation.predictive``. CuPy is imported only when ``CuPyCD
 constructed, and a missing library or CUDA device is an error rather than a CPU fallback.
 
 Beta-binomial tails are exact finite sums, pivoting at probability one half so subtraction always
-uses the directly summed smaller tail. Temporary log-mass grids are bounded by
-``CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE`` float64 elements and no
-array dimension depends on the complete allele-number support.
+uses the directly summed smaller tail. Query, draw, and support batches are chosen from current
+free device memory using a conservative peak-byte model and fixed caps. No array dimension depends
+on the complete allele-number support.
 """
 
 from __future__ import annotations
@@ -17,13 +17,48 @@ from typing import Any
 
 import numpy as np
 
-CDF_ROW_CHUNK_SIZE = 4
-CDF_DRAW_CHUNK_SIZE = 128
-CDF_SUPPORT_CHUNK_SIZE = 1024
+CDF_ROW_CHUNK_CAP = 8
+CDF_DRAW_CHUNK_CAP = 256
+CDF_SUPPORT_CHUNK_CAP = 2048
+CDF_TEMPORARY_BYTES_PER_ELEMENT = 96
+CDF_MEMORY_CAP_BYTES = 512 * 1024**2
+CDF_MIN_MEMORY_BUDGET_BYTES = 64 * 1024**2
+# Profiler compatibility: these are the maximum plan, while each call may choose less.
+CDF_ROW_CHUNK_SIZE = CDF_ROW_CHUNK_CAP
+CDF_DRAW_CHUNK_SIZE = CDF_DRAW_CHUNK_CAP
+CDF_SUPPORT_CHUNK_SIZE = CDF_SUPPORT_CHUNK_CAP
 MAX_TEMPORARY_ELEMENTS = (
-    CDF_ROW_CHUNK_SIZE * CDF_DRAW_CHUNK_SIZE * CDF_SUPPORT_CHUNK_SIZE
+    CDF_ROW_CHUNK_CAP * CDF_DRAW_CHUNK_CAP * CDF_SUPPORT_CHUNK_CAP
 )
 LOG_HALF = float(np.log(0.5))
+
+
+def _cdf_chunk_plan(
+    *, rows: int, draws: int, free_device_bytes: int
+) -> tuple[int, int, int]:
+    """Choose bounded row, draw, and support batches from available device memory.
+
+    The peak model reserves 96 bytes for each row×draw×support element, covering twelve
+    simultaneous float64-sized arrays. Only one eighth of currently free memory is eligible and
+    the budget is capped at 512 MiB, leaving space for JAX, CuPy pools, and non-grid temporaries.
+    """
+    if any(type(value) is not int or value <= 0 for value in (rows, draws, free_device_bytes)):
+        raise ValueError("chunk-plan inputs must be positive integers")
+    memory_budget = min(free_device_bytes // 8, CDF_MEMORY_CAP_BYTES)
+    if memory_budget < CDF_MIN_MEMORY_BUDGET_BYTES:
+        raise RuntimeError(
+            "CuPy CDF requires at least 512 MiB free device memory for bounded exact tails"
+        )
+    row_chunk = min(rows, CDF_ROW_CHUNK_CAP)
+    draw_chunk = min(draws, CDF_DRAW_CHUNK_CAP)
+    maximum_elements = memory_budget // CDF_TEMPORARY_BYTES_PER_ELEMENT
+    support_chunk = min(
+        CDF_SUPPORT_CHUNK_CAP,
+        maximum_elements // (row_chunk * draw_chunk),
+    )
+    if support_chunk < 1:
+        raise RuntimeError("CuPy CDF cannot construct a bounded exact-tail chunk plan")
+    return row_chunk, draw_chunk, support_chunk
 
 
 def _load_cupy() -> tuple[Any, Any]:
@@ -62,10 +97,16 @@ class CuPyCDF:
         """Return mixture CDFs for a ``(queries, observations)`` threshold matrix."""
         if ac.ndim != 2 or an.ndim != 1 or ac.shape[1] != an.shape[0]:
             raise ValueError("validated CDF arrays have incompatible shapes")
+        free_device_bytes, _ = self._cp.cuda.runtime.memGetInfo()
+        chunk_plan = _cdf_chunk_plan(
+            rows=ac.size,
+            draws=self._mean.shape[0],
+            free_device_bytes=int(free_device_bytes),
+        )
         if self._concentration is None:
-            result = self._binomial_cdf(ac, an)
+            result = self._binomial_cdf(ac, an, chunk_plan[:2])
         else:
-            result = self._beta_binomial_cdf(ac, an)
+            result = self._beta_binomial_cdf(ac, an, chunk_plan)
         if not np.all(np.isfinite(result)) or np.any((result < 0.0) | (result > 1.0)):
             raise FloatingPointError("CuPy CDF produced a non-finite or out-of-range probability")
         return result
@@ -83,18 +124,21 @@ class CuPyCDF:
         )
         return count, denominator, observation
 
-    def _binomial_cdf(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
+    def _binomial_cdf(
+        self, ac: np.ndarray, an: np.ndarray, chunk_plan: tuple[int, int]
+    ) -> np.ndarray:
         cp = self._cp
+        row_chunk_size, draw_chunk_size = chunk_plan
         count, denominator, observation = self._query_arrays(ac, an)
         output = cp.empty(count.shape, dtype=cp.float64)
-        for row_start in range(0, count.size, CDF_ROW_CHUNK_SIZE):
-            row_stop = min(row_start + CDF_ROW_CHUNK_SIZE, count.size)
+        for row_start in range(0, count.size, row_chunk_size):
+            row_stop = min(row_start + row_chunk_size, count.size)
             k = count[row_start:row_stop]
             n = denominator[row_start:row_stop]
             obs = observation[row_start:row_stop]
             total = cp.zeros(row_stop - row_start, dtype=cp.float64)
-            for draw_start in range(0, self._mean.shape[0], CDF_DRAW_CHUNK_SIZE):
-                draw_stop = min(draw_start + CDF_DRAW_CHUNK_SIZE, self._mean.shape[0])
+            for draw_start in range(0, self._mean.shape[0], draw_chunk_size):
+                draw_stop = min(draw_start + draw_chunk_size, self._mean.shape[0])
                 means = self._mean[draw_start:draw_stop, obs].T
                 values = self._special.bdtr(k[:, None], n[:, None], means)
                 values = cp.where(k[:, None] < 0, 0.0, values)
@@ -110,6 +154,7 @@ class CuPyCDF:
         denominator: Any,
         start: Any,
         stop: Any,
+        support_chunk_size: int,
     ) -> Any:
         cp = self._cp
         special = self._special
@@ -118,8 +163,8 @@ class CuPyCDF:
         alpha = mean * concentration
         beta = (1.0 - mean) * concentration
         log_normalizer = special.betaln(alpha, beta)
-        for support_start in range(0, maximum_terms, CDF_SUPPORT_CHUNK_SIZE):
-            width = min(CDF_SUPPORT_CHUNK_SIZE, maximum_terms - support_start)
+        for support_start in range(0, maximum_terms, support_chunk_size):
+            width = min(support_chunk_size, maximum_terms - support_start)
             offset = cp.arange(support_start, support_start + width, dtype=cp.int64)
             support = start[:, None] + offset[None, :]
             valid = support < stop[:, None]
@@ -136,18 +181,21 @@ class CuPyCDF:
             total = cp.logaddexp(total, special.logsumexp(log_mass, axis=2))
         return total
 
-    def _beta_binomial_cdf(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
+    def _beta_binomial_cdf(
+        self, ac: np.ndarray, an: np.ndarray, chunk_plan: tuple[int, int, int]
+    ) -> np.ndarray:
         cp = self._cp
+        row_chunk_size, draw_chunk_size, support_chunk_size = chunk_plan
         count, denominator, observation = self._query_arrays(ac, an)
         output = cp.empty(count.shape, dtype=cp.float64)
-        for row_start in range(0, count.size, CDF_ROW_CHUNK_SIZE):
-            row_stop = min(row_start + CDF_ROW_CHUNK_SIZE, count.size)
+        for row_start in range(0, count.size, row_chunk_size):
+            row_stop = min(row_start + row_chunk_size, count.size)
             k = count[row_start:row_stop]
             n = denominator[row_start:row_stop]
             obs = observation[row_start:row_stop]
             total = cp.zeros(row_stop - row_start, dtype=cp.float64)
-            for draw_start in range(0, self._mean.shape[0], CDF_DRAW_CHUNK_SIZE):
-                draw_stop = min(draw_start + CDF_DRAW_CHUNK_SIZE, self._mean.shape[0])
+            for draw_start in range(0, self._mean.shape[0], draw_chunk_size):
+                draw_stop = min(draw_start + draw_chunk_size, self._mean.shape[0])
                 mean = self._mean[draw_start:draw_stop, obs].T
                 concentration = self._concentration[draw_start:draw_stop, obs].T
                 boundary_zero = mean == 0.0
@@ -163,6 +211,7 @@ class CuPyCDF:
                     n,
                     short_start,
                     short_stop,
+                    support_chunk_size,
                 )
                 values = cp.where(
                     lower_is_shorter[:, None],
@@ -174,12 +223,16 @@ class CuPyCDF:
                 if bool(cp.asnumpy(cp.any(fallback))):
                     long_start = cp.where(lower_is_shorter, k + 1, 0)
                     long_stop = cp.where(lower_is_shorter, n + 1, k + 1)
+                    fallback_rows = cp.any(fallback, axis=1)
+                    long_start = cp.where(fallback_rows, long_start, 0)
+                    long_stop = cp.where(fallback_rows, long_stop, 0)
                     log_long = self._tail_logsum(
                         safe_mean,
                         concentration,
                         n,
                         long_start,
                         long_stop,
+                        support_chunk_size,
                     )
                     fallback_values = cp.where(
                         lower_is_shorter[:, None],

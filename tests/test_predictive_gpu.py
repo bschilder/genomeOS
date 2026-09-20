@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from genomeos.validation import predictive_cupy as predictive_cupy_module
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
 from genomeos.validation.predictive_cupy import CuPyCDF
 
@@ -36,6 +37,35 @@ def _cupy_device_available() -> bool:
 
 GPU_AVAILABLE = _cupy_device_available()
 requires_gpu = pytest.mark.skipif(not GPU_AVAILABLE, reason="requires a working CUDA device")
+
+
+def test_cupy_chunk_plan_batches_real_workload_within_a_conservative_memory_budget():
+    """The old 4×128×1,024 plan leaves an A100 launch-bound on the real query shape."""
+    plan = predictive_cupy_module._cdf_chunk_plan(
+        rows=1_505,
+        draws=2_000,
+        free_device_bytes=8 * 1024**3,
+    )
+
+    assert plan == (8, 256, 2_048)
+    assert np.prod(plan) * 96 <= 512 * 1024**2
+
+
+def test_cupy_chunk_plan_reduces_work_or_refuses_when_device_memory_is_tight():
+    constrained = predictive_cupy_module._cdf_chunk_plan(
+        rows=1_505,
+        draws=2_000,
+        free_device_bytes=512 * 1024**2,
+    )
+
+    assert constrained == (8, 256, 341)
+    assert np.prod(constrained) * 96 <= 64 * 1024**2
+    with pytest.raises(RuntimeError, match="512 MiB free"):
+        predictive_cupy_module._cdf_chunk_plan(
+            rows=1_505,
+            draws=2_000,
+            free_device_bytes=511 * 1024**2,
+        )
 
 
 def _profile_command(out: Path) -> list[str]:
@@ -389,6 +419,37 @@ def test_gpu_refuses_invalid_fallback_component_before_cancellation(monkeypatch)
 
     with pytest.raises(FloatingPointError, match="component"):
         evaluator(np.array([[0]]), np.array([2]))
+
+
+@requires_gpu
+def test_gpu_fallback_excludes_irrelevant_large_support_rows(monkeypatch):
+    """One fallback row must not expand an unrelated genome-scale complement."""
+    evaluator = CuPyCDF(
+        np.full((2, 2), 0.25),
+        np.ones((2, 2)),
+    )
+    cp = evaluator._cp
+    calls = 0
+
+    def injected_tail(mean, concentration, denominator, start, stop, support_chunk_size):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return cp.log(cp.asarray([[0.75, 0.75], [0.25, 0.25]]))
+        spans = cp.asnumpy(stop - start)
+        assert spans[0] == 2
+        assert spans[1] == 0
+        return cp.log(cp.full(mean.shape, 0.25, dtype=cp.float64))
+
+    monkeypatch.setattr(evaluator, "_tail_logsum", injected_tail)
+
+    result = evaluator(
+        np.array([[0, 0]]),
+        np.array([2, MAX_COUNT]),
+    )
+
+    np.testing.assert_allclose(result, np.array([[0.75, 0.25]]))
+    assert calls == 2
 
 
 @requires_gpu
