@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the offline current spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #319).
+"""Run the offline current spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #319, #333).
 
 This is a deterministic file adapter around
 ``genomeos.validation.spatial_gp_benchmark``. It requires caller-supplied geography and
@@ -30,6 +30,7 @@ sys.path.insert(0, str(ROOT))
 
 import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.surfaces.config as surface_config_module  # noqa: E402
+import genomeos.surfaces.convergence as convergence_module  # noqa: E402
 import genomeos.surfaces.fit as surface_fit_module  # noqa: E402
 import genomeos.surfaces.observation as observation_module  # noqa: E402
 import genomeos.surfaces.observation_prediction as prediction_module  # noqa: E402
@@ -66,6 +67,13 @@ FOLD_STATUS_COLUMNS = (
     "status",
     "expected_test_ids",
     "failure_reason",
+    "max_rhat",
+    "max_rhat_parameter",
+    "min_bulk_ess",
+    "min_bulk_ess_parameter",
+    "min_tail_ess",
+    "min_tail_ess_parameter",
+    "divergence_count",
 )
 OBSERVATION_LITERAL_COLUMNS = (
     "variant_id",
@@ -86,6 +94,7 @@ FIT_CONFIG_FIELDS = tuple(field.name for field in fields(FitConfig))
 SCIENCE_SOURCE_FILES = {
     "genomeos/observations/schema.py": Path(observations_schema_module.__file__).resolve(),
     "genomeos/surfaces/config.py": Path(surface_config_module.__file__).resolve(),
+    "genomeos/surfaces/convergence.py": Path(convergence_module.__file__).resolve(),
     "genomeos/surfaces/fit.py": Path(surface_fit_module.__file__).resolve(),
     "genomeos/surfaces/observation.py": Path(observation_module.__file__).resolve(),
     "genomeos/surfaces/observation_prediction.py": Path(prediction_module.__file__).resolve(),
@@ -356,6 +365,12 @@ def run(args: argparse.Namespace) -> int:
         "cdf_backend": args.cdf_backend,
         "data_version": args.data_version,
         "fit_config": asdict(config),
+        "sampler_convergence_gate": {
+            "maximum_divergences": 0,
+            "maximum_rhat": config.max_rhat,
+            "minimum_bulk_ess": config.min_ess,
+            "minimum_tail_ess": config.min_ess,
+        },
         "seed": args.seed,
     }
     science_hashes = {
@@ -395,13 +410,25 @@ def run(args: argparse.Namespace) -> int:
         fold_results.append(fold_result)
     result = finalize_single_variant_gp_benchmark(plan, fold_results)
 
-    status_by_id = {status.split_id: status for status in result.fold_status}
+    result_by_id = {fold.status.split_id: fold for fold in fold_results}
     split_records: list[dict[str, object]] = []
     status_rows: list[dict[str, object]] = []
     for split in result.splits:
-        status = status_by_id[split.split_id]
+        fold = result_by_id[split.split_id]
+        status = fold.status
+        diagnostics = (
+            asdict(fold.sampler_diagnostics)
+            if fold.sampler_diagnostics is not None
+            else None
+        )
         record = asdict(split)
-        record.update({"status": status.status, "failure_reason": status.failure_reason})
+        record.update(
+            {
+                "status": status.status,
+                "failure_reason": status.failure_reason,
+                "sampler_diagnostics": diagnostics,
+            }
+        )
         split_records.append(record)
         status_rows.append(
             {
@@ -412,11 +439,24 @@ def run(args: argparse.Namespace) -> int:
                     list(status.expected_test_ids), separators=(",", ":")
                 ),
                 "failure_reason": status.failure_reason or "",
+                **(
+                    diagnostics
+                    if diagnostics is not None
+                    else {
+                        "max_rhat": "",
+                        "max_rhat_parameter": "",
+                        "min_bulk_ess": "",
+                        "min_bulk_ess_parameter": "",
+                        "min_tail_ess": "",
+                        "min_tail_ess_parameter": "",
+                        "divergence_count": "",
+                    }
+                ),
             }
         )
 
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "model": {
             "model_id": MODEL_ID,
             "name": MODEL_NAME,
