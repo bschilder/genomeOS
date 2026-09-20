@@ -1,0 +1,9 @@
+variant_id	rsid	population_id	lat	lon	radius_km	ac	an	source_record_id	source	assay	date_lower	date_upper	sampling_design	disease_ascertainment_excluded	cohort_id	ingest_version
+chr11-5227002-T-A	rs334	population-a-0	0.0	0.0	10.0	0	100	a-0	fixture	fixture-assay	0	0	population_random	True	cohort-a-0	fixture-v1
+chr11-5227002-T-A	rs334	population-a-1	0.1	0.1	10.0	1	120	a-1	fixture	fixture-assay	0	0	population_random	True	cohort-a-1	fixture-v1
+chr11-5227002-T-A	rs334	population-b-0	0.0	5.0	10.0	5	100	b-0	fixture	fixture-assay	0	0	population_random	True	cohort-b-0	fixture-v1
+chr11-5227002-T-A	rs334	population-b-1	0.1	5.1	10.0	6	120	b-1	fixture	fixture-assay	0	0	population_random	True	cohort-b-1	fixture-v1
+chr11-5227002-T-A	rs334	population-c-0	0.0	10.0	10.0	10	100	c-0	fixture	fixture-assay	0	0	population_random	True	cohort-c-0	fixture-v1
+chr11-5227002-T-A	rs334	population-c-1	0.1	10.1	10.0	11	120	c-1	fixture	fixture-assay	0	0	population_random	True	cohort-c-1	fixture-v1
+chr11-5227002-T-A	rs334	population-d-0	0.0	15.0	10.0	15	100	d-0	fixture	fixture-assay	0	0	population_random	True	cohort-d-0	fixture-v1
+chr11-5227002-T-A	rs334	population-d-1	0.1	15.1	10.0	16	120	d-1	fixture	fixture-assay	0	0	population_random	True	cohort-d-1	fixture-v1

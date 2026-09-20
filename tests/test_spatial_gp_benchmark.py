@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -8,14 +8,31 @@ import pytest
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
 from genomeos.surfaces.config import FitConfig
+from genomeos.surfaces.convergence import SamplerDiagnostics
+from genomeos.surfaces.fit import ConvergenceError
 from genomeos.surfaces.observation import (
     ObservationModelMetadata,
     ObservationParameters,
     SurveyQueries,
 )
-from genomeos.validation.spatial_gp_benchmark import evaluate_single_variant_gp
+from genomeos.validation.spatial_gp_benchmark import (
+    evaluate_single_variant_gp,
+    evaluate_single_variant_gp_fold,
+    finalize_single_variant_gp_benchmark,
+    plan_single_variant_gp_benchmark,
+)
 
 VARIANT = "chr11-5227002-T-A"
+GOOD_DIAGNOSTICS = SamplerDiagnostics(1.01, "z", 300.0, "z", 260.0, "z", 0)
+BAD_DIAGNOSTICS = SamplerDiagnostics(1.08, "z", 150.0, "z", 180.0, "z", 1)
+
+
+@pytest.fixture(autouse=True)
+def _stable_sampler_diagnostics(monkeypatch):
+    monkeypatch.setattr(
+        "genomeos.validation.spatial_gp_benchmark.summarize_sampler_diagnostics",
+        lambda *_args, **_kwargs: GOOD_DIAGNOSTICS,
+    )
 
 
 def _observations(*, large_denominator: bool = False) -> pd.DataFrame:
@@ -63,6 +80,7 @@ class _FakeFit:
     training_cohorts: tuple[str, ...]
     likelihood: str
     fail_prediction: bool = False
+    idata: object = None
 
     def predict_new_cohort_parameters(
         self, queries: SurveyQueries, *, seed: int
@@ -123,6 +141,73 @@ def _evaluate(
         config=config,
         fit_function=fit_function,
     )
+
+
+def _plan() -> object:
+    return plan_single_variant_gp_benchmark(
+        _observations(),
+        _assignments(),
+        (),
+        buffer_km=10.0,
+        data_version="test-v1",
+        config=FitConfig(likelihood="binomial"),
+    )
+
+
+def test_completed_fold_retains_passing_sampler_diagnostics():
+    plan = _plan()
+
+    result = evaluate_single_variant_gp_fold(
+        plan, plan.splits[0], fit_function=_recording_fit([])
+    )
+
+    assert result.status.status == "completed"
+    assert result.sampler_diagnostics == GOOD_DIAGNOSTICS
+
+
+def test_convergence_failure_retains_diagnostics_and_emits_no_predictions():
+    plan = _plan()
+
+    def nonconverged_fit(_observations, _config):
+        raise ConvergenceError(
+            "sampler did not converge (synthetic gate failure)",
+            diagnostics=BAD_DIAGNOSTICS,
+        )
+
+    result = evaluate_single_variant_gp_fold(
+        plan, plan.splits[0], fit_function=nonconverged_fit
+    )
+
+    assert result.status.status == "failed"
+    assert "sampler did not converge" in result.status.failure_reason
+    assert result.predictions.empty
+    assert result.sampler_diagnostics == BAD_DIAGNOSTICS
+
+
+@pytest.mark.parametrize(
+    "diagnostics",
+    [
+        SamplerDiagnostics(1.051, "z", 300.0, "z", 260.0, "z", 0),
+        SamplerDiagnostics(1.01, "z", 199.0, "z", 260.0, "z", 0),
+        SamplerDiagnostics(1.01, "z", 300.0, "z", 199.0, "z", 0),
+        SamplerDiagnostics(1.01, "z", 300.0, "z", 260.0, "z", 1),
+    ],
+)
+def test_fold_refuses_each_retained_sampler_gate(monkeypatch, diagnostics):
+    monkeypatch.setattr(
+        "genomeos.validation.spatial_gp_benchmark.summarize_sampler_diagnostics",
+        lambda *_args, **_kwargs: diagnostics,
+    )
+    plan = _plan()
+
+    result = evaluate_single_variant_gp_fold(
+        plan, plan.splits[0], fit_function=_recording_fit([])
+    )
+
+    assert result.status.status == "failed"
+    assert "sampler did not converge" in result.status.failure_reason
+    assert result.predictions.empty
+    assert result.sampler_diagnostics == diagnostics
 
 
 def test_evaluator_fits_each_fold_and_scores_test_rows_in_batches():
@@ -255,3 +340,34 @@ def test_evaluator_refuses_multiple_variants_before_fitting():
         )
 
     assert calls == []
+
+
+@pytest.mark.parametrize("change", [
+    {"max_rhat": 1.051},
+    {"min_bulk_ess": 199.0},
+    {"min_tail_ess": 199.0},
+    {"divergence_count": 1},
+])
+def test_finalization_refuses_completed_fold_with_failed_retained_gate(change):
+    plan = _plan()
+    folds = [
+        evaluate_single_variant_gp_fold(plan, split, fit_function=_recording_fit([]))
+        for split in plan.splits
+    ]
+    folds[0] = replace(folds[0], sampler_diagnostics=replace(GOOD_DIAGNOSTICS, **change))
+
+    with pytest.raises(ValueError, match="completed fold.*convergence"):
+        finalize_single_variant_gp_benchmark(plan, folds)
+
+
+@pytest.mark.parametrize("limits", [{"max_rhat": 1.005}, {"min_ess": 270.0}])
+def test_finalization_uses_the_supplied_plan_limits(limits):
+    plan = _plan()
+    folds = [
+        evaluate_single_variant_gp_fold(plan, split, fit_function=_recording_fit([]))
+        for split in plan.splits
+    ]
+    stricter_plan = replace(plan, config=replace(plan.config, **limits))
+
+    with pytest.raises(ValueError, match="completed fold.*convergence"):
+        finalize_single_variant_gp_benchmark(stricter_plan, folds)

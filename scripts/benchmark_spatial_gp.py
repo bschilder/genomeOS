@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the offline current spatial-GP benchmark (design §§4–5, 7–8, 12; #189).
+"""Run the offline current spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #319, #333).
 
 This is a deterministic file adapter around
 ``genomeos.validation.spatial_gp_benchmark``. It requires caller-supplied geography and
@@ -12,8 +12,10 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import asdict, fields
 from math import isfinite
 from pathlib import Path
@@ -28,12 +30,14 @@ sys.path.insert(0, str(ROOT))
 
 import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.surfaces.config as surface_config_module  # noqa: E402
+import genomeos.surfaces.convergence as convergence_module  # noqa: E402
 import genomeos.surfaces.fit as surface_fit_module  # noqa: E402
 import genomeos.surfaces.observation as observation_module  # noqa: E402
 import genomeos.surfaces.observation_prediction as prediction_module  # noqa: E402
 import genomeos.validation.benchmark as benchmark_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.spatial_gp_benchmark as spatial_benchmark_module  # noqa: E402
+import genomeos.validation.spatial_gp_checkpoint as checkpoint_module  # noqa: E402
 import genomeos.validation.splits as splits_module  # noqa: E402
 from genomeos.surfaces.config import FitConfig  # noqa: E402
 from genomeos.validation.benchmark import (  # noqa: E402
@@ -41,7 +45,17 @@ from genomeos.validation.benchmark import (  # noqa: E402
     validate_allele_observations,
 )
 from genomeos.validation.spatial_gp_benchmark import (  # noqa: E402
-    evaluate_single_variant_gp,
+    evaluate_single_variant_gp_fold,
+    plan_single_variant_gp_benchmark,
+    spatial_gp_seed_schedule,
+)
+from genomeos.validation.spatial_gp_checkpoint import (  # noqa: E402
+    build_checkpoint_header,
+    finalize_checkpoint_benchmark,
+    initialize_checkpoint,
+    load_fold_checkpoints,
+    validate_checkpoint_splits,
+    write_fold_checkpoint,
 )
 
 MODEL_ID = "B2-current"
@@ -54,6 +68,13 @@ FOLD_STATUS_COLUMNS = (
     "status",
     "expected_test_ids",
     "failure_reason",
+    "max_rhat",
+    "max_rhat_parameter",
+    "min_bulk_ess",
+    "min_bulk_ess_parameter",
+    "min_tail_ess",
+    "min_tail_ess_parameter",
+    "divergence_count",
 )
 OBSERVATION_LITERAL_COLUMNS = (
     "variant_id",
@@ -74,6 +95,7 @@ FIT_CONFIG_FIELDS = tuple(field.name for field in fields(FitConfig))
 SCIENCE_SOURCE_FILES = {
     "genomeos/observations/schema.py": Path(observations_schema_module.__file__).resolve(),
     "genomeos/surfaces/config.py": Path(surface_config_module.__file__).resolve(),
+    "genomeos/surfaces/convergence.py": Path(convergence_module.__file__).resolve(),
     "genomeos/surfaces/fit.py": Path(surface_fit_module.__file__).resolve(),
     "genomeos/surfaces/observation.py": Path(observation_module.__file__).resolve(),
     "genomeos/surfaces/observation_prediction.py": Path(prediction_module.__file__).resolve(),
@@ -82,6 +104,7 @@ SCIENCE_SOURCE_FILES = {
     "genomeos/validation/spatial_gp_benchmark.py": Path(
         spatial_benchmark_module.__file__
     ).resolve(),
+    "genomeos/validation/spatial_gp_checkpoint.py": Path(checkpoint_module.__file__).resolve(),
     "genomeos/validation/splits.py": Path(splits_module.__file__).resolve(),
     "scripts/benchmark_spatial_gp.py": Path(__file__).resolve(),
 }
@@ -135,6 +158,9 @@ def _parser() -> argparse.ArgumentParser:
         required=True,
         choices=("reviewed", "not_checked"),
     )
+    checkpoint = parser.add_mutually_exclusive_group(required=True)
+    checkpoint.add_argument("--checkpoint-dir", type=Path)
+    checkpoint.add_argument("--resume-from", type=Path)
     parser.add_argument("--out", required=True, type=Path)
     return parser
 
@@ -258,10 +284,55 @@ def _write_tsv(frame: pd.DataFrame, path: Path) -> None:
     serialized.to_csv(path, sep="\t", index=False, lineterminator="\n")
 
 
+def _publish_result(
+    output: Path,
+    *,
+    inventory: dict[str, object],
+    predictions: pd.DataFrame,
+    status_rows: list[dict[str, object]],
+    summary_document: dict[str, object],
+    manifest: dict[str, object],
+) -> None:
+    """Write a complete publication in a sibling staging directory, then rename atomically."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(
+        tempfile.mkdtemp(prefix=f".{output.name}.partial-", dir=output.parent)
+    )
+    try:
+        _json_write(staging / "inventory.json", inventory)
+        _write_tsv(predictions, staging / "predictions.tsv")
+        _write_tsv(
+            pd.DataFrame.from_records(status_rows, columns=FOLD_STATUS_COLUMNS),
+            staging / "fold_status.tsv",
+        )
+        _json_write(staging / "summary.json", summary_document)
+        manifest["output_files"] = {
+            name: _file_record(staging / name) for name in OUTPUT_FILENAMES
+        }
+        _json_write(staging / "manifest.json", manifest)
+        staging.rename(output)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+
+
 def run(args: argparse.Namespace) -> int:
     """Validate inputs, execute the complete planned ledger, and write the manifest last."""
     if args.out.exists():
         raise ValueError(f"output directory already exists: {args.out}")
+    checkpoint_path = args.checkpoint_dir or args.resume_from
+    output_resolved = args.out.resolve()
+    checkpoint_resolved = checkpoint_path.resolve()
+    if (
+        output_resolved == checkpoint_resolved
+        or output_resolved in checkpoint_resolved.parents
+        or checkpoint_resolved in output_resolved.parents
+    ):
+        raise ValueError("output and checkpoint directories must be disjoint")
+    if args.checkpoint_dir is not None and checkpoint_path.exists():
+        raise ValueError(f"checkpoint directory already exists: {checkpoint_path}")
+    if args.resume_from is not None and not checkpoint_path.is_dir():
+        raise ValueError(f"resume checkpoint directory does not exist: {checkpoint_path}")
     if not isinstance(args.data_version, str) or not args.data_version.strip():
         raise ValueError("data_version must be a nonempty string")
     science_sources = _resolved_science_sources()
@@ -279,7 +350,7 @@ def run(args: argparse.Namespace) -> int:
     dependency_pairs = tuple(
         dependencies.loc[:, DEPENDENCY_COLUMNS].itertuples(index=False, name=None)
     )
-    result = evaluate_single_variant_gp(
+    plan = plan_single_variant_gp_benchmark(
         observations,
         assignments,
         dependency_pairs,
@@ -289,14 +360,77 @@ def run(args: argparse.Namespace) -> int:
         seed=args.seed,
         cdf_backend=args.cdf_backend,
     )
+    inventory = inventory_observations(observations)
+    resolved_config = {
+        "buffer_km": args.buffer_km,
+        "cdf_backend": args.cdf_backend,
+        "data_version": args.data_version,
+        "fit_config": asdict(config),
+        "sampler_convergence_gate": {
+            "maximum_divergences": 0,
+            "maximum_rhat": config.max_rhat,
+            "minimum_bulk_ess": config.min_ess,
+            "minimum_tail_ess": config.min_ess,
+        },
+        "seed": args.seed,
+    }
+    science_hashes = {
+        relative: _file_record(path)["sha256"] for relative, path in science_sources.items()
+    }
+    package_versions = _package_versions(config, args.cdf_backend)
+    qualification = {
+        "assignment_review_status": args.assignment_review_status,
+        "dependency_review_status": args.dependency_review_status,
+        "scientific_promotion_decision": "not_made",
+    }
+    planned_splits = [asdict(split) for split in plan.splits]
+    seed_schedule = [asdict(seeds) for seeds in spatial_gp_seed_schedule(plan)]
+    checkpoint_header = build_checkpoint_header(
+        model_id=MODEL_ID,
+        evidence_kind=args.evidence_kind,
+        qualification=qualification,
+        configuration=resolved_config,
+        input_files=input_files,
+        planned_splits=planned_splits,
+        seed_schedule=seed_schedule,
+        code_revision=_code_revision(),
+        science_source_sha256=science_hashes,
+        package_versions=package_versions,
+    )
+    if args.checkpoint_dir is not None:
+        initialize_checkpoint(checkpoint_path, checkpoint_header)
+        fold_results = []
+    else:
+        fold_results = list(
+            load_fold_checkpoints(checkpoint_path, checkpoint_header, plan.splits)
+        )
+    validate_checkpoint_splits(checkpoint_header, plan.splits)
+    for ordinal in range(len(fold_results), len(plan.splits)):
+        split = plan.splits[ordinal]
+        fold_result = evaluate_single_variant_gp_fold(plan, split)
+        write_fold_checkpoint(checkpoint_path, ordinal, split, fold_result)
+        fold_results.append(fold_result)
+    result = finalize_checkpoint_benchmark(checkpoint_path, checkpoint_header, plan)
 
-    status_by_id = {status.split_id: status for status in result.fold_status}
+    result_by_id = {fold.status.split_id: fold for fold in fold_results}
     split_records: list[dict[str, object]] = []
     status_rows: list[dict[str, object]] = []
     for split in result.splits:
-        status = status_by_id[split.split_id]
+        fold = result_by_id[split.split_id]
+        status = fold.status
+        diagnostics = (
+            asdict(fold.sampler_diagnostics)
+            if fold.sampler_diagnostics is not None
+            else None
+        )
         record = asdict(split)
-        record.update({"status": status.status, "failure_reason": status.failure_reason})
+        record.update(
+            {
+                "status": status.status,
+                "failure_reason": status.failure_reason,
+                "sampler_diagnostics": diagnostics,
+            }
+        )
         split_records.append(record)
         status_rows.append(
             {
@@ -307,27 +441,24 @@ def run(args: argparse.Namespace) -> int:
                     list(status.expected_test_ids), separators=(",", ":")
                 ),
                 "failure_reason": status.failure_reason or "",
+                **(
+                    diagnostics
+                    if diagnostics is not None
+                    else {
+                        "max_rhat": "",
+                        "max_rhat_parameter": "",
+                        "min_bulk_ess": "",
+                        "min_bulk_ess_parameter": "",
+                        "min_tail_ess": "",
+                        "min_tail_ess_parameter": "",
+                        "divergence_count": "",
+                    }
+                ),
             }
         )
 
-    inventory = inventory_observations(observations)
-    resolved_config = {
-        "buffer_km": args.buffer_km,
-        "cdf_backend": args.cdf_backend,
-        "data_version": args.data_version,
-        "fit_config": asdict(config),
-        "seed": args.seed,
-    }
-    science_hashes = {
-        relative: _file_record(path)["sha256"] for relative, path in science_sources.items()
-    }
-    qualification = {
-        "assignment_review_status": args.assignment_review_status,
-        "dependency_review_status": args.dependency_review_status,
-        "scientific_promotion_decision": "not_made",
-    }
     manifest = {
-        "schema_version": 1,
+        "schema_version": 2,
         "model": {
             "model_id": MODEL_ID,
             "name": MODEL_NAME,
@@ -347,9 +478,9 @@ def run(args: argparse.Namespace) -> int:
         },
         "splits": split_records,
         "split_manifest_sha256": _canonical_hash(split_records),
-        "code_revision": _code_revision(),
+        "code_revision": checkpoint_header["code_revision"],
         "science_source_sha256": science_hashes,
-        "package_versions": _package_versions(config, args.cdf_backend),
+        "package_versions": package_versions,
     }
     summary_document = {
         "schema_version": 1,
@@ -360,18 +491,14 @@ def run(args: argparse.Namespace) -> int:
         "benchmark": result.summary,
     }
 
-    args.out.mkdir(parents=True, exist_ok=False)
-    _json_write(args.out / "inventory.json", inventory)
-    _write_tsv(result.predictions, args.out / "predictions.tsv")
-    _write_tsv(
-        pd.DataFrame.from_records(status_rows, columns=FOLD_STATUS_COLUMNS),
-        args.out / "fold_status.tsv",
+    _publish_result(
+        args.out,
+        inventory=inventory,
+        predictions=result.predictions,
+        status_rows=status_rows,
+        summary_document=summary_document,
+        manifest=manifest,
     )
-    _json_write(args.out / "summary.json", summary_document)
-    manifest["output_files"] = {
-        name: _file_record(args.out / name) for name in OUTPUT_FILENAMES
-    }
-    _json_write(args.out / "manifest.json", manifest)
     return 0 if result.summary["comparison_complete"] else 1
 
 
