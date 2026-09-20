@@ -188,9 +188,7 @@ def test_outer_heldout_counts_cannot_change_bandwidth_or_local_posterior():
 
 def test_plan_refuses_cohort_split_across_geographic_blocks():
     observations, assignments = _inputs()
-    observations.loc[observations["source_record_id"].isin(["a-0", "b-0"]), "cohort_id"] = (
-        "shared"
-    )
+    observations.loc[observations["source_record_id"].isin(["a-0", "b-0"]), "cohort_id"] = "shared"
 
     with pytest.raises(ValueError, match="whole cohort"):
         plan_local_count_benchmark(
@@ -202,3 +200,132 @@ def test_plan_refuses_cohort_split_across_geographic_blocks():
             config=_config(),
             seed=42,
         )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "unknown_scored",
+        "wrong_expected",
+        "missing_support",
+        "duplicate_emitted",
+        "overlapping_refused",
+        "extra_support",
+        "wrong_split",
+        "wrong_count",
+        "wrong_region",
+        "failed_predictions",
+        "invalid_state",
+        "missing_prediction",
+        "posterior_on_unknown",
+        "missing_posterior",
+        "insufficient_support",
+        "wrong_concentration",
+    ],
+)
+def test_finalization_refuses_contradictory_retained_fold(mutation):
+    from dataclasses import replace
+
+    from genomeos.validation.local_count_benchmark import finalize_local_count_benchmark
+
+    observations, assignments = _inputs()
+    plan = plan_local_count_benchmark(
+        observations, assignments, (), buffer_km=100.0, data_version="fixture-v1", config=_config()
+    )
+    folds = [evaluate_local_count_fold(plan, split) for split in plan.splits]
+    fold = folds[0]
+    support, predictions, status = fold.support.copy(), fold.predictions.copy(), fold.status
+    if mutation == "unknown_scored":
+        support["status"] = "unknown"
+        support["refusal_reason"] = "refused"
+        support[["posterior_alpha", "posterior_beta", "posterior_mean"]] = None
+    elif mutation == "wrong_expected":
+        status = replace(status, expected_test_ids=("invented",))
+    elif mutation == "missing_support":
+        support = support.iloc[:0]
+    elif mutation == "duplicate_emitted":
+        status = replace(status, emitted_test_ids=status.emitted_test_ids * 2)
+    elif mutation == "overlapping_refused":
+        status = replace(status, refused_test_ids=status.emitted_test_ids)
+    elif mutation == "extra_support":
+        support = pd.concat([support, support.iloc[:1]])
+    elif mutation == "wrong_split":
+        predictions["split_id"] = "invented"
+    elif mutation == "wrong_count":
+        predictions["observed_an"] += 1
+    elif mutation == "wrong_region":
+        predictions["region_id"] = "invented"
+    elif mutation == "failed_predictions":
+        status = replace(status, status="failed", failure_reason="failure")
+    elif mutation == "invalid_state":
+        status = replace(status, status="invented")
+    elif mutation == "missing_prediction":
+        predictions = predictions.iloc[:0]
+    elif mutation == "posterior_on_unknown":
+        status = replace(
+            status,
+            status="infeasible",
+            emitted_test_ids=(),
+            refused_test_ids=status.expected_test_ids,
+            failure_reason="refused",
+        )
+        predictions = predictions.iloc[:0]
+        support["status"] = "unknown"
+        support["refusal_reason"] = "refused"
+    elif mutation == "insufficient_support":
+        support["effective_allele_count"] = 0.5
+        predictions["effective_allele_count"] = 0.5
+    elif mutation == "wrong_concentration":
+        support["effective_allele_count"] += 1.0
+        predictions["effective_allele_count"] += 1.0
+    elif mutation == "missing_posterior":
+        support["posterior_alpha"] = None
+    folds[0] = replace(fold, status=status, predictions=predictions, support=support)
+    with pytest.raises(ValueError):
+        finalize_local_count_benchmark(plan, folds)
+
+
+@pytest.mark.parametrize("state", ["failed", "infeasible"])
+def test_valid_terminal_refusals_remain_visible_and_unscored(state):
+    from dataclasses import replace
+
+    from genomeos.validation.local_count_benchmark import finalize_local_count_benchmark
+
+    observations, assignments = _inputs()
+    plan = plan_local_count_benchmark(
+        observations, assignments, (), buffer_km=100.0, data_version="fixture-v1", config=_config()
+    )
+    folds = [evaluate_local_count_fold(plan, split) for split in plan.splits]
+    fold = folds[0]
+    support = fold.support.copy()
+    support["status"] = "unknown"
+    support["refusal_reason"] = "retained terminal refusal"
+    support[["posterior_alpha", "posterior_beta", "posterior_mean"]] = None
+    status = replace(
+        fold.status,
+        status=state,
+        emitted_test_ids=(),
+        refused_test_ids=fold.status.expected_test_ids,
+        failure_reason="retained terminal refusal",
+    )
+    folds[0] = replace(fold, status=status, support=support, predictions=fold.predictions.iloc[:0])
+    result = finalize_local_count_benchmark(plan, folds)
+    assert result.summary["requested_observation_count"] == 8
+    assert result.summary["emitted_observation_count"] == 6
+    assert result.summary["excluded_fraction"] == 0.25
+    assert result.fold_status[0].status == state
+
+
+def test_finalizer_rejects_plan_with_changed_split_membership():
+    from dataclasses import replace
+
+    from genomeos.validation.local_count_benchmark import finalize_local_count_benchmark
+
+    observations, assignments = _inputs()
+    plan = plan_local_count_benchmark(
+        observations, assignments, (), buffer_km=100.0, data_version="fixture-v1", config=_config()
+    )
+    folds = [evaluate_local_count_fold(plan, split) for split in plan.splits]
+    invalid = replace(plan, splits=(replace(plan.splits[0], test_ids=("invented",)), *plan.splits[1:]))
+    with pytest.raises(ValueError, match="plan splits"):
+        finalize_local_count_benchmark(invalid, folds)

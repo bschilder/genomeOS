@@ -30,6 +30,7 @@ import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.validation.benchmark as benchmark_module  # noqa: E402
 import genomeos.validation.local_count as local_count_module  # noqa: E402
 import genomeos.validation.local_count_benchmark as local_benchmark_module  # noqa: E402
+import genomeos.validation.local_count_evidence as local_evidence_module  # noqa: E402
 import genomeos.validation.local_count_selection as local_selection_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.splits as splits_module  # noqa: E402
@@ -37,6 +38,7 @@ from genomeos.validation.benchmark import inventory_observations  # noqa: E402
 from genomeos.validation.local_count_benchmark import (  # noqa: E402
     evaluate_local_count_benchmark,
     plan_local_count_benchmark,
+    validate_local_count_result,
 )
 from genomeos.validation.local_count_selection import (  # noqa: E402
     ASSIGNMENT_COLUMNS,
@@ -76,6 +78,7 @@ SCIENCE_SOURCE_FILES = {
     "genomeos/validation/local_count_benchmark.py": Path(
         local_benchmark_module.__file__
     ).resolve(),
+    "genomeos/validation/local_count_evidence.py": Path(local_evidence_module.__file__).resolve(),
     "genomeos/validation/local_count_selection.py": Path(
         local_selection_module.__file__
     ).resolve(),
@@ -304,6 +307,7 @@ def run(args: argparse.Namespace) -> int:
         seed=args.seed,
     )
     result = evaluate_local_count_benchmark(plan)
+    validate_local_count_result(plan, result)
     inventory = inventory_observations(observations)
     configuration = asdict(config) | {
         "buffer_km": args.buffer_km,

@@ -11,7 +11,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
 import matplotlib
 
@@ -21,6 +23,11 @@ import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
 from genomeos.validation.benchmark import BenchmarkFoldStatus, summarize_benchmark  # noqa: E402
+from genomeos.validation.local_count_artifact import (  # noqa: E402
+    SUMMARY_ATOL,
+    SUMMARY_RTOL,
+    read_local_count_comparison,
+)
 from genomeos.viz.basemap import draw_countries  # noqa: E402
 
 PRIMARY_ROLE = "prespecified_primary"
@@ -46,22 +53,6 @@ def _sha256(path: Path) -> str:
 
 def _json(path: Path) -> dict[str, object]:
     return json.loads(path.read_text())
-
-
-def _artifact(path: Path, role: str) -> tuple[dict[str, object], dict[str, object]]:
-    manifest = _json(path / "manifest.json")
-    summary = _json(path / "summary.json")
-    if manifest.get("model", {}).get("model_id") != "B1-local-count":
-        raise ValueError(f"{path} is not a B1 local-count artifact")
-    if manifest.get("analysis_role") != role or summary.get("analysis_role") != role:
-        raise ValueError(f"{path} must have analysis_role={role!r}")
-    if manifest.get("publication_eligible") is not False:
-        raise ValueError(f"{path} must remain nonpublication evidence")
-    return manifest, summary["benchmark"]
-
-
-def _finite_or_infinity(series: pd.Series) -> pd.Series:
-    return pd.to_numeric(series.replace("-Infinity", -np.inf), errors="raise")
 
 
 def _matched_b0_summary(
@@ -94,17 +85,84 @@ def _matched_b0_summary(
 
 def _row_metrics(frame: pd.DataFrame) -> dict[str, float | int]:
     delta = frame["log_score_b1"] - frame["log_score_b0"]
+    undefined = int(delta.isna().sum())
+    opposite = bool(np.isposinf(delta).any() and np.isneginf(delta).any())
     return {
         "observation_count": int(len(frame)),
         "b1_mean_log_score": float(frame["log_score_b1"].mean()),
         "b0_mean_log_score": float(frame["log_score_b0"].mean()),
-        "mean_log_score_delta": float(delta.mean()),
-        "median_log_score_delta": float(delta.median()),
+        "mean_log_score_delta": float(np.mean(delta.to_numpy())),
+        "paired_delta_available": not undefined and not opposite,
+        "undefined_delta_count": undefined,
+        "positive_infinite_delta_count": int(np.isposinf(delta).sum()),
+        "negative_infinite_delta_count": int(np.isneginf(delta).sum()),
+        "paired_delta_unavailable_reason": "undefined_paired_scores"
+        if undefined
+        else ("opposite_infinite_differences" if opposite else None),
+        "median_log_score_delta": float(np.median(delta.to_numpy())),
         "b1_mae": float(frame["absolute_error_b1"].mean()),
         "b0_mae": float(frame["absolute_error_b0"].mean()),
         "b1_coverage_95": float(frame["coverage_95_b1"].mean()),
         "b0_coverage_95": float(frame["coverage_95_b0"].mean()),
     }
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float) and not np.isfinite(value):
+        return None if np.isnan(value) else ("Infinity" if value > 0 else "-Infinity")
+    return value
+
+
+def _stratified(support: pd.DataFrame, matched: pd.DataFrame) -> dict[str, object]:
+    frame = support.copy()
+    frame["denominator"] = pd.cut(
+        frame["an"], [0, 100, 1000, 10000, np.inf], labels=["1–100", "101–1000", "1001–10000", ">10000"]
+    )
+    frame["distance_km"] = pd.cut(
+        frame["nearest_edge_distance_km"],
+        [-np.inf, 500, 1000, 2000, np.inf],
+        labels=["0–500", ">500–1000", ">1000–2000", ">2000"],
+    )
+    frame["distance_km"] = frame["distance_km"].cat.add_categories(["unavailable"]).fillna("unavailable")
+    frame["count"] = np.where(frame["ac"] == 0, "zero", "positive")
+    result = {
+        "analysis_role": "posthoc_descriptive_strata",
+        "intervals": "right_closed",
+        "endemic_background": {
+            "available": False,
+            "review_state": "not_reviewed",
+            "reason": "no_existing_reviewed_outcome_independent_definition",
+            "acceptance_item": "open",
+        },
+    }
+    for name in ("count", "denominator", "distance_km"):
+        rows = []
+        for label, group in frame.groupby(name, observed=True, sort=True):
+            keys = group[["split_id", "source_record_id"]]
+            scored = matched.merge(keys, on=["split_id", "source_record_id"], validate="one_to_one")
+            emitted = int((group["status"] == "emitted").sum())
+            rows.append(
+                {
+                    "stratum": str(label),
+                    "requested_count": len(group),
+                    "emitted_count": emitted,
+                    "refused_count": len(group) - emitted,
+                    "emission_fraction": emitted / len(group),
+                    "refusal_counts": {
+                        str(k): int(v)
+                        for k, v in group.loc[group.status != "emitted", "refusal_reason"]
+                        .value_counts()
+                        .items()
+                    },
+                    "matched_scores": _row_metrics(scored) if len(scored) else None,
+                }
+            )
+        result[name] = rows
+    return result
 
 
 def _candidate_summary(path: Path) -> list[dict[str, object]]:
@@ -146,58 +204,43 @@ def _build_report(
     sensitivity_path: Path,
     b0_path: Path,
 ) -> tuple[dict[str, object], pd.DataFrame, pd.DataFrame]:
-    primary_manifest, primary_summary = _artifact(primary_path, PRIMARY_ROLE)
-    sensitivity_manifest, sensitivity_summary = _artifact(
-        sensitivity_path, SENSITIVITY_ROLE
-    )
-    b0_manifest = _json(b0_path / "manifest.json")
-    if b0_manifest.get("model", {}).get("model_id") != "B0":
-        raise ValueError("b0 must be a B0 benchmark artifact")
+    (
+        manifests,
+        summaries,
+        support,
+        sensitivity_predictions,
+        b0_predictions,
+        primary_support,
+        primary_predictions,
+    ) = read_local_count_comparison(observations_path, primary_path, sensitivity_path, b0_path)
+    primary_manifest, sensitivity_manifest, _ = manifests
+    primary_summary, sensitivity_summary, _ = summaries
     expected_inputs = primary_manifest["input_files"]
-    if (
-        sensitivity_manifest["input_files"] != expected_inputs
-        or b0_manifest["input_files"] != expected_inputs
-    ):
-        raise ValueError("B0, primary B1, and sensitivity B1 must use byte-identical inputs")
-
-    observations = pd.read_csv(
-        observations_path,
-        sep="\t",
-        usecols=["source_record_id", "lat", "lon"],
-        dtype={"source_record_id": str},
-    )
-    if observations["source_record_id"].duplicated().any():
-        raise ValueError("observation source_record_id values must be unique")
-    support = pd.read_csv(
-        sensitivity_path / "support.tsv", sep="\t", keep_default_na=False
-    ).merge(observations, on="source_record_id", validate="one_to_one")
-    sensitivity_predictions = pd.read_csv(sensitivity_path / "predictions.tsv", sep="\t")
-    b0_predictions = pd.read_csv(b0_path / "predictions.tsv", sep="\t")
-    sensitivity_predictions["log_score"] = _finite_or_infinity(
-        sensitivity_predictions["log_score"]
-    )
-    b0_predictions["log_score"] = _finite_or_infinity(b0_predictions["log_score"])
     matched = sensitivity_predictions.merge(
         b0_predictions,
         on=["split_id", "source_record_id"],
         suffixes=("_b1", "_b0"),
         validate="one_to_one",
     )
+    primary_matched = primary_predictions.merge(
+        b0_predictions, on=["split_id", "source_record_id"], suffixes=("_b1", "_b0"), validate="one_to_one"
+    )
     matched["log_score_delta"] = matched["log_score_b1"] - matched["log_score_b0"]
     matched["count_stratum"] = np.where(matched["observed_ac_b1"] > 0, "positive", "zero")
-    strata = {
-        str(label): _row_metrics(group)
-        for label, group in matched.groupby("count_stratum", sort=True)
-    }
-    b0_matched = _matched_b0_summary(
-        b0_predictions, sensitivity_predictions, sensitivity_manifest
-    )
+    strata = {str(label): _row_metrics(group) for label, group in matched.groupby("count_stratum", sort=True)}
+    b0_matched = _matched_b0_summary(b0_predictions, sensitivity_predictions, sensitivity_manifest)
     refusal_counts = {
         str(reason or "emitted"): int(count)
         for reason, count in support["refusal_reason"].value_counts(dropna=False).items()
     }
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "summary_replay_tolerance": {"rtol": SUMMARY_RTOL, "atol": SUMMARY_ATOL},
+        "retained_manifest_sha256": {
+            "primary": _sha256(primary_path / "manifest.json"),
+            "sensitivity": _sha256(sensitivity_path / "manifest.json"),
+            "b0": _sha256(b0_path / "manifest.json"),
+        },
         "scientific_promotion_decision": "not_made",
         "publication_eligible": False,
         "source_specific_features": False,
@@ -213,6 +256,7 @@ def _build_report(
             "qualification": primary_manifest["qualification"],
             "benchmark": _compact_benchmark(primary_summary),
             "candidate_summary": _candidate_summary(primary_path),
+            "retained_evidence_strata": _stratified(primary_support, primary_matched),
         },
         "sensitivity": {
             "analysis_role": SENSITIVITY_ROLE,
@@ -223,10 +267,28 @@ def _build_report(
             "matched_row_weighted": _row_metrics(matched),
             "matched_count_strata": strata,
             "matched_b0_macro_metrics": b0_matched["metrics"],
+            "retained_evidence_strata": _stratified(support, matched),
         },
         "b2_current": {
             "valid_comparison_available": False,
-            "reason": "three_hour_cutoff_before_all_folds_completed",
+            "reason": "later_completed_development_result_lacks_required_convergence_evidence",
+            "historical_snapshot": {
+                "date": "2026-09-16",
+                "run": "hbs-current-gp-benchmark-20260916-v1-partial",
+                "reason": "three_hour_cutoff_before_all_folds_completed",
+            },
+            "later_development_result": {
+                "date": "2026-09-17",
+                "report": "docs/research/hbs-current-gp-benchmark-2026-09-17.json",
+                "pull_request": "https://github.com/bschilder/genomeOS/pull/332",
+                "report_sha256": _sha256(
+                    Path(__file__).resolve().parents[1]
+                    / "docs/research/hbs-current-gp-benchmark-2026-09-17.json"
+                ),
+                "completed_observation_count": 994,
+                "qualification": "not_convergence_qualified_and_calibration_gates_not_met",
+                "comparison": "no_qualified_matched_B2_available;_old_results_not_retroactively_qualified",
+            },
         },
         "interpretation": {
             "primary": "prespecified_local_support_grid_infeasible_for_global_geographic_holdouts",
@@ -234,7 +296,12 @@ def _build_report(
             "promotion": "rejected_pending_broader_support_and_zero_count_repair",
         },
     }
-    return report, support, matched
+    return _json_safe(report), support, matched
+
+
+def _format_score(metrics: dict) -> str:
+    value = metrics.get("mean_log_score_delta")
+    return f"{value:+.2f}" if isinstance(value, (int, float)) else str(value or "undefined")
 
 
 def _render(report: dict[str, object], support: pd.DataFrame, matched: pd.DataFrame, out: Path) -> None:
@@ -268,15 +335,26 @@ def _render(report: dict[str, object], support: pd.DataFrame, matched: pd.DataFr
     map_ax.legend(frameon=False, loc="lower left", ncols=2)
     map_ax.grid(color="#eceff1", linewidth=0.5, zorder=0)
 
-    colors = np.where(matched["count_stratum"] == "positive", "#1769aa", "#d97706")
+    finite = np.isfinite(matched["log_score_delta"])
+    plotted = matched.loc[finite]
+    colors = np.where(plotted["count_stratum"] == "positive", "#1769aa", "#d97706")
     score_ax.scatter(
-        matched["nearest_edge_distance_km"],
-        matched["log_score_delta"],
+        plotted["nearest_edge_distance_km"],
+        plotted["log_score_delta"],
         s=15,
         color=colors,
         alpha=0.72,
         linewidths=0,
     )
+    if not finite.all():
+        score_ax.text(
+            0.02,
+            0.98,
+            f"{int((~finite).sum())} infinite/undefined paired scores retained in JSON",
+            transform=score_ax.transAxes,
+            va="top",
+            fontsize=8,
+        )
     score_ax.axhline(0.0, color="#343a40", linewidth=1.0)
     score_ax.set_yscale("symlog", linthresh=10.0, linscale=0.7)
     score_ax.set(
@@ -307,33 +385,57 @@ def _render(report: dict[str, object], support: pd.DataFrame, matched: pd.DataFr
             f"{primary['requested_observation_count']}; post-hoc sensitivity emitted "
             f"{sensitivity['emitted_observation_count']}/{sensitivity['requested_observation_count']} "
             f"({100 * sensitivity['excluded_fraction']:.1f}% excluded).  "
-            f"Mean Δ log score: positive {strata['positive']['mean_log_score_delta']:+.1f}, "
-            f"zero {strata['zero']['mean_log_score_delta']:+.2f} nats/observation."
+            f"Mean Δ log score: positive {_format_score(strata.get('positive', {}))}, "
+            f"zero {_format_score(strata.get('zero', {}))} nats/observation."
         ),
         ha="center",
         fontsize=9.5,
         color="#343a40",
     )
     out.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(
-        out,
-        dpi=190,
-        facecolor="white",
-        metadata={"Software": "genomeOS B1 local-count evidence renderer v1"},
-    )
+    with out.open("xb") as output:
+        figure.savefig(
+            output,
+            format="png",
+            dpi=190,
+            facecolor="white",
+            metadata={"Software": "genomeOS B1 local-count evidence renderer v2"},
+        )
     plt.close(figure)
 
 
 def main() -> int:
     args = _parser().parse_args()
-    report, support, matched = _build_report(
-        args.observations, args.primary, args.sensitivity, args.b0
-    )
-    _render(report, support, matched, args.out)
+    for path in (args.out, args.report):
+        if path.exists() or path.is_symlink():
+            raise FileExistsError(f"output already exists; use a new version: {path}")
+    destinations = args.out.resolve(), args.report.resolve()
+    if destinations[0] == destinations[1] or any(
+        left in right.parents for left, right in (destinations, destinations[::-1])
+    ):
+        raise ValueError("figure and report destinations must be distinct and non-nested")
+    report, support, matched = _build_report(args.observations, args.primary, args.sensitivity, args.b0)
+    payload = json.dumps(report, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    args.out.parent.mkdir(parents=True, exist_ok=True)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(
-        json.dumps(report, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    )
+    with (
+        TemporaryDirectory(prefix=".b1-figure-", dir=args.out.parent) as figure_dir,
+        TemporaryDirectory(prefix=".b1-report-", dir=args.report.parent) as report_dir,
+    ):
+        temporary_figure = Path(figure_dir) / "figure.png"
+        temporary_report = Path(report_dir) / "report.json"
+        _render(report, support, matched, temporary_figure)
+        with temporary_report.open("x") as output:
+            output.write(payload)
+        # Hard links create complete files exclusively, including against racing symlinks.
+        os.link(temporary_figure, args.out)
+        try:
+            os.link(temporary_report, args.report)
+        except OSError:
+            # Roll back only our own published inode, never a competing replacement.
+            if not args.out.is_symlink() and args.out.exists() and args.out.samefile(temporary_figure):
+                args.out.unlink()
+            raise
     return 0
 
 

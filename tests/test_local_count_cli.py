@@ -113,6 +113,7 @@ def test_runner_writes_source_neutral_nonpublication_evidence(tmp_path):
         "genomeos/validation/local_count.py",
         "genomeos/validation/local_count_benchmark.py",
         "genomeos/validation/local_count_selection.py",
+        "genomeos/validation/local_count_evidence.py",
         "genomeos/validation/predictive.py",
         "genomeos/validation/splits.py",
         "scripts/benchmark_local_count.py",
@@ -173,3 +174,27 @@ def test_existing_output_and_unsorted_candidate_grid_are_refused(tmp_path):
     assert "already exists" in existing.stderr
     assert unsorted.returncode == 2
     assert "strictly increasing" in unsorted.stderr
+
+
+def test_writer_revalidates_results_before_creating_output(tmp_path, monkeypatch):
+    import runpy
+    from dataclasses import replace
+
+    import pytest
+
+    runner = runpy.run_path(str(SCRIPT))
+    run = runner["run"]
+    evaluate = run.__globals__["evaluate_local_count_benchmark"]
+
+    def contradictory(plan):
+        result = evaluate(plan)
+        support = result.support.copy()
+        support["status"] = "unknown"
+        return replace(result, support=support)
+
+    monkeypatch.setitem(run.__globals__, "evaluate_local_count_benchmark", contradictory)
+    output = tmp_path / "invalid"
+    args = runner["_parser"]().parse_args(_command(output)[2:])
+    with pytest.raises(ValueError, match="support status"):
+        run(args)
+    assert not output.exists()

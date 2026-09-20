@@ -32,6 +32,7 @@ from genomeos.validation.benchmark import (
     validate_predictive_diagnostics,
 )
 from genomeos.validation.local_count import LocalCountSupport, fit_local_count
+from genomeos.validation.local_count_evidence import validate_local_count_fold
 from genomeos.validation.local_count_selection import (
     LocalCountBenchmarkConfig,
     LocalCountCandidateScore,
@@ -222,9 +223,7 @@ def _support_frame(
     )
 
 
-def _failed_support(
-    split: BenchmarkSplit, reason: str, bandwidth_km: float | None
-) -> pd.DataFrame:
+def _failed_support(split: BenchmarkSplit, reason: str, bandwidth_km: float | None) -> pd.DataFrame:
     return pd.DataFrame.from_records(
         [
             {
@@ -248,9 +247,7 @@ def _failed_support(
     )
 
 
-def evaluate_local_count_fold(
-    plan: LocalCountBenchmarkPlan, split: BenchmarkSplit
-) -> LocalCountFoldResult:
+def evaluate_local_count_fold(plan: LocalCountBenchmarkPlan, split: BenchmarkSplit) -> LocalCountFoldResult:
     """Select on inner training folds, then evaluate one untouched outer fold."""
     if not isinstance(plan, LocalCountBenchmarkPlan) or split not in plan.splits:
         raise ValueError("split must belong to plan")
@@ -265,9 +262,9 @@ def evaluate_local_count_fold(
     training = by_id.loc[list(split.train_ids)].reset_index(drop=True)
     testing = by_id.loc[list(split.test_ids)].reset_index(drop=True)
     training_ids = set(split.train_ids)
-    inner_assignments = plan.assignments[
-        plan.assignments["source_record_id"].isin(training_ids)
-    ].reset_index(drop=True)
+    inner_assignments = plan.assignments[plan.assignments["source_record_id"].isin(training_ids)].reset_index(
+        drop=True
+    )
     inner_dependencies = tuple(
         pair for pair in plan.dependencies if pair[0] in training_ids and pair[1] in training_ids
     )
@@ -404,11 +401,26 @@ def finalize_local_count_benchmark(
     plan: LocalCountBenchmarkPlan, folds: Sequence[LocalCountFoldResult]
 ) -> LocalCountBenchmarkResult:
     """Validate one terminal result per outer split and summarize supported rows."""
+    if not isinstance(plan, LocalCountBenchmarkPlan):
+        raise TypeError("plan must be a LocalCountBenchmarkPlan")
+    rebuilt = plan_local_count_benchmark(
+        plan.observations,
+        plan.assignments,
+        plan.dependencies,
+        buffer_km=plan.buffer_km,
+        data_version=plan.data_version,
+        config=plan.config,
+        seed=plan.seed,
+    )
+    if rebuilt.splits != plan.splits:
+        raise ValueError("plan splits contradict frozen inputs")
     by_split = {fold.status.split_id: fold for fold in folds}
     expected_ids = tuple(split.split_id for split in plan.splits)
     if len(by_split) != len(folds) or set(by_split) != set(expected_ids):
         raise ValueError("folds must contain exactly one result for every planned split")
     ordered = tuple(by_split[split_id] for split_id in expected_ids)
+    for split, fold in zip(plan.splits, ordered, strict=True):
+        validate_local_count_fold(fold, split, plan.observations, plan.assignments, config=plan.config)
     predictions = pd.concat([fold.predictions for fold in ordered], ignore_index=True)
     support = pd.concat([fold.support for fold in ordered], ignore_index=True)
     score_statuses = []
@@ -428,7 +440,7 @@ def finalize_local_count_benchmark(
                 )
             )
     supported_summary = summarize_benchmark(predictions, score_statuses, expected_ids)
-    requested = sum(len(fold.status.expected_test_ids) for fold in ordered)
+    requested = sum(len(split.test_ids) for split in plan.splits)
     emitted = sum(len(fold.status.emitted_test_ids) for fold in ordered)
     summary = {
         "comparison_complete": all(fold.status.status == "completed" for fold in ordered),
@@ -441,9 +453,7 @@ def finalize_local_count_benchmark(
     candidate_records = []
     for fold in ordered:
         for score in fold.candidate_scores:
-            candidate_records.append(
-                {"split_id": fold.status.split_id, **score.__dict__}
-            )
+            candidate_records.append({"split_id": fold.status.split_id, **score.__dict__})
     candidate_frame = pd.DataFrame.from_records(candidate_records)
     return LocalCountBenchmarkResult(
         predictions=predictions.sort_values(["split_id", "source_record_id"]).reset_index(drop=True),
@@ -453,6 +463,28 @@ def finalize_local_count_benchmark(
         splits=plan.splits,
         summary=summary,
     )
+
+
+def validate_local_count_result(plan: LocalCountBenchmarkPlan, result: LocalCountBenchmarkResult) -> None:
+    """Revalidate complete retained evidence immediately before artifact publication."""
+    if result.splits != plan.splits:
+        raise ValueError("result split ledger differs from plan")
+    if not set(result.predictions["split_id"]) <= {s.split_id for s in plan.splits} or not set(
+        result.support["split_id"]
+    ) <= {s.split_id for s in plan.splits}:
+        raise ValueError("result contains extra split identities")
+    folds = tuple(
+        LocalCountFoldResult(
+            status,
+            result.predictions.loc[result.predictions.split_id == status.split_id],
+            result.support.loc[result.support.split_id == status.split_id],
+            (),
+        )
+        for status in result.fold_status
+    )
+    replay = finalize_local_count_benchmark(plan, folds)
+    if replay.summary != result.summary:
+        raise ValueError("result summary contradicts retained evidence")
 
 
 def evaluate_local_count_benchmark(plan: LocalCountBenchmarkPlan) -> LocalCountBenchmarkResult:
