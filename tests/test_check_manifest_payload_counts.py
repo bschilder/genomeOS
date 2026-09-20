@@ -23,6 +23,7 @@ from genomeos.observations.evidence import make_search_id  # noqa: E402
 from scripts.check_manifest_payload_counts import inspect, main, read_manifest  # noqa: E402
 
 CORPORA = ROOT / "tests/fixtures/literature"
+WORKFLOW = ROOT / ".github/workflows/manifest-payload-gate.yml"
 QUERY = "rs4988235[All Fields] AND (population[Title/Abstract] OR frequency[Title/Abstract])"
 EXECUTED_AT = "2026-09-12T04:08:25Z"
 VERSION = "lct-rs4988235@2026-09-12.1"
@@ -175,6 +176,19 @@ def test_cli_exits_nonzero_and_names_both_numbers(
 def test_cli_passes_on_the_committed_corpora(capsys: pytest.CaptureFixture) -> None:
     _run_main(["check_manifest_payload_counts.py"], 0)
     assert "reconciliation passed (2 corpora)" in capsys.readouterr().out
+
+
+def test_fork_gate_runs_trusted_code_over_candidate_data() -> None:
+    """A contributor cannot replace the checker that judges their fixture changes."""
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    assert "pull_request_target:" in workflow
+    assert "permissions:\n  contents: read" in workflow
+    assert workflow.count("persist-credentials: false") == 2
+    assert "github.event.pull_request.base.sha" in workflow
+    assert "github.event.pull_request.head.sha" in workflow
+    assert "python trusted/scripts/check_manifest_payload_counts.py" in workflow
+    assert '--fixtures-root "$GITHUB_WORKSPACE/candidate/tests/fixtures/literature"' in workflow
+    assert "python candidate/" not in workflow
 
 
 def _run_main(argv: list[str], expected: int) -> None:
