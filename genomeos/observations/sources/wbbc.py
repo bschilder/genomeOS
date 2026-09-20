@@ -110,11 +110,16 @@ def _region_lookup(
     source_aliases = aliases.loc[aliases["source"] == ALIAS_SOURCE]
     if source_aliases["label"].duplicated().any():
         raise UnmappedRegionError("duplicate WBBC region alias")
+    unexpected = sorted(set(source_aliases["label"]) - set(REGION_ORDER))
+    if unexpected:
+        raise UnmappedRegionError(f"unexpected WBBC region aliases: {unexpected}")
     mapping = source_aliases.set_index("label")["population_id"]
     missing = sorted(set(REGION_ORDER) - set(mapping.index))
     if missing:
         raise UnmappedRegionError(f"WBBC regions absent from the registry: {missing}")
     population_ids = mapping.loc[list(REGION_ORDER)].to_numpy(dtype=str)
+    if len(set(population_ids)) != len(population_ids):
+        raise UnmappedRegionError("WBBC regions must map to distinct populations")
     placed = populations.set_index("population_id")
     missing_ids = sorted(set(population_ids) - set(placed.index))
     if missing_ids:

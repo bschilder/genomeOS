@@ -170,6 +170,37 @@ def test_unmapped_source_region_is_a_hard_error(registry):
         )
 
 
+def test_distinct_source_regions_cannot_collapse_to_one_population(registry):
+    populations, aliases = registry
+    aliases = aliases.copy()
+    aliases.loc[aliases["label"] == "Central", "population_id"] = "wbbc-north"
+
+    with pytest.raises(wbbc.UnmappedRegionError, match="distinct populations"):
+        wbbc.load(
+            FIXTURES / "wbbc_sites.vcf",
+            populations,
+            aliases,
+            "0.1.0",
+            variant_ids=REQUESTED,
+        )
+
+
+def test_unexpected_source_region_alias_is_a_hard_error(registry):
+    populations, aliases = registry
+    extra = aliases.iloc[[0]].copy()
+    extra["label"] = "Northern China"
+    aliases = pd.concat([aliases, extra], ignore_index=True)
+
+    with pytest.raises(wbbc.UnmappedRegionError, match="unexpected.*Northern China"):
+        wbbc.load(
+            FIXTURES / "wbbc_sites.vcf",
+            populations,
+            aliases,
+            "0.1.0",
+            variant_ids=REQUESTED,
+        )
+
+
 def _mutated_vcf(tmp_path: Path, old: str, new: str) -> Path:
     path = tmp_path / "mutated.vcf"
     path.write_text((FIXTURES / "wbbc_sites.vcf").read_text().replace(old, new), encoding="utf-8")
