@@ -150,7 +150,37 @@ def _validate_header(document: object) -> dict[str, object]:
         raise ValueError("checkpoint schema version is unsupported")
     if document["header_sha256"] != _canonical_hash(body):
         raise ValueError("checkpoint header integrity check failed")
+    _convergence_limits(document)
     return document
+
+
+def _convergence_limits(header: Mapping[str, object]) -> tuple[float, float]:
+    """Read explicit, mutually consistent fit and evidence gates; never default them."""
+    try:
+        configuration = header["configuration"]
+        fit_config = configuration["fit_config"]
+        max_rhat = fit_config["max_rhat"]
+        min_ess = fit_config["min_ess"]
+        gate = configuration["sampler_convergence_gate"]
+    except (KeyError, TypeError) as error:
+        raise ValueError("checkpoint convergence gate is missing or invalid") from error
+    for value, minimum in ((max_rhat, 1.0), (min_ess, 0.0)):
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, Real)
+            or not isfinite(value)
+            or value < minimum
+        ):
+            raise ValueError("checkpoint convergence gate limits are invalid")
+    expected = {
+        "maximum_divergences": 0,
+        "maximum_rhat": max_rhat,
+        "minimum_bulk_ess": min_ess,
+        "minimum_tail_ess": min_ess,
+    }
+    if gate != expected or any(isinstance(value, bool) for value in gate.values()):
+        raise ValueError("checkpoint convergence gate contradicts the frozen fit configuration")
+    return float(max_rhat), float(min_ess)
 
 
 def _json_bytes(value: object) -> bytes:
@@ -298,12 +328,17 @@ def write_fold_checkpoint(
     folds = root / FOLD_DIRECTORY
     if not (root / HEADER_FILENAME).is_file() or not folds.is_dir():
         raise ValueError(f"checkpoint directory is incomplete: {root}")
+    header = _validate_header(_read_json(root / HEADER_FILENAME))
+    max_rhat, min_ess = _convergence_limits(header)
+    if not isinstance(result, SpatialGPFoldResult):
+        raise TypeError("result must be a SpatialGPFoldResult")
+    result.validate_convergence(max_rhat=max_rhat, min_ess=min_ess)
     document = _artifact_document(ordinal, split, result)
     _atomic_write_new(folds / f"{ordinal:04d}.json", _json_bytes(document))
 
 
 def _decode_artifact(
-    path: Path, ordinal: int, split: BenchmarkSplit
+    path: Path, ordinal: int, split: BenchmarkSplit, *, max_rhat: float, min_ess: float
 ) -> SpatialGPFoldResult:
     document = _read_json(path)
     if set(document) != set(_ARTIFACT_FIELDS):
@@ -362,6 +397,7 @@ def _decode_artifact(
         )
     except (TypeError, ValueError) as error:
         raise ValueError(f"checkpoint fold result is invalid: {path.name}") from error
+    result.validate_convergence(max_rhat=max_rhat, min_ess=min_ess)
     _validate_fold_result(split, result)
     return result
 
@@ -388,6 +424,7 @@ def load_fold_checkpoints(
     expected = _validate_header(dict(expected_header))
     if actual_header != expected:
         raise ValueError("checkpoint header mismatch; resume identity changed")
+    max_rhat, min_ess = _convergence_limits(actual_header)
 
     split_tuple = tuple(splits)
     expected_names = {f"{ordinal:04d}.json" for ordinal in range(len(split_tuple))}
@@ -399,6 +436,9 @@ def load_fold_checkpoints(
     if present != [ordinal < completed_count for ordinal in range(len(split_tuple))]:
         raise ValueError("checkpoint folds must form a contiguous prefix")
     return tuple(
-        _decode_artifact(folds / f"{ordinal:04d}.json", ordinal, split_tuple[ordinal])
+        _decode_artifact(
+            folds / f"{ordinal:04d}.json", ordinal, split_tuple[ordinal],
+            max_rhat=max_rhat, min_ess=min_ess,
+        )
         for ordinal in range(completed_count)
     )

@@ -120,6 +120,17 @@ class SpatialGPFoldResult:
         if self.status.status == "completed" and diagnostics is None:
             raise ValueError("completed folds must retain sampler_diagnostics")
 
+    def validate_convergence(self, *, max_rhat: float, min_ess: float) -> None:
+        """Refuse completed evidence that contradicts its frozen admission gates."""
+        self.__post_init__()
+        if self.status.status != "completed":
+            return
+        reason = convergence_failure(
+            self.sampler_diagnostics, max_rhat=max_rhat, min_ess=min_ess
+        )
+        if reason is not None:
+            raise ValueError(f"completed fold contradicts frozen convergence gates: {reason}")
+
 
 @dataclass(frozen=True)
 class SpatialGPFoldSeed:
@@ -470,6 +481,9 @@ def finalize_single_variant_gp_benchmark(
     for split, result in zip(plan.splits, ordered, strict=True):
         if result.status.expected_test_ids != split.test_ids:
             raise ValueError("fold result expected_test_ids do not match the frozen split")
+        result.validate_convergence(
+            max_rhat=plan.config.max_rhat, min_ess=plan.config.min_ess
+        )
     prediction_frames = [
         result.predictions for result in ordered if not result.predictions.empty
     ]

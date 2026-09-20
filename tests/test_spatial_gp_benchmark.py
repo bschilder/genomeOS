@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,7 @@ from genomeos.surfaces.observation import (
 from genomeos.validation.spatial_gp_benchmark import (
     evaluate_single_variant_gp,
     evaluate_single_variant_gp_fold,
+    finalize_single_variant_gp_benchmark,
     plan_single_variant_gp_benchmark,
 )
 
@@ -339,3 +340,34 @@ def test_evaluator_refuses_multiple_variants_before_fitting():
         )
 
     assert calls == []
+
+
+@pytest.mark.parametrize("change", [
+    {"max_rhat": 1.051},
+    {"min_bulk_ess": 199.0},
+    {"min_tail_ess": 199.0},
+    {"divergence_count": 1},
+])
+def test_finalization_refuses_completed_fold_with_failed_retained_gate(change):
+    plan = _plan()
+    folds = [
+        evaluate_single_variant_gp_fold(plan, split, fit_function=_recording_fit([]))
+        for split in plan.splits
+    ]
+    folds[0] = replace(folds[0], sampler_diagnostics=replace(GOOD_DIAGNOSTICS, **change))
+
+    with pytest.raises(ValueError, match="completed fold.*convergence"):
+        finalize_single_variant_gp_benchmark(plan, folds)
+
+
+@pytest.mark.parametrize("limits", [{"max_rhat": 1.005}, {"min_ess": 270.0}])
+def test_finalization_uses_the_supplied_plan_limits(limits):
+    plan = _plan()
+    folds = [
+        evaluate_single_variant_gp_fold(plan, split, fit_function=_recording_fit([]))
+        for split in plan.splits
+    ]
+    stricter_plan = replace(plan, config=replace(plan.config, **limits))
+
+    with pytest.raises(ValueError, match="completed fold.*convergence"):
+        finalize_single_variant_gp_benchmark(stricter_plan, folds)

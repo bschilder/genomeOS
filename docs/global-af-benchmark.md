@@ -113,6 +113,10 @@ A spatial-benchmark fold is `completed` only when maximum R-hat is at most the c
 `max_rhat`, both ESS extrema are at least the configured `min_ess`, and the divergence count is
 zero. A diagnostic failure is an immutable `failed` checkpoint with no admissible predictions;
 resume reuses that failure and cannot selectively retry it under the same benchmark identity.
+Checkpoint writing, loading, and finalization also check retained completed folds against the
+frozen configuration. A `completed` label paired with failing diagnostics is an invalid artifact:
+it raises before publication or further fitting, rather than being rewritten or retried. A valid
+content hash does not waive this check, and schema-v1 checkpoints remain unsupported.
 
 Before fitting, the runner verifies that the selected likelihood's exact scorer can cover every
 denominator. A single unsupported row produces a failed status for every planned fold, zero fits,

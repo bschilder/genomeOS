@@ -461,3 +461,39 @@ def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, 
     assert {path.name: path.read_bytes() for path in first_out.iterdir()} == {
         path.name: path.read_bytes() for path in resumed_out.iterdir()
     }
+
+
+@pytest.mark.parametrize("change", [
+    {"max_rhat": 1.051},
+    {"min_bulk_ess": 199.0},
+    {"min_tail_ess": 199.0},
+    {"divergence_count": 1},
+])
+def test_resume_refuses_contradictory_fold_before_fitting_or_publication(
+    tmp_path, monkeypatch, change
+):
+    paths = _write_inputs(tmp_path)
+    checkpoint = tmp_path / "checkpoint"
+    output = tmp_path / "output"
+    runner = _load_runner("spatial_gp_runner_contradictory_checkpoint")
+    calls = _install_fake_fit(runner, monkeypatch, interrupt_once_after=1)
+    args = runner._parser().parse_args(_command(paths, output, checkpoint=checkpoint)[2:])
+    with pytest.raises(KeyboardInterrupt):
+        runner.run(args)
+    path = checkpoint / "folds" / "0000.json"
+    document = json.loads(path.read_text())
+    document["sampler_diagnostics"].update(change)
+    body = {key: value for key, value in document.items() if key != "artifact_sha256"}
+    document["artifact_sha256"] = hashlib.sha256(
+        json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    ).hexdigest()
+    path.write_text(json.dumps(document))
+    original = path.read_bytes()
+    resumed = runner._parser().parse_args(_command(paths, output, resume_from=checkpoint)[2:])
+
+    with pytest.raises(ValueError, match="completed fold.*convergence"):
+        runner.run(resumed)
+
+    assert len(calls) == 1
+    assert not output.exists()
+    assert path.read_bytes() == original
