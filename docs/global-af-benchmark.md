@@ -107,6 +107,16 @@ hashes, package versions, evidence kind, or qualification fields. It also refuse
 unknown, overwritten, or noncontiguous fold artifacts. Every terminal fold is reused, including a
 failed or infeasible fold; resume is not an implicit retry mechanism.
 
+The public checkpoint APIs bind every supplied `BenchmarkSplit` field to the exact canonical
+record at its ordinal in the header's frozen `planned_splits` ledger. Training and held-out IDs,
+held-out `block_id`, exclusions and their reasons, input fingerprint, buffer, edge separation,
+and data version must match, including order. Loading requires the entire supplied ledger even
+when no fold is yet retained; missing, duplicated, reordered or extra splits are hard errors.
+The runner checks this binding before fitting and finalizes by reloading the complete terminal
+ledger through `finalize_checkpoint_benchmark`. A mismatched caller plan cannot reuse or publish
+results under another frozen split identity. Valid checkpoint bytes and terminal failures remain
+unchanged; no migration, automatic repair or retry is introduced.
+
 Each fitted fold retains its maximum rank-normalized R-hat, minimum bulk ESS, minimum tail ESS,
 the parameter responsible for each extreme, and the number of post-tuning divergent transitions.
 A spatial-benchmark fold is `completed` only when maximum R-hat is at most the configured

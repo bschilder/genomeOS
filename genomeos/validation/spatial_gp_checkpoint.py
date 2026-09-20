@@ -22,7 +22,7 @@ import json
 import os
 import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, fields
 from math import isfinite
 from numbers import Integral, Real
 from pathlib import Path
@@ -35,7 +35,10 @@ from genomeos.surfaces.convergence import SamplerDiagnostics
 from genomeos.validation.benchmark import BenchmarkFoldStatus
 from genomeos.validation.spatial_gp_benchmark import (
     PREDICTION_COLUMNS,
+    SpatialGPBenchmarkPlan,
+    SpatialGPBenchmarkResult,
     SpatialGPFoldResult,
+    finalize_single_variant_gp_benchmark,
 )
 from genomeos.validation.splits import BenchmarkSplit
 
@@ -134,9 +137,7 @@ def build_checkpoint_header(
         "seed_schedule": seed_records,
         "seed_schedule_sha256": _canonical_hash(seed_records),
         "code_revision": _label(code_revision, "code_revision"),
-        "science_source_sha256": _json_value(
-            dict(science_source_sha256), "science_source_sha256"
-        ),
+        "science_source_sha256": _json_value(dict(science_source_sha256), "science_source_sha256"),
         "package_versions": _json_value(dict(package_versions), "package_versions"),
     }
     return {**body, "header_sha256": _canonical_hash(body)}
@@ -151,7 +152,66 @@ def _validate_header(document: object) -> dict[str, object]:
     if document["header_sha256"] != _canonical_hash(body):
         raise ValueError("checkpoint header integrity check failed")
     _convergence_limits(document)
+    _planned_split_records(document)
     return document
+
+
+def _planned_split_records(header: Mapping[str, object]) -> list[dict[str, object]]:
+    records = header["planned_splits"]
+    if not isinstance(records, list) or not records:
+        raise ValueError("checkpoint planned split ledger must be a nonempty list")
+    if header["planned_splits_sha256"] != _canonical_hash(records):
+        raise ValueError("checkpoint planned split ledger digest is invalid")
+    names = {field.name for field in fields(BenchmarkSplit)}
+    split_ids = []
+    for record in records:
+        if not isinstance(record, dict) or set(record) != names:
+            raise ValueError("checkpoint planned split record fields are invalid")
+        for name in ("split_id", "block_id", "input_fingerprint", "data_version"):
+            _label(record[name], f"planned split {name}")
+        split_ids.append(record["split_id"])
+        for name in ("train_ids", "test_ids", "excluded_ids"):
+            values = record[name]
+            if (
+                not isinstance(values, list)
+                or any(not isinstance(value, str) or not value.strip() for value in values)
+                or len(set(values)) != len(values)
+            ):
+                raise ValueError(f"checkpoint planned split {name} must be unique literal IDs")
+        reasons = record["exclusion_reasons"]
+        if not isinstance(reasons, list) or any(
+            not isinstance(pair, list)
+            or len(pair) != 2
+            or not isinstance(pair[0], str)
+            or not isinstance(pair[1], list)
+            or not pair[1]
+            or any(reason not in ("buffer", "dependency") for reason in pair[1])
+            for pair in reasons
+        ):
+            raise ValueError("checkpoint planned split exclusion reasons are invalid")
+        for name in ("buffer_km", "min_edge_separation_km"):
+            value = record[name]
+            if name == "min_edge_separation_km" and value is None:
+                continue
+            if isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value) or value < 0:
+                raise ValueError(f"checkpoint planned split {name} is invalid")
+    if len(set(split_ids)) != len(split_ids):
+        raise ValueError("checkpoint planned split IDs must be unique")
+    return records
+
+
+def _supplied_split_record(split: BenchmarkSplit) -> dict[str, object]:
+    if not isinstance(split, BenchmarkSplit):
+        raise ValueError("supplied frozen splits must be BenchmarkSplit records")
+    return _json_value(asdict(split), "supplied frozen split")
+
+
+def validate_checkpoint_splits(header: Mapping[str, object], splits: Sequence[BenchmarkSplit]) -> None:
+    """Bind the complete supplied split sequence, in order, to the frozen header."""
+    validated = _validate_header(dict(header))
+    supplied = [_supplied_split_record(split) for split in splits]
+    if _canonical_bytes(supplied) != _canonical_bytes(validated["planned_splits"]):
+        raise ValueError("supplied splits do not match the complete ordered frozen split ledger")
 
 
 def _convergence_limits(header: Mapping[str, object]) -> tuple[float, float]:
@@ -165,12 +225,7 @@ def _convergence_limits(header: Mapping[str, object]) -> tuple[float, float]:
     except (KeyError, TypeError) as error:
         raise ValueError("checkpoint convergence gate is missing or invalid") from error
     for value, minimum in ((max_rhat, 1.0), (min_ess, 0.0)):
-        if (
-            isinstance(value, bool)
-            or not isinstance(value, Real)
-            or not isfinite(value)
-            or value < minimum
-        ):
+        if isinstance(value, bool) or not isinstance(value, Real) or not isfinite(value) or value < minimum:
             raise ValueError("checkpoint convergence gate limits are invalid")
     expected = {
         "maximum_divergences": 0,
@@ -184,17 +239,13 @@ def _convergence_limits(header: Mapping[str, object]) -> tuple[float, float]:
 
 
 def _json_bytes(value: object) -> bytes:
-    return (
-        json.dumps(value, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    ).encode()
+    return (json.dumps(value, allow_nan=False, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode()
 
 
 def _atomic_write_new(path: Path, data: bytes) -> None:
     if path.exists():
         raise FileExistsError(f"immutable checkpoint artifact already exists: {path}")
-    descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.tmp-", dir=path.parent
-    )
+    descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.tmp-", dir=path.parent)
     temporary = Path(temporary_name)
     try:
         with os.fdopen(descriptor, "wb") as stream:
@@ -204,9 +255,7 @@ def _atomic_write_new(path: Path, data: bytes) -> None:
         try:
             os.link(temporary, path)
         except FileExistsError as error:
-            raise FileExistsError(
-                f"immutable checkpoint artifact already exists: {path}"
-            ) from error
+            raise FileExistsError(f"immutable checkpoint artifact already exists: {path}") from error
         directory = os.open(path.parent, os.O_RDONLY)
         try:
             os.fsync(directory)
@@ -260,9 +309,7 @@ def _encode_scalar(value: object, column: str) -> object:
     raise ValueError(f"checkpoint prediction {column} contains a non-JSON value")
 
 
-def _validate_fold_result(
-    split: BenchmarkSplit, result: SpatialGPFoldResult
-) -> pd.DataFrame:
+def _validate_fold_result(split: BenchmarkSplit, result: SpatialGPFoldResult) -> pd.DataFrame:
     if not isinstance(result, SpatialGPFoldResult):
         raise TypeError("result must be a SpatialGPFoldResult")
     if result.status.split_id != split.split_id:
@@ -273,13 +320,11 @@ def _validate_fold_result(
     if not isinstance(frame, pd.DataFrame) or tuple(frame.columns) != PREDICTION_COLUMNS:
         raise ValueError("fold checkpoint predictions have invalid columns")
     if result.status.status == "completed":
-        if frame["source_record_id"].duplicated().any() or set(
-            frame["source_record_id"]
-        ) != set(split.test_ids):
+        if frame["source_record_id"].duplicated().any() or set(frame["source_record_id"]) != set(
+            split.test_ids
+        ):
             raise ValueError("completed fold predictions must match expected_test_ids exactly")
-        if set(frame["split_id"]) != {split.split_id} or set(frame["block_id"]) != {
-            split.block_id
-        }:
+        if set(frame["split_id"]) != {split.split_id} or set(frame["block_id"]) != {split.block_id}:
             raise ValueError("completed fold predictions have the wrong split identity")
     elif not frame.empty:
         raise ValueError("failed or infeasible fold checkpoints must not contain predictions")
@@ -307,9 +352,7 @@ def _artifact_document(
         "status": result.status.status,
         "failure_reason": result.status.failure_reason,
         "sampler_diagnostics": (
-            asdict(result.sampler_diagnostics)
-            if result.sampler_diagnostics is not None
-            else None
+            asdict(result.sampler_diagnostics) if result.sampler_diagnostics is not None else None
         ),
         "prediction_columns": list(PREDICTION_COLUMNS),
         "prediction_rows": rows,
@@ -329,6 +372,11 @@ def write_fold_checkpoint(
     if not (root / HEADER_FILENAME).is_file() or not folds.is_dir():
         raise ValueError(f"checkpoint directory is incomplete: {root}")
     header = _validate_header(_read_json(root / HEADER_FILENAME))
+    planned = header["planned_splits"]
+    if isinstance(ordinal, bool) or not isinstance(ordinal, Integral) or not 0 <= ordinal < len(planned):
+        raise ValueError("fold ordinal must be an integer within the frozen split ledger")
+    if _canonical_bytes(_supplied_split_record(split)) != _canonical_bytes(planned[ordinal]):
+        raise ValueError("supplied split does not match its ordinal in the frozen split ledger")
     max_rhat, min_ess = _convergence_limits(header)
     if not isinstance(result, SpatialGPFoldResult):
         raise TypeError("result must be a SpatialGPFoldResult")
@@ -380,15 +428,9 @@ def _decode_artifact(
         raise ValueError(f"checkpoint fold status is invalid: {path.name}") from error
     diagnostics_record = document["sampler_diagnostics"]
     try:
-        diagnostics = (
-            None
-            if diagnostics_record is None
-            else SamplerDiagnostics(**diagnostics_record)
-        )
+        diagnostics = None if diagnostics_record is None else SamplerDiagnostics(**diagnostics_record)
     except (TypeError, ValueError) as error:
-        raise ValueError(
-            f"checkpoint sampler diagnostics are invalid: {path.name}"
-        ) from error
+        raise ValueError(f"checkpoint sampler diagnostics are invalid: {path.name}") from error
     try:
         result = SpatialGPFoldResult(
             status=status,
@@ -427,6 +469,7 @@ def load_fold_checkpoints(
     max_rhat, min_ess = _convergence_limits(actual_header)
 
     split_tuple = tuple(splits)
+    validate_checkpoint_splits(actual_header, split_tuple)
     expected_names = {f"{ordinal:04d}.json" for ordinal in range(len(split_tuple))}
     actual_names = _visible_names(folds)
     if not actual_names <= expected_names:
@@ -437,8 +480,23 @@ def load_fold_checkpoints(
         raise ValueError("checkpoint folds must form a contiguous prefix")
     return tuple(
         _decode_artifact(
-            folds / f"{ordinal:04d}.json", ordinal, split_tuple[ordinal],
-            max_rhat=max_rhat, min_ess=min_ess,
+            folds / f"{ordinal:04d}.json",
+            ordinal,
+            split_tuple[ordinal],
+            max_rhat=max_rhat,
+            min_ess=min_ess,
         )
         for ordinal in range(completed_count)
     )
+
+
+def finalize_checkpoint_benchmark(
+    path: Path,
+    expected_header: Mapping[str, object],
+    plan: SpatialGPBenchmarkPlan,
+) -> SpatialGPBenchmarkResult:
+    """Finalize only a complete terminal ledger reloaded under the exact frozen splits."""
+    if not isinstance(plan, SpatialGPBenchmarkPlan):
+        raise TypeError("plan must be a SpatialGPBenchmarkPlan")
+    results = load_fold_checkpoints(path, expected_header, plan.splits)
+    return finalize_single_variant_gp_benchmark(plan, results)

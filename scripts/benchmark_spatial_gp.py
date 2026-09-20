@@ -46,14 +46,15 @@ from genomeos.validation.benchmark import (  # noqa: E402
 )
 from genomeos.validation.spatial_gp_benchmark import (  # noqa: E402
     evaluate_single_variant_gp_fold,
-    finalize_single_variant_gp_benchmark,
     plan_single_variant_gp_benchmark,
     spatial_gp_seed_schedule,
 )
 from genomeos.validation.spatial_gp_checkpoint import (  # noqa: E402
     build_checkpoint_header,
+    finalize_checkpoint_benchmark,
     initialize_checkpoint,
     load_fold_checkpoints,
+    validate_checkpoint_splits,
     write_fold_checkpoint,
 )
 
@@ -403,12 +404,13 @@ def run(args: argparse.Namespace) -> int:
         fold_results = list(
             load_fold_checkpoints(checkpoint_path, checkpoint_header, plan.splits)
         )
+    validate_checkpoint_splits(checkpoint_header, plan.splits)
     for ordinal in range(len(fold_results), len(plan.splits)):
         split = plan.splits[ordinal]
         fold_result = evaluate_single_variant_gp_fold(plan, split)
         write_fold_checkpoint(checkpoint_path, ordinal, split, fold_result)
         fold_results.append(fold_result)
-    result = finalize_single_variant_gp_benchmark(plan, fold_results)
+    result = finalize_checkpoint_benchmark(checkpoint_path, checkpoint_header, plan)
 
     result_by_id = {fold.status.split_id: fold for fold in fold_results}
     split_records: list[dict[str, object]] = []

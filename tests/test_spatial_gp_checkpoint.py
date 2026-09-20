@@ -156,9 +156,7 @@ def test_fold_checkpoints_round_trip_all_terminal_states_and_negative_infinity(t
 
     observed = load_fold_checkpoints(root, _header(splits), splits)
 
-    assert tuple(result.status for result in observed) == tuple(
-        result.status for result in expected
-    )
+    assert tuple(result.status for result in observed) == tuple(result.status for result in expected)
     for actual, wanted in zip(observed, expected, strict=True):
         pd.testing.assert_frame_equal(actual.predictions, wanted.predictions, check_dtype=False)
         assert actual.sampler_diagnostics == wanted.sampler_diagnostics
@@ -255,10 +253,13 @@ def test_checkpoint_load_refuses_rehashed_completed_fold_with_failed_gate(tmp_pa
     assert path.read_bytes() == original
 
 
-@pytest.mark.parametrize("filename,hash_field", [
-    ("checkpoint.json", "header_sha256"),
-    ("folds/0000.json", "artifact_sha256"),
-])
+@pytest.mark.parametrize(
+    "filename,hash_field",
+    [
+        ("checkpoint.json", "header_sha256"),
+        ("folds/0000.json", "artifact_sha256"),
+    ],
+)
 def test_resume_refuses_schema_v1_without_retrospective_upgrade(tmp_path, filename, hash_field):
     split = _split(0)
     root = tmp_path / "checkpoint"
@@ -291,3 +292,206 @@ def test_checkpoint_refuses_unavailable_or_inconsistent_frozen_gate(tmp_path, ch
         initialize_checkpoint(tmp_path / "checkpoint", header)
 
     assert not (tmp_path / "checkpoint").exists()
+
+
+SPLIT_CHANGES = [
+    {"split_id": "different-split"},
+    {"block_id": "different-held-out-block"},
+    {"train_ids": ("different-training-row",)},
+    {"test_ids": ("different-test-row",)},
+    {"excluded_ids": ("different-excluded-row",)},
+    {"exclusion_reasons": (("different-excluded-row", ("buffer",)),)},
+    {"min_edge_separation_km": 999.0},
+    {"input_fingerprint": "f" * 64},
+    {"buffer_km": 999.0},
+    {"data_version": "different-data-version"},
+]
+
+
+@pytest.mark.parametrize("change", SPLIT_CHANGES, ids=lambda value: next(iter(value)))
+def test_write_binds_every_split_field_to_header_before_publication(tmp_path, change):
+    split = _split(0)
+    root = tmp_path / "checkpoint"
+    initialize_checkpoint(root, _header((split,)))
+    altered = replace(split, **change)
+    before = (root / "checkpoint.json").read_bytes()
+    with pytest.raises(ValueError, match="frozen split"):
+        write_fold_checkpoint(root, 0, altered, _terminal(altered, "failed"))
+    assert not list((root / "folds").iterdir())
+    assert (root / "checkpoint.json").read_bytes() == before
+
+
+@pytest.mark.parametrize("prefix_length", [0, 1])
+@pytest.mark.parametrize("change", SPLIT_CHANGES, ids=lambda value: next(iter(value)))
+def test_load_binds_every_split_field_even_before_an_empty_prefix(tmp_path, change, prefix_length):
+    split = _split(0)
+    root = tmp_path / "checkpoint"
+    header = _header((split,))
+    initialize_checkpoint(root, header)
+    if prefix_length:
+        write_fold_checkpoint(root, 0, split, _terminal(split, "failed"))
+    before = {path.name: path.read_bytes() for path in (root / "folds").iterdir()}
+    with pytest.raises(ValueError, match="frozen split"):
+        load_fold_checkpoints(root, header, (replace(split, **change),))
+    assert {path.name: path.read_bytes() for path in (root / "folds").iterdir()} == before
+
+
+@pytest.mark.parametrize("change", ["reverse", "duplicate", "missing", "extra", "empty"])
+def test_load_requires_exact_complete_ordered_caller_ledger(tmp_path, change):
+    splits = (_split(0), _split(1))
+    root = tmp_path / "checkpoint"
+    header = _header(splits)
+    initialize_checkpoint(root, header)
+    supplied = {
+        "reverse": splits[::-1],
+        "duplicate": (splits[0], splits[0]),
+        "missing": splits[:1],
+        "extra": (*splits, _split(2)),
+        "empty": (),
+    }[change]
+    with pytest.raises(ValueError, match="frozen split"):
+        load_fold_checkpoints(root, header, supplied)
+    from genomeos.validation.spatial_gp_checkpoint import finalize_checkpoint_benchmark
+
+    with pytest.raises(ValueError, match="frozen split"):
+        finalize_checkpoint_benchmark(root, header, _checkpoint_plan(supplied))
+
+
+@pytest.mark.parametrize("ordinal", [-1, 1, True, 0.5])
+def test_write_refuses_invalid_or_out_of_range_ordinal_before_publication(tmp_path, ordinal):
+    split = _split(0)
+    root = tmp_path / "checkpoint"
+    initialize_checkpoint(root, _header((split,)))
+    with pytest.raises(ValueError, match="ordinal"):
+        write_fold_checkpoint(root, ordinal, split, _completed(split))
+    assert not list((root / "folds").iterdir())
+
+
+@pytest.mark.parametrize("change", ["digest", "missing_field", "extra_field", "duplicate", "empty"])
+def test_header_refuses_invalid_rehashed_split_ledger_before_initialization(tmp_path, change):
+    header = _header((_split(0),))
+    if change == "digest":
+        header["planned_splits_sha256"] = "f" * 64
+    else:
+        if change == "missing_field":
+            del header["planned_splits"][0]["train_ids"]
+        elif change == "extra_field":
+            header["planned_splits"][0]["held_out_block_ids"] = ["unexpected"]
+        elif change == "duplicate":
+            header["planned_splits"] *= 2
+        else:
+            header["planned_splits"] = []
+        header["planned_splits_sha256"] = hashlib.sha256(
+            json.dumps(
+                header["planned_splits"], sort_keys=True, separators=(",", ":"), ensure_ascii=False
+            ).encode()
+        ).hexdigest()
+    _rehash_document(header, "header_sha256")
+    with pytest.raises(ValueError, match="planned split"):
+        initialize_checkpoint(tmp_path / "checkpoint", header)
+    assert not (tmp_path / "checkpoint").exists()
+
+
+def _checkpoint_plan(splits):
+    from genomeos.surfaces.config import FitConfig
+    from genomeos.validation.spatial_gp_benchmark import SpatialGPBenchmarkPlan
+
+    # Finalization uses only the immutable split/configuration and retained fold evidence.
+    return SpatialGPBenchmarkPlan(
+        pd.DataFrame(), pd.DataFrame(), splits, FitConfig(likelihood="binomial"), 42, "scipy", None
+    )
+
+
+@pytest.mark.parametrize("change", SPLIT_CHANGES, ids=lambda value: next(iter(value)))
+def test_finalization_reloads_only_header_bound_plan_splits(tmp_path, change):
+    from genomeos.validation.spatial_gp_checkpoint import finalize_checkpoint_benchmark
+
+    split = _split(0)
+    root = tmp_path / "checkpoint"
+    header = _header((split,))
+    initialize_checkpoint(root, header)
+    write_fold_checkpoint(root, 0, split, _terminal(split, "failed"))
+    before = (root / "folds/0000.json").read_bytes()
+    with pytest.raises(ValueError, match="frozen split"):
+        finalize_checkpoint_benchmark(root, header, _checkpoint_plan((replace(split, **change),)))
+    assert (root / "folds/0000.json").read_bytes() == before
+
+
+def test_valid_partial_prefix_and_all_terminal_states_remain_reusable(tmp_path):
+    from genomeos.validation.spatial_gp_checkpoint import finalize_checkpoint_benchmark
+
+    splits = tuple(_split(index) for index in range(3))
+    header = _header(splits)
+    root = tmp_path / "checkpoint"
+    initialize_checkpoint(root, header)
+    results = (_completed(splits[0]), _terminal(splits[1], "failed"), _terminal(splits[2], "infeasible"))
+    assert load_fold_checkpoints(root, header, splits) == ()
+    for index, (split, result) in enumerate(zip(splits, results, strict=True)):
+        write_fold_checkpoint(root, index, split, result)
+        assert len(load_fold_checkpoints(root, header, splits)) == index + 1
+        if index < 2:
+            with pytest.raises(ValueError, match="cover exactly"):
+                finalize_checkpoint_benchmark(root, header, _checkpoint_plan(splits))
+    before = {p.name: p.read_bytes() for p in (root / "folds").iterdir()}
+    final = finalize_checkpoint_benchmark(root, header, _checkpoint_plan(splits))
+    assert [status.status for status in final.fold_status] == ["completed", "failed", "infeasible"]
+    assert {p.name: p.read_bytes() for p in (root / "folds").iterdir()} == before
+
+
+@pytest.mark.parametrize("field", ["train_ids", "test_ids", "excluded_ids", "exclusion_reasons"])
+def test_member_order_is_part_of_frozen_identity(tmp_path, field):
+    split = replace(
+        _split(0),
+        train_ids=("train-a", "train-b"),
+        test_ids=("test-a", "test-b"),
+        excluded_ids=("excluded-a", "excluded-b"),
+        exclusion_reasons=(("excluded-a", ("buffer",)), ("excluded-b", ("dependency",))),
+    )
+    header = _header((split,))
+    root = tmp_path / "checkpoint"
+    initialize_checkpoint(root, header)
+    changed = replace(split, **{field: getattr(split, field)[::-1]})
+    with pytest.raises(ValueError, match="frozen split"):
+        write_fold_checkpoint(root, 0, changed, _terminal(changed, "failed"))
+    with pytest.raises(ValueError, match="frozen split"):
+        load_fold_checkpoints(root, header, (changed,))
+    assert not list((root / "folds").iterdir())
+
+
+def test_atomic_write_failure_and_competing_publication_preserve_evidence(tmp_path, monkeypatch):
+    import genomeos.validation.spatial_gp_checkpoint as checkpoints
+
+    split = _split(0)
+    root = tmp_path / "checkpoint"
+    initialize_checkpoint(root, _header((split,)))
+    target = root / "folds/0000.json"
+    real_fsync = checkpoints.os.fsync
+
+    def failing_fsync(_descriptor):
+        raise OSError("simulated prepublication failure")
+
+    monkeypatch.setattr(checkpoints.os, "fsync", failing_fsync)
+    with pytest.raises(OSError, match="prepublication"):
+        write_fold_checkpoint(root, 0, split, _completed(split))
+    assert not list((root / "folds").iterdir())
+    monkeypatch.setattr(checkpoints.os, "fsync", real_fsync)
+    real_link = checkpoints.os.link
+
+    def racing_link(source, destination):
+        target.write_bytes(b"competing immutable evidence")
+        real_link(source, destination)
+
+    monkeypatch.setattr(checkpoints.os, "link", racing_link)
+    with pytest.raises(FileExistsError, match="immutable"):
+        write_fold_checkpoint(root, 0, split, _completed(split))
+    assert target.read_bytes() == b"competing immutable evidence"
+    assert list((root / "folds").iterdir()) == [target]
+
+
+def test_writer_binds_the_supplied_split_to_the_requested_ordinal(tmp_path):
+    splits = (_split(0), _split(1))
+    root = tmp_path / "checkpoint"
+    initialize_checkpoint(root, _header(splits))
+    with pytest.raises(ValueError, match="frozen split"):
+        write_fold_checkpoint(root, 1, splits[0], _terminal(splits[0], "failed"))
+    assert not list((root / "folds").iterdir())

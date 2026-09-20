@@ -77,8 +77,7 @@ def _write_inputs(root: Path, *, large_denominator: bool = False) -> dict[str, P
     assignments.to_csv(paths["assignments"], sep="\t", index=False, lineterminator="\n")
     paths["dependencies"].write_text("source_record_id_a\tsource_record_id_b\n")
     paths["fit_config"].write_text(
-        json.dumps(asdict(FitConfig(likelihood="beta_binomial")), indent=2, sort_keys=True)
-        + "\n"
+        json.dumps(asdict(FitConfig(likelihood="beta_binomial")), indent=2, sort_keys=True) + "\n"
     )
     return paths
 
@@ -145,9 +144,7 @@ class _FakeFit:
     fail_prediction: bool = False
     idata: object = None
 
-    def predict_new_cohort_parameters(
-        self, queries: SurveyQueries, *, seed: int
-    ) -> ObservationParameters:
+    def predict_new_cohort_parameters(self, queries: SurveyQueries, *, seed: int) -> ObservationParameters:
         if self.fail_prediction:
             raise RuntimeError("controlled terminal fold failure")
         assert not set(queries.cohort_ids) & set(self.training_cohorts)
@@ -156,9 +153,7 @@ class _FakeFit:
             np.linspace(0.01, 0.08, len(queries.observation_ids)),
             (draws, len(queries.observation_ids)),
         )
-        concentration = (
-            np.full(mean.shape, 30.0) if self.likelihood == "beta_binomial" else None
-        )
+        concentration = np.full(mean.shape, 30.0) if self.likelihood == "beta_binomial" else None
         return ObservationParameters(
             queries=queries,
             metadata=ObservationModelMetadata(
@@ -279,9 +274,7 @@ def test_runner_writes_reproducible_current_gp_evidence(tmp_path, monkeypatch):
     assert set(statuses["min_tail_ess"]) == {GOOD_DIAGNOSTICS.min_tail_ess}
     assert set(statuses["divergence_count"]) == {0}
     assert all(split["sampler_diagnostics"] for split in manifest["splits"])
-    assert json.loads((first / "summary.json").read_text())["benchmark"][
-        "comparison_complete"
-    ] is True
+    assert json.loads((first / "summary.json").read_text())["benchmark"]["comparison_complete"] is True
     for name, record in manifest["output_files"].items():
         content = (first / name).read_bytes()
         assert record == {
@@ -335,9 +328,7 @@ def test_runner_refuses_overlapping_checkpoint_and_output_directories(tmp_path):
     paths = _write_inputs(tmp_path)
     runner = _load_runner("spatial_gp_runner_overlapping_paths")
     output = tmp_path / "same"
-    args = runner._parser().parse_args(
-        _command(paths, output, checkpoint=output)[2:]
-    )
+    args = runner._parser().parse_args(_command(paths, output, checkpoint=output)[2:])
 
     with pytest.raises(ValueError, match="must be disjoint"):
         runner.run(args)
@@ -361,28 +352,17 @@ def test_runner_bootstraps_the_checked_out_science_sources(tmp_path):
     assert completed.returncode == 1, completed.stderr
     assert "synthetic wrong-checkout" not in completed.stderr
     manifest = json.loads((tmp_path / "run" / "manifest.json").read_text())
-    expected = hashlib.sha256(
-        (ROOT / "genomeos/validation/spatial_gp_benchmark.py").read_bytes()
-    ).hexdigest()
-    assert (
-        manifest["science_source_sha256"][
-            "genomeos/validation/spatial_gp_benchmark.py"
-        ]
-        == expected
-    )
+    expected = hashlib.sha256((ROOT / "genomeos/validation/spatial_gp_benchmark.py").read_bytes()).hexdigest()
+    assert manifest["science_source_sha256"]["genomeos/validation/spatial_gp_benchmark.py"] == expected
 
 
-def test_runner_resumes_a_terminal_fold_prefix_with_byte_identical_publication(
-    tmp_path, monkeypatch
-):
+def test_runner_resumes_a_terminal_fold_prefix_with_byte_identical_publication(tmp_path, monkeypatch):
     paths = _write_inputs(tmp_path)
     checkpoint = tmp_path / "interrupted-checkpoint"
     resumed_out = tmp_path / "resumed"
     runner = _load_runner("spatial_gp_runner_resume")
     calls = _install_fake_fit(runner, monkeypatch, interrupt_once_after=2)
-    interrupted = runner._parser().parse_args(
-        _command(paths, resumed_out, checkpoint=checkpoint)[2:]
-    )
+    interrupted = runner._parser().parse_args(_command(paths, resumed_out, checkpoint=checkpoint)[2:])
 
     with pytest.raises(KeyboardInterrupt, match="controlled"):
         runner.run(interrupted)
@@ -392,9 +372,7 @@ def test_runner_resumes_a_terminal_fold_prefix_with_byte_identical_publication(
         "0000.json",
         "0001.json",
     ]
-    resumed = runner._parser().parse_args(
-        _command(paths, resumed_out, resume_from=checkpoint)[2:]
-    )
+    resumed = runner._parser().parse_args(_command(paths, resumed_out, resume_from=checkpoint)[2:])
     assert runner.run(resumed) == 0
     assert len(calls) == 4
 
@@ -440,9 +418,7 @@ def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, 
     first_out = tmp_path / "failed-first"
     runner = _load_runner("spatial_gp_runner_failed_resume")
     calls = _install_fake_fit(runner, monkeypatch, convergence_failure_on_call=1)
-    first = runner._parser().parse_args(
-        _command(paths, first_out, checkpoint=checkpoint)[2:]
-    )
+    first = runner._parser().parse_args(_command(paths, first_out, checkpoint=checkpoint)[2:])
 
     assert runner.run(first) == 1
     assert len(calls) == 4
@@ -453,9 +429,7 @@ def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, 
     assert failed["divergence_count"] == BAD_DIAGNOSTICS.divergence_count
 
     resumed_out = tmp_path / "failed-resumed"
-    resumed = runner._parser().parse_args(
-        _command(paths, resumed_out, resume_from=checkpoint)[2:]
-    )
+    resumed = runner._parser().parse_args(_command(paths, resumed_out, resume_from=checkpoint)[2:])
     assert runner.run(resumed) == 1
     assert len(calls) == 4
     assert {path.name: path.read_bytes() for path in first_out.iterdir()} == {
@@ -463,15 +437,16 @@ def test_resume_reuses_a_terminal_failed_fold_without_selective_retry(tmp_path, 
     }
 
 
-@pytest.mark.parametrize("change", [
-    {"max_rhat": 1.051},
-    {"min_bulk_ess": 199.0},
-    {"min_tail_ess": 199.0},
-    {"divergence_count": 1},
-])
-def test_resume_refuses_contradictory_fold_before_fitting_or_publication(
-    tmp_path, monkeypatch, change
-):
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"max_rhat": 1.051},
+        {"min_bulk_ess": 199.0},
+        {"min_tail_ess": 199.0},
+        {"divergence_count": 1},
+    ],
+)
+def test_resume_refuses_contradictory_fold_before_fitting_or_publication(tmp_path, monkeypatch, change):
     paths = _write_inputs(tmp_path)
     checkpoint = tmp_path / "checkpoint"
     output = tmp_path / "output"
@@ -497,3 +472,21 @@ def test_resume_refuses_contradictory_fold_before_fitting_or_publication(
     assert len(calls) == 1
     assert not output.exists()
     assert path.read_bytes() == original
+
+
+def test_fresh_runner_refuses_unbound_split_header_before_fitting(tmp_path, monkeypatch):
+    inputs = _write_inputs(tmp_path)
+    runner = _load_runner("spatial_gp_runner_unbound_header")
+    calls = _install_fake_fit(runner, monkeypatch)
+    build_header = runner.build_checkpoint_header
+
+    def altered_header(**kwargs):
+        kwargs["planned_splits"][0]["input_fingerprint"] = "f" * 64
+        return build_header(**kwargs)
+
+    monkeypatch.setattr(runner, "build_checkpoint_header", altered_header)
+    args = runner._parser().parse_args(_command(inputs, tmp_path / "publication")[2:])
+    with pytest.raises(ValueError, match="frozen split"):
+        runner.run(args)
+    assert calls == []
+    assert not (tmp_path / "publication").exists()
