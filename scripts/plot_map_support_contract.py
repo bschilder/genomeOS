@@ -10,6 +10,7 @@ all space outside the accepted synthetic coordinates as unqualified.
 from __future__ import annotations
 
 import argparse
+import sys
 import tempfile
 from pathlib import Path
 
@@ -20,9 +21,11 @@ import matplotlib.pyplot as plt  # noqa: E402
 import pandas as pd  # noqa: E402
 from matplotlib.patches import Rectangle  # noqa: E402
 
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
 from genomeos.observations.sources import map_surveys  # noqa: E402
 
-ROOT = Path(__file__).parents[1]
 SYNTHETIC_FIXTURE = ROOT / "tests" / "fixtures" / "map_hbs_curated_synthetic.csv"
 
 

@@ -11,14 +11,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 
-from genomeos.observations.ingest import write_observations
-from genomeos.observations.sources import gnomad_hgdp_1kg as gnomad
-from genomeos.observations.sources import map_surveys, publications
-from genomeos.registry.publication import read_registry
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from genomeos.observations.ingest import write_observations  # noqa: E402
+from genomeos.observations.sources import gnomad_hgdp_1kg as gnomad  # noqa: E402
+from genomeos.observations.sources import map_surveys, publications  # noqa: E402
+from genomeos.registry.publication import read_registry  # noqa: E402
 
 VERSION = "0.1.0"
 

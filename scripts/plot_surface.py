@@ -23,6 +23,7 @@ spherical kernel and the geodesic inducing grid exist to remove. The mask logic 
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -32,6 +33,9 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.patches import Patch  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from genomeos.observations.sources import (  # noqa: E402
     afnd_carriers,

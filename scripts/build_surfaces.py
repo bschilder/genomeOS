@@ -15,14 +15,18 @@ without repeating the inference — a palette change should not cost nine minute
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
 
-from genomeos.observations.sources import map_g6pd, map_surveys
-from genomeos.surfaces.batch import jobs_from_sources, run_batch, write_exclusions
-from genomeos.surfaces.fit import FitConfig, save_fit
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from genomeos.observations.sources import map_g6pd, map_surveys  # noqa: E402
+from genomeos.surfaces.batch import jobs_from_sources, run_batch, write_exclusions  # noqa: E402
+from genomeos.surfaces.fit import FitConfig, save_fit  # noqa: E402
 
 #: Loaders keyed by the CLI flag that supplies their export.
 LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}

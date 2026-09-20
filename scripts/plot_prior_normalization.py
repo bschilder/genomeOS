@@ -13,6 +13,7 @@ comes only from comparing different locations.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,9 @@ import numpy as np  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from matplotlib.colors import Normalize  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from genomeos.observations.sources import map_surveys  # noqa: E402
 from genomeos.surfaces.fit import (  # noqa: E402

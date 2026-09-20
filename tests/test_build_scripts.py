@@ -416,10 +416,18 @@ def test_build_observations_refuses_raw_map_export_without_creating_store(tmp_pa
     command = _command(registry, out)
     map_flag = command.index("--map-surveys")
     command[map_flag + 1] = str(FIXTURES / "map_hbs_surveys.csv")
+    stale_package = tmp_path / "stale-package" / "genomeos"
+    stale_package.mkdir(parents=True)
+    (stale_package / "__init__.py").write_text(
+        'raise RuntimeError("stale genomeos package imported")\n'
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(stale_package.parent)
 
-    completed = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    completed = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
 
     assert completed.returncode != 0
     assert "explicit spatial support" in completed.stderr
     assert "curated MAP CSV" in completed.stderr
+    assert "stale genomeos package imported" not in completed.stderr
     assert not out.exists()
