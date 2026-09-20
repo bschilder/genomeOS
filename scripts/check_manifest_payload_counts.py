@@ -92,10 +92,43 @@ def payload_identifiers(path: Path) -> tuple[list[str], list[str]]:
 
 def inspect(corpus: Path) -> Corpus:
     """Reconcile one corpus directory. Empty `problems` means it reconciles."""
-    discovery = json.loads((corpus / "PROVENANCE.json").read_text(encoding="utf-8")).get("discovery") or {}
-    queries, version = discovery.get("queries") or [], discovery.get("manifest_version")
-    if not queries or not version:
+    provenance_path = corpus / "PROVENANCE.json"
+    try:
+        provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return Corpus(
+            [f"{corpus.name}: PROVENANCE.json is not readable JSON ({error})"],
+            [f"{corpus.name}: malformed provenance"],
+            True,
+        )
+    if not isinstance(provenance, dict):
+        return Corpus(
+            [f"{corpus.name}: PROVENANCE.json must contain a JSON object"],
+            [f"{corpus.name}: malformed provenance"],
+            True,
+        )
+    discovery = provenance.get("discovery")
+    if not discovery:
         return Corpus([], [f"{corpus.name}: no discovery block with payloads"], False)
+    if not isinstance(discovery, dict):
+        return Corpus(
+            [f"{corpus.name}: discovery must contain a JSON object"],
+            [f"{corpus.name}: malformed discovery block"],
+            True,
+        )
+    queries, version = discovery.get("queries"), discovery.get("manifest_version")
+    if not isinstance(version, str) or not version.strip():
+        return Corpus(
+            [f"{corpus.name}: discovery is missing required field manifest_version"],
+            [f"{corpus.name}: malformed discovery block"],
+            True,
+        )
+    if not isinstance(queries, list) or not queries:
+        return Corpus(
+            [f"{corpus.name}: discovery is missing a nonempty queries array"],
+            [f"{corpus.name}: malformed discovery block"],
+            True,
+        )
 
     manifests = {
         path.name: rows
@@ -105,9 +138,22 @@ def inspect(corpus: Path) -> Corpus:
 
     problems: list[str] = []
     lines = [f"{corpus.name}  ({version}, {len(manifests)} manifest file(s))"]
-    for query in queries:
-        name = query.get("name", "?")
-        payload = corpus / str(query.get("payload", ""))
+    for index, query in enumerate(queries):
+        if not isinstance(query, dict):
+            problems.append(f"{corpus.name}/query[{index}]: query declaration must be an object")
+            continue
+        name_value = query.get("name")
+        name = name_value if isinstance(name_value, str) and name_value.strip() else f"query[{index}]"
+        missing = [
+            field
+            for field in ("query", "executed_at", "payload")
+            if not isinstance(query.get(field), str) or not query[field].strip()
+        ]
+        if missing:
+            label = "field" if len(missing) == 1 else "fields"
+            problems.append(f"{corpus.name}/{name}: missing required {label} {', '.join(missing)}")
+            continue
+        payload = corpus / query["payload"]
         if not payload.exists():
             problems.append(f"{corpus.name}/{name}: declared payload {payload.name} is absent")
             continue
@@ -123,10 +169,19 @@ def inspect(corpus: Path) -> Corpus:
             if row.get("search_id") == search_id and row.get("manifest_version") == version
         ]
         same_set = set(recorded) == set(idlist)
-        if len(recorded) != len(idlist) or not same_set:
+        if len(recorded) != len(idlist):
             problems.append(
                 f"{corpus.name}/{name}: manifest records {len(recorded)} candidate(s) under {version} "
                 f"for a payload matching {len(idlist)}"
+            )
+        elif not same_set:
+            unexpected = sorted(set(recorded) - set(idlist))
+            absent = sorted(set(idlist) - set(recorded))
+            problems.append(
+                f"{corpus.name}/{name}: manifest candidate set differs from the declared payload: "
+                f"{len(unexpected)} candidate(s) not in the declared payload "
+                f"({unexpected[:3]}), and {len(absent)} payload identifier(s) absent from the "
+                f"manifest ({absent[:3]})"
             )
         lines.append(f"  {name}: payload {len(idlist)} identifier(s), manifest {len(recorded)} row(s), "
                      f"set match {same_set}")
@@ -164,13 +219,25 @@ def main() -> int:
     if problems:
         print("\nManifest/payload reconciliation failed:")
         print("\n".join(f"- {problem}" for problem in problems))
-        print(
-            "\nA manifest recording fewer candidates than the payload matched is a truncated or\n"
-            "paginated capture, not a screened one, and it is indistinguishable from a complete one\n"
-            "once committed. Re-fetch with scripts/fetch_pubmed_manifest.py (retmax=100000 refuses\n"
-            "this disagreement) and publish the result as a new manifest_version over the corrected\n"
-            "snapshot, stating which version it supersedes. Never edit a published manifest in place."
+        count_mismatch = any(
+            "manifest records" in problem or "payload count" in problem for problem in problems
         )
+        set_mismatch = any("candidate set differs" in problem for problem in problems)
+        if count_mismatch:
+            print(
+                "\nA manifest recording fewer candidates than the payload matched is a truncated or\n"
+                "paginated capture, not a screened one, and it is indistinguishable from a complete one\n"
+                "once committed. Re-fetch with scripts/fetch_pubmed_manifest.py (retmax=100000 refuses\n"
+                "this disagreement) and publish the result as a new manifest_version over the corrected\n"
+                "snapshot, stating which version it supersedes. Never edit a published manifest in place."
+            )
+        if set_mismatch:
+            print(
+                "\nA same-size candidate-set disagreement is a provenance gap, not pagination. Restore\n"
+                "the identifiers returned by the declared payload, or declare and retain the actual\n"
+                "source that introduced the substituted candidate. Never edit a published manifest in\n"
+                "place."
+            )
         return 1
     print(f"\nmanifest/payload reconciliation passed ({examined} corpora)")
     return 0

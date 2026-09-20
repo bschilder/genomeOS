@@ -96,6 +96,38 @@ def test_truncated_manifest_is_refused(tmp_path: Path) -> None:
     assert "matching 58" in problems[0]
 
 
+def test_equal_count_wrong_identifier_names_the_provenance_mismatch(tmp_path: Path) -> None:
+    """A substituted PMID is a set/provenance defect, not a truncated search."""
+    corpus = build_corpus(tmp_path)
+    manifest = corpus / "searches.pending.tsv"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace("pmid:40000000", "pmid:99999999", 1),
+        encoding="utf-8",
+    )
+
+    problems = inspect(corpus).problems
+
+    assert len(problems) == 1
+    assert "candidate set differs" in problems[0]
+    assert "1 candidate(s) not in the declared payload" in problems[0]
+    assert "1 payload identifier(s) absent from the manifest" in problems[0]
+    assert "99999999" in problems[0]
+
+
+def test_missing_required_query_field_is_a_contextual_refusal(tmp_path: Path) -> None:
+    corpus = build_corpus(tmp_path)
+    provenance_path = corpus / "PROVENANCE.json"
+    provenance = json.loads(provenance_path.read_text(encoding="utf-8"))
+    del provenance["discovery"]["queries"][0]["executed_at"]
+    provenance_path.write_text(json.dumps(provenance), encoding="utf-8")
+
+    problems = inspect(corpus).problems
+
+    assert len(problems) == 1
+    assert "lct-enattah-2007/Q3" in problems[0]
+    assert "missing required field executed_at" in problems[0]
+
+
 def test_payload_disagreeing_with_its_own_idlist_is_refused(tmp_path: Path) -> None:
     """The payload is validated, not trusted: its count must equal the identifiers it returned."""
     problems = inspect(build_corpus(tmp_path, payload_count=57)).problems
@@ -171,6 +203,24 @@ def test_cli_exits_nonzero_and_names_both_numbers(
     output = capsys.readouterr().out
     assert "records 25 candidate(s)" in output and "matching 58" in output
     assert "truncated or" in output
+
+
+def test_cli_gives_set_specific_remediation_for_substituted_identifier(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    corpus = build_corpus(tmp_path)
+    manifest = corpus / "searches.pending.tsv"
+    manifest.write_text(
+        manifest.read_text(encoding="utf-8").replace("pmid:40000000", "pmid:99999999", 1),
+        encoding="utf-8",
+    )
+
+    _run_main(["check_manifest_payload_counts.py", "--fixtures-root", str(tmp_path)], 1)
+
+    output = capsys.readouterr().out
+    assert "candidate set differs" in output
+    assert "provenance gap" in output
+    assert "truncated or paginated" not in output
 
 
 def test_cli_passes_on_the_committed_corpora(capsys: pytest.CaptureFixture) -> None:
