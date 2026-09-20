@@ -1,4 +1,4 @@
-"""Binomial spatial-GP surface fit with ascertainment offsets (design §7, §7.1, P2).
+"""Binomial spatial-GP surface fit with ascertainment offsets (design §7, §7.1, P2; #333).
 
 The model of design §7:
 
@@ -57,6 +57,7 @@ from genomeos.surfaces.config import NUTS_SAMPLERS as NUTS_SAMPLERS
 from genomeos.surfaces.config import REFERENCE_DESIGN as REFERENCE_DESIGN
 from genomeos.surfaces.config import SEED as SEED
 from genomeos.surfaces.config import FitConfig as FitConfig
+from genomeos.surfaces.convergence import SamplerDiagnostics, summarize_sampler_diagnostics
 from genomeos.surfaces.observation import (
     ObservationModelMetadata,
     ObservationParameters,
@@ -73,6 +74,12 @@ class ConvergenceError(RuntimeError):
     be the worst available outcome — a non-converged chain produces a confident-looking map, and
     nothing downstream can tell it from a good one.
     """
+
+    def __init__(
+        self, message: str, *, diagnostics: SamplerDiagnostics | None = None
+    ) -> None:
+        self.diagnostics = diagnostics
+        super().__init__(message)
 
 #: Keeps logit/Beta arithmetic away from the 0 and 1 boundaries in the predictive path.
 _EPS = 1e-9
@@ -454,7 +461,7 @@ def inducing_points(x: np.ndarray, n_inducing: int, seed: int) -> np.ndarray:
     return centroids[norms > 0] / norms[norms > 0, None]
 
 
-def _check_convergence(idata, config: FitConfig) -> None:
+def _check_convergence(idata, config: FitConfig) -> SamplerDiagnostics:
     """Raise unless every parameter mixed, naming the parameter that failed.
 
     The offending parameter is part of the message because it changes the diagnosis entirely.
@@ -462,33 +469,30 @@ def _check_convergence(idata, config: FitConfig) -> None:
     starved `z_u` is the spatial field itself failing and usually means the inducing set or the
     sampling budget is wrong. Without the name, every failure looks like "buy more draws" (#111).
     """
-    import arviz as az
-
-    rhat = az.rhat(idata)
-    ess = az.ess(idata)
-    worst_rhat, rhat_var = -np.inf, "?"
-    for name in rhat.data_vars:
-        value = float(np.nanmax(rhat[name].to_numpy()))
-        if not np.isfinite(value) or value > worst_rhat:
-            worst_rhat, rhat_var = value, name
-    worst_ess, ess_var = np.inf, "?"
-    for name in ess.data_vars:
-        value = float(np.nanmin(ess[name].to_numpy()))
-        if not np.isfinite(value) or value < worst_ess:
-            worst_ess, ess_var = value, name
-
+    try:
+        diagnostics = summarize_sampler_diagnostics(
+            idata, chains=config.chains, draws=config.draws
+        )
+    except (TypeError, ValueError, ArithmeticError) as error:
+        raise ConvergenceError(f"sampler diagnostics are invalid: {error}") from error
     problems = []
-    if not np.isfinite(worst_rhat) or worst_rhat > config.max_rhat:
-        problems.append(f"r_hat {worst_rhat:.3f} > {config.max_rhat} (worst: {rhat_var})")
-    if not np.isfinite(worst_ess) or worst_ess < config.min_ess:
+    if diagnostics.max_rhat > config.max_rhat:
         problems.append(
-            f"effective sample size {worst_ess:.0f} < {config.min_ess:.0f} (worst: {ess_var})"
+            f"r_hat {diagnostics.max_rhat:.3f} > {config.max_rhat:g} "
+            f"(worst: {diagnostics.max_rhat_parameter})"
+        )
+    if diagnostics.min_bulk_ess < config.min_ess:
+        problems.append(
+            f"effective sample size {diagnostics.min_bulk_ess:.0f} < {config.min_ess:g} "
+            f"(worst: {diagnostics.min_bulk_ess_parameter})"
         )
     if problems:
         raise ConvergenceError(
             "sampler did not converge (" + "; ".join(problems) + "). "
-            "Per §12 this variant is excluded from the surface set rather than published."
+            "Per §12 this variant is excluded from the surface set rather than published.",
+            diagnostics=diagnostics,
         )
+    return diagnostics
 
 
 def fit_surface(observations: pd.DataFrame, config: FitConfig | None = None) -> SurfaceFit:
