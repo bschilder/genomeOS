@@ -298,9 +298,13 @@ provide a completed B0/B1/B2 comparison. The first HbS B1 run is recorded in the
 [local-count evidence note](research/hbs-local-count-benchmark-2026-09-16.md): the prespecified
 local grid is infeasible for global geographic holdouts, while a post-hoc 2,000 km sensitivity
 finds positive-count gains on only 21.9% of rows and regresses zero counts. The bounded scorer now
-admits the complete count domain without dropping rows, but the current-GP B2 run hit its time
-cutoff before all folds completed. Those WP0 and WP1 gates remain required on reviewed, permitted
-data.
+admits the complete count domain without dropping rows. The later
+[current-GP B2 development run](research/hbs-current-gp-benchmark-2026-09-17.md) completed all five
+folds and 994 held-out rows: balanced macro log score improved by 316.44 nats and MAE fell by 21.1%
+against pooled B0. It remains unqualified because the 50% and 80% intervals over-cover, all five
+fits warned about R-hat above 1.01, one fit diverged, numerical per-fold diagnostics were not
+retained, dependencies were not reviewed, and geography remained algorithmic development evidence.
+Those WP0 and WP1 gates remain required on reviewed, permitted data.
 
 WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
 admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
