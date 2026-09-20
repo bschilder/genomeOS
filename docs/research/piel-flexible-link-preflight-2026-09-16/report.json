@@ -70,6 +70,9 @@
       "piel_printed_2013": [
         0.012125566368418774
       ],
+      "piel_published_2013": [
+        0.011919045998596509
+      ],
       "stukel_piel_printed_2013": [
         0.01204560314134028
       ],
@@ -95,8 +98,9 @@
   "environmental_covariates_used": [],
   "evidence_kind": "method_preflight",
   "executed_source_sha256": {
-    "genomeos/surfaces/piel_flexible_link.py": "227b086d0cb580e699fdfd6d875ef6678156979f29c314ab16cb9bec0822bf00",
-    "scripts/preflight_piel_flexible_link.py": "0a6da56405528e0ba703ca55048d550593e56997a60815df9f59eaf2b0e0f98a"
+    "genomeos/surfaces/piel_flexible_link.py": "95ac34377a575cdc9c05a24ac7fe16b2aa9bd2ff9312d5831773af14b7fc7639",
+    "genomeos/surfaces/piel_published_link.py": "02492408bc5e7db94878a99eb1162a4ecfaadfccdcade6608c90147274510978",
+    "scripts/preflight_piel_flexible_link.py": "25fa81247bb4429c81b5d9e8982785debd0a1ae959969ddece5bb513859ab5bd"
   },
   "inputs": {
     "observations": {
@@ -107,24 +111,55 @@
   },
   "issue": 103,
   "limitations": [
-    "Piel's fitted cubic coefficients are unpublished.",
+    "The published coefficients are specific to Piel's source data; affine quantile alignment to the current data is diagnostic and is not a source spatial refit.",
     "The appendix's printed smoothing equation conflicts with its stated conjugate model.",
     "The appendix does not fully specify the posterior CDF fitting procedure; this run uses a named plug-in MLE quantile interpretation.",
     "This preflight does not test spatial held-out count prediction or national burden.",
     "The observed HbS range does not identify Stukel's positive-latent branch; alpha_positive is fixed at zero and explicitly reported as unfitted."
   ],
   "outputs": {
-    "link_curves.csv": "3fd7dea5ae32d67955a5ba8d9c7ce6d0fa4c7851dd48b2a302a0b642872332df",
-    "piel-flexible-link-preflight.png": "1c2e734ff4ed60188a9dadc2121ebb3a58f799b22db50792cc2b9281e9caef42",
-    "smoothed_frequency_quantiles.csv": "9d49b14b9272adf3a8b6b761084ae3c43dc1a21e9bd9ae3e486a06d01a0cdfff"
+    "link_curves.csv": "97fe72af7e15393879fe54734ae17f64f661fa2c67022bafafe3db3215825686",
+    "piel-flexible-link-preflight.png": "c8e457e84621b497d4e05dab63413fd5f0fd382a8d24230f29c859e971256a12",
+    "smoothed_frequency_quantiles.csv": "514cadbaa087e4fa779ee304d852ee557047b545b5be84b0447922f9f838860e"
   },
   "primary_source": {
-    "appendix": "Web Appendix 1 pp. 12-13; PMC3547249 supplementary file mmc1.pdf",
+    "appendix": "Web Appendix 1 pp. 13, 15; PMC3547249 supplementary file mmc1.pdf",
+    "appendix_sha256": "7fa25e9d3c6a442f410425bafd891a166be7e800c71927ea36ba3e997208295e",
     "article": "Piel FB et al. Lancet 2013;381:142-151; doi:10.1016/S0140-6736(12)61229-X",
+    "published_coefficients_page": 15,
     "stukel_article": "Stukel TA. JASA 1988;83:426-431; doi:10.1080/01621459.1988.10478613"
   },
   "publication_eligible": false,
-  "schema_version": 2,
+  "published_piel_arm": {
+    "baseline_logit_location": -3.813757690595778,
+    "baseline_logit_scale": 1.5122739303586257,
+    "formula": "-1.48556762*x^3 + 0.28125179*x^2 + 0.02261485*x + 0.02125477",
+    "inverse_max_abs_error": 4.440892098500626e-15,
+    "link": {
+      "branch_lower_bound": 0.158275411911046,
+      "coefficients": [
+        0.02125477,
+        0.02261485,
+        0.28125179,
+        -1.48556762
+      ]
+    },
+    "maximum_fitted_latent": 1.8948899955260052,
+    "min_an": 50,
+    "minimum_fitted_latent": 1.0802971058524298,
+    "n_below_min_an": 31,
+    "n_distinct_frequencies": 854,
+    "n_eligible": 963,
+    "n_total": 994,
+    "plotting_position": "hazen_rank_average",
+    "quantile_orientation": -1.0,
+    "rmse_logit": 0.20208165032737774,
+    "source": "Piel et al. 2013 Web Appendix 1 page 15",
+    "source_appendix_sha256": "7fa25e9d3c6a442f410425bafd891a166be7e800c71927ea36ba3e997208295e",
+    "source_latent_location": 1.4192393634644596,
+    "source_latent_scale": 0.17468978106859687
+  },
+  "schema_version": 3,
   "spatial_fit_performed": false,
   "stukel_arms": {
     "piel_printed_2013": {

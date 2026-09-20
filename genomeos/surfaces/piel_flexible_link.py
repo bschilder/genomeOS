@@ -2,10 +2,11 @@
 
 Piel et al. 2013 replaced an inverse-logit link after its right tail produced implausible HbS
 burden. Web Appendix 1 maps a Gaussian latent value through ``expit(h(x))``, where ``h`` is a
-monotone cubic estimated outside the spatial fit. The appendix does not publish its coefficients,
-and its printed smoothed-frequency equation conflicts with the stated uniform-prior binomial
-model. This module preserves both equations as separately named research arms. It does not choose
-between them or connect either arm to the production surface fitter.
+monotone cubic estimated outside the spatial fit. The appendix publishes the final source-data
+coefficients, evaluated separately in :mod:`genomeos.surfaces.piel_published_link`, while this
+module reconstructs the empirical fitting procedure on the current data. Its printed
+smoothed-frequency equation conflicts with the stated uniform-prior binomial model, so both
+interpretations remain separately named. Neither module connects an arm to the production fitter.
 
 The appendix also leaves details of its empirical-CDF fit implicit. This preflight names its
 interpretation: average ranks with Hazen plotting positions, a plug-in normal MLE, and monotone

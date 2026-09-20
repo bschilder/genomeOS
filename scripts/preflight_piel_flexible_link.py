@@ -30,7 +30,7 @@ import pandas as pd  # noqa: E402
 from scipy.special import expit  # noqa: E402
 from scipy.stats import norm  # noqa: E402
 
-from genomeos.surfaces import piel_flexible_link  # noqa: E402
+from genomeos.surfaces import piel_flexible_link, piel_published_link  # noqa: E402
 from genomeos.surfaces.piel_flexible_link import (  # noqa: E402
     NORMAL_FIT,
     PLOTTING_POSITION,
@@ -39,9 +39,12 @@ from genomeos.surfaces.piel_flexible_link import (  # noqa: E402
     fit_stukel_link,
     smooth_piel_frequencies,
 )
+from genomeos.surfaces.piel_published_link import (  # noqa: E402
+    fit_published_piel_link,
+)
 
 ARTICLE = "Piel FB et al. Lancet 2013;381:142-151; doi:10.1016/S0140-6736(12)61229-X"
-APPENDIX = "Web Appendix 1 pp. 12-13; PMC3547249 supplementary file mmc1.pdf"
+APPENDIX = "Web Appendix 1 pp. 13, 15; PMC3547249 supplementary file mmc1.pdf"
 STUKEL_ARTICLE = "Stukel TA. JASA 1988;83:426-431; doi:10.1080/01621459.1988.10478613"
 QUANTILES = np.array([0.001, 0.01, 0.05, 0.5, 0.95, 0.99, 0.999])
 CURVE_POINTS = 501
@@ -84,9 +87,18 @@ def _stukel_arm_dict(result: piel_flexible_link.StukelLinkPreflight) -> dict:
     return asdict(result)
 
 
+def _published_arm_dict(
+    result: piel_published_link.PublishedPielLinkPreflight,
+) -> dict:
+    encoded = asdict(result)
+    encoded["link"]["coefficients"] = list(result.link.coefficients)
+    return encoded
+
+
 def _curves(
     results: dict[str, piel_flexible_link.PielFlexibleLinkPreflight],
     stukel_results: dict[str, piel_flexible_link.StukelLinkPreflight],
+    published_result: piel_published_link.PublishedPielLinkPreflight,
 ) -> pd.DataFrame:
     lower = min(
         -10.0,
@@ -99,6 +111,7 @@ def _curves(
     latent = np.linspace(lower, upper, CURVE_POINTS)
     values = {"latent": latent, "inverse_logit": expit(latent)}
     values.update({rule: result.link.frequency(latent) for rule, result in results.items()})
+    values["piel_published_2013"] = published_result.aligned_frequency(latent)
     values.update(
         {f"stukel_{rule}": result.aligned_frequency(latent) for rule, result in stukel_results.items()}
     )
@@ -109,6 +122,7 @@ def _quantile_table(
     frame: pd.DataFrame,
     results: dict[str, piel_flexible_link.PielFlexibleLinkPreflight],
     stukel_results: dict[str, piel_flexible_link.StukelLinkPreflight],
+    published_result: piel_published_link.PublishedPielLinkPreflight,
     min_an: int,
 ) -> pd.DataFrame:
     eligible = frame.loc[frame["an"] >= min_an]
@@ -118,6 +132,11 @@ def _quantile_table(
         latent = result.normal_location + result.normal_scale * norm.ppf(QUANTILES)
         fitted = result.link.frequency(latent)
         stukel_fitted = stukel_results[rule].aligned_frequency(latent)
+        published_fitted = (
+            published_result.aligned_frequency(latent)
+            if rule == "piel_printed_2013"
+            else np.full(latent.shape, np.nan)
+        )
         empirical = np.quantile(smoothed, QUANTILES)
         rows.extend(
             {
@@ -126,9 +145,15 @@ def _quantile_table(
                 "empirical_smoothed_frequency": float(observed),
                 "fitted_link_frequency": float(predicted),
                 "stukel_link_frequency": float(stukel),
+                "published_piel_link_frequency": float(published),
             }
-            for quantile, observed, predicted, stukel in zip(
-                QUANTILES, empirical, fitted, stukel_fitted, strict=True
+            for quantile, observed, predicted, stukel, published in zip(
+                QUANTILES,
+                empirical,
+                fitted,
+                stukel_fitted,
+                published_fitted,
+                strict=True,
             )
         )
     return pd.DataFrame(rows)
@@ -143,11 +168,13 @@ def _render(
 ) -> None:
     colors = {
         "inverse_logit": "#3f3f46",
+        "piel_published_2013": "#009e73",
         "piel_printed_2013": "#0072b2",
         "uniform_binomial_conjugate": "#d55e00",
     }
     labels = {
         "inverse_logit": "current inverse-logit",
+        "piel_published_2013": "published Piel 2013 cubic",
         "piel_printed_2013": "appendix equation as printed",
         "uniform_binomial_conjugate": "uniform-binomial conjugate equation",
     }
@@ -187,6 +214,7 @@ def _render(
             (
                 f"At current-fit intercept x = {reference:.3f}\n"
                 f"inverse-logit: {100 * diagnostic_frequency['inverse_logit'][0]:.3f}%\n"
+                f"published Piel: {100 * diagnostic_frequency['piel_published_2013'][0]:.3f}%\n"
                 f"printed equation: {100 * diagnostic_frequency['piel_printed_2013'][0]:.3f}%\n"
                 f"conjugate equation: {100 * diagnostic_frequency['uniform_binomial_conjugate'][0]:.3f}%\n"
                 f"printed Stukel: {100 * diagnostic_frequency['stukel_piel_printed_2013'][0]:.3f}%\n"
@@ -225,6 +253,15 @@ def _render(
             linestyle="-.",
             label=f"{labels[rule]} — Stukel fit",
         )
+        if rule == "piel_printed_2013":
+            axes[1].plot(
+                selected["quantile"],
+                selected["published_piel_link_frequency"],
+                color=colors["piel_published_2013"],
+                linewidth=1.8,
+                linestyle=":",
+                label="published Piel 2013 cubic",
+            )
     axes[1].set_xscale("logit")
     axes[1].set_yscale("log")
     axes[1].set_xlabel("empirical quantile")
@@ -241,8 +278,8 @@ def _render(
     figure.text(
         0.5,
         0.002,
-        "Dashed lines are monotone cubic fits; dash-dot lines are quantile-aligned Stukel fits. "
-        "Both smoothing equations are preserved; this artifact is not publication eligible.",
+        "Green: published Piel cubic (dotted in panel B); dashed: reconstructed cubics; "
+        "dash-dot: aligned Stukel fits. This artifact is not publication eligible.",
         ha="center",
         fontsize=8.5,
     )
@@ -270,8 +307,11 @@ def run(
         rule: fit_stukel_link(frame["ac"], frame["an"], rule=rule, min_an=min_an)
         for rule in SMOOTHING_RULES
     }
-    curves = _curves(results, stukel_results)
-    quantiles = _quantile_table(frame, results, stukel_results, min_an)
+    published_result = fit_published_piel_link(frame["ac"], frame["an"], min_an=min_an)
+    curves = _curves(results, stukel_results, published_result)
+    quantiles = _quantile_table(
+        frame, results, stukel_results, published_result, min_an
+    )
     diagnostic_frequency = {
         "inverse_logit": expit(np.asarray(diagnostic_latent)).tolist(),
         **{
@@ -282,6 +322,9 @@ def run(
             f"stukel_{rule}": result.aligned_frequency(diagnostic_latent).tolist()
             for rule, result in stukel_results.items()
         },
+        "piel_published_2013": published_result.aligned_frequency(
+            diagnostic_latent
+        ).tolist(),
     }
     diagnostics = {
         "latent": list(diagnostic_latent),
@@ -305,7 +348,7 @@ def run(
         module_path = Path(piel_flexible_link.__file__).resolve()
         script_path = Path(__file__).resolve()
         report = {
-            "schema_version": 2,
+            "schema_version": 3,
             "artifact": "piel-flexible-link-method-preflight",
             "evidence_kind": "method_preflight",
             "publication_eligible": False,
@@ -315,6 +358,8 @@ def run(
             "primary_source": {
                 "article": ARTICLE,
                 "appendix": APPENDIX,
+                "appendix_sha256": piel_published_link.PIEL_APPENDIX_SHA256,
+                "published_coefficients_page": 15,
                 "stukel_article": STUKEL_ARTICLE,
             },
             "inputs": {
@@ -334,9 +379,11 @@ def run(
             "stukel_arms": {
                 rule: _stukel_arm_dict(result) for rule, result in stukel_results.items()
             },
+            "published_piel_arm": _published_arm_dict(published_result),
             "diagnostics": diagnostics,
             "limitations": [
-                "Piel's fitted cubic coefficients are unpublished.",
+                "The published coefficients are specific to Piel's source data; affine quantile "
+                "alignment to the current data is diagnostic and is not a source spatial refit.",
                 "The appendix's printed smoothing equation conflicts with its stated conjugate model.",
                 "The appendix does not fully specify the posterior CDF fitting procedure; "
                 "this run uses a named plug-in MLE quantile interpretation.",
@@ -346,6 +393,11 @@ def run(
             ],
             "executed_source_sha256": {
                 str(module_path.relative_to(script_path.parents[1])): sha256(module_path),
+                str(
+                    Path(piel_published_link.__file__).resolve().relative_to(
+                        script_path.parents[1]
+                    )
+                ): sha256(Path(piel_published_link.__file__).resolve()),
                 str(script_path.relative_to(script_path.parents[1])): sha256(script_path),
             },
             "outputs": {

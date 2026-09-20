@@ -69,6 +69,9 @@ def test_cli_writes_a_reproducible_nonpublication_comparison(tmp_path: Path) -> 
         "uniform_binomial_conjugate",
     }
     assert set(report["stukel_arms"]) == set(report["arms"])
+    assert report["published_piel_arm"]["formula"].startswith("-1.48556762*x^3")
+    assert report["published_piel_arm"]["quantile_orientation"] == -1.0
+    assert report["primary_source"]["published_coefficients_page"] == 15
     assert all(
         arm["positive_branch_fitted"] is False
         for arm in report["stukel_arms"].values()
@@ -85,12 +88,17 @@ def test_cli_writes_a_reproducible_nonpublication_comparison(tmp_path: Path) -> 
     curves = pd.read_csv(first / "link_curves.csv")
     for column in [
         "inverse_logit",
+        "piel_published_2013",
         "piel_printed_2013",
         "uniform_binomial_conjugate",
         "stukel_piel_printed_2013",
         "stukel_uniform_binomial_conjugate",
     ]:
         assert np.all(np.diff(curves[column]) > 0)
+    quantiles = pd.read_csv(first / "smoothed_frequency_quantiles.csv")
+    printed = quantiles["smoothing_rule"] == "piel_printed_2013"
+    assert quantiles.loc[printed, "published_piel_link_frequency"].notna().all()
+    assert quantiles.loc[~printed, "published_piel_link_frequency"].isna().all()
     assert (first / "piel-flexible-link-preflight.png").stat().st_size > 10_000
     assert (first / "report.json").read_bytes() == (second / "report.json").read_bytes()
     assert (first / "link_curves.csv").read_bytes() == (

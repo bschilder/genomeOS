@@ -13,6 +13,12 @@ from genomeos.surfaces.piel_flexible_link import (
     fit_stukel_link,
     smooth_piel_frequencies,
 )
+from genomeos.surfaces.piel_published_link import (
+    PIEL_APPENDIX_SHA256,
+    PIEL_PUBLISHED_COEFFICIENTS,
+    PIEL_PUBLISHED_FORMULA,
+    fit_published_piel_link,
+)
 
 
 def _counts() -> tuple[np.ndarray, np.ndarray]:
@@ -127,6 +133,58 @@ def test_link_refuses_nonfinite_latent_values() -> None:
         result.link.frequency([0.0, np.nan])
     with pytest.raises(ValueError, match="finite"):
         result.link.derivative([np.inf])
+
+
+def test_published_piel_link_preserves_source_coefficients_and_branch() -> None:
+    result = fit_published_piel_link(*_counts())
+
+    assert PIEL_PUBLISHED_COEFFICIENTS == (
+        0.02125477,
+        0.02261485,
+        0.28125179,
+        -1.48556762,
+    )
+    assert PIEL_PUBLISHED_FORMULA.startswith("-1.48556762*x^3")
+    assert PIEL_APPENDIX_SHA256 == (
+        "7fa25e9d3c6a442f410425bafd891a166be7e800c71927ea36ba3e997208295e"
+    )
+    assert result.link.coefficients == PIEL_PUBLISHED_COEFFICIENTS
+    assert result.link.branch_lower_bound == pytest.approx(0.158275411911046)
+    assert result.quantile_orientation == -1.0
+    assert result.minimum_fitted_latent > result.link.branch_lower_bound
+    assert result.inverse_max_abs_error < 1e-12
+    assert np.all(
+        result.link.derivative(
+            [result.minimum_fitted_latent, result.maximum_fitted_latent]
+        )
+        < 0.0
+    )
+
+
+def test_published_piel_alignment_is_increasing_and_deterministic() -> None:
+    ac, an = _counts()
+    first = fit_published_piel_link(ac, an)
+    order = np.array([8, 2, 10, 0, 5, 11, 3, 6, 1, 9, 4, 7])
+    second = fit_published_piel_link(ac[order], an[order])
+    baseline = np.linspace(-8.0, 1.0, 101)
+
+    assert first == second
+    assert np.all(np.diff(first.aligned_frequency(baseline)) > 0.0)
+    assert np.all(np.diff(first.aligned_source_latent(baseline)) < 0.0)
+
+
+@pytest.mark.parametrize("min_an", [0, -1, True, 2.5])
+def test_published_piel_fit_requires_positive_integer_floor(min_an) -> None:
+    with pytest.raises(ValueError, match="min_an"):
+        fit_published_piel_link(*_counts(), min_an=min_an)
+
+
+def test_published_piel_link_refuses_nonfinite_and_off_branch_values() -> None:
+    result = fit_published_piel_link(*_counts())
+    with pytest.raises(ValueError, match="finite"):
+        result.aligned_frequency([0.0, np.nan])
+    with pytest.raises(ValueError, match="decreasing branch"):
+        result.aligned_frequency([1e6])
 
 
 def test_stukel_link_matches_published_reference_values() -> None:

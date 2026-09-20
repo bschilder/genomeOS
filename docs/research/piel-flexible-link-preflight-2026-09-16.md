@@ -7,12 +7,12 @@ This is a method preflight, not a fitted surface or publication result.
 
 ## Scientific contract
 
-The objective was to determine whether either Piel et al.'s unpublished empirical
-cubic or Stukel's generalized logistic link is promising enough to justify another
-full HbS spatial fit. The measurable output is a deterministic reconstruction under
-both explicit readings of Piel's ambiguous smoothing equation. A candidate advances
-only if it suppresses the diffuse non-endemic floor without making the weak-peak
-problem worse.
+The objective was to determine whether Piel et al.'s published empirical cubic or
+Stukel's generalized logistic link is promising enough to justify another full HbS
+spatial fit. The measurable output evaluates the exact published coefficients and
+deterministically reconstructs the fitting procedure under both explicit readings of
+Piel's ambiguous smoothing equation. A candidate advances only if it suppresses the
+diffuse non-endemic floor without making the weak-peak problem worse.
 
 The engineering component is the pure `genomeos.surfaces.piel_flexible_link`
 module and offline `scripts/preflight_piel_flexible_link.py` runner. They emit
@@ -20,7 +20,10 @@ coefficients, aggregate curves and quantiles, source and input hashes, and a rev
 figure. They do not alter the production fitter, serve data, or make an artifact
 publication eligible.
 
-Piel's cubic coefficients are unavailable. The appendix also leaves details of its
+Web Appendix 1 page 15 publishes the cubic as
+`-1.48556762*x^3 + 0.28125179*x^2 + 0.02261485*x + 0.02125477`.
+It is decreasing on the source-data branch, so the source and current latent scales
+must use opposite quantile orientations. The appendix leaves details of its
 empirical-CDF fit implicit and prints a smoothing equation that conflicts with its
 stated uniform-prior binomial model. The reconstruction names every added choice and
 preserves both equation arms. Stukel's positive-latent branch is outside the observed
@@ -56,6 +59,14 @@ quantile as the inverse-logit baseline:
 This alignment prevents a raw latent value from being given two different empirical
 meanings.
 
+The exact published cubic is inverted only on its decreasing branch. Its source
+latents span `1.08030–1.89489`, safely above the `0.15828` turning point, and recover
+the smoothed empirical logits with maximum absolute inversion error below `5e-15`.
+Because the branch decreases, its affine quantile alignment has orientation `-1`.
+This preserves empirical rank while mapping larger current latent values to larger
+frequencies. It is a source-exact link diagnostic on the current observations, not a
+reproduction of Piel's spatial field.
+
 ## Result
 
 | Smoothing arm | Cubic logit RMSE | Stukel logit RMSE | Cubic at background | Stukel at background |
@@ -63,24 +74,27 @@ meanings.
 | Appendix equation as printed | 0.19424 | 0.21247 | 1.2126% | 1.2046% |
 | Uniform-binomial conjugate | 0.19459 | 0.21033 | 1.1939% | 1.1878% |
 
-The current inverse-logit background at `x = -4.599069` is 0.9961%. Both cubic
-reconstructions raise it by about 20%. The aligned Stukel candidates also raise it,
-by 20.9% and 19.2%, while fitting the empirical logit quantiles worse than the cubic.
+The exact published cubic has logit RMSE `0.20208` after quantile alignment and maps
+the same background point to `1.1919%`. The current inverse-logit background at
+`x = -4.599069` is `0.9961%`. The published cubic and both reconstructions therefore
+raise it by about 20%. The aligned Stukel candidates also raise it, by 20.9% and
+19.2%, while fitting the empirical logit quantiles worse than the reconstructed
+cubics.
 
-| Inverse-logit operating point | Printed-equation Stukel | Conjugate-equation Stukel |
-| ---: | ---: | ---: |
-| 5% | 5.404% | 5.465% |
-| 10% | 9.087% | 9.377% |
-| 15% | 11.995% | 12.543% |
-| 20% | 14.480% | 15.292% |
+| Inverse-logit operating point | Published Piel cubic | Printed-equation Stukel | Conjugate-equation Stukel |
+| ---: | ---: | ---: | ---: |
+| 5% | 5.379% | 5.404% | 5.465% |
+| 10% | 9.071% | 9.087% | 9.377% |
+| 15% | 11.961% | 11.995% | 12.543% |
+| 20% | 14.401% | 14.480% | 15.292% |
 
 The 20% point is a mild diagnostic extrapolation for the printed-equation arm,
 whose maximum smoothed observation is 18.26%. The rejection already holds at the
 10% and 15% points inside the observed range of both arms.
 
-The two arms therefore give the same directional answer: Stukel raises the diffuse
-background and compresses the peaks. It worsens both parts of the current
-high-background, weak-peak failure.
+The source-exact cubic, both reconstructed cubics, and both Stukel arms give the same
+directional answer: they raise the diffuse background and compress the peaks. They
+worsen both parts of the current high-background, weak-peak failure.
 
 ![Piel cubic and Stukel link preflight](../figures/piel_flexible_link_preflight.png)
 
@@ -93,9 +107,9 @@ The receipt records `spatial_fit_performed: false`,
 
 Do **not** spend a GPU fit on either link now. This bounded negative result does not
 prove that every joint refit must fail, because a spatial refit could move the latent
-intercept and field. Revisit only with the original cubic coefficients, a fully
-specified fitting procedure, or a model that separately targets low background and
-localized peaks. Any candidate must beat the unchanged inverse-logit baseline on
+intercept and field. Revisit only with a source spatial refit, a fully specified
+empirical-CDF fitting procedure, or a model that separately targets low background
+and localized peaks. Any candidate must beat the unchanged inverse-logit baseline on
 held-out counts, calibration, supported-only national burden, and peak/background
 contrasts.
 
