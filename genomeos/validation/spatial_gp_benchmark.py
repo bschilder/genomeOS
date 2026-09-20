@@ -1,4 +1,4 @@
-"""Offline single-variant spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #314, #319).
+"""Offline single-variant spatial-GP benchmark (design §§4–5, 7–8, 12; #189, #314, #319, #333).
 
 Scientific objective
     Measure the unchanged current GP's predictive distribution for geographically held-out
@@ -35,7 +35,12 @@ import numpy as np
 import pandas as pd
 
 from genomeos.surfaces.config import FitConfig
-from genomeos.surfaces.fit import fit_surface
+from genomeos.surfaces.convergence import (
+    SamplerDiagnostics,
+    convergence_failure,
+    summarize_sampler_diagnostics,
+)
+from genomeos.surfaces.fit import ConvergenceError, fit_surface
 from genomeos.surfaces.observation import SurveyQueries
 from genomeos.validation.benchmark import (
     BenchmarkFoldStatus,
@@ -106,6 +111,25 @@ class SpatialGPFoldResult:
 
     status: BenchmarkFoldStatus
     predictions: pd.DataFrame
+    sampler_diagnostics: SamplerDiagnostics | None
+
+    def __post_init__(self) -> None:
+        diagnostics = self.sampler_diagnostics
+        if diagnostics is not None and not isinstance(diagnostics, SamplerDiagnostics):
+            raise TypeError("sampler_diagnostics must be SamplerDiagnostics or None")
+        if self.status.status == "completed" and diagnostics is None:
+            raise ValueError("completed folds must retain sampler_diagnostics")
+
+    def validate_convergence(self, *, max_rhat: float, min_ess: float) -> None:
+        """Refuse completed evidence that contradicts its frozen admission gates."""
+        self.__post_init__()
+        if self.status.status != "completed":
+            return
+        reason = convergence_failure(
+            self.sampler_diagnostics, max_rhat=max_rhat, min_ess=min_ess
+        )
+        if reason is not None:
+            raise ValueError(f"completed fold contradicts frozen convergence gates: {reason}")
 
 
 @dataclass(frozen=True)
@@ -272,7 +296,7 @@ def _fold_predictions(
     seed: int,
     cdf_backend: str,
     fit_function: FitFunction,
-) -> pd.DataFrame:
+) -> tuple[pd.DataFrame, SamplerDiagnostics]:
     by_id = observations.set_index("source_record_id", drop=False)
     training = by_id.loc[list(split.train_ids)].reset_index(drop=True)
     testing = by_id.loc[list(split.test_ids)].reset_index(drop=True)
@@ -284,27 +308,41 @@ def _fold_predictions(
     fit_seed = _fold_seed(seed, split.split_id, "fit")
     predictive_seed = _fold_seed(seed, split.split_id, "predictive")
     fit = fit_function(training, replace(config, seed=fit_seed))
-    queries = SurveyQueries(
-        observation_ids=tuple(testing["source_record_id"]),
-        cohort_ids=tuple(testing["cohort_id"]),
-        sampling_designs=tuple(testing["sampling_design"]),
-        lat=tuple(testing["lat"]),
-        lon=tuple(testing["lon"]),
+    sampler_diagnostics = summarize_sampler_diagnostics(
+        fit.idata, chains=config.chains, draws=config.draws
     )
-    parameters = fit.predict_new_cohort_parameters(queries, seed=predictive_seed)
-    predictive = CountPredictive(
-        parameters.mean_draws,
-        concentration=parameters.concentration,
-        cdf_backend=cdf_backend,
+    convergence_reason = convergence_failure(
+        sampler_diagnostics, max_rhat=config.max_rhat, min_ess=config.min_ess
     )
-    diagnostics = validate_predictive_diagnostics(
-        predictive_diagnostics(
-            predictive,
-            testing["ac"].to_numpy(),
-            testing["an"].to_numpy(),
-            seed=predictive_seed,
+    if convergence_reason is not None:
+        raise ConvergenceError(
+            convergence_reason,
+            diagnostics=sampler_diagnostics,
         )
-    )
+    try:
+        queries = SurveyQueries(
+            observation_ids=tuple(testing["source_record_id"]),
+            cohort_ids=tuple(testing["cohort_id"]),
+            sampling_designs=tuple(testing["sampling_design"]),
+            lat=tuple(testing["lat"]),
+            lon=tuple(testing["lon"]),
+        )
+        parameters = fit.predict_new_cohort_parameters(queries, seed=predictive_seed)
+        predictive = CountPredictive(
+            parameters.mean_draws,
+            concentration=parameters.concentration,
+            cdf_backend=cdf_backend,
+        )
+        diagnostics = validate_predictive_diagnostics(
+            predictive_diagnostics(
+                predictive,
+                testing["ac"].to_numpy(),
+                testing["an"].to_numpy(),
+                seed=predictive_seed,
+            )
+        )
+    except Exception as error:
+        raise _PostFitError(error, sampler_diagnostics) from error
 
     identity = testing.loc[
         :, ["source_record_id", "variant_id", "cohort_id", "ac", "an"]
@@ -319,10 +357,19 @@ def _fold_predictions(
     identity.insert(1, "block_id", split.block_id)
     identity["fit_seed"] = fit_seed
     identity["predictive_seed"] = predictive_seed
-    return pd.concat(
-        [identity.reset_index(drop=True), diagnostics.reset_index(drop=True)],
-        axis=1,
+    predictions = pd.concat(
+        [identity.reset_index(drop=True), diagnostics.reset_index(drop=True)], axis=1
     ).loc[:, PREDICTION_COLUMNS]
+    return predictions, sampler_diagnostics
+
+
+class _PostFitError(RuntimeError):
+    """A prediction/scoring failure after a sampler record was accepted."""
+
+    def __init__(self, error: Exception, diagnostics: SamplerDiagnostics) -> None:
+        self.error = error
+        self.diagnostics = diagnostics
+        super().__init__(str(error))
 
 
 def evaluate_single_variant_gp_fold(
@@ -347,6 +394,7 @@ def evaluate_single_variant_gp_fold(
                 plan.scoring_refusal,
             ),
             predictions=_empty_predictions(),
+            sampler_diagnostics=None,
         )
     if not split.train_ids:
         return SpatialGPFoldResult(
@@ -357,9 +405,10 @@ def evaluate_single_variant_gp_fold(
                 "split has no training observations after dependency and buffer exclusions",
             ),
             predictions=_empty_predictions(),
+            sampler_diagnostics=None,
         )
     try:
-        predictions = _fold_predictions(
+        predictions, sampler_diagnostics = _fold_predictions(
             plan.observations,
             plan.assignments,
             split,
@@ -367,6 +416,29 @@ def evaluate_single_variant_gp_fold(
             seed=plan.seed,
             cdf_backend=plan.cdf_backend,
             fit_function=fit_function,
+        )
+    except ConvergenceError as error:
+        return SpatialGPFoldResult(
+            status=BenchmarkFoldStatus(
+                split.split_id,
+                "failed",
+                split.test_ids,
+                f"{type(error).__name__}: {error}",
+            ),
+            predictions=_empty_predictions(),
+            sampler_diagnostics=error.diagnostics,
+        )
+    except _PostFitError as wrapped:
+        error = wrapped.error
+        return SpatialGPFoldResult(
+            status=BenchmarkFoldStatus(
+                split.split_id,
+                "failed",
+                split.test_ids,
+                f"{type(error).__name__}: {error}",
+            ),
+            predictions=_empty_predictions(),
+            sampler_diagnostics=wrapped.diagnostics,
         )
     except Exception as error:  # Every planned fold remains visible in the result ledger.
         return SpatialGPFoldResult(
@@ -377,10 +449,12 @@ def evaluate_single_variant_gp_fold(
                 f"{type(error).__name__}: {error}",
             ),
             predictions=_empty_predictions(),
+            sampler_diagnostics=None,
         )
     return SpatialGPFoldResult(
         status=BenchmarkFoldStatus(split.split_id, "completed", split.test_ids, None),
         predictions=predictions,
+        sampler_diagnostics=sampler_diagnostics,
     )
 
 
@@ -407,6 +481,9 @@ def finalize_single_variant_gp_benchmark(
     for split, result in zip(plan.splits, ordered, strict=True):
         if result.status.expected_test_ids != split.test_ids:
             raise ValueError("fold result expected_test_ids do not match the frozen split")
+        result.validate_convergence(
+            max_rhat=plan.config.max_rhat, min_ess=plan.config.min_ess
+        )
     prediction_frames = [
         result.predictions for result in ordered if not result.predictions.empty
     ]
