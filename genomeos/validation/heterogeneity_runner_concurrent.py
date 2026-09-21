@@ -19,13 +19,12 @@ from genomeos.validation.heterogeneity_runner_spool import (
 from genomeos.validation.heterogeneity_runner_store import LocalB0HStore, StoreIntegrityError
 from genomeos.validation.heterogeneity_runner_wire import record_digest
 from genomeos.validation.heterogeneity_simulation_types import SbcCaseId
+from genomeos.validation.numerical_runtime import (
+    NUMERICAL_THREAD_CAPS,
+    apply_numerical_thread_caps,
+)
 
-THREAD_CAPS = {
-    "OMP_NUM_THREADS": "1",
-    "MKL_NUM_THREADS": "1",
-    "OPENBLAS_NUM_THREADS": "1",
-    "NUMEXPR_NUM_THREADS": "1",
-}
+THREAD_CAPS = dict(NUMERICAL_THREAD_CAPS)
 
 
 @dataclass(frozen=True)
@@ -53,7 +52,7 @@ class ConcurrentExecutionFailed(RuntimeError):
 
 
 def _worker_main(slot: int, inbound: Any, outbound: Any) -> None:
-    os.environ.update(THREAD_CAPS)
+    apply_numerical_thread_caps()
     from genomeos.validation.heterogeneity_runner import execute_b0h_stage
 
     while True:

@@ -11,6 +11,11 @@ import uuid
 from collections.abc import Sequence
 from pathlib import Path
 
+from genomeos.validation.numerical_runtime import apply_numerical_thread_caps
+
+if __name__ == "__main__":
+    apply_numerical_thread_caps()
+
 from genomeos.validation.heterogeneity_codec import B0HCodecLimits, EncodedB0HEvidence
 from genomeos.validation.heterogeneity_reduction import reduce_b0h_study, reduction_bytes
 from genomeos.validation.heterogeneity_runner import execute_b0h_case, load_b0h_case

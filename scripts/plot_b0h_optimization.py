@@ -205,6 +205,7 @@ def _calibration_run_record(
     result_path = candidate / "result/result.json"
     result = _read_object(result_path)
     science = result.get("science")
+    classifications = result.get("classifications")
     inventory = result.get("store_inventory")
     case_count = result.get("case_count")
     if (
@@ -213,6 +214,7 @@ def _calibration_run_record(
         or result.get("identity") != identity
         or result.get("workers") != workers
         or not isinstance(science, list)
+        or not isinstance(classifications, list)
         or not isinstance(inventory, list)
         or type(case_count) is not int
         or case_count < 1
@@ -222,6 +224,14 @@ def _calibration_run_record(
     science_sha256 = hashlib.sha256(science_raw).hexdigest()
     if result.get("science_sha256") != science_sha256:
         raise ValueError(f"configuration scientific digest does not match evidence: {identity}")
+    classification_raw = json.dumps(
+        classifications, sort_keys=True, separators=(",", ":")
+    ).encode("ascii")
+    classification_sha256 = hashlib.sha256(classification_raw).hexdigest()
+    if result.get("classification_sha256") != classification_sha256:
+        raise ValueError(
+            f"configuration classification digest does not match evidence: {identity}"
+        )
     result_elapsed = _number(
         result.get("elapsed_seconds"), name="result_elapsed_seconds", positive=True
     )
@@ -234,6 +244,7 @@ def _calibration_run_record(
         "repetition": repetition,
         "case_count": case_count,
         "science_sha256": science_sha256,
+        "classification_sha256": classification_sha256,
         "store_inventory_sha256": hashlib.sha256(inventory_raw).hexdigest(),
         "science_elapsed_seconds": result_elapsed,
         **metrics,
@@ -372,7 +383,7 @@ def build_calibration_report(campaign_root: Path, *, cost_per_hour: float) -> di
     hardware = _read_object(hardware_path)
     configurations = campaign.get("completed")
     source_sha = campaign.get("source_sha")
-    declared_science = campaign.get("science_sha256")
+    declared_classification = campaign.get("classification_sha256")
     if (
         campaign.get("format") != "b0h-calibration-optimization-campaign-result"
         or campaign.get("version") != "1"
@@ -381,8 +392,9 @@ def build_calibration_report(campaign_root: Path, *, cost_per_hour: float) -> di
         or not isinstance(source_sha, str)
         or len(source_sha) != 40
         or any(character not in "0123456789abcdef" for character in source_sha)
-        or not isinstance(declared_science, str)
-        or len(declared_science) != 64
+        or not isinstance(declared_classification, str)
+        or len(declared_classification) != 64
+        or any(character not in "0123456789abcdef" for character in declared_classification)
     ):
         raise ValueError("calibration campaign identity is invalid")
     runs = [
@@ -392,12 +404,13 @@ def build_calibration_report(campaign_root: Path, *, cost_per_hour: float) -> di
     identities = [row["identity"] for row in runs]
     case_counts = {row["case_count"] for row in runs}
     science_digests = {row["science_sha256"] for row in runs}
+    classification_digests = {row["classification_sha256"] for row in runs}
     if len(identities) != len(set(identities)):
         raise ValueError("campaign repeats a configuration identity")
     if len(case_counts) != 1:
         raise ValueError("configurations do not contain the same case count")
-    if science_digests != {declared_science}:
-        raise ValueError("scientific evidence differs across configurations")
+    if classification_digests != {declared_classification}:
+        raise ValueError("execution classifications differ across configurations")
     by_workers = _group_runs(runs)
     aggregates = [_aggregate(workers, by_workers[workers]) for workers in sorted(by_workers)]
     serial, selection = _select_configuration(aggregates)
@@ -409,9 +422,13 @@ def build_calibration_report(campaign_root: Path, *, cost_per_hour: float) -> di
         "case_count_per_run": next(iter(case_counts)),
         "cost_per_hour_usd": cost_per_hour,
         "hardware": hardware,
-        "scientific_equivalence": {
-            "all_science_sha256_equal": True,
-            "science_sha256": declared_science,
+        "execution_equivalence": {
+            "all_classification_sha256_equal": True,
+            "classification_sha256": declared_classification,
+        },
+        "raw_science_reproducibility": {
+            "all_science_sha256_equal": len(science_digests) == 1,
+            "unique_science_sha256_count": len(science_digests),
         },
         "input_files": {
             "campaign_result": _file_record(campaign_path),

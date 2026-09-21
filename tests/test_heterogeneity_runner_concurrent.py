@@ -232,6 +232,7 @@ def test_fixed_clock_serial_and_concurrent_completion_inventory_is_identical(
 
 def test_spawn_bootstrap_inherits_thread_caps_and_parent_environment_is_restored(monkeypatch):
     from genomeos.validation import heterogeneity_runner_concurrent as subject
+    from genomeos.validation.numerical_runtime import NUMERICAL_THREAD_CAPS
 
     monkeypatch.setenv("OMP_NUM_THREADS", "7")
     monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
@@ -244,5 +245,21 @@ def test_spawn_bootstrap_inherits_thread_caps_and_parent_environment_is_restored
     subject._start_with_thread_caps((Process(), Process()))
 
     assert observed == [subject.THREAD_CAPS, subject.THREAD_CAPS]
+    assert subject.THREAD_CAPS == dict(NUMERICAL_THREAD_CAPS)
     assert os.environ["OMP_NUM_THREADS"] == "7"
     assert "MKL_NUM_THREADS" not in os.environ
+
+
+def test_numerical_runtime_refuses_missing_cap_and_applies_complete_environment(monkeypatch):
+    from genomeos.validation import numerical_runtime as subject
+
+    for name, _ in subject.NUMERICAL_THREAD_CAPS:
+        monkeypatch.delenv(name, raising=False)
+    with pytest.raises(ValueError, match="thread caps are not established"):
+        subject.require_numerical_thread_caps()
+
+    subject.apply_numerical_thread_caps()
+    subject.require_numerical_thread_caps()
+    assert {name: os.environ[name] for name, _ in subject.NUMERICAL_THREAD_CAPS} == dict(
+        subject.NUMERICAL_THREAD_CAPS
+    )

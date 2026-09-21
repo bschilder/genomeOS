@@ -104,9 +104,16 @@ def _campaign(tmp_path: Path) -> Path:
 def _calibration_campaign(tmp_path: Path) -> Path:
     configurations = []
     elapsed = {1: (400.0, 420.0), 2: (210.0, 220.0), 3: (150.0, 155.0), 4: (145.0, 148.0)}
-    science = [{"case_id": "study=0/case=0", "stages": [{"outcome": "evidence"}]}]
-    science_raw = json.dumps(science, sort_keys=True, separators=(",", ":")).encode("ascii")
-    science_sha256 = __import__("hashlib").sha256(science_raw).hexdigest()
+    classifications = [
+        {
+            "case_id": "study=0/case=0",
+            "stages": [{"stage": "fit", "attempt_id": 0, "outcome": "evidence"}],
+        }
+    ]
+    classification_raw = json.dumps(
+        classifications, sort_keys=True, separators=(",", ":")
+    ).encode("ascii")
+    classification_sha256 = __import__("hashlib").sha256(classification_raw).hexdigest()
     for workers, repetitions in elapsed.items():
         for repetition, seconds in enumerate(repetitions, start=1):
             identity = f"workers-{workers}-repeat-{repetition}"
@@ -116,6 +123,16 @@ def _calibration_campaign(tmp_path: Path) -> Path:
             candidate = tmp_path / "candidates" / identity
             result = candidate / "result"
             result.mkdir(parents=True)
+            science = [
+                {
+                    "case_id": "study=0/case=0",
+                    "stages": [{"outcome": "evidence", "draw_digest": f"draws-{identity}"}],
+                }
+            ]
+            science_raw = json.dumps(
+                science, sort_keys=True, separators=(",", ":")
+            ).encode("ascii")
+            science_sha256 = __import__("hashlib").sha256(science_raw).hexdigest()
             (result / "result.json").write_text(
                 json.dumps(
                     {
@@ -127,6 +144,8 @@ def _calibration_campaign(tmp_path: Path) -> Path:
                         "elapsed_seconds": seconds - 2,
                         "science_sha256": science_sha256,
                         "science": science,
+                        "classification_sha256": classification_sha256,
+                        "classifications": classifications,
                         "store_inventory": [["study=0/case=0", [f"digest-{workers}"]]],
                     }
                 )
@@ -164,7 +183,7 @@ def _calibration_campaign(tmp_path: Path) -> Path:
                 "version": "1",
                 "source_sha": "b" * 40,
                 "completed": configurations,
-                "science_sha256": science_sha256,
+                "classification_sha256": classification_sha256,
             }
         )
         + "\n"
@@ -247,10 +266,12 @@ def test_calibration_report_rehashes_science_and_selects_frontier(tmp_path):
     assert report["source_sha"] == "b" * 40
     assert report["case_count_per_run"] == 16
     assert report["selection"]["workers"] == 3
-    assert report["scientific_equivalence"]["all_science_sha256_equal"] is True
+    assert report["execution_equivalence"]["all_classification_sha256_equal"] is True
+    assert report["raw_science_reproducibility"]["all_science_sha256_equal"] is False
+    assert report["raw_science_reproducibility"]["unique_science_sha256_count"] == 8
 
 
-def test_calibration_report_refuses_tampered_or_different_science(tmp_path):
+def test_calibration_report_refuses_tampered_science(tmp_path):
     campaign = _calibration_campaign(tmp_path)
     result = campaign / "candidates/workers-2-repeat-1/result/result.json"
     value = json.loads(result.read_bytes())
@@ -258,6 +279,47 @@ def test_calibration_report_refuses_tampered_or_different_science(tmp_path):
     result.write_text(json.dumps(value) + "\n")
     with pytest.raises(ValueError, match="scientific digest"):
         _plotter().build_calibration_report(campaign, cost_per_hour=1.59)
+
+
+def test_calibration_report_refuses_different_execution_classification(tmp_path):
+    campaign = _calibration_campaign(tmp_path)
+    result = campaign / "candidates/workers-2-repeat-1/result/result.json"
+    value = json.loads(result.read_bytes())
+    value["classifications"][0]["stages"][0]["outcome"] = "failure"
+    raw = json.dumps(
+        value["classifications"], sort_keys=True, separators=(",", ":")
+    ).encode("ascii")
+    value["classification_sha256"] = __import__("hashlib").sha256(raw).hexdigest()
+    result.write_text(json.dumps(value) + "\n")
+    with pytest.raises(ValueError, match="execution classifications differ"):
+        _plotter().build_calibration_report(campaign, cost_per_hour=1.59)
+
+
+def test_calibration_cli_writes_verified_report_and_figure(tmp_path):
+    campaign = _calibration_campaign(tmp_path / "campaign")
+    out = tmp_path / "out"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--campaign",
+            str(campaign),
+            "--kind",
+            "calibration",
+            "--cost-per-hour",
+            "1.59",
+            "--out",
+            str(out),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads((out / "report.json").read_bytes())
+    assert report["format"] == "b0h-calibration-optimization-report"
+    assert report["selection"]["workers"] == 3
+    assert (out / "optimization.png").stat().st_size > 20_000
 
 
 def test_cli_writes_reviewable_figure_and_refuses_overwrite(tmp_path):
