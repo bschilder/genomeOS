@@ -20,6 +20,13 @@ from genomeos.validation.heterogeneity_runner_store import LocalB0HStore, StoreI
 from genomeos.validation.heterogeneity_runner_wire import record_digest
 from genomeos.validation.heterogeneity_simulation_types import SbcCaseId
 
+THREAD_CAPS = {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+}
+
 
 @dataclass(frozen=True)
 class WorkerOutcome:
@@ -46,8 +53,7 @@ class ConcurrentExecutionFailed(RuntimeError):
 
 
 def _worker_main(slot: int, inbound: Any, outbound: Any) -> None:
-    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
-        os.environ[name] = "1"
+    os.environ.update(THREAD_CAPS)
     from genomeos.validation.heterogeneity_runner import execute_b0h_stage
 
     while True:
@@ -71,6 +77,21 @@ def _worker_main(slot: int, inbound: Any, outbound: Any) -> None:
         outbound.put(WorkerOutcome(slot, start_sha256, packet, None, None))
 
 
+def _start_with_thread_caps(processes: Sequence[Any]) -> None:
+    """Let spawn bootstrap import numerical libraries under bounded thread settings."""
+    prior = {name: os.environ.get(name) for name in THREAD_CAPS}
+    try:
+        os.environ.update(THREAD_CAPS)
+        for process in processes:
+            process.start()
+    finally:
+        for name, value in prior.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
 class ProcessWorkerGroup:
     """Long-lived spawned workers with one task queue per process."""
 
@@ -89,8 +110,7 @@ class ProcessWorkerGroup:
             )
             for slot in self.slots
         )
-        for process in self._processes:
-            process.start()
+        _start_with_thread_caps(self._processes)
         self._active_start: dict[int, str] = {}
         self._reported_dead: set[int] = set()
         self._closed = False

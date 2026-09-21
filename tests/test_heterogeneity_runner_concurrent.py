@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections import deque
 
 import pytest
@@ -194,3 +195,21 @@ def test_fixed_clock_serial_and_concurrent_completion_inventory_is_identical(
 
     assert serial_counts == concurrent_counts
     assert serial_inventory == concurrent_inventory
+
+
+def test_spawn_bootstrap_inherits_thread_caps_and_parent_environment_is_restored(monkeypatch):
+    from genomeos.validation import heterogeneity_runner_concurrent as subject
+
+    monkeypatch.setenv("OMP_NUM_THREADS", "7")
+    monkeypatch.delenv("MKL_NUM_THREADS", raising=False)
+    observed = []
+
+    class Process:
+        def start(self):
+            observed.append({name: os.environ.get(name) for name in subject.THREAD_CAPS})
+
+    subject._start_with_thread_caps((Process(), Process()))
+
+    assert observed == [subject.THREAD_CAPS, subject.THREAD_CAPS]
+    assert os.environ["OMP_NUM_THREADS"] == "7"
+    assert "MKL_NUM_THREADS" not in os.environ
