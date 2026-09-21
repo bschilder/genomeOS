@@ -27,6 +27,36 @@ def test_help_is_offline(capsys):
     assert "prepare" in capsys.readouterr().out
 
 
+def test_worker_configuration_selects_serial_or_concurrent_path(tmp_path, monkeypatch):
+    cli = command()
+    manifest = type("Manifest", (), {"cases": ("case-a", "case-b")})()
+    store = object()
+    observed = []
+    monkeypatch.setattr(
+        cli,
+        "execute_b0h_case",
+        lambda received_manifest, case, received_store: observed.append(
+            ("serial", received_manifest, case, received_store)
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_b0h_concurrent",
+        lambda received_manifest, received_store, spool, *, workers: observed.append(
+            ("concurrent", received_manifest, received_store, spool, workers)
+        ),
+    )
+
+    cli.run_campaign(manifest, store, workers=1, spool=tmp_path / "spool")
+    assert [row[2] for row in observed] == ["case-a", "case-b"]
+    observed.clear()
+    cli.run_campaign(manifest, store, workers=3, spool=tmp_path / "spool")
+    assert observed == [("concurrent", manifest, store, tmp_path / "spool", 3)]
+
+    with pytest.raises(ValueError, match="positive"):
+        cli.run_campaign(manifest, store, workers=0, spool=tmp_path / "spool")
+
+
 def test_pending_publication_retries_same_packet_only(tmp_path, monkeypatch):
     cli = command()
     from heterogeneity_runner_fixtures import dataset

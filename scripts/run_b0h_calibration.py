@@ -15,6 +15,10 @@ from genomeos.validation.heterogeneity_codec import B0HCodecLimits, EncodedB0HEv
 from genomeos.validation.heterogeneity_reduction import reduce_b0h_study, reduction_bytes
 from genomeos.validation.heterogeneity_runner import execute_b0h_case, load_b0h_case
 from genomeos.validation.heterogeneity_runner_admission import observe_b0h_admission
+from genomeos.validation.heterogeneity_runner_concurrent import (
+    ConcurrentExecutionFailed,
+    run_b0h_concurrent,
+)
 from genomeos.validation.heterogeneity_runner_reader import read_collected_b0h_snapshot
 from genomeos.validation.heterogeneity_runner_records import (
     AdmissionReceipt,
@@ -173,6 +177,38 @@ def reconcile_publication(store: LocalB0HStore, pending: PendingPublication) -> 
     raise pending
 
 
+def positive_integer(value: str) -> int:
+    try:
+        result = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a positive integer") from error
+    if result < 1:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return result
+
+
+def run_campaign(
+    manifest: CampaignManifest,
+    store: LocalB0HStore,
+    *,
+    workers: int,
+    spool: Path,
+) -> None:
+    if type(workers) is not int or workers < 1:
+        raise ValueError("workers must be a positive integer")
+    if workers == 1:
+        for case in manifest.cases:
+            while True:
+                try:
+                    execute_b0h_case(manifest, case, store)
+                except PendingPublication as pending:
+                    reconcile_publication(store, pending)
+                else:
+                    break
+        return
+    run_b0h_concurrent(manifest, store, spool, workers=workers)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Offline frozen B0H campaign")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -201,6 +237,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         child.add_argument("--database", type=Path, required=True)
         if name == "run":
             child.add_argument("--source-root", type=Path, required=True)
+            child.add_argument("--workers", type=positive_integer, default=1)
         else:
             child.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
@@ -269,18 +306,41 @@ def main(argv: Sequence[str] | None = None) -> int:
         null = read_record(args.null, PreparedNull)
         if not args.database.is_file():
             raise ValueError("prepared campaign database is missing; no recreation on run/reduce")
+        if args.command == "run":
+            worker_configuration = {
+                "format": "b0h_worker_configuration",
+                "version": "1",
+                "campaign_sha256": record_digest(manifest),
+                "workers": args.workers,
+                "mode": "serial" if args.workers == 1 else "isolated_processes",
+                "process_start_method": None if args.workers == 1 else "spawn",
+                "thread_caps": {
+                    "MKL_NUM_THREADS": 1,
+                    "NUMEXPR_NUM_THREADS": 1,
+                    "OMP_NUM_THREADS": 1,
+                    "OPENBLAS_NUM_THREADS": 1,
+                },
+                "spool_directory": "publication-spool",
+            }
+            frozen_file(
+                args.database.parent / "worker-configuration.json",
+                json.dumps(
+                    worker_configuration,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                ).encode("ascii"),
+            )
         with _TimedStore(
             args.database, manifest=manifest, admission=admission, null=null, owner_id=str(uuid.uuid4())
         ) as store:
             if args.command == "run":
-                for case in manifest.cases:
-                    while True:
-                        try:
-                            execute_b0h_case(manifest, case, store)
-                        except PendingPublication as pending:
-                            reconcile_publication(store, pending)
-                        else:
-                            break
+                run_campaign(
+                    manifest,
+                    store,
+                    workers=args.workers,
+                    spool=args.database.parent / "publication-spool",
+                )
                 return 0
             for case in manifest.cases:
                 load_b0h_case(manifest, case, store)
@@ -310,6 +370,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             json.dumps({"status": "interrupted_unresolved", "redelivery_permitted": False}), file=sys.stderr
         )
         return 130
+    except ConcurrentExecutionFailed as error:
+        print(
+            json.dumps(
+                {
+                    "status": "concurrent_execution_failed",
+                    "message_utf8hex": str(error).encode("utf-8", "surrogatepass").hex(),
+                    "redelivery_permitted": False,
+                }
+            ),
+            file=sys.stderr,
+        )
+        return 2
     except Exception as error:
         print(
             json.dumps(
