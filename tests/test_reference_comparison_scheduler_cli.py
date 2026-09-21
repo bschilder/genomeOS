@@ -16,9 +16,16 @@ def _command():
     return module
 
 
-def _documents(tmp_path: Path, statuses: tuple[int, ...]):
+def _documents(
+    tmp_path: Path,
+    statuses: tuple[int, ...],
+    delays: tuple[float, ...] | None = None,
+):
+    delays = (0.1,) * len(statuses) if delays is None else delays
+    if len(delays) != len(statuses):
+        raise ValueError("fixture delays must match statuses")
     runs = []
-    for index, status in enumerate(statuses):
+    for index, (status, delay) in enumerate(zip(statuses, delays, strict=True)):
         run_id = f"run-{index}"
         runs.append(
             {
@@ -27,7 +34,7 @@ def _documents(tmp_path: Path, statuses: tuple[int, ...]):
                 "execution_argv": (
                     sys.executable,
                     "-c",
-                    f"import time; time.sleep(0.1); raise SystemExit({status})",
+                    f"import time; time.sleep({delay!r}); raise SystemExit({status})",
                     "--out",
                     str(tmp_path / "runs" / run_id),
                 ),
@@ -107,7 +114,9 @@ def test_execute_uses_bounded_scheduler_and_preserves_plan_order(tmp_path, monke
 
 def test_execute_stops_queued_runs_after_unexpected_exit(tmp_path, monkeypatch):
     subject = _command()
-    admission_path, shard_path, admission, shard = _documents(tmp_path, (7, 0, 0))
+    admission_path, shard_path, admission, shard = _documents(
+        tmp_path, (7, 0, 0), delays=(0.0, 0.5, 0.5)
+    )
     monkeypatch.setattr(subject, "verify_admission_shard", lambda *args: (admission, shard))
     monkeypatch.setattr(subject, "verify_source", lambda *args: None)
     monkeypatch.setattr(subject, "verify_inputs", lambda *args: None)
