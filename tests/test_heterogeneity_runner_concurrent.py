@@ -150,14 +150,36 @@ def test_worker_failure_stops_new_starts_and_drains_active_result(tmp_path, monk
 def test_fixed_clock_serial_and_concurrent_completion_inventory_is_identical(
     tmp_path, monkeypatch
 ):
+    from genomeos.validation import heterogeneity_reduction as reduction
     from genomeos.validation import heterogeneity_runner_concurrent as subject
+    from genomeos.validation import heterogeneity_runner_records as records
+    from genomeos.validation import heterogeneity_simulation as simulation
+    from genomeos.validation.heterogeneity_runner_records import restore_null
 
     runner, serial_counts = mocked_runner(monkeypatch)
     monkeypatch.setattr(runner.time, "time_ns", lambda: 100)
     monkeypatch.setattr(runner.time, "monotonic_ns", lambda: 200)
     monkeypatch.setattr(runner, "_resource_observation", lambda: (4096, None))
     manifest, admission, null = campaign(tmp_path)
-    cases = (dataset(0).case_id, dataset(1).case_id)
+    cases = (dataset(0, track=0).case_id, dataset(0, track=1).case_id)
+    monkeypatch.setattr(records, "enumerate_sbc_cases", lambda: cases)
+    monkeypatch.setattr(simulation, "enumerate_sbc_cases", lambda: cases)
+    rank_reduction = reduction.rank_reduction
+    monkeypatch.setattr(
+        reduction,
+        "rank_reduction",
+        lambda track, mode, quantity, ranks, failures, reference: rank_reduction(
+            track,
+            mode,
+            quantity,
+            ranks,
+            failures + ("not_admitted",) * (512 - len(ranks) - len(failures)),
+            reference,
+        ),
+    )
+    manifest = records.CampaignManifest.model_validate(
+        {**manifest.model_dump(mode="python"), "cases": cases}, strict=True
+    )
     database = tmp_path / "study.sqlite3"
     with LocalB0HStore.create(
         database,
@@ -169,6 +191,10 @@ def test_fixed_clock_serial_and_concurrent_completion_inventory_is_identical(
         for case in cases:
             runner.execute_b0h_case(manifest, case, store)
         serial_inventory = store.inventory()
+        serial_evidence = tuple(runner.load_b0h_case(manifest, case, store) for case in manifest.cases)
+        serial_reduction = reduction.reduction_bytes(
+            reduction.reduce_b0h_study(manifest, serial_evidence, restore_null(null))
+        )
 
     database.unlink()
     runner, concurrent_counts = mocked_runner(monkeypatch)
@@ -192,9 +218,16 @@ def test_fixed_clock_serial_and_concurrent_completion_inventory_is_identical(
             worker_group=workers,
         )
         concurrent_inventory = store.inventory()
+        concurrent_evidence = tuple(
+            runner.load_b0h_case(manifest, case, store) for case in manifest.cases
+        )
+        concurrent_reduction = reduction.reduction_bytes(
+            reduction.reduce_b0h_study(manifest, concurrent_evidence, restore_null(null))
+        )
 
     assert serial_counts == concurrent_counts
     assert serial_inventory == concurrent_inventory
+    assert serial_reduction == concurrent_reduction
 
 
 def test_spawn_bootstrap_inherits_thread_caps_and_parent_environment_is_restored(monkeypatch):

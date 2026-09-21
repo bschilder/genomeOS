@@ -82,7 +82,36 @@ def _verified_classifications(
     ]
 
 
-def _run_record(root: Path, config: dict[str, object], cost_per_hour: float) -> dict[str, object]:
+def _corrected_cpu(path: Path) -> tuple[dict[str, float], dict[str, object]] | None:
+    if not path.is_file():
+        return None
+    values = []
+    for index, raw in enumerate(path.read_text().splitlines(), start=1):
+        try:
+            sample = json.loads(raw)
+        except json.JSONDecodeError as error:
+            raise ValueError(f"invalid telemetry sample {path}:{index}") from error
+        if not isinstance(sample, dict) or "cpu_percent" not in sample:
+            raise ValueError(f"invalid telemetry sample {path}:{index}")
+        if sample["cpu_percent"] is not None:
+            values.append(_number(sample["cpu_percent"], name="cpu_percent"))
+    if not values:
+        raise ValueError(f"telemetry series has no observed CPU interval: {path}")
+    corrected = [max(0.0, value) for value in values]
+    return (
+        {
+            "process_cpu_mean_percent": statistics.fmean(corrected),
+            "process_cpu_max_percent": max(corrected),
+        },
+        {
+            "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+            "negative_interval_count": sum(value < 0 for value in values),
+            "observed_interval_count": len(values),
+        },
+    )
+
+
+def _configuration(config: dict[str, object]) -> tuple[str, int, int]:
     identity = config.get("identity")
     workers = config.get("workers")
     repetition = config.get("repetition")
@@ -97,19 +126,22 @@ def _run_record(root: Path, config: dict[str, object], cost_per_hour: float) -> 
         or repetition < 1
     ):
         raise ValueError("campaign contains an invalid configuration")
-    candidate = root / "candidates" / identity
+    return identity, workers, repetition
+
+
+def _candidate_metrics(
+    candidate: Path, *, case_count: int, cost_per_hour: float
+) -> dict[str, object]:
+    if type(case_count) is not int or case_count < 1:
+        raise ValueError("candidate case count must be a positive integer")
     telemetry_path = candidate / "telemetry-summary.json"
-    receipt_path = candidate / "receipt.json"
     telemetry = _read_object(telemetry_path)
-    receipt = _read_object(receipt_path)
     if (
         telemetry.get("format") != "b0h_scheduler_telemetry_summary"
         or telemetry.get("version") != "1"
         or telemetry.get("exit_status") != 0
     ):
-        raise ValueError(f"configuration has invalid telemetry: {identity}")
-    classifications = _verified_classifications(receipt, workers=workers)
-    case_count = len(classifications)
+        raise ValueError(f"configuration has invalid telemetry: {candidate.name}")
     elapsed = _number(telemetry.get("elapsed_seconds"), name="elapsed_seconds", positive=True)
     numeric = {
         name: _number(telemetry.get(name), name=name, positive=name.endswith("_peak_bytes"))
@@ -129,20 +161,82 @@ def _run_record(root: Path, config: dict[str, object], cost_per_hour: float) -> 
             "write_bytes_final",
         )
     }
+    input_files = {
+        "telemetry_summary": _file_record(telemetry_path),
+    }
+    correction = _corrected_cpu(candidate / "telemetry.jsonl")
+    correction_record = None
+    if correction is not None:
+        corrected_cpu, correction_record = correction
+        numeric.update(corrected_cpu)
+        input_files["telemetry_samples"] = _file_record(candidate / "telemetry.jsonl")
+    return {
+        "elapsed_seconds": elapsed,
+        "throughput_cases_per_hour": case_count * 3600.0 / elapsed,
+        "cost_per_case_usd": cost_per_hour * elapsed / 3600.0 / case_count,
+        **numeric,
+        "cpu_transition_correction": correction_record,
+        "input_files": input_files,
+    }
+
+
+def _run_record(root: Path, config: dict[str, object], cost_per_hour: float) -> dict[str, object]:
+    identity, workers, repetition = _configuration(config)
+    candidate = root / "candidates" / identity
+    receipt_path = candidate / "receipt.json"
+    classifications = _verified_classifications(_read_object(receipt_path), workers=workers)
+    metrics = _candidate_metrics(candidate, case_count=len(classifications), cost_per_hour=cost_per_hour)
+    metrics["input_files"]["controller_receipt"] = _file_record(receipt_path)
+    return {
+        "identity": identity,
+        "workers": workers,
+        "repetition": repetition,
+        "case_count": len(classifications),
+        "case_classifications": classifications,
+        **metrics,
+    }
+
+
+def _calibration_run_record(
+    root: Path, config: dict[str, object], cost_per_hour: float
+) -> dict[str, object]:
+    identity, workers, repetition = _configuration(config)
+    candidate = root / "candidates" / identity
+    result_path = candidate / "result/result.json"
+    result = _read_object(result_path)
+    science = result.get("science")
+    inventory = result.get("store_inventory")
+    case_count = result.get("case_count")
+    if (
+        result.get("format") != "b0h-calibration-optimization-result"
+        or result.get("version") != "1"
+        or result.get("identity") != identity
+        or result.get("workers") != workers
+        or not isinstance(science, list)
+        or not isinstance(inventory, list)
+        or type(case_count) is not int
+        or case_count < 1
+    ):
+        raise ValueError(f"configuration has invalid calibration result: {identity}")
+    science_raw = json.dumps(science, sort_keys=True, separators=(",", ":")).encode("ascii")
+    science_sha256 = hashlib.sha256(science_raw).hexdigest()
+    if result.get("science_sha256") != science_sha256:
+        raise ValueError(f"configuration scientific digest does not match evidence: {identity}")
+    result_elapsed = _number(
+        result.get("elapsed_seconds"), name="result_elapsed_seconds", positive=True
+    )
+    metrics = _candidate_metrics(candidate, case_count=case_count, cost_per_hour=cost_per_hour)
+    metrics["input_files"]["calibration_result"] = _file_record(result_path)
+    inventory_raw = json.dumps(inventory, sort_keys=True, separators=(",", ":")).encode("ascii")
     return {
         "identity": identity,
         "workers": workers,
         "repetition": repetition,
         "case_count": case_count,
-        "case_classifications": classifications,
-        "elapsed_seconds": elapsed,
-        "throughput_cases_per_hour": case_count * 3600.0 / elapsed,
-        "cost_per_case_usd": cost_per_hour * elapsed / 3600.0 / case_count,
-        **numeric,
-        "input_files": {
-            "telemetry_summary": _file_record(telemetry_path),
-            "controller_receipt": _file_record(receipt_path),
-        },
+        "science_sha256": science_sha256,
+        "store_inventory_sha256": hashlib.sha256(inventory_raw).hexdigest(),
+        "science_elapsed_seconds": result_elapsed,
+        **metrics,
     }
 
 
@@ -175,6 +269,49 @@ def _aggregate(workers: int, rows: list[dict[str, object]]) -> dict[str, object]
     }
 
 
+def _group_runs(runs: list[dict[str, object]]) -> dict[int, list[dict[str, object]]]:
+    grouped: dict[int, list[dict[str, object]]] = {}
+    for row in runs:
+        grouped.setdefault(int(row["workers"]), []).append(row)
+    if 1 not in grouped:
+        raise ValueError("campaign has no serial oracle")
+    for workers, rows in grouped.items():
+        repetitions = [int(row["repetition"]) for row in rows]
+        if len(repetitions) < 2 or len(repetitions) != len(set(repetitions)):
+            raise ValueError(f"worker count {workers} requires repeated unique measurements")
+    return grouped
+
+
+def _select_configuration(
+    aggregates: list[dict[str, object]],
+) -> tuple[dict[str, object], dict[str, object]]:
+    serial = next(row for row in aggregates if row["workers"] == 1)
+    serial_throughput = float(serial["throughput_cases_per_hour"])
+    serial_cost = float(serial["cost_per_case_usd"])
+    best_throughput = max(float(row["throughput_cases_per_hour"]) for row in aggregates)
+    for row in aggregates:
+        row["speedup_vs_serial"] = float(row["throughput_cases_per_hour"]) / serial_throughput
+        row["within_best_throughput_fraction"] = (
+            float(row["throughput_cases_per_hour"]) / best_throughput
+        )
+        row["cost_ratio_vs_serial"] = float(row["cost_per_case_usd"]) / serial_cost
+        row["meets_acceptance"] = (
+            row["speedup_vs_serial"] >= 2.0
+            and row["within_best_throughput_fraction"] >= 0.9
+            and row["cost_ratio_vs_serial"] <= 1.0 + 1e-12
+        )
+    eligible = [row for row in aggregates if row["meets_acceptance"]]
+    if eligible:
+        return serial, {"status": "accepted", **min(eligible, key=lambda row: int(row["workers"]))}
+    return serial, {
+        "status": "no_configuration_met_acceptance",
+        "workers": None,
+        "required_speedup": 2.0,
+        "required_best_throughput_fraction": 0.9,
+        "maximum_cost_ratio_vs_serial": 1.0,
+    }
+
+
 def build_report(campaign_root: Path, *, cost_per_hour: float) -> dict[str, object]:
     """Verify repeated terminal runs and choose the bounded balanced-frontier configuration."""
     cost_per_hour = _number(cost_per_hour, name="cost_per_hour", positive=True)
@@ -203,40 +340,9 @@ def build_report(campaign_root: Path, *, cost_per_hour: float) -> dict[str, obje
     classifications = runs[0]["case_classifications"]
     if any(row["case_classifications"] != classifications for row in runs[1:]):
         raise ValueError("verified case classifications differ across configurations")
-    by_workers: dict[int, list[dict[str, object]]] = {}
-    for row in runs:
-        by_workers.setdefault(int(row["workers"]), []).append(row)
-    if 1 not in by_workers:
-        raise ValueError("campaign has no serial oracle")
+    by_workers = _group_runs(runs)
     aggregates = [_aggregate(workers, by_workers[workers]) for workers in sorted(by_workers)]
-    serial = next(row for row in aggregates if row["workers"] == 1)
-    serial_throughput = float(serial["throughput_cases_per_hour"])
-    serial_cost = float(serial["cost_per_case_usd"])
-    best_throughput = max(float(row["throughput_cases_per_hour"]) for row in aggregates)
-    for row in aggregates:
-        row["speedup_vs_serial"] = float(row["throughput_cases_per_hour"]) / serial_throughput
-        row["within_best_throughput_fraction"] = (
-            float(row["throughput_cases_per_hour"]) / best_throughput
-        )
-        row["cost_ratio_vs_serial"] = float(row["cost_per_case_usd"]) / serial_cost
-        row["meets_acceptance"] = (
-            row["speedup_vs_serial"] >= 2.0
-            and row["within_best_throughput_fraction"] >= 0.9
-            and row["cost_ratio_vs_serial"] <= 1.0 + 1e-12
-        )
-    eligible = [row for row in aggregates if row["meets_acceptance"]]
-    selection: dict[str, object]
-    if eligible:
-        chosen = min(eligible, key=lambda row: int(row["workers"]))
-        selection = {"status": "accepted", **chosen}
-    else:
-        selection = {
-            "status": "no_configuration_met_acceptance",
-            "workers": None,
-            "required_speedup": 2.0,
-            "required_best_throughput_fraction": 0.9,
-            "maximum_cost_ratio_vs_serial": 1.0,
-        }
+    serial, selection = _select_configuration(aggregates)
     return {
         "format": "b0h-scheduler-optimization-report",
         "version": "1",
@@ -248,6 +354,67 @@ def build_report(campaign_root: Path, *, cost_per_hour: float) -> dict[str, obje
         "hardware": hardware,
         "input_files": {
             "campaign": _file_record(campaign_path),
+            "hardware_attestation": _file_record(hardware_path),
+        },
+        "runs": runs,
+        "aggregates": aggregates,
+        "serial": serial,
+        "selection": selection,
+    }
+
+
+def build_calibration_report(campaign_root: Path, *, cost_per_hour: float) -> dict[str, object]:
+    """Verify real calibration evidence and choose the bounded balanced frontier."""
+    cost_per_hour = _number(cost_per_hour, name="cost_per_hour", positive=True)
+    campaign_path = campaign_root / "campaign-result.json"
+    hardware_path = campaign_root / "hardware-attestation.json"
+    campaign = _read_object(campaign_path)
+    hardware = _read_object(hardware_path)
+    configurations = campaign.get("completed")
+    source_sha = campaign.get("source_sha")
+    declared_science = campaign.get("science_sha256")
+    if (
+        campaign.get("format") != "b0h-calibration-optimization-campaign-result"
+        or campaign.get("version") != "1"
+        or not isinstance(configurations, list)
+        or not configurations
+        or not isinstance(source_sha, str)
+        or len(source_sha) != 40
+        or any(character not in "0123456789abcdef" for character in source_sha)
+        or not isinstance(declared_science, str)
+        or len(declared_science) != 64
+    ):
+        raise ValueError("calibration campaign identity is invalid")
+    runs = [
+        _calibration_run_record(campaign_root, config, cost_per_hour)
+        for config in configurations
+    ]
+    identities = [row["identity"] for row in runs]
+    case_counts = {row["case_count"] for row in runs}
+    science_digests = {row["science_sha256"] for row in runs}
+    if len(identities) != len(set(identities)):
+        raise ValueError("campaign repeats a configuration identity")
+    if len(case_counts) != 1:
+        raise ValueError("configurations do not contain the same case count")
+    if science_digests != {declared_science}:
+        raise ValueError("scientific evidence differs across configurations")
+    by_workers = _group_runs(runs)
+    aggregates = [_aggregate(workers, by_workers[workers]) for workers in sorted(by_workers)]
+    serial, selection = _select_configuration(aggregates)
+    return {
+        "format": "b0h-calibration-optimization-report",
+        "version": "1",
+        "analysis_role": "performance_only_not_scientific_evidence",
+        "source_sha": source_sha,
+        "case_count_per_run": next(iter(case_counts)),
+        "cost_per_hour_usd": cost_per_hour,
+        "hardware": hardware,
+        "scientific_equivalence": {
+            "all_science_sha256_equal": True,
+            "science_sha256": declared_science,
+        },
+        "input_files": {
+            "campaign_result": _file_record(campaign_path),
             "hardware_attestation": _file_record(hardware_path),
         },
         "runs": runs,
@@ -305,7 +472,11 @@ def build_figure(report: dict[str, object]):
         axis.set_xticks(workers)
         axis.grid(axis="y", alpha=0.2)
     figure.suptitle(
-        "B0H scheduler optimization — performance-only, verified scientific receipts",
+        (
+            "B0H calibration scheduler — exact scientific evidence across worker counts"
+            if report["format"] == "b0h-calibration-optimization-report"
+            else "B0H reference scheduler — verified scientific receipts"
+        ),
         fontsize=12,
         fontweight="bold",
     )
@@ -315,6 +486,7 @@ def build_figure(report: dict[str, object]):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--campaign", required=True, type=Path)
+    parser.add_argument("--kind", choices=("reference", "calibration"), default="reference")
     parser.add_argument("--cost-per-hour", required=True, type=float)
     parser.add_argument("--out", required=True, type=Path)
     return parser
@@ -325,7 +497,11 @@ def main() -> int:
     try:
         if args.out.exists():
             raise FileExistsError(f"output directory already exists: {args.out}")
-        report = build_report(args.campaign, cost_per_hour=args.cost_per_hour)
+        report = (
+            build_calibration_report(args.campaign, cost_per_hour=args.cost_per_hour)
+            if args.kind == "calibration"
+            else build_report(args.campaign, cost_per_hour=args.cost_per_hour)
+        )
         args.out.mkdir(parents=True)
         report_path = args.out / "report.json"
         figure_path = args.out / "optimization.png"

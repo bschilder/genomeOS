@@ -101,6 +101,80 @@ def _campaign(tmp_path: Path) -> Path:
     return tmp_path
 
 
+def _calibration_campaign(tmp_path: Path) -> Path:
+    configurations = []
+    elapsed = {1: (400.0, 420.0), 2: (210.0, 220.0), 3: (150.0, 155.0), 4: (145.0, 148.0)}
+    science = [{"case_id": "study=0/case=0", "stages": [{"outcome": "evidence"}]}]
+    science_raw = json.dumps(science, sort_keys=True, separators=(",", ":")).encode("ascii")
+    science_sha256 = __import__("hashlib").sha256(science_raw).hexdigest()
+    for workers, repetitions in elapsed.items():
+        for repetition, seconds in enumerate(repetitions, start=1):
+            identity = f"workers-{workers}-repeat-{repetition}"
+            configurations.append(
+                {"identity": identity, "workers": workers, "repetition": repetition}
+            )
+            candidate = tmp_path / "candidates" / identity
+            result = candidate / "result"
+            result.mkdir(parents=True)
+            (result / "result.json").write_text(
+                json.dumps(
+                    {
+                        "format": "b0h-calibration-optimization-result",
+                        "version": "1",
+                        "identity": identity,
+                        "workers": workers,
+                        "case_count": 16,
+                        "elapsed_seconds": seconds - 2,
+                        "science_sha256": science_sha256,
+                        "science": science,
+                        "store_inventory": [["study=0/case=0", [f"digest-{workers}"]]],
+                    }
+                )
+                + "\n"
+            )
+            (candidate / "telemetry-summary.json").write_text(
+                json.dumps(
+                    {
+                        "format": "b0h_scheduler_telemetry_summary",
+                        "version": "1",
+                        "elapsed_seconds": seconds,
+                        "exit_status": 0,
+                        "sample_count": 10,
+                        "gpu_utilization_mean_percent": 20.0 + workers * 10,
+                        "gpu_utilization_p95_percent": 30.0 + workers * 10,
+                        "gpu_utilization_max_percent": 40.0 + workers * 10,
+                        "gpu_memory_peak_mib": 1000.0 * workers,
+                        "gpu_power_mean_watts": 100.0,
+                        "process_cpu_mean_percent": 100.0 * workers,
+                        "process_cpu_max_percent": 120.0 * workers,
+                        "process_rss_peak_bytes": 2_000_000_000 * workers,
+                        "process_threads_peak": 8 * workers,
+                        "host_load_1m_peak": float(workers),
+                        "host_memory_used_peak_bytes": 3_000_000_000 * workers,
+                        "read_bytes_final": 100,
+                        "write_bytes_final": 200,
+                    }
+                )
+                + "\n"
+            )
+    (tmp_path / "campaign-result.json").write_text(
+        json.dumps(
+            {
+                "format": "b0h-calibration-optimization-campaign-result",
+                "version": "1",
+                "source_sha": "b" * 40,
+                "completed": configurations,
+                "science_sha256": science_sha256,
+            }
+        )
+        + "\n"
+    )
+    (tmp_path / "hardware-attestation.json").write_text(
+        json.dumps({"gpu": {"name": "NVIDIA A100-SXM4-80GB"}}) + "\n"
+    )
+    return tmp_path
+
+
 def test_report_selects_smallest_configuration_on_balanced_frontier(tmp_path):
     report = _plotter().build_report(_campaign(tmp_path), cost_per_hour=1.59)
     assert report["source_sha"] == "a" * 40
@@ -143,6 +217,47 @@ def test_report_accepts_verified_refusals_but_requires_matching_classifications(
     mismatched.write_text(json.dumps(value) + "\n")
     with pytest.raises(ValueError, match="classifications differ"):
         _plotter().build_report(campaign, cost_per_hour=1.59)
+
+
+def test_report_corrects_negative_cpu_transition_deltas_from_bound_raw_samples(tmp_path):
+    campaign = _campaign(tmp_path)
+    candidate = campaign / "candidates/workers-1-repeat-1"
+    (candidate / "telemetry.jsonl").write_text(
+        "\n".join(
+            json.dumps({"cpu_percent": value}) for value in (None, -100.0, 100.0, 200.0)
+        )
+        + "\n"
+    )
+    report = _plotter().build_report(campaign, cost_per_hour=1.59)
+    run = next(row for row in report["runs"] if row["identity"] == "workers-1-repeat-1")
+    assert run["process_cpu_mean_percent"] == pytest.approx(100.0)
+    assert run["process_cpu_max_percent"] == pytest.approx(200.0)
+    assert run["cpu_transition_correction"] == {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 1,
+        "observed_interval_count": 3,
+    }
+    assert "telemetry_samples" in run["input_files"]
+
+
+def test_calibration_report_rehashes_science_and_selects_frontier(tmp_path):
+    campaign = _calibration_campaign(tmp_path)
+    report = _plotter().build_calibration_report(campaign, cost_per_hour=1.59)
+    assert report["format"] == "b0h-calibration-optimization-report"
+    assert report["source_sha"] == "b" * 40
+    assert report["case_count_per_run"] == 16
+    assert report["selection"]["workers"] == 3
+    assert report["scientific_equivalence"]["all_science_sha256_equal"] is True
+
+
+def test_calibration_report_refuses_tampered_or_different_science(tmp_path):
+    campaign = _calibration_campaign(tmp_path)
+    result = campaign / "candidates/workers-2-repeat-1/result/result.json"
+    value = json.loads(result.read_bytes())
+    value["science"][0]["stages"][0]["outcome"] = "failure"
+    result.write_text(json.dumps(value) + "\n")
+    with pytest.raises(ValueError, match="scientific digest"):
+        _plotter().build_calibration_report(campaign, cost_per_hour=1.59)
 
 
 def test_cli_writes_reviewable_figure_and_refuses_overwrite(tmp_path):
