@@ -74,8 +74,10 @@ same fixed cases. It used every study and both tracks.
 Four workers remained just below the predeclared 2× gate. Five workers were the smallest measured
 configuration that passed it, halving cost per case while matching the best measured throughput.
 The runner therefore defaults to five workers and retains `--workers 1` as an explicit serial
-mode. Five is also the hard measured bound: the small gain from four to five came with 307 more
-threads and 1.36 GiB more resident memory, so a higher default requires a new resource measurement.
+mode. Five is the highest measured calibration count: the small gain from four to five came with
+307 more threads and 1.36 GiB more resident memory, so choosing a higher default requires a new
+resource measurement. An explicit higher worker count remains available and is frozen in the
+campaign record.
 
 ![Thirty-two-case scheduler confirmation](../figures/b0h-calibration-confirmation-2026-09-21.png)
 
