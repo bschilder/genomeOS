@@ -65,6 +65,7 @@ def test_executable_bootstrap_sets_numerical_thread_caps_before_cli_imports():
 
 def test_worker_configuration_selects_serial_or_concurrent_path(tmp_path, monkeypatch):
     cli = command()
+    assert cli.DEFAULT_WORKERS == 5
     manifest = type("Manifest", (), {"cases": ("case-a", "case-b")})()
     store = object()
     observed = []

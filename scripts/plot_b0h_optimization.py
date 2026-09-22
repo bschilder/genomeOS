@@ -465,8 +465,27 @@ def build_figure(report: dict[str, object]):
         zorder=1,
     )
     axes[0].scatter(workers, throughput, s=75, c=colors, zorder=2)
-    axes[0].axhline(2 * throughput[workers == 1][0], color="#B44B4B", linestyle="--")
+    serial_throughput = throughput[workers == 1][0]
+    axes[0].axhline(
+        2 * serial_throughput,
+        color="#B44B4B",
+        linestyle="--",
+        label="2× serial target",
+    )
+    for worker, value in zip(workers, throughput, strict=True):
+        speedup = value / serial_throughput
+        offset = -15 if value >= 0.9 * 2 * serial_throughput else 8
+        precision = 3 if 1.9 <= speedup <= 2.1 else 2
+        axes[0].annotate(
+            f"{speedup:.{precision}f}×",
+            (worker, value),
+            xytext=(0, offset),
+            textcoords="offset points",
+            ha="center",
+            fontsize=8,
+        )
     axes[0].set(title="End-to-end throughput", xlabel="Concurrent case workers", ylabel="Cases / hour")
+    axes[0].legend(frameon=False, loc="lower right")
 
     axes[1].plot(workers, gpu, marker="o", color="#167D9A", label="mean")
     axes[1].plot(workers, gpu_p95, marker="s", color="#D17A22", label="95th percentile")
@@ -490,9 +509,9 @@ def build_figure(report: dict[str, object]):
         axis.grid(axis="y", alpha=0.2)
     figure.suptitle(
         (
-            "B0H calibration scheduler — exact scientific evidence across worker counts"
+            "B0H calibration scheduler — matched case outcomes across worker counts"
             if report["format"] == "b0h-calibration-optimization-report"
-            else "B0H reference scheduler — verified scientific receipts"
+            else "B0H reference scheduler — verified run outcomes"
         ),
         fontsize=12,
         fontweight="bold",

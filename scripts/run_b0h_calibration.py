@@ -46,6 +46,9 @@ from genomeos.validation.heterogeneity_runner_wire import (
 )
 from genomeos.validation.sbc_ranks import simulate_rank_null
 
+# Repeated A100 calibration measurements: docs/research/b0h-scheduler-optimization-2026-09-21.md.
+DEFAULT_WORKERS = 5
+
 
 def _emit_timing(record: dict) -> None:
     payload = json.dumps(record, sort_keys=True, separators=(",", ":"), allow_nan=False)
@@ -242,7 +245,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         child.add_argument("--database", type=Path, required=True)
         if name == "run":
             child.add_argument("--source-root", type=Path, required=True)
-            child.add_argument("--workers", type=positive_integer, default=1)
+            child.add_argument("--workers", type=positive_integer, default=DEFAULT_WORKERS)
         else:
             child.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
