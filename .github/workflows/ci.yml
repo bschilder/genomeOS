@@ -28,6 +28,8 @@ jobs:
       - name: Smoke
         run: python scripts/smoke.py
       - name: Test
+        env:
+          COVERAGE_CORE: sysmon
         run: pytest -v --cov=genomeos --cov-report=term-missing --cov-report=json
       - name: Coverage badge is current
         run: |
