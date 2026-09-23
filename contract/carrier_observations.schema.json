@@ -17,10 +17,12 @@
   "columns": {
     "assay": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
       }
     },
     "carriers": {
@@ -29,10 +31,12 @@
     },
     "cohort_id": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
       }
     },
     "date_lower": {
@@ -48,10 +52,12 @@
     },
     "ingest_version": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
       }
     },
     "lat": {
@@ -77,7 +83,14 @@
       "greater_than": 0
     },
     "population_id": {
-      "dtype": "string[pyarrow]"
+      "dtype": "string[pyarrow]",
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      }
     },
     "radius_km": {
       "dtype": "float64",
@@ -101,18 +114,22 @@
     },
     "source": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
       }
     },
     "source_record_id": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
       },
       "unique": true
     },

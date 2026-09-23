@@ -28,7 +28,23 @@ jobs:
       - name: Smoke
         run: python scripts/smoke.py
       - name: Test
-        run: pytest -v
+        env:
+          COVERAGE_CORE: sysmon
+        run: pytest -v --cov=genomeos --cov-report=term-missing --cov-report=json
+      - name: Coverage badge is current
+        run: |
+          python scripts/render_coverage_badge.py
+          if [[ -n "$(git status --porcelain -- README.md website/public/_static/coverage.svg)" ]]; then
+            echo "Coverage changed; regenerate its README badge with scripts/render_coverage_badge.py."
+            git diff -- README.md website/public/_static/coverage.svg
+            git status --short -- README.md website/public/_static/coverage.svg
+            exit 1
+          fi
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-json
+          path: coverage.json
       - name: Container HTTP smoke
         run: |
           set -euo pipefail

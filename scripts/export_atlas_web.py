@@ -12,30 +12,37 @@ import argparse
 import hashlib
 import json
 import math
+import sys
 from collections.abc import Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from genomeos.observations.sources import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from genomeos.observations.sources import (  # noqa: E402
     afnd_carriers,
     afnd_cytokines,
     afnd_frequencies,
     map_g6pd,
     map_surveys,
 )
-from genomeos.publication.atlas_discovery import validate_artifact_discovery, validate_discovery_groups
-from genomeos.publication.commercial_use import (
+from genomeos.publication.atlas_discovery import (  # noqa: E402
+    validate_artifact_discovery,
+    validate_discovery_groups,
+)
+from genomeos.publication.commercial_use import (  # noqa: E402
     KNOWN_NON_COMMERCIAL_FIELDS,  # noqa: F401  (re-exported for the check script and tests)
 )
-from genomeos.publication.commercial_use import (
+from genomeos.publication.commercial_use import (  # noqa: E402
     validate as validate_commercial_use,
 )
-from genomeos.registry.sources import afnd as afnd_registry
-from genomeos.registry.variants import load as load_variant_registry
-from genomeos.registry.variants import normalized_identity
-from genomeos.surfaces.artifacts import read as read_surface_artifact
+from genomeos.registry.sources import afnd as afnd_registry  # noqa: E402
+from genomeos.registry.variants import load as load_variant_registry  # noqa: E402
+from genomeos.registry.variants import normalized_identity  # noqa: E402
+from genomeos.surfaces.artifacts import read as read_surface_artifact  # noqa: E402
 
 SCHEMA_VERSION = 1
 
@@ -792,7 +799,12 @@ def export_catalog(
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--store", type=Path, required=True)
-    parser.add_argument("--hbs-csv", type=Path, required=True)
+    parser.add_argument(
+        "--hbs-csv",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     parser.add_argument("--g6pd-csv", type=Path, required=True)
     parser.add_argument("--afnd-frequencies", type=Path)
     parser.add_argument("--afnd-populations", type=Path)

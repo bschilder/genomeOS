@@ -1,11 +1,13 @@
 [build-system]
-requires = ["setuptools>=75"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "genomeos"
 version = "0.1.0"
 description = "Provenance-first atlas of human genetic variation"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
   # `<1`, restored. This was the original bound and the deliberate one: FastAPI has stayed on 0.x
@@ -60,7 +62,7 @@ geo = [
 figures = [
   "matplotlib>=3.8",
 ]
-dev = ["httpx>=0.28,<1", "pytest>=8.4,<9", "ruff>=0.6"]
+dev = ["httpx>=0.28,<1", "pytest>=8.4,<9", "pytest-cov>=6,<8", "ruff>=0.6"]
 
 [project.scripts]
 genomeos = "genomeos.cli:main"

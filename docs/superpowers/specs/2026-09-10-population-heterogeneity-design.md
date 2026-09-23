@@ -146,9 +146,10 @@ def predict_reference_population_heterogeneity(
 Fit validates ReferenceCount rows before any sampler call. All-zero-AN training
 is infeasible. It fits every variant with available training evidence, sorted by
 literal variant ID, and retains unavailable training record IDs. Individual
-training AN above the existing public MAX_BETA_SCORING_COUNT is refused as an
-unsupported domain; counts are never thinned or capped. No metadata from test
-rows participates in graph construction, RNG choice or stopping.
+training AN above the public `MAX_COUNT` is refused as an unsupported domain;
+the former 65,536 predictive-scoring work limit was removed by #314, and counts
+are never thinned or capped. No metadata from test rows participates in graph
+construction, RNG choice or stopping.
 
 PyMC graph nodes are named `mean` and `rho`, with explicit `variant` coordinates;
 only positive-AN rows enter the observed node. Call pm.sample with config seed,
