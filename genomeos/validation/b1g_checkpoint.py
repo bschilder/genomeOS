@@ -28,9 +28,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from genomeos.surfaces.config import FitConfig
 from genomeos.surfaces.convergence import (
     SamplerDiagnostics,
     convergence_failure,
+)
+from genomeos.validation.b1g_attempt import (
+    B1GFitAttempt,
+    validate_b1g_fit_attempts,
 )
 from genomeos.validation.b1g_benchmark import (
     PREDICTION_COLUMNS,
@@ -40,6 +45,7 @@ from genomeos.validation.b1g_benchmark import (
     B1GFoldResult,
     B1GFoldStatus,
     B1GInnerFoldRecord,
+    derive_b1g_seed,
     finalize_b1g_benchmark,
 )
 from genomeos.validation.nested_folds import (
@@ -53,7 +59,7 @@ from genomeos.validation.spatial_gp_checkpoint import (
     validate_checkpoint_splits,
 )
 
-SHARD_SCHEMA_VERSION = 2
+SHARD_SCHEMA_VERSION = 3
 _BODY_FIELDS = (
     "schema_version",
     "ordinal",
@@ -65,6 +71,7 @@ _BODY_FIELDS = (
     "selected_basis_count",
     "failure_reason",
     "sampler_diagnostics",
+    "fit_attempts",
     "candidate_scores",
     "prediction_columns",
     "prediction_rows",
@@ -167,6 +174,16 @@ def _diagnostics_record(diagnostics: SamplerDiagnostics | None) -> dict[str, obj
     return None if diagnostics is None else asdict(diagnostics)
 
 
+def _attempt_record(attempt: B1GFitAttempt) -> dict[str, object]:
+    return {
+        "attempt": attempt.attempt,
+        "config": asdict(attempt.config),
+        "status": attempt.status,
+        "reason": attempt.reason,
+        "diagnostics": _diagnostics_record(attempt.diagnostics),
+    }
+
+
 def _encode_number(value: float | None) -> float | str | None:
     if value is None or isfinite(value):
         return value
@@ -190,7 +207,9 @@ def _candidate_record(candidate: B1GCandidateScore) -> dict[str, object]:
             {
                 **asdict(inner),
                 "expected_test_ids": list(inner.expected_test_ids),
+                "source_block_ids": list(inner.source_block_ids),
                 "sampler_diagnostics": _diagnostics_record(inner.sampler_diagnostics),
+                "fit_attempts": [_attempt_record(attempt) for attempt in inner.fit_attempts],
             }
             for inner in candidate.inner_folds
         ],
@@ -251,6 +270,43 @@ def _validate_result(
             raise ValueError("completed B1G fold predictions must exactly cover held-out IDs")
     elif not frame.empty:
         raise ValueError("failed or infeasible B1G fold must not contain predictions")
+
+    selected = (result.status.selected_radius_km, result.status.selected_basis_count)
+    if (selected[0] is None) != (selected[1] is None):
+        raise ValueError("B1G fold must retain both selected basis fields or neither")
+    outer_started = all(value is not None for value in selected)
+    if outer_started:
+        radius_km, basis_count = selected
+        initial_seed = derive_b1g_seed(plan.seed, split.split_id, radius_km, basis_count, "fit")
+        retry_seed = derive_b1g_seed(
+            plan.seed,
+            split.split_id,
+            radius_km,
+            basis_count,
+            "fit",
+            "retry",
+        )
+        terminal_seed = validate_b1g_fit_attempts(
+            result.fit_attempts,
+            fit_config=plan.config.fit_config,
+            initial_seed=initial_seed,
+            retry_seed=retry_seed,
+        )
+        _validate_attempt_diagnostics(
+            result.fit_attempts,
+            max_rhat=max_rhat,
+            min_ess=min_ess,
+        )
+        if result.status.status == "completed":
+            if set(frame["fit_seed"]) != {terminal_seed}:
+                raise ValueError("completed B1G fold predictions contradict accepted fit attempt")
+            accepted = next(
+                attempt for attempt in result.fit_attempts if attempt.status == "accepted"
+            )
+            if accepted.diagnostics != result.sampler_diagnostics:
+                raise ValueError("completed B1G fold diagnostics contradict accepted fit attempt")
+    elif result.fit_attempts:
+        raise ValueError("B1G fold retains fit attempts although no outer fit was selected")
 
     expected_candidates = set(plan.config.candidate_configs)
     actual_candidates = {
@@ -343,6 +399,39 @@ def _validate_result(
         for inner in score.inner_folds:
             if inner.expected_test_ids != expected_test_ids[inner.inner_block_id]:
                 raise ValueError("B1G inner fold contradicts its frozen source-block membership")
+            initial_seed = derive_b1g_seed(
+                derive_b1g_seed(plan.seed, split.split_id, "selection"),
+                inner.split_id,
+                score.radius_km,
+                score.basis_count,
+                "fit",
+            )
+            retry_seed = derive_b1g_seed(
+                derive_b1g_seed(plan.seed, split.split_id, "selection"),
+                inner.split_id,
+                score.radius_km,
+                score.basis_count,
+                "fit",
+                "retry",
+            )
+            terminal_seed = validate_b1g_fit_attempts(
+                inner.fit_attempts,
+                fit_config=plan.config.fit_config,
+                initial_seed=initial_seed,
+                retry_seed=retry_seed,
+            )
+            _validate_attempt_diagnostics(
+                inner.fit_attempts,
+                max_rhat=max_rhat,
+                min_ess=min_ess,
+            )
+            if inner.fit_seed != terminal_seed:
+                raise ValueError("B1G inner fold fit seed contradicts retained attempts")
+            terminal = next(
+                attempt for attempt in inner.fit_attempts if attempt.config.seed == terminal_seed
+            )
+            if inner.sampler_diagnostics != terminal.diagnostics:
+                raise ValueError("B1G inner-fold diagnostics contradict retained attempts")
             if inner.status == "completed":
                 if inner.sampler_diagnostics is None:
                     raise ValueError("completed B1G inner fold lacks sampler diagnostics")
@@ -360,11 +449,28 @@ def _validate_result(
             or score.mean_log_score is None
         ):
             raise ValueError("eligible B1G candidate contradicts its retained evidence")
-    selected = (result.status.selected_radius_km, result.status.selected_basis_count)
     eligible = {(score.radius_km, score.basis_count) for score in result.candidate_scores if score.eligible}
     if result.status.status == "completed" and selected not in eligible:
         raise ValueError("completed B1G fold selected an ineligible candidate")
     return frame
+
+
+def _validate_attempt_diagnostics(
+    attempts: tuple[B1GFitAttempt, ...],
+    *,
+    max_rhat: float,
+    min_ess: float,
+) -> None:
+    for attempt in attempts:
+        if attempt.diagnostics is None:
+            continue
+        reason = convergence_failure(
+            attempt.diagnostics,
+            max_rhat=max_rhat,
+            min_ess=min_ess,
+        )
+        if (attempt.status == "accepted") != (reason is None):
+            raise ValueError("B1G fit attempt status contradicts convergence gates")
 
 
 def _document(
@@ -395,6 +501,7 @@ def _document(
         "selected_basis_count": result.status.selected_basis_count,
         "failure_reason": result.status.failure_reason,
         "sampler_diagnostics": _diagnostics_record(result.sampler_diagnostics),
+        "fit_attempts": [_attempt_record(attempt) for attempt in result.fit_attempts],
         "candidate_scores": [_candidate_record(score) for score in result.candidate_scores],
         "prediction_columns": list(PREDICTION_COLUMNS),
         "prediction_rows": [
@@ -459,6 +566,33 @@ def _decode_diagnostics(value: object) -> SamplerDiagnostics | None:
         raise ValueError("B1G shard contains invalid sampler diagnostics") from error
 
 
+def _decode_attempt(value: object) -> B1GFitAttempt:
+    if not isinstance(value, dict) or set(value) != {
+        "attempt",
+        "config",
+        "status",
+        "reason",
+        "diagnostics",
+    }:
+        raise ValueError("B1G fit attempt record fields are invalid")
+    config = value["config"]
+    if not isinstance(config, dict):
+        raise ValueError("B1G fit attempt config must be an object")
+    config = dict(config)
+    if isinstance(config.get("hsgp_m"), list):
+        config["hsgp_m"] = tuple(config["hsgp_m"])
+    try:
+        return B1GFitAttempt(
+            attempt=value["attempt"],
+            config=FitConfig(**config),
+            status=value["status"],
+            reason=value["reason"],
+            diagnostics=_decode_diagnostics(value["diagnostics"]),
+        )
+    except (TypeError, ValueError) as error:
+        raise ValueError("B1G fit attempt record is invalid") from error
+
+
 def _decode_candidate(value: object) -> B1GCandidateScore:
     if not isinstance(value, dict):
         raise ValueError("B1G candidate record must be an object")
@@ -474,6 +608,10 @@ def _decode_candidate(value: object) -> B1GCandidateScore:
         item["expected_test_ids"] = tuple(item["expected_test_ids"])
         item["source_block_ids"] = tuple(item["source_block_ids"])
         item["sampler_diagnostics"] = _decode_diagnostics(item["sampler_diagnostics"])
+        raw_attempts = item["fit_attempts"]
+        if not isinstance(raw_attempts, list):
+            raise ValueError("B1G inner-fold fit_attempts must be a list")
+        item["fit_attempts"] = tuple(_decode_attempt(attempt) for attempt in raw_attempts)
         inner_folds.append(B1GInnerFoldRecord(**item))
     fields["failure_reasons"] = tuple(fields["failure_reasons"])
     fields["inner_folds"] = tuple(inner_folds)
@@ -533,6 +671,7 @@ def _decode_shard(
         predictions=pd.DataFrame(decoded_rows, columns=PREDICTION_COLUMNS),
         candidate_scores=tuple(_decode_candidate(value) for value in document["candidate_scores"]),
         sampler_diagnostics=_decode_diagnostics(document["sampler_diagnostics"]),
+        fit_attempts=tuple(_decode_attempt(value) for value in document["fit_attempts"]),
     )
     runtime = B1GFoldRuntime(**document["runtime"])
     _validate_result(plan, ordinal, result, max_rhat=max_rhat, min_ess=min_ess)

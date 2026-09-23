@@ -10,6 +10,7 @@ import pytest
 
 from genomeos.surfaces.config import FitConfig
 from genomeos.surfaces.convergence import SamplerDiagnostics
+from genomeos.validation.b1g_attempt import B1GFitAttempt
 from genomeos.validation.b1g_benchmark import (
     PREDICTION_COLUMNS,
     B1GBenchmarkConfig,
@@ -18,6 +19,7 @@ from genomeos.validation.b1g_benchmark import (
     B1GFoldResult,
     B1GFoldStatus,
     B1GInnerFoldRecord,
+    derive_b1g_seed,
 )
 from genomeos.validation.b1g_checkpoint import (
     B1GFoldRuntime,
@@ -125,6 +127,8 @@ def _candidate(
     radius_km: float,
     basis_count: int,
     groups: tuple[InnerFoldGroup, ...],
+    fit_config: FitConfig,
+    selection_seed: int,
     diagnostics: SamplerDiagnostics = GOOD,
 ) -> B1GCandidateScore:
     inner_folds = tuple(
@@ -132,14 +136,63 @@ def _candidate(
             split_id=f"inner-{index}",
             status="completed",
             expected_test_ids=tuple(f"obs-{block}" for block in groups[index].source_block_ids),
-            fit_seed=index + 1,
-            predictive_seed=index + 11,
+            fit_seed=derive_b1g_seed(
+                selection_seed,
+                f"inner-{index}",
+                radius_km,
+                basis_count,
+                "fit",
+            ),
+            predictive_seed=derive_b1g_seed(
+                selection_seed,
+                f"inner-{index}",
+                radius_km,
+                basis_count,
+                "predictive",
+            ),
             sampler_diagnostics=diagnostics,
             failure_reason=None,
             inner_block_id=f"inner-{index}",
             source_block_ids=groups[index].source_block_ids,
             grouping_algorithm=THREE_INNER_FOLD_ALGORITHM,
             grouping_sha256=grouping_sha256,
+            fit_attempts=(
+                B1GFitAttempt(
+                    "initial",
+                    replace(
+                        fit_config,
+                        seed=derive_b1g_seed(
+                            selection_seed,
+                            f"inner-{index}",
+                            radius_km,
+                            basis_count,
+                            "fit",
+                        ),
+                    ),
+                    "accepted",
+                    None,
+                    diagnostics,
+                ),
+                B1GFitAttempt(
+                    "retry",
+                    replace(
+                        fit_config,
+                        draws=2 * fit_config.draws,
+                        tune=2 * fit_config.tune,
+                        seed=derive_b1g_seed(
+                            selection_seed,
+                            f"inner-{index}",
+                            radius_km,
+                            basis_count,
+                            "fit",
+                            "retry",
+                        ),
+                    ),
+                    "not_attempted",
+                    "initial_accepted",
+                    None,
+                ),
+            ),
         )
         for index in range(3)
     )
@@ -159,6 +212,11 @@ def _candidate(
 
 def _fold(plan: B1GBenchmarkPlan, ordinal: int) -> B1GFoldResult:
     split = plan.splits[ordinal]
+    selection_seed = derive_b1g_seed(plan.seed, split.split_id, "selection")
+    outer_initial_seed = derive_b1g_seed(plan.seed, split.split_id, 500.0, 8, "fit")
+    outer_retry_seed = derive_b1g_seed(
+        plan.seed, split.split_id, 500.0, 8, "fit", "retry"
+    )
     grouping = plan_three_inner_folds(
         plan.assignments[
             plan.assignments["source_record_id"].isin(split.train_ids)
@@ -179,7 +237,7 @@ def _fold(plan: B1GBenchmarkPlan, ordinal: int) -> B1GFoldResult:
         "observed_an": int(observation["an"]),
         "basis_radius_km": 500.0,
         "basis_count": 8,
-        "fit_seed": 3,
+        "fit_seed": outer_initial_seed,
         "predictive_seed": 4,
         "log_score": -1.0,
         "absolute_error": 0.01,
@@ -201,10 +259,33 @@ def _fold(plan: B1GBenchmarkPlan, ordinal: int) -> B1GFoldResult:
                 radius_km=config.radius_km,
                 basis_count=config.basis_count,
                 groups=grouping.groups,
+                fit_config=plan.config.fit_config,
+                selection_seed=selection_seed,
             )
             for index, config in enumerate(plan.config.candidate_configs)
         ),
         sampler_diagnostics=GOOD,
+        fit_attempts=(
+            B1GFitAttempt(
+                "initial",
+                replace(plan.config.fit_config, seed=outer_initial_seed),
+                "accepted",
+                None,
+                GOOD,
+            ),
+            B1GFitAttempt(
+                "retry",
+                replace(
+                    plan.config.fit_config,
+                    draws=2 * plan.config.fit_config.draws,
+                    tune=2 * plan.config.fit_config.tune,
+                    seed=outer_retry_seed,
+                ),
+                "not_attempted",
+                "initial_accepted",
+                None,
+            ),
+        ),
     )
 
 
@@ -297,7 +378,7 @@ def test_shard_is_immutable_and_integrity_checked(tmp_path):
 
     artifact = checkpoint / "folds" / "0000.json"
     document = json.loads(artifact.read_text())
-    assert document["schema_version"] == 2
+    assert document["schema_version"] == 3
     document["runtime"]["elapsed_seconds"] = 99.0
     artifact.write_text(json.dumps(document))
     with pytest.raises(ValueError, match="integrity"):
@@ -311,14 +392,20 @@ def test_eligible_candidate_cannot_hide_bad_inner_diagnostics(tmp_path):
     initialize_checkpoint(checkpoint, header)
     fold = _fold(plan, 0)
     candidates = list(fold.candidate_scores)
-    bad_inner = replace(candidates[0].inner_folds[0], sampler_diagnostics=BAD)
+    original_inner = candidates[0].inner_folds[0]
+    bad_initial = replace(original_inner.fit_attempts[0], diagnostics=BAD)
+    bad_inner = replace(
+        original_inner,
+        sampler_diagnostics=BAD,
+        fit_attempts=(bad_initial, original_inner.fit_attempts[1]),
+    )
     candidates[0] = replace(
         candidates[0],
         inner_folds=(bad_inner, *candidates[0].inner_folds[1:]),
     )
     contradictory = replace(fold, candidate_scores=tuple(candidates))
 
-    with pytest.raises(ValueError, match="eligible candidate.*convergence"):
+    with pytest.raises(ValueError, match="attempt status contradicts convergence"):
         write_b1g_fold_shard(
             checkpoint,
             header,
@@ -383,6 +470,85 @@ def test_checkpoint_refuses_candidates_with_different_grouping_evidence(tmp_path
             replace(fold, candidate_scores=tuple(candidates)),
             _runtime(),
         )
+
+
+def test_checkpoint_refuses_missing_inner_or_outer_fit_attempt_evidence(tmp_path):
+    plan = _plan()
+    header = _header(plan)
+    checkpoint = tmp_path / "checkpoint"
+    initialize_checkpoint(checkpoint, header)
+    fold = _fold(plan, 0)
+    candidates = list(fold.candidate_scores)
+    missing_inner = replace(candidates[0].inner_folds[0], fit_attempts=())
+    candidates[0] = replace(
+        candidates[0],
+        inner_folds=(missing_inner, *candidates[0].inner_folds[1:]),
+    )
+
+    with pytest.raises(ValueError, match="exactly two attempt slots"):
+        write_b1g_fold_shard(
+            checkpoint,
+            header,
+            plan,
+            0,
+            replace(fold, candidate_scores=tuple(candidates)),
+            _runtime(),
+        )
+    with pytest.raises(ValueError, match="exactly two attempt slots"):
+        write_b1g_fold_shard(
+            checkpoint,
+            header,
+            plan,
+            0,
+            replace(fold, fit_attempts=()),
+            _runtime(),
+        )
+
+
+def test_checkpoint_round_trip_preserves_failed_initial_and_accepted_retry(tmp_path):
+    plan = _plan()
+    header = _header(plan)
+    checkpoint = tmp_path / "checkpoint"
+    initialize_checkpoint(checkpoint, header)
+    fold = _fold(plan, 0)
+    candidates = list(fold.candidate_scores)
+    inner = candidates[0].inner_folds[0]
+    initial, retry = inner.fit_attempts
+    retried = replace(
+        inner,
+        fit_seed=retry.config.seed,
+        fit_attempts=(
+            replace(
+                initial,
+                status="convergence_failed",
+                reason="B1GConvergenceError: synthetic initial failure",
+                diagnostics=BAD,
+            ),
+            replace(retry, status="accepted", reason=None, diagnostics=GOOD),
+        ),
+    )
+    candidates[0] = replace(
+        candidates[0],
+        inner_folds=(retried, *candidates[0].inner_folds[1:]),
+    )
+
+    write_b1g_fold_shard(
+        checkpoint,
+        header,
+        plan,
+        0,
+        replace(fold, candidate_scores=tuple(candidates)),
+        _runtime(),
+    )
+
+    (loaded,) = load_b1g_fold_shards(checkpoint, header, plan)
+    attempts = loaded.result.candidate_scores[0].inner_folds[0].fit_attempts
+    assert tuple(attempt.status for attempt in attempts) == (
+        "convergence_failed",
+        "accepted",
+    )
+    assert attempts[0].diagnostics == BAD
+    assert attempts[1].diagnostics == GOOD
 
 
 def test_finalization_refuses_missing_parallel_shards(tmp_path):

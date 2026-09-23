@@ -33,6 +33,7 @@ import genomeos.observations.schema as observations_schema_module  # noqa: E402
 import genomeos.surfaces.config as surface_config_module  # noqa: E402
 import genomeos.surfaces.convergence as convergence_module  # noqa: E402
 import genomeos.surfaces.observation as observation_module  # noqa: E402
+import genomeos.validation.b1g_attempt as attempt_module  # noqa: E402
 import genomeos.validation.b1g_basis as basis_module  # noqa: E402
 import genomeos.validation.b1g_benchmark as benchmark_module  # noqa: E402
 import genomeos.validation.b1g_checkpoint as checkpoint_module  # noqa: E402
@@ -97,6 +98,7 @@ SCIENCE_SOURCE_FILES = {
     "genomeos/surfaces/config.py": Path(surface_config_module.__file__).resolve(),
     "genomeos/surfaces/convergence.py": Path(convergence_module.__file__).resolve(),
     "genomeos/surfaces/observation.py": Path(observation_module.__file__).resolve(),
+    "genomeos/validation/b1g_attempt.py": Path(attempt_module.__file__).resolve(),
     "genomeos/validation/b1g_basis.py": Path(basis_module.__file__).resolve(),
     "genomeos/validation/b1g_benchmark.py": Path(benchmark_module.__file__).resolve(),
     "genomeos/validation/b1g_checkpoint.py": Path(checkpoint_module.__file__).resolve(),
@@ -326,6 +328,12 @@ def _build_campaign(args: argparse.Namespace):
         "cdf_backend": args.cdf_backend,
         "data_version": args.data_version,
         "fit_config": asdict(fit_config),
+        "fit_retry_protocol": {
+            "admission_error": "B1GConvergenceError",
+            "draws_multiplier": 2,
+            "maximum_retries": 1,
+            "tune_multiplier": 2,
+        },
         "inner_fold_protocol": {
             "algorithm": THREE_INNER_FOLD_ALGORITHM,
             "fold_count": THREE_INNER_FOLD_COUNT,
@@ -378,6 +386,14 @@ def _diagnostics_columns(prefix: str, diagnostics) -> dict[str, object]:
     return {f"{prefix}{key}": value for key, value in asdict(diagnostics).items()}
 
 
+def _attempts_json(attempts) -> str:
+    return json.dumps(
+        [asdict(attempt) for attempt in attempts],
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+
+
 def _evidence_tables(shards):
     fold_rows = []
     candidate_rows = []
@@ -392,6 +408,7 @@ def _evidence_tables(shards):
             {
                 "ordinal": shard.ordinal,
                 **status_record,
+                "fit_attempts": _attempts_json(shard.result.fit_attempts),
                 **_diagnostics_columns("", shard.result.sampler_diagnostics),
                 **asdict(shard.runtime),
             }
@@ -413,7 +430,7 @@ def _evidence_tables(shards):
                 inner_record = {
                     key: value
                     for key, value in asdict(inner).items()
-                    if key != "sampler_diagnostics"
+                    if key not in {"fit_attempts", "sampler_diagnostics"}
                 }
                 inner_record["expected_test_ids"] = json.dumps(
                     list(inner.expected_test_ids), separators=(",", ":")
@@ -421,6 +438,7 @@ def _evidence_tables(shards):
                 inner_record["source_block_ids"] = json.dumps(
                     list(inner.source_block_ids), separators=(",", ":")
                 )
+                inner_record["fit_attempts"] = _attempts_json(inner.fit_attempts)
                 inner_rows.append(
                     {
                         "outer_split_id": status.split_id,

@@ -19,13 +19,17 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Literal
 
 import pandas as pd
 
 from genomeos.surfaces.config import FitConfig
 from genomeos.surfaces.convergence import SamplerDiagnostics
+from genomeos.validation.b1g_attempt import (
+    B1GFitAttempt,
+    run_b1g_fit_attempts,
+)
 from genomeos.validation.b1g_basis import B1GBasisConfig
 from genomeos.validation.b1g_fit import B1GFit, B1GPrediction, fit_b1g, predict_b1g
 from genomeos.validation.benchmark import (
@@ -125,6 +129,7 @@ class B1GInnerFoldRecord:
     source_block_ids: tuple[str, ...]
     grouping_algorithm: str
     grouping_sha256: str
+    fit_attempts: tuple[B1GFitAttempt, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -187,6 +192,22 @@ class B1GFoldResult:
     predictions: pd.DataFrame
     candidate_scores: tuple[B1GCandidateScore, ...]
     sampler_diagnostics: SamplerDiagnostics | None
+    fit_attempts: tuple[B1GFitAttempt, ...] = ()
+
+
+class B1GEvaluationError(RuntimeError):
+    """A post-fit failure retaining the accepted fit-attempt evidence."""
+
+    def __init__(
+        self,
+        error: Exception,
+        attempts: tuple[B1GFitAttempt, B1GFitAttempt],
+        diagnostics: SamplerDiagnostics,
+    ) -> None:
+        self.reason = f"{type(error).__name__}: {error}"
+        self.attempts = attempts
+        self.diagnostics = diagnostics
+        super().__init__(self.reason)
 
 
 @dataclass(frozen=True)
@@ -353,40 +374,67 @@ def _fit_and_score(
     fit_function: FitFunction,
     predict_function: PredictFunction,
     diagnostic_scope: Literal["full", "log_score"] = "full",
-) -> tuple[pd.DataFrame, SamplerDiagnostics, int, int]:
-    fit_seed = derive_b1g_seed(
+) -> tuple[
+    pd.DataFrame,
+    SamplerDiagnostics,
+    int,
+    int,
+    tuple[B1GFitAttempt, B1GFitAttempt],
+]:
+    initial_fit_seed = derive_b1g_seed(
         seed, split.split_id, basis_config.radius_km, basis_config.basis_count, "fit"
+    )
+    retry_fit_seed = derive_b1g_seed(
+        seed,
+        split.split_id,
+        basis_config.radius_km,
+        basis_config.basis_count,
+        "fit",
+        "retry",
     )
     predictive_seed = derive_b1g_seed(
         seed, split.split_id, basis_config.radius_km, basis_config.basis_count, "predictive"
     )
-    fit = fit_function(
+    run = run_b1g_fit_attempts(
         training,
         basis_config=basis_config,
-        fit_config=replace(benchmark_config.fit_config, seed=fit_seed),
+        fit_config=benchmark_config.fit_config,
+        initial_seed=initial_fit_seed,
+        retry_seed=retry_fit_seed,
+        fit_function=fit_function,
     )
-    prediction = predict_function(
-        fit,
-        testing,
-        seed=predictive_seed,
-        cdf_backend=benchmark_config.cdf_backend,
+    accepted = next(attempt for attempt in run.attempts if attempt.status == "accepted")
+    try:
+        prediction = predict_function(
+            run.fit,
+            testing,
+            seed=predictive_seed,
+            cdf_backend=benchmark_config.cdf_backend,
+        )
+        if diagnostic_scope == "full":
+            frame_function = _prediction_frame
+        elif diagnostic_scope == "log_score":
+            frame_function = _prediction_log_score_frame
+        else:
+            raise ValueError("diagnostic_scope must be 'full' or 'log_score'")
+        frame = frame_function(
+            testing,
+            assignments,
+            split,
+            prediction,
+            basis_config=basis_config,
+            fit_seed=accepted.config.seed,
+            predictive_seed=predictive_seed,
+        )
+    except Exception as error:
+        raise B1GEvaluationError(error, run.attempts, accepted.diagnostics) from error
+    return (
+        frame,
+        accepted.diagnostics,
+        accepted.config.seed,
+        predictive_seed,
+        run.attempts,
     )
-    if diagnostic_scope == "full":
-        frame_function = _prediction_frame
-    elif diagnostic_scope == "log_score":
-        frame_function = _prediction_log_score_frame
-    else:
-        raise ValueError("diagnostic_scope must be 'full' or 'log_score'")
-    frame = frame_function(
-        testing,
-        assignments,
-        split,
-        prediction,
-        basis_config=basis_config,
-        fit_seed=fit_seed,
-        predictive_seed=predictive_seed,
-    )
-    return frame, fit.sampler_diagnostics, fit_seed, predictive_seed
 
 
 def _select_candidate(
@@ -432,6 +480,14 @@ def _select_candidate(
             fit_seed = derive_b1g_seed(
                 seed, split.split_id, basis_config.radius_km, basis_config.basis_count, "fit"
             )
+            retry_fit_seed = derive_b1g_seed(
+                seed,
+                split.split_id,
+                basis_config.radius_km,
+                basis_config.basis_count,
+                "fit",
+                "retry",
+            )
             predictive_seed = derive_b1g_seed(
                 seed,
                 split.split_id,
@@ -439,6 +495,7 @@ def _select_candidate(
                 basis_config.basis_count,
                 "predictive",
             )
+            fit_attempts: tuple[B1GFitAttempt, ...] = ()
             try:
                 if not split.train_ids:
                     raise ValueError("no training observations")
@@ -447,6 +504,7 @@ def _select_candidate(
                     diagnostics,
                     returned_fit_seed,
                     returned_predictive_seed,
+                    fit_attempts,
                 ) = _fit_and_score(
                     by_id.loc[list(split.train_ids)].reset_index(drop=True),
                     by_id.loc[list(split.test_ids)].reset_index(drop=True),
@@ -459,8 +517,11 @@ def _select_candidate(
                     predict_function=predict_function,
                     diagnostic_scope="log_score",
                 )
-                if (returned_fit_seed, returned_predictive_seed) != (fit_seed, predictive_seed):
+                if returned_fit_seed not in {fit_seed, retry_fit_seed}:
                     raise RuntimeError("derived inner seeds changed during fit")
+                if returned_predictive_seed != predictive_seed:
+                    raise RuntimeError("derived inner predictive seed changed during fit")
+                fit_seed = returned_fit_seed
                 frames.append(frame)
                 inner_records.append(
                     B1GInnerFoldRecord(
@@ -475,14 +536,24 @@ def _select_candidate(
                         group.source_block_ids,
                         THREE_INNER_FOLD_ALGORITHM,
                         grouping.grouping_sha256,
+                        fit_attempts,
                     )
                 )
             except Exception as error:
-                reason = f"{split.split_id}: {type(error).__name__}: {error}"
+                error_reason = getattr(error, "reason", f"{type(error).__name__}: {error}")
+                reason = f"{split.split_id}: {error_reason}"
                 failures.append(reason)
                 diagnostics = getattr(error, "diagnostics", None)
                 if not isinstance(diagnostics, SamplerDiagnostics):
                     diagnostics = None
+                retained_attempts = getattr(error, "attempts", ())
+                if isinstance(retained_attempts, tuple):
+                    fit_attempts = retained_attempts
+                attempted = [
+                    attempt for attempt in fit_attempts if attempt.status != "not_attempted"
+                ]
+                if attempted:
+                    fit_seed = attempted[-1].config.seed
                 inner_records.append(
                     B1GInnerFoldRecord(
                         split.split_id,
@@ -496,6 +567,7 @@ def _select_candidate(
                         group.source_block_ids,
                         THREE_INNER_FOLD_ALGORITHM,
                         grouping.grouping_sha256,
+                        fit_attempts,
                     )
                 )
         predictions = pd.concat(frames, ignore_index=True) if frames else _empty_predictions()
@@ -548,7 +620,7 @@ def evaluate_b1g_fold(
     if not split.train_ids:
         reason = "outer split has no training observations after leakage exclusions"
         status = B1GFoldStatus(split.split_id, "infeasible", split.test_ids, None, None, reason)
-        return B1GFoldResult(status, _empty_predictions(), (), None)
+        return B1GFoldResult(status, _empty_predictions(), (), None, ())
     by_id = plan.observations.set_index("source_record_id", drop=False)
     training_ids = set(split.train_ids)
     training = by_id.loc[list(split.train_ids)].reset_index(drop=True)
@@ -561,6 +633,7 @@ def evaluate_b1g_fold(
     )
     scores: tuple[B1GCandidateScore, ...] = ()
     selected: B1GBasisConfig | None = None
+    fit_attempts: tuple[B1GFitAttempt, ...] = ()
     try:
         selection = _select_candidate(
             training,
@@ -575,7 +648,7 @@ def evaluate_b1g_fold(
         )
         scores = selection.candidate_scores
         selected = selection.selected_config
-        predictions, diagnostics, _, _ = _fit_and_score(
+        predictions, diagnostics, _, _, fit_attempts = _fit_and_score(
             training,
             testing,
             plan.assignments,
@@ -594,13 +667,16 @@ def evaluate_b1g_fold(
             selected.basis_count,
             None,
         )
-        return B1GFoldResult(status, predictions, scores, diagnostics)
+        return B1GFoldResult(status, predictions, scores, diagnostics, fit_attempts)
     except B1GSelectionError as error:
         reason = str(error)
         status = B1GFoldStatus(split.split_id, "infeasible", split.test_ids, None, None, reason)
-        return B1GFoldResult(status, _empty_predictions(), error.scores, None)
+        return B1GFoldResult(status, _empty_predictions(), error.scores, None, ())
     except Exception as error:
-        reason = f"{type(error).__name__}: {error}"
+        reason = getattr(error, "reason", f"{type(error).__name__}: {error}")
+        retained_attempts = getattr(error, "attempts", ())
+        if isinstance(retained_attempts, tuple):
+            fit_attempts = retained_attempts
         status = B1GFoldStatus(
             split.split_id,
             "failed",
@@ -609,7 +685,7 @@ def evaluate_b1g_fold(
             None if selected is None else selected.basis_count,
             reason,
         )
-        return B1GFoldResult(status, _empty_predictions(), scores, None)
+        return B1GFoldResult(status, _empty_predictions(), scores, None, fit_attempts)
 
 
 def finalize_b1g_benchmark(

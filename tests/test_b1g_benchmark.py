@@ -16,6 +16,7 @@ from genomeos.validation.b1g_benchmark import (
     finalize_b1g_benchmark,
     plan_b1g_benchmark,
 )
+from genomeos.validation.b1g_fit import B1GConvergenceError
 from genomeos.validation.predictive import CountPredictive
 
 VARIANT = "chr11-5227002-T-A"
@@ -179,6 +180,96 @@ def test_five_outer_blocks_still_use_exactly_three_inner_folds():
     assert sum(len(blocks) for blocks in source_blocks) == 4
 
 
+def test_every_inner_and_outer_fit_gets_one_prespecified_convergence_retry():
+    observations, assignments = _inputs()
+    plan = plan_b1g_benchmark(
+        observations,
+        assignments,
+        (),
+        buffer_km=1.0,
+        data_version="fixture-v1",
+        config=_config(),
+        seed=42,
+    )
+    calls = []
+
+    def fit_function(training, *, basis_config, fit_config):
+        calls.append((tuple(sorted(training["source_record_id"])), basis_config, fit_config))
+        if len(calls) % 2:
+            raise B1GConvergenceError("synthetic first-attempt failure", GOOD_DIAGNOSTICS)
+        return SimpleNamespace(
+            basis_config=basis_config,
+            sampler_diagnostics=GOOD_DIAGNOSTICS,
+        )
+
+    _, _, predict_function = _fake_functions()
+    result = evaluate_b1g_fold(
+        plan,
+        plan.splits[0],
+        fit_function=fit_function,
+        predict_function=predict_function,
+    )
+
+    assert result.status.status == "completed"
+    assert len(calls) == 56  # 28 requested fits, each with one admitted retry.
+    all_attempts = [
+        inner.fit_attempts
+        for score in result.candidate_scores
+        for inner in score.inner_folds
+    ]
+    assert len(all_attempts) == 27
+    assert all(
+        tuple(attempt.status for attempt in attempts) == ("convergence_failed", "accepted")
+        for attempts in all_attempts
+    )
+    assert tuple(attempt.status for attempt in result.fit_attempts) == (
+        "convergence_failed",
+        "accepted",
+    )
+    assert set(result.predictions["fit_seed"]) == {result.fit_attempts[1].config.seed}
+    assert result.fit_attempts[1].config.draws == 2 * plan.config.fit_config.draws
+    assert result.fit_attempts[1].config.tune == 2 * plan.config.fit_config.tune
+
+
+def test_outer_prediction_failure_retains_accepted_fit_without_retry():
+    observations, assignments = _inputs()
+    plan = plan_b1g_benchmark(
+        observations,
+        assignments,
+        (),
+        buffer_km=1.0,
+        data_version="fixture-v1",
+        config=_config(),
+        seed=42,
+    )
+    fit_calls, fit_function, predict_function = _fake_functions()
+    predict_calls = []
+
+    def fail_outer_prediction(*args, **kwargs):
+        predict_calls.append((args, kwargs))
+        if len(predict_calls) == 28:
+            raise ArithmeticError("synthetic outer prediction failure")
+        return predict_function(*args, **kwargs)
+
+    result = evaluate_b1g_fold(
+        plan,
+        plan.splits[0],
+        fit_function=fit_function,
+        predict_function=fail_outer_prediction,
+    )
+
+    assert result.status.status == "failed"
+    assert result.status.failure_reason == "ArithmeticError: synthetic outer prediction failure"
+    assert len(fit_calls) == 28
+    assert len(predict_calls) == 28
+    assert tuple(attempt.status for attempt in result.fit_attempts) == (
+        "accepted",
+        "not_attempted",
+    )
+    assert result.fit_attempts[1].reason == "initial_accepted"
+    assert result.predictions.empty
+
+
 def test_inner_selection_skips_interval_diagnostics(monkeypatch):
     observations, assignments = _inputs()
     plan = plan_b1g_benchmark(
@@ -278,6 +369,10 @@ def test_failed_inner_candidate_is_preserved_and_cannot_win():
     assert {inner.status for inner in failed.inner_folds} == {"failed"}
     assert all(inner.sampler_diagnostics is None for inner in failed.inner_folds)
     assert all(inner.failure_reason for inner in failed.inner_folds)
+    assert all(
+        tuple(attempt.status for attempt in inner.fit_attempts) == ("failed", "not_attempted")
+        for inner in failed.inner_folds
+    )
     assert (result.status.selected_radius_km, result.status.selected_basis_count) == (1000.0, 8)
 
 
