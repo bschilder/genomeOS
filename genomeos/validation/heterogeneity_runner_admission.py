@@ -24,6 +24,10 @@ from genomeos.validation.heterogeneity_runner_records import (
     StorageAdmission,
 )
 from genomeos.validation.heterogeneity_runner_wire import sha256
+from genomeos.validation.numerical_runtime import (
+    NUMERICAL_THREAD_CAPS,
+    require_numerical_thread_caps,
+)
 
 
 def _json(value: object) -> bytes:
@@ -199,6 +203,7 @@ def _storage(parent: Path) -> StorageAdmission:
 
 
 def observe_b0h_admission(source_root: Path, database_parent: Path) -> AdmissionReceipt:
+    require_numerical_thread_caps()
     start = time.monotonic_ns()
     source = _source(source_root.resolve(strict=True))
     import cupy as cp
@@ -228,6 +233,7 @@ def observe_b0h_admission(source_root: Path, database_parent: Path) -> Admission
             "XLA_PYTHON_CLIENT_PREALLOCATE",
             "CUDA_VISIBLE_DEVICES",
             "PYTENSOR_FLAGS",
+            *(name for name, _ in NUMERICAL_THREAD_CAPS),
         )
     )
     driver = (

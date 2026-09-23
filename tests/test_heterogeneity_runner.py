@@ -70,6 +70,34 @@ def test_fresh_case_and_reuse_have_exact_counts(tmp_path, monkeypatch, study, ex
         assert tuple(s.encoded for s in loaded.stages) == tuple(s.encoded for s in result.stages)
 
 
+def test_stage_task_separates_start_science_and_publication(tmp_path, monkeypatch):
+    runner, counts = mocked_runner(monkeypatch)
+    manifest, admission, null = campaign(tmp_path)
+    case = dataset().case_id
+    with LocalB0HStore.create(
+        tmp_path / "study.sqlite3",
+        manifest=manifest,
+        admission=admission,
+        null=null,
+        owner_id="fixture-owner",
+    ) as store:
+        task = runner.prepare_b0h_stage(manifest, case, store)
+        assert type(task) is runner.B0HStageTask
+        assert task.start.key.stage == "generation"
+        assert counts == {"generation": 0, "fit": 0, "quantities": 0, "summary": 0}
+        assert store.stages(case)[0].completion is None
+
+        packet = runner.execute_b0h_stage(task)
+        assert packet.start == task.start
+        assert counts == {"generation": 1, "fit": 0, "quantities": 0, "summary": 0}
+        assert store.stages(case)[0].completion is None
+
+        store.publish_pending(packet)
+        loaded = runner.load_b0h_case(manifest, case, store)
+        assert loaded.stages[0].completion == packet.completion
+        assert loaded.stages[0].encoded == packet.encoded
+
+
 def test_only_completed_convergence_failure_admits_retry(tmp_path, monkeypatch):
     runner, counts = mocked_runner(monkeypatch, retry=True)
     manifest, admission, null = campaign(tmp_path)
