@@ -1,6 +1,7 @@
 """Build the population registry to parquet (design §6, P0). Usage:
 
     python scripts/build_registry.py --hgdp data/raw/hgdp_populations.tsv \
+        --wbbc-regions docs/research/wbbc-regions-2026-09-17.tsv \
         --release-version 0.1.0 --out data/registry-v1
 
 HGDP input must follow the curated five-column contract documented in
@@ -31,7 +32,7 @@ from genomeos.registry.release_contract import (
     identify_input,
     validate_release_version,
 )
-from genomeos.registry.sources import afnd, hgdp
+from genomeos.registry.sources import afnd, hgdp, wbbc
 
 
 def _release_version(value: str) -> str:
@@ -63,6 +64,11 @@ def main() -> None:
         help="curated HGDP TSV; see docs/hgdp-registry-input.md",
     )
     ap.add_argument("--afnd", type=Path)
+    ap.add_argument(
+        "--wbbc-regions",
+        type=Path,
+        help="reviewed four-row WBBC regional geography TSV",
+    )
     ap.add_argument("--release-version", type=_release_version, required=True)
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
@@ -97,6 +103,19 @@ def main() -> None:
             )
             print(report)
             loaded.append((afnd_populations, afnd_aliases))
+        if args.wbbc_regions is not None:
+            wbbc_snapshot, wbbc_input = _snapshot(
+                args.wbbc_regions, snapshot_dir, "wbbc-regions"
+            )
+            inputs.extend(
+                [
+                    wbbc_input,
+                    _implementation_input(
+                        "genomeos/registry/sources/wbbc.py", Path(wbbc.__file__).resolve()
+                    ),
+                ]
+            )
+            loaded.append(wbbc.load(wbbc_snapshot, args.release_version))
 
         populations, aliases = build_registry(loaded)
         manifest = publish_registry(

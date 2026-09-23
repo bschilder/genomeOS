@@ -1,0 +1,5 @@
+region	latitude	longitude	uncertainty_radius_km	member_divisions	provenance
+North	43.146298	109.721579	2025.000000	Gansu|Hebei|Heilongjiang|Henan|Inner Mongolia|Jilin|Liaoning|Ningxia|Qinghai|Shaanxi|Shandong|Shanxi|Tianjin	doi:10.1038/s41467-022-30526-x;natural-earth:v5.1.1:ne_10m_admin_1_states_provinces
+Central	32.235380	118.341915	350.000000	Anhui|Jiangsu	doi:10.1038/s41467-022-30526-x;natural-earth:v5.1.1:ne_10m_admin_1_states_provinces
+South	28.503013	109.420054	1300.000000	Chongqing|Fujian|Guizhou|Hubei|Hunan|Jiangxi|Sichuan|Yunnan|Zhejiang	doi:10.1038/s41467-022-30526-x;natural-earth:v5.1.1:ne_10m_admin_1_states_provinces
+Lingnan	23.876558	110.815613	650.000000	Guangxi|Guangdong|Hainan	doi:10.1038/s41467-022-30526-x;natural-earth:v5.1.1:ne_10m_admin_1_states_provinces
