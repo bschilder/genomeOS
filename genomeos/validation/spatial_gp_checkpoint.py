@@ -143,7 +143,8 @@ def build_checkpoint_header(
     return {**body, "header_sha256": _canonical_hash(body)}
 
 
-def _validate_header(document: object) -> dict[str, object]:
+def validate_checkpoint_header(document: object) -> dict[str, object]:
+    """Return a validated immutable checkpoint identity document."""
     if not isinstance(document, dict) or set(document) != set(_HEADER_FIELDS):
         raise ValueError("checkpoint header fields are invalid")
     body = {field: document[field] for field in _HEADER_BODY_FIELDS}
@@ -208,7 +209,7 @@ def _supplied_split_record(split: BenchmarkSplit) -> dict[str, object]:
 
 def validate_checkpoint_splits(header: Mapping[str, object], splits: Sequence[BenchmarkSplit]) -> None:
     """Bind the complete supplied split sequence, in order, to the frozen header."""
-    validated = _validate_header(dict(header))
+    validated = validate_checkpoint_header(dict(header))
     supplied = [_supplied_split_record(split) for split in splits]
     if _canonical_bytes(supplied) != _canonical_bytes(validated["planned_splits"]):
         raise ValueError("supplied splits do not match the complete ordered frozen split ledger")
@@ -287,7 +288,7 @@ def _read_json(path: Path) -> dict[str, object]:
 def initialize_checkpoint(path: Path, header: Mapping[str, object]) -> None:
     """Create a new checkpoint directory and publish its immutable identity."""
     path = Path(path)
-    validated = _validate_header(dict(header))
+    validated = validate_checkpoint_header(dict(header))
     if path.exists():
         raise ValueError(f"checkpoint directory already exists: {path}")
     path.mkdir(parents=True, exist_ok=False)
@@ -371,7 +372,7 @@ def write_fold_checkpoint(
     folds = root / FOLD_DIRECTORY
     if not (root / HEADER_FILENAME).is_file() or not folds.is_dir():
         raise ValueError(f"checkpoint directory is incomplete: {root}")
-    header = _validate_header(_read_json(root / HEADER_FILENAME))
+    header = validate_checkpoint_header(_read_json(root / HEADER_FILENAME))
     planned = header["planned_splits"]
     if isinstance(ordinal, bool) or not isinstance(ordinal, Integral) or not 0 <= ordinal < len(planned):
         raise ValueError("fold ordinal must be an integer within the frozen split ledger")
@@ -462,8 +463,8 @@ def load_fold_checkpoints(
     folds = root / FOLD_DIRECTORY
     if not folds.is_dir():
         raise ValueError("checkpoint fold directory is missing")
-    actual_header = _validate_header(_read_json(root / HEADER_FILENAME))
-    expected = _validate_header(dict(expected_header))
+    actual_header = validate_checkpoint_header(_read_json(root / HEADER_FILENAME))
+    expected = validate_checkpoint_header(dict(expected_header))
     if actual_header != expected:
         raise ValueError("checkpoint header mismatch; resume identity changed")
     max_rhat, min_ess = _convergence_limits(actual_header)
