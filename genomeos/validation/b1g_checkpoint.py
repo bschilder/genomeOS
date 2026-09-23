@@ -42,13 +42,18 @@ from genomeos.validation.b1g_benchmark import (
     B1GInnerFoldRecord,
     finalize_b1g_benchmark,
 )
+from genomeos.validation.nested_folds import (
+    THREE_INNER_FOLD_ALGORITHM,
+    THREE_INNER_FOLD_COUNT,
+    plan_three_inner_folds,
+)
 from genomeos.validation.spatial_gp_checkpoint import (
     FOLD_DIRECTORY,
     HEADER_FILENAME,
     validate_checkpoint_splits,
 )
 
-SHARD_SCHEMA_VERSION = 1
+SHARD_SCHEMA_VERSION = 2
 _BODY_FIELDS = (
     "schema_version",
     "ordinal",
@@ -261,7 +266,73 @@ def _validate_result(
         actual_candidates != expected_tuples or len(result.candidate_scores) != len(expected_tuples)
     ):
         raise ValueError("B1G fold must retain every fixed-grid candidate exactly once")
+    expected_inner_evidence: tuple[tuple[str, tuple[str, ...], str, str], ...] | None = None
+    expected_test_ids: dict[str, tuple[str, ...]] = {}
+    if grid_was_started:
+        training_ids = set(split.train_ids)
+        outer_assignments = plan.assignments[
+            plan.assignments["source_record_id"].isin(training_ids)
+        ].loc[:, ["source_record_id", "block_id"]]
+        grouping = plan_three_inner_folds(outer_assignments)
+        expected_inner_evidence = tuple(
+            (
+                group.inner_block_id,
+                group.source_block_ids,
+                grouping.algorithm,
+                grouping.grouping_sha256,
+            )
+            for group in grouping.groups
+        )
+        expected_test_ids = {
+            group.inner_block_id: tuple(
+                sorted(
+                    outer_assignments.loc[
+                        outer_assignments["block_id"].isin(group.source_block_ids),
+                        "source_record_id",
+                    ]
+                )
+            )
+            for group in grouping.groups
+        }
     for score in result.candidate_scores:
+        if len(score.inner_folds) != THREE_INNER_FOLD_COUNT:
+            raise ValueError("B1G candidate must retain exactly three inner folds")
+        inner_evidence = tuple(
+            (
+                inner.inner_block_id,
+                inner.source_block_ids,
+                inner.grouping_algorithm,
+                inner.grouping_sha256,
+            )
+            for inner in score.inner_folds
+        )
+        if inner_evidence != expected_inner_evidence:
+            raise ValueError("B1G candidate disagrees with the frozen inner-fold grouping")
+        if {inner.inner_block_id for inner in score.inner_folds} != {
+            f"inner-{index}" for index in range(THREE_INNER_FOLD_COUNT)
+        }:
+            raise ValueError("B1G candidate inner-fold labels are invalid")
+        if {inner.grouping_algorithm for inner in score.inner_folds} != {
+            THREE_INNER_FOLD_ALGORITHM
+        }:
+            raise ValueError("B1G candidate inner-fold algorithm is invalid")
+        grouping_hashes = {inner.grouping_sha256 for inner in score.inner_folds}
+        if len(grouping_hashes) != 1 or any(
+            len(value) != 64 or any(character not in "0123456789abcdef" for character in value)
+            for value in grouping_hashes
+        ):
+            raise ValueError("B1G candidate inner-fold grouping hash is invalid")
+        source_blocks = [
+            source_block_id
+            for inner in score.inner_folds
+            for source_block_id in inner.source_block_ids
+        ]
+        if (
+            not all(isinstance(value, str) and value.strip() for value in source_blocks)
+            or len(source_blocks) != len(set(source_blocks))
+            or any(not inner.source_block_ids for inner in score.inner_folds)
+        ):
+            raise ValueError("B1G candidate source blocks are not partitioned exactly once")
         completed = sum(inner.status == "completed" for inner in score.inner_folds)
         failed = len(score.inner_folds) - completed
         if (completed, failed) != (
@@ -270,6 +341,8 @@ def _validate_result(
         ):
             raise ValueError("B1G candidate inner-fold counts contradict retained records")
         for inner in score.inner_folds:
+            if inner.expected_test_ids != expected_test_ids[inner.inner_block_id]:
+                raise ValueError("B1G inner fold contradicts its frozen source-block membership")
             if inner.status == "completed":
                 if inner.sampler_diagnostics is None:
                     raise ValueError("completed B1G inner fold lacks sampler diagnostics")
@@ -399,6 +472,7 @@ def _decode_candidate(value: object) -> B1GCandidateScore:
             raise ValueError("B1G inner-fold record must be an object")
         item = dict(record)
         item["expected_test_ids"] = tuple(item["expected_test_ids"])
+        item["source_block_ids"] = tuple(item["source_block_ids"])
         item["sampler_diagnostics"] = _decode_diagnostics(item["sampler_diagnostics"])
         inner_folds.append(B1GInnerFoldRecord(**item))
     fields["failure_reasons"] = tuple(fields["failure_reasons"])

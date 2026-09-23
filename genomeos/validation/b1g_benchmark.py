@@ -36,6 +36,12 @@ from genomeos.validation.benchmark import (
     validate_predictive_diagnostics,
 )
 from genomeos.validation.local_count_selection import validate_local_count_assignments
+from genomeos.validation.nested_folds import (
+    THREE_INNER_FOLD_ALGORITHM,
+    THREE_INNER_FOLD_COUNT,
+    apply_three_inner_folds,
+    plan_three_inner_folds,
+)
 from genomeos.validation.predictive import predictive_diagnostics
 from genomeos.validation.splits import BenchmarkSplit, build_buffered_splits
 
@@ -115,6 +121,10 @@ class B1GInnerFoldRecord:
     predictive_seed: int
     sampler_diagnostics: SamplerDiagnostics | None
     failure_reason: str | None
+    inner_block_id: str
+    source_block_ids: tuple[str, ...]
+    grouping_algorithm: str
+    grouping_sha256: str
 
 
 @dataclass(frozen=True)
@@ -392,15 +402,25 @@ def _select_candidate(
     predict_function: PredictFunction,
 ) -> B1GSelection:
     try:
+        grouping = plan_three_inner_folds(
+            assignments.loc[:, ["source_record_id", "block_id"]]
+        )
+        grouped_assignments = apply_three_inner_folds(
+            assignments.loc[:, ["source_record_id", "block_id"]],
+            grouping,
+        )
         inner_splits = build_buffered_splits(
             training,
-            assignments.loc[:, ["source_record_id", "block_id"]],
+            grouped_assignments,
             dependencies,
             buffer_km=buffer_km,
             data_version=data_version,
         )
+        if len(inner_splits) != THREE_INNER_FOLD_COUNT:
+            raise ValueError("inner split planning did not produce exactly three folds")
     except ValueError as error:
         raise B1GSelectionError(f"inner split planning failed: {error}", ()) from error
+    groups_by_id = {group.inner_block_id: group for group in grouping.groups}
     by_id = training.set_index("source_record_id", drop=False)
     scores: list[B1GCandidateScore] = []
     for basis_config in config.candidate_configs:
@@ -408,6 +428,7 @@ def _select_candidate(
         failures = []
         inner_records: list[B1GInnerFoldRecord] = []
         for split in inner_splits:
+            group = groups_by_id[split.block_id]
             fit_seed = derive_b1g_seed(
                 seed, split.split_id, basis_config.radius_km, basis_config.basis_count, "fit"
             )
@@ -450,6 +471,10 @@ def _select_candidate(
                         predictive_seed,
                         diagnostics,
                         None,
+                        split.block_id,
+                        group.source_block_ids,
+                        THREE_INNER_FOLD_ALGORITHM,
+                        grouping.grouping_sha256,
                     )
                 )
             except Exception as error:
@@ -467,6 +492,10 @@ def _select_candidate(
                         predictive_seed,
                         diagnostics,
                         reason,
+                        split.block_id,
+                        group.source_block_ids,
+                        THREE_INNER_FOLD_ALGORITHM,
+                        grouping.grouping_sha256,
                     )
                 )
         predictions = pd.concat(frames, ignore_index=True) if frames else _empty_predictions()

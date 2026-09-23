@@ -20,6 +20,10 @@ from genomeos.validation.b1g_benchmark import (
     B1GFoldStatus,
     B1GInnerFoldRecord,
 )
+from genomeos.validation.nested_folds import (
+    THREE_INNER_FOLD_ALGORITHM,
+    plan_three_inner_folds,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "benchmark_b1g.py"
@@ -135,28 +139,42 @@ def _fake_fold(plan, split):
         "randomized_pit": 0.5,
     }
     candidates = []
+    grouping = plan_three_inner_folds(
+        plan.assignments[
+            plan.assignments["source_record_id"].isin(split.train_ids)
+        ].loc[:, ["source_record_id", "block_id"]]
+    )
     for index, config in enumerate(plan.config.candidate_configs):
-        inner = B1GInnerFoldRecord(
-            f"inner-{index}",
-            "completed",
-            (f"inner-test-{index}",),
-            index + 100,
-            index + 200,
-            GOOD,
-            None,
+        inner_folds = tuple(
+            B1GInnerFoldRecord(
+                f"inner-{inner_index}",
+                "completed",
+                tuple(
+                    f"obs-{block}" for block in grouping.groups[inner_index].source_block_ids
+                ),
+                index * 10 + inner_index + 100,
+                index * 10 + inner_index + 200,
+                GOOD,
+                None,
+                f"inner-{inner_index}",
+                grouping.groups[inner_index].source_block_ids,
+                THREE_INNER_FOLD_ALGORITHM,
+                grouping.grouping_sha256,
+            )
+            for inner_index in range(3)
         )
         candidates.append(
             B1GCandidateScore(
                 config.radius_km,
                 config.basis_count,
-                1,
-                1,
+                3,
+                3,
                 -1.0,
-                1,
+                3,
                 0,
                 (),
                 True,
-                (inner,),
+                inner_folds,
             )
         )
     return B1GFoldResult(
@@ -199,9 +217,11 @@ def test_runner_initializes_parallel_folds_and_atomic_final_publication(tmp_path
     candidates = pd.read_csv(output / "candidate_scores.tsv", sep="\t")
     inner = pd.read_csv(output / "inner_folds.tsv", sep="\t")
     assert len(candidates) == 36
-    assert len(inner) == 36
+    assert len(inner) == 108
     assert json.loads(candidates.iloc[0]["failure_reasons"]) == []
     assert len(json.loads(inner.iloc[0]["expected_test_ids"])) == 1
+    assert len(json.loads(inner.iloc[0]["source_block_ids"])) == 1
+    assert set(inner["grouping_algorithm"]) == {THREE_INNER_FOLD_ALGORITHM}
     manifest = json.loads((output / "manifest.json").read_text())
     assert manifest["model"]["model_id"] == "B1G"
     assert manifest["publication_eligible"] is False
@@ -209,6 +229,11 @@ def test_runner_initializes_parallel_folds_and_atomic_final_publication(tmp_path
         "basis_counts": [8, 16, 32],
         "radii_km": [500.0, 1000.0, 2000.0],
     }
+    assert manifest["configuration"]["inner_fold_protocol"] == {
+        "algorithm": THREE_INNER_FOLD_ALGORITHM,
+        "fold_count": 3,
+    }
+    assert "genomeos/validation/nested_folds.py" in manifest["science_source_sha256"]
     assert len(manifest["folds"]) == 4
     assert {fold["runtime"]["device"] for fold in manifest["folds"]} == {
         "synthetic-device"
