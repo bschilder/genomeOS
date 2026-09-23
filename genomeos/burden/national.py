@@ -1,9 +1,9 @@
 """National burden totals from a fitted surface (design §8, §9, §10, P3).
 
-The missing middle of golden test 1: §8 has an input (332 georeferenced MAP HbS surveys, #91), a
-target (Piel et al.'s 191 national estimates, #93) and a scorer (`validation.hbs_parity`), and
-this is what turns a fitted surface into the one AS/SS neonate number per country the scorer
-consumes.
+The missing middle of golden test 1: §8 has a declared Piel-comparable HbS survey subset as input
+(currently 994 georeferenced observations), a target (Piel et al.'s 191 national estimates, #93)
+and a scorer (`validation.hbs_parity`), and this is what turns a fitted surface into the one AS/SS
+neonate number per country the scorer consumes.
 
 **Population-weighted, never a centroid value.** Evaluating the surface at a country centroid is
 the shortcut, and it fails worst exactly where the answer matters: Nigeria, India and the DRC
@@ -24,7 +24,8 @@ over cells — births in the cell × affected frequency in the cell — and that
 This is why the input is `frequency_draws` rather than a fitted surface object: the summaries a
 surface exposes per cell cannot be re-summed into a national interval, and a function that
 accepted them would be quietly computing the wrong thing. `SurfaceFit` currently exposes only
-those summaries, so a real run waits on #112.
+those summaries through its ordinary prediction interface; the offline parity exporter therefore
+retains identical posterior rows across all prediction blocks before calling this module.
 
 **Partial coverage is the hard part, and it is governed by population, not by area.** Most
 countries have a posterior for some cells and a masked one (`unknown`, `prior_dominated`) for the
