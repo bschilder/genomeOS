@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 import pandas as pd
@@ -13,12 +13,14 @@ import pytest
 
 from genomeos.surfaces.config import FitConfig
 from genomeos.surfaces.convergence import SamplerDiagnostics
+from genomeos.validation.b1g_attempt import B1GFitAttempt
 from genomeos.validation.b1g_benchmark import (
     PREDICTION_COLUMNS,
     B1GCandidateScore,
     B1GFoldResult,
     B1GFoldStatus,
     B1GInnerFoldRecord,
+    derive_b1g_seed,
 )
 from genomeos.validation.nested_folds import (
     THREE_INNER_FOLD_ALGORITHM,
@@ -110,6 +112,11 @@ def _arguments(paths: dict[str, Path], checkpoint: Path) -> list[str]:
 
 def _fake_fold(plan, split):
     ordinal = plan.splits.index(split)
+    selection_seed = derive_b1g_seed(plan.seed, split.split_id, "selection")
+    outer_initial_seed = derive_b1g_seed(plan.seed, split.split_id, 500.0, 8, "fit")
+    outer_retry_seed = derive_b1g_seed(
+        plan.seed, split.split_id, 500.0, 8, "fit", "retry"
+    )
     record_id = split.test_ids[0]
     observation = plan.observations.set_index("source_record_id").loc[record_id]
     assignment = plan.assignments.set_index("source_record_id").loc[record_id]
@@ -125,7 +132,7 @@ def _fake_fold(plan, split):
         "observed_an": int(observation["an"]),
         "basis_radius_km": 500.0,
         "basis_count": 8,
-        "fit_seed": ordinal + 10,
+        "fit_seed": outer_initial_seed,
         "predictive_seed": ordinal + 20,
         "log_score": -1.0,
         "absolute_error": 0.01,
@@ -144,7 +151,7 @@ def _fake_fold(plan, split):
             plan.assignments["source_record_id"].isin(split.train_ids)
         ].loc[:, ["source_record_id", "block_id"]]
     )
-    for index, config in enumerate(plan.config.candidate_configs):
+    for config in plan.config.candidate_configs:
         inner_folds = tuple(
             B1GInnerFoldRecord(
                 f"inner-{inner_index}",
@@ -152,14 +159,63 @@ def _fake_fold(plan, split):
                 tuple(
                     f"obs-{block}" for block in grouping.groups[inner_index].source_block_ids
                 ),
-                index * 10 + inner_index + 100,
-                index * 10 + inner_index + 200,
+                derive_b1g_seed(
+                    selection_seed,
+                    f"inner-{inner_index}",
+                    config.radius_km,
+                    config.basis_count,
+                    "fit",
+                ),
+                derive_b1g_seed(
+                    selection_seed,
+                    f"inner-{inner_index}",
+                    config.radius_km,
+                    config.basis_count,
+                    "predictive",
+                ),
                 GOOD,
                 None,
                 f"inner-{inner_index}",
                 grouping.groups[inner_index].source_block_ids,
                 THREE_INNER_FOLD_ALGORITHM,
                 grouping.grouping_sha256,
+                (
+                    B1GFitAttempt(
+                        "initial",
+                        replace(
+                            plan.config.fit_config,
+                            seed=derive_b1g_seed(
+                                selection_seed,
+                                f"inner-{inner_index}",
+                                config.radius_km,
+                                config.basis_count,
+                                "fit",
+                            ),
+                        ),
+                        "accepted",
+                        None,
+                        GOOD,
+                    ),
+                    B1GFitAttempt(
+                        "retry",
+                        replace(
+                            plan.config.fit_config,
+                            draws=2 * plan.config.fit_config.draws,
+                            tune=2 * plan.config.fit_config.tune,
+                            seed=derive_b1g_seed(
+                                selection_seed,
+                                f"inner-{inner_index}",
+                                config.radius_km,
+                                config.basis_count,
+                                "fit",
+                                "retry",
+                            ),
+                        ),
+                        "not_attempted",
+                        "initial_accepted",
+                        None,
+                    ),
+                ),
             )
             for inner_index in range(3)
         )
@@ -182,6 +238,27 @@ def _fake_fold(plan, split):
         pd.DataFrame.from_records([row], columns=PREDICTION_COLUMNS),
         tuple(candidates),
         GOOD,
+        (
+            B1GFitAttempt(
+                "initial",
+                replace(plan.config.fit_config, seed=outer_initial_seed),
+                "accepted",
+                None,
+                GOOD,
+            ),
+            B1GFitAttempt(
+                "retry",
+                replace(
+                    plan.config.fit_config,
+                    draws=2 * plan.config.fit_config.draws,
+                    tune=2 * plan.config.fit_config.tune,
+                    seed=outer_retry_seed,
+                ),
+                "not_attempted",
+                "initial_accepted",
+                None,
+            ),
+        ),
     )
 
 
@@ -221,6 +298,13 @@ def test_runner_initializes_parallel_folds_and_atomic_final_publication(tmp_path
     assert json.loads(candidates.iloc[0]["failure_reasons"]) == []
     assert len(json.loads(inner.iloc[0]["expected_test_ids"])) == 1
     assert len(json.loads(inner.iloc[0]["source_block_ids"])) == 1
+    assert [
+        attempt["status"] for attempt in json.loads(inner.iloc[0]["fit_attempts"])
+    ] == ["accepted", "not_attempted"]
+    folds = pd.read_csv(output / "fold_status.tsv", sep="\t")
+    assert [
+        attempt["status"] for attempt in json.loads(folds.iloc[0]["fit_attempts"])
+    ] == ["accepted", "not_attempted"]
     assert set(inner["grouping_algorithm"]) == {THREE_INNER_FOLD_ALGORITHM}
     manifest = json.loads((output / "manifest.json").read_text())
     assert manifest["model"]["model_id"] == "B1G"
@@ -233,6 +317,13 @@ def test_runner_initializes_parallel_folds_and_atomic_final_publication(tmp_path
         "algorithm": THREE_INNER_FOLD_ALGORITHM,
         "fold_count": 3,
     }
+    assert manifest["configuration"]["fit_retry_protocol"] == {
+        "admission_error": "B1GConvergenceError",
+        "draws_multiplier": 2,
+        "maximum_retries": 1,
+        "tune_multiplier": 2,
+    }
+    assert "genomeos/validation/b1g_attempt.py" in manifest["science_source_sha256"]
     assert "genomeos/validation/nested_folds.py" in manifest["science_source_sha256"]
     assert len(manifest["folds"]) == 4
     assert {fold["runtime"]["device"] for fold in manifest["folds"]} == {
