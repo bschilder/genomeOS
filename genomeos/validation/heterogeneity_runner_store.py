@@ -308,6 +308,7 @@ class LocalB0HStore:
         receipt: EvidenceReceipt | None,
         encoded: EncodedB0HEvidence | None,
         failure: StageExecutionFailure | None,
+        allow_prior_owner: bool = False,
     ) -> None:
         self._require_open()
         if self._db.in_transaction:
@@ -358,7 +359,7 @@ class LocalB0HStore:
 
         if matches():
             return
-        if start.owner_id != self.owner_id:
+        if start.owner_id != self.owner_id and not allow_prior_owner:
             raise StoreIntegrityError("only live START owner publishes new evidence")
 
         def write():
@@ -438,6 +439,19 @@ class LocalB0HStore:
             receipt=packet.receipt,
             encoded=packet.encoded,
             failure=packet.failure,
+        )
+
+    def publish_recovered(self, packet: PublicationPacket) -> None:
+        """Publish exact durable bytes after the original process exclusion ended."""
+        if type(packet) is not PublicationPacket or packet.start.owner_id == self.owner_id:
+            raise StoreIntegrityError("recovered publication requires a prior owner packet")
+        self._complete(
+            packet.start,
+            packet.completion,
+            receipt=packet.receipt,
+            encoded=packet.encoded,
+            failure=packet.failure,
+            allow_prior_owner=True,
         )
 
     def record_owner_loss(self, start: StageStart) -> OwnerLoss:

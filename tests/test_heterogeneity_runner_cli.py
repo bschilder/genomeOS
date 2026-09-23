@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -25,6 +29,69 @@ def test_help_is_offline(capsys):
         cli.main(["--help"])
     assert exited.value.code == 0
     assert "prepare" in capsys.readouterr().out
+
+
+def test_executable_bootstrap_sets_numerical_thread_caps_before_cli_imports():
+    path = Path(__file__).parents[1] / "scripts/run_b0h_calibration.py"
+    probe = (
+        "import json,os,runpy,sys; "
+        f"sys.argv=[{str(path)!r},'--help']; "
+        "\ntry: runpy.run_path(sys.argv[0],run_name='__main__')"
+        "\nexcept SystemExit: pass"
+        "\nprint('CAPS='+json.dumps({k:os.environ.get(k) for k in "
+        "('OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','NUMEXPR_NUM_THREADS')},"
+        "sort_keys=True))"
+    )
+    environment = dict(os.environ)
+    for name in ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS"):
+        environment.pop(name, None)
+    result = subprocess.run(
+        [sys.executable, "-c", probe],
+        cwd=path.parents[1],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    marker = next(line for line in result.stdout.splitlines() if line.startswith("CAPS="))
+    assert json.loads(marker.removeprefix("CAPS=")) == {
+        "MKL_NUM_THREADS": "1",
+        "NUMEXPR_NUM_THREADS": "1",
+        "OMP_NUM_THREADS": "1",
+        "OPENBLAS_NUM_THREADS": "1",
+    }
+
+
+def test_worker_configuration_selects_serial_or_concurrent_path(tmp_path, monkeypatch):
+    cli = command()
+    assert cli.DEFAULT_WORKERS == 5
+    manifest = type("Manifest", (), {"cases": ("case-a", "case-b")})()
+    store = object()
+    observed = []
+    monkeypatch.setattr(
+        cli,
+        "execute_b0h_case",
+        lambda received_manifest, case, received_store: observed.append(
+            ("serial", received_manifest, case, received_store)
+        ),
+    )
+    monkeypatch.setattr(
+        cli,
+        "run_b0h_concurrent",
+        lambda received_manifest, received_store, spool, *, workers: observed.append(
+            ("concurrent", received_manifest, received_store, spool, workers)
+        ),
+    )
+
+    cli.run_campaign(manifest, store, workers=1, spool=tmp_path / "spool")
+    assert [row[2] for row in observed] == ["case-a", "case-b"]
+    observed.clear()
+    cli.run_campaign(manifest, store, workers=3, spool=tmp_path / "spool")
+    assert observed == [("concurrent", manifest, store, tmp_path / "spool", 3)]
+
+    with pytest.raises(ValueError, match="positive"):
+        cli.run_campaign(manifest, store, workers=0, spool=tmp_path / "spool")
 
 
 def test_pending_publication_retries_same_packet_only(tmp_path, monkeypatch):

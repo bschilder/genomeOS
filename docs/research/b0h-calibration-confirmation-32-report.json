@@ -1,0 +1,473 @@
+{
+  "aggregates": [
+    {
+      "cost_per_case_usd": 0.011113779363236001,
+      "cost_ratio_vs_serial": 1.0,
+      "elapsed_seconds": 805.2247689589858,
+      "elapsed_seconds_range": [
+        802.798469144851,
+        807.6510687731206
+      ],
+      "gpu_memory_peak_mib": 690.0,
+      "gpu_utilization_mean_percent": 10.421481639538166,
+      "gpu_utilization_p95_percent": 76.0,
+      "host_memory_used_peak_bytes": 99706843136.0,
+      "meets_acceptance": false,
+      "process_cpu_mean_percent": 147.67549777562306,
+      "process_rss_peak_bytes": 3626586112.0,
+      "process_threads_peak": 348.0,
+      "repetition_count": 2,
+      "speedup_vs_serial": 1.0,
+      "throughput_cases_per_hour": 143.06694278587688,
+      "throughput_range": [
+        142.63585408856943,
+        143.49803148318432
+      ],
+      "within_best_throughput_fraction": 0.49747550643406,
+      "workers": 1
+    },
+    {
+      "cost_per_case_usd": 0.00556155904396049,
+      "cost_ratio_vs_serial": 0.5004201417168616,
+      "elapsed_seconds": 402.9506929963827,
+      "elapsed_seconds_range": [
+        400.86615934222937,
+        405.03522665053606
+      ],
+      "gpu_memory_peak_mib": 2650.0,
+      "gpu_utilization_mean_percent": 66.02141195091926,
+      "gpu_utilization_p95_percent": 100.0,
+      "host_memory_used_peak_bytes": 105567531008.0,
+      "meets_acceptance": false,
+      "process_cpu_mean_percent": 428.8850037103327,
+      "process_rss_peak_bytes": 8600801280.0,
+      "process_threads_peak": 1307.0,
+      "repetition_count": 2,
+      "speedup_vs_serial": 1.9983561800951688,
+      "throughput_cases_per_hour": 285.898709283479,
+      "throughput_range": [
+        284.4197057936258,
+        287.3777127733322
+      ],
+      "within_best_throughput_fraction": 0.9941332527284777,
+      "workers": 4
+    },
+    {
+      "cost_per_case_usd": 0.005537918458872688,
+      "cost_ratio_vs_serial": 0.4982929998765255,
+      "elapsed_seconds": 401.23786569945514,
+      "elapsed_seconds_range": [
+        384.94122386723757,
+        417.5345075316727
+      ],
+      "gpu_memory_peak_mib": 3663.0,
+      "gpu_utilization_mean_percent": 66.17533854558897,
+      "gpu_utilization_p95_percent": 100.0,
+      "host_memory_used_peak_bytes": 108271230976.0,
+      "meets_acceptance": true,
+      "process_cpu_mean_percent": 513.1939669535475,
+      "process_rss_peak_bytes": 10063941632.0,
+      "process_threads_peak": 1614.0,
+      "repetition_count": 2,
+      "speedup_vs_serial": 2.01014921753248,
+      "throughput_cases_per_hour": 287.5859030957945,
+      "throughput_range": [
+        275.9053393718873,
+        299.26646681970163
+      ],
+      "within_best_throughput_fraction": 1.0,
+      "workers": 5
+    }
+  ],
+  "analysis_role": "performance_only_not_scientific_evidence",
+  "case_count_per_run": 32,
+  "cost_per_hour_usd": 1.59,
+  "execution_equivalence": {
+    "all_classification_sha256_equal": true,
+    "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703"
+  },
+  "format": "b0h-calibration-optimization-report",
+  "hardware": {
+    "cupy": {
+      "active_device_id": 0,
+      "device_count": 1,
+      "probe_device_id": 0,
+      "probe_dtype": "float64"
+    },
+    "format": "b0h-comparison-hardware-attestation",
+    "gpu": {
+      "driver_version": "580.126.16",
+      "memory_free_mib": 80651,
+      "memory_total_mib": 81920,
+      "name": "NVIDIA A100-SXM4-80GB"
+    },
+    "jax": {
+      "default_backend": "gpu",
+      "devices": [
+        {
+          "device_kind": "NVIDIA A100-SXM4-80GB",
+          "id": 0,
+          "platform": "gpu"
+        }
+      ],
+      "enable_x64": true,
+      "probe_device": "cuda:0",
+      "probe_dtype": "float64"
+    },
+    "packages": {
+      "cupy-cuda12x": "14.2.0",
+      "jax": "0.11.1",
+      "jaxlib": "0.11.1",
+      "numpy": "2.4.6",
+      "numpyro": "0.21.0",
+      "pandas": "3.0.5",
+      "pymc": "6.3.2",
+      "pytensor": "3.3.2",
+      "scipy": "1.18.1"
+    },
+    "python": "3.12.3",
+    "python_executable": "/usr/bin/python3.12",
+    "version": "3r15"
+  },
+  "input_files": {
+    "campaign_result": {
+      "sha256": "2e257811a16d1d4cd841c6c1b48de921fec6b44f204205b0809d2318ef70c93c",
+      "size_bytes": 752
+    },
+    "hardware_attestation": {
+      "sha256": "94ef2a114af5918880387de44fe204460a1230040e91f84691b370b4690af86c",
+      "size_bytes": 682
+    }
+  },
+  "raw_science_reproducibility": {
+    "all_science_sha256_equal": false,
+    "unique_science_sha256_count": 6
+  },
+  "runs": [
+    {
+      "case_count": 32,
+      "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703",
+      "cost_per_case_usd": 0.011147267355462342,
+      "cpu_transition_correction": {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 3,
+        "observed_interval_count": 775
+      },
+      "elapsed_seconds": 807.6510687731206,
+      "gpu_memory_peak_mib": 690.0,
+      "gpu_power_mean_watts": 95.22871134020617,
+      "gpu_utilization_max_percent": 80.0,
+      "gpu_utilization_mean_percent": 10.271907216494846,
+      "gpu_utilization_p95_percent": 76.0,
+      "host_load_1m_peak": 36.42,
+      "host_memory_used_peak_bytes": 97818365952.0,
+      "identity": "workers-1-repeat-1",
+      "input_files": {
+        "calibration_result": {
+          "sha256": "f8060956f84dac97b606a369966e2f028bee5547342d95e235d74898bd2d3fdc",
+          "size_bytes": 129308
+        },
+        "telemetry_samples": {
+          "sha256": "b9caeeb8af40c65b40136a9c210f26aab2d4c56e27d2886a47396e1cadfe3fdf",
+          "size_bytes": 318303
+        },
+        "telemetry_summary": {
+          "sha256": "e8dc7045e52598b02e0ee5a03a862c9652c2890aaa8da3f5977a9684dc309a42",
+          "size_bytes": 1083
+        }
+      },
+      "process_cpu_max_percent": 559.9308640411449,
+      "process_cpu_mean_percent": 147.50869264313732,
+      "process_rss_peak_bytes": 3626586112.0,
+      "process_threads_peak": 348.0,
+      "read_bytes_final": 0.0,
+      "repetition": 1,
+      "science_elapsed_seconds": 796.6798314489424,
+      "science_sha256": "2675838aea3ed9889cb192c51e8dc4de79bc84f6826e25e19915872b3b77816b",
+      "store_inventory_sha256": "716878275a886a9f3b8eb7244491929a57b2c088ccf997733bd60fb10efbc70b",
+      "throughput_cases_per_hour": 142.63585408856943,
+      "workers": 1,
+      "write_bytes_final": 0.0
+    },
+    {
+      "case_count": 32,
+      "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703",
+      "cost_per_case_usd": 0.0055327881367547285,
+      "cpu_transition_correction": {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 2,
+        "observed_interval_count": 382
+      },
+      "elapsed_seconds": 400.86615934222937,
+      "gpu_memory_peak_mib": 2644.0,
+      "gpu_power_mean_watts": 112.92028720626632,
+      "gpu_utilization_max_percent": 100.0,
+      "gpu_utilization_mean_percent": 64.84334203655352,
+      "gpu_utilization_p95_percent": 100.0,
+      "host_load_1m_peak": 14.73,
+      "host_memory_used_peak_bytes": 100262219776.0,
+      "identity": "workers-4-repeat-1",
+      "input_files": {
+        "calibration_result": {
+          "sha256": "36657411f412348d12b1019873b071580e6f5d007159820218ac251edb17dbd4",
+          "size_bytes": 129309
+        },
+        "telemetry_samples": {
+          "sha256": "9c82f293546df4b2e64aa35610a4042b2c43bbb544e20d79ea45ab9d0e55b655",
+          "size_bytes": 157983
+        },
+        "telemetry_summary": {
+          "sha256": "2e9db2144de37d2d21ca6c8e56c4309def6a3d12d93a98bfeb2a7f22aa6f26c8",
+          "size_bytes": 1088
+        }
+      },
+      "process_cpu_max_percent": 1367.9949692709538,
+      "process_cpu_mean_percent": 426.67720425675236,
+      "process_rss_peak_bytes": 8573722624.0,
+      "process_threads_peak": 1307.0,
+      "read_bytes_final": 0.0,
+      "repetition": 1,
+      "science_elapsed_seconds": 394.46515522524714,
+      "science_sha256": "496712e1f8a8cd2074408388b20ebdb646ccb05ea2b49ccd46681f144cd0fcd9",
+      "store_inventory_sha256": "629a53eacc6b618258e738bf399d6548afc26ea2900c80cb9d4608479454a181",
+      "throughput_cases_per_hour": 287.3777127733322,
+      "workers": 4,
+      "write_bytes_final": 0.0
+    },
+    {
+      "case_count": 32,
+      "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703",
+      "cost_per_case_usd": 0.005312990850250936,
+      "cpu_transition_correction": {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 3,
+        "observed_interval_count": 366
+      },
+      "elapsed_seconds": 384.94122386723757,
+      "gpu_memory_peak_mib": 3272.0,
+      "gpu_power_mean_watts": 115.21692098092643,
+      "gpu_utilization_max_percent": 100.0,
+      "gpu_utilization_mean_percent": 66.566757493188,
+      "gpu_utilization_p95_percent": 100.0,
+      "host_load_1m_peak": 13.98,
+      "host_memory_used_peak_bytes": 105813393408.0,
+      "identity": "workers-5-repeat-1",
+      "input_files": {
+        "calibration_result": {
+          "sha256": "5ef52fb90e249a1c78911168db8f9674569f93572658a04e8e053c19e971245e",
+          "size_bytes": 129309
+        },
+        "telemetry_samples": {
+          "sha256": "c863f34fa2f06f0631e79e22cac429c4dfbface533220d6630e076bc87d8ce35",
+          "size_bytes": 151498
+        },
+        "telemetry_summary": {
+          "sha256": "7380deb424be8162b32259c7dae3bd75982ad5172d17069e3f6e975cf09400a5",
+          "size_bytes": 1095
+        }
+      },
+      "process_cpu_max_percent": 1411.362960032056,
+      "process_cpu_mean_percent": 521.0417739404393,
+      "process_rss_peak_bytes": 10036772864.0,
+      "process_threads_peak": 1614.0,
+      "read_bytes_final": 0.0,
+      "repetition": 1,
+      "science_elapsed_seconds": 378.34215243160725,
+      "science_sha256": "1b7545fbc9270ba2e46b762f648cd039798a6a18c1fe2fbc9751385c1f6ceead",
+      "store_inventory_sha256": "5f3bcb20e03e6d2f27cc34c912ef5e174818c61da1e6ef0288415ec6981761c7",
+      "throughput_cases_per_hour": 299.26646681970163,
+      "workers": 5,
+      "write_bytes_final": 0.0
+    },
+    {
+      "case_count": 32,
+      "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703",
+      "cost_per_case_usd": 0.011080291371009661,
+      "cpu_transition_correction": {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 3,
+        "observed_interval_count": 766
+      },
+      "elapsed_seconds": 802.798469144851,
+      "gpu_memory_peak_mib": 685.0,
+      "gpu_power_mean_watts": 96.12478487614082,
+      "gpu_utilization_max_percent": 83.0,
+      "gpu_utilization_mean_percent": 10.571056062581487,
+      "gpu_utilization_p95_percent": 76.0,
+      "host_load_1m_peak": 10.87,
+      "host_memory_used_peak_bytes": 99706843136.0,
+      "identity": "workers-1-repeat-2",
+      "input_files": {
+        "calibration_result": {
+          "sha256": "cf78b336e3bdc3e0a865ef8708e3219e75998b4af14ac5a75ff4b1062e6b8ebf",
+          "size_bytes": 129308
+        },
+        "telemetry_samples": {
+          "sha256": "c79f817c28bbf8e6fc0c75d6ec440714283f2e1e2277cb6f5e260f312d56eb8b",
+          "size_bytes": 313346
+        },
+        "telemetry_summary": {
+          "sha256": "456a81aad9a132c4311fda0448f6a3810720c697020d7112d694db95018599bd",
+          "size_bytes": 1082
+        }
+      },
+      "process_cpu_max_percent": 567.6465629182078,
+      "process_cpu_mean_percent": 147.8423029081088,
+      "process_rss_peak_bytes": 3597643776.0,
+      "process_threads_peak": 344.0,
+      "read_bytes_final": 0.0,
+      "repetition": 2,
+      "science_elapsed_seconds": 794.0979311279953,
+      "science_sha256": "b238e8cf3e55a26c5ba27269cccd0044f5f75c8c25aeafc9625754a4d8f2bda0",
+      "store_inventory_sha256": "386f8d6a9ebeb1247b384f1228de5b15ffc8bd718a452077c66bcc1faae27169",
+      "throughput_cases_per_hour": 143.49803148318432,
+      "workers": 1,
+      "write_bytes_final": 0.0
+    },
+    {
+      "case_count": 32,
+      "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703",
+      "cost_per_case_usd": 0.005590329951166253,
+      "cpu_transition_correction": {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 2,
+        "observed_interval_count": 385
+      },
+      "elapsed_seconds": 405.03522665053606,
+      "gpu_memory_peak_mib": 2650.0,
+      "gpu_power_mean_watts": 119.42023316062176,
+      "gpu_utilization_max_percent": 100.0,
+      "gpu_utilization_mean_percent": 67.19948186528498,
+      "gpu_utilization_p95_percent": 100.0,
+      "host_load_1m_peak": 15.94,
+      "host_memory_used_peak_bytes": 105567531008.0,
+      "identity": "workers-4-repeat-2",
+      "input_files": {
+        "calibration_result": {
+          "sha256": "155be7a8e13eafb2444e92181ba2e68a6749979b61cfd22339f71ee77d0715fc",
+          "size_bytes": 129308
+        },
+        "telemetry_samples": {
+          "sha256": "647ef120e7dd0d6816c173ea523279af76c64eb756fcf5a418096619565e9c90",
+          "size_bytes": 159154
+        },
+        "telemetry_summary": {
+          "sha256": "cfa1cce51d0007783ad21e3579e61ade1d6ac2c8ee7aa8e0247dc5f556b34aba",
+          "size_bytes": 1088
+        }
+      },
+      "process_cpu_max_percent": 1387.071187663482,
+      "process_cpu_mean_percent": 431.092803163913,
+      "process_rss_peak_bytes": 8600801280.0,
+      "process_threads_peak": 1289.0,
+      "read_bytes_final": 0.0,
+      "repetition": 2,
+      "science_elapsed_seconds": 398.7818597778678,
+      "science_sha256": "d0bfd31ab33420ebb6c98c8ab7431f18c24429c89a77d45fb02c77f188224b70",
+      "store_inventory_sha256": "42331a6e84b240e6bc52565872ab4f8ea28f5e4686b4a9bb6c02f1eda665f0e1",
+      "throughput_cases_per_hour": 284.4197057936258,
+      "workers": 4,
+      "write_bytes_final": 0.0
+    },
+    {
+      "case_count": 32,
+      "classification_sha256": "aa0d45dd257ebb830b9562dc9d0fb5853ebeaa052ef659ca03dce1248704f703",
+      "cost_per_case_usd": 0.005762846067494441,
+      "cpu_transition_correction": {
+        "method": "clamp_negative_aggregate_jiffy_deltas_to_zero",
+        "negative_interval_count": 2,
+        "observed_interval_count": 397
+      },
+      "elapsed_seconds": 417.5345075316727,
+      "gpu_memory_peak_mib": 3663.0,
+      "gpu_power_mean_watts": 113.80198492462313,
+      "gpu_utilization_max_percent": 100.0,
+      "gpu_utilization_mean_percent": 65.78391959798995,
+      "gpu_utilization_p95_percent": 100.0,
+      "host_load_1m_peak": 15.62,
+      "host_memory_used_peak_bytes": 108271230976.0,
+      "identity": "workers-5-repeat-2",
+      "input_files": {
+        "calibration_result": {
+          "sha256": "c7f125750875931367bb3fa36ff4081f21a1858a2214a7996199450abebb0354",
+          "size_bytes": 129308
+        },
+        "telemetry_samples": {
+          "sha256": "0c5e8d9cd0013a0af668def4ec03b33a12cdbaae86697c26395192ec09f872e2",
+          "size_bytes": 164400
+        },
+        "telemetry_summary": {
+          "sha256": "8a9de9ec9c983833161bb3d45da0025b02e04cf7594578c9d2a536721d0b554e",
+          "size_bytes": 1098
+        }
+      },
+      "process_cpu_max_percent": 1393.7827374180024,
+      "process_cpu_mean_percent": 505.34615996665576,
+      "process_rss_peak_bytes": 10063941632.0,
+      "process_threads_peak": 1613.0,
+      "read_bytes_final": 0.0,
+      "repetition": 2,
+      "science_elapsed_seconds": 411.5158499516547,
+      "science_sha256": "b9a8b1b345c3457fa11cb13795d6b48e61c1f2c98d3b12330058b6adaeafa307",
+      "store_inventory_sha256": "dfe8cf19ce92144b9341f6e3991ea755b7e96c287a735d61ac136ad54518fc03",
+      "throughput_cases_per_hour": 275.9053393718873,
+      "workers": 5,
+      "write_bytes_final": 0.0
+    }
+  ],
+  "selection": {
+    "cost_per_case_usd": 0.005537918458872688,
+    "cost_ratio_vs_serial": 0.4982929998765255,
+    "elapsed_seconds": 401.23786569945514,
+    "elapsed_seconds_range": [
+      384.94122386723757,
+      417.5345075316727
+    ],
+    "gpu_memory_peak_mib": 3663.0,
+    "gpu_utilization_mean_percent": 66.17533854558897,
+    "gpu_utilization_p95_percent": 100.0,
+    "host_memory_used_peak_bytes": 108271230976.0,
+    "meets_acceptance": true,
+    "process_cpu_mean_percent": 513.1939669535475,
+    "process_rss_peak_bytes": 10063941632.0,
+    "process_threads_peak": 1614.0,
+    "repetition_count": 2,
+    "speedup_vs_serial": 2.01014921753248,
+    "status": "accepted",
+    "throughput_cases_per_hour": 287.5859030957945,
+    "throughput_range": [
+      275.9053393718873,
+      299.26646681970163
+    ],
+    "within_best_throughput_fraction": 1.0,
+    "workers": 5
+  },
+  "serial": {
+    "cost_per_case_usd": 0.011113779363236001,
+    "cost_ratio_vs_serial": 1.0,
+    "elapsed_seconds": 805.2247689589858,
+    "elapsed_seconds_range": [
+      802.798469144851,
+      807.6510687731206
+    ],
+    "gpu_memory_peak_mib": 690.0,
+    "gpu_utilization_mean_percent": 10.421481639538166,
+    "gpu_utilization_p95_percent": 76.0,
+    "host_memory_used_peak_bytes": 99706843136.0,
+    "meets_acceptance": false,
+    "process_cpu_mean_percent": 147.67549777562306,
+    "process_rss_peak_bytes": 3626586112.0,
+    "process_threads_peak": 348.0,
+    "repetition_count": 2,
+    "speedup_vs_serial": 1.0,
+    "throughput_cases_per_hour": 143.06694278587688,
+    "throughput_range": [
+      142.63585408856943,
+      143.49803148318432
+    ],
+    "within_best_throughput_fraction": 0.49747550643406,
+    "workers": 1
+  },
+  "source_sha": "e29164f444267af2ddacc879fa3a820c9d9b1892",
+  "version": "1"
+}
