@@ -11,13 +11,13 @@ The open georeferenced HbS survey database behind Piel et al. 2010/2013, publish
 
 Survey sites carry their own coordinates, so this adapter needs no registry join.
 
-``cohort_id`` is the **contributing study**, not the survey site. The two differ: 332 retained
-surveys come from 151 studies, and 41 studies contribute more than one site. Keying cohorts by
-site would give one cohort level per observation, which is not a cohort effect at all — it is an
-observation-level overdispersion term, unidentifiable as the study-level effect §7.1d wants and
-free to absorb the spatial signal the GP exists to explain. Grouping by study leaves cohort
-effects estimable, because replicated studies supply the within-cohort contrast that identifies
-them.
+``cohort_id`` is the **contributing study**, not the survey site. In the current Piel-comparable
+run, 994 retained surveys come from 385 studies, and 136 studies contribute more than one site.
+Keying cohorts by site would give one cohort level per observation, which is not a cohort effect
+at all — it is an observation-level overdispersion term, unidentifiable as the study-level effect
+§7.1d wants and free to absorb the spatial signal the GP exists to explain. Grouping by study
+leaves cohort effects estimable, because replicated studies supply the within-cohort contrast
+that identifies them.
 
 Allele counts come from the reported genotypes: ``ac = hbas + 2·hbss`` over ``an = 2·sample_size``.
 
