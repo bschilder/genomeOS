@@ -17,6 +17,8 @@ from __future__ import annotations
 import pandera.pandas as pa
 from pandera import extensions
 
+from genomeos.schema_checks import REVIEWABLE_TEXT
+
 SAMPLING_DESIGNS: tuple[str, ...] = (
     "population_random",
     "healthy_reference",
@@ -84,7 +86,9 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
     {
         "variant_id": pa.Column(str, pa.Check.str_matches(VARIANT_ID_PATTERN), nullable=False),
         "rsid": pa.Column(str, nullable=True, required=True),
-        "population_id": pa.Column(str, nullable=False),
+        # An identity that joins to the P0 registry, so it has to be a name. It carried no
+        # check at all, which let a lone space or a literal "NA" through (#340).
+        "population_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
         "lat": pa.Column(float, pa.Check.in_range(-90.0, 90.0), nullable=False),
         "lon": pa.Column(float, pa.Check.in_range(-180.0, 180.0), nullable=False),
         "radius_km": pa.Column(float, pa.Check.gt(0.0), nullable=False),
@@ -100,9 +104,9 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         "an": pa.Column("Int64", pa.Check.gt(0), nullable=False),
         # Stable identity in the source system, and the only join from compact P1 rows back to
         # verbose evidence. Local dataframe positions and random UUIDs are not source identities.
-        "source_record_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False, unique=True),
-        "source": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        "assay": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "source_record_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False, unique=True),
+        "source": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
+        "assay": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
         # Years before present; modern = 0, ancient from AADR (§7 time axis). "Int64" for the
         # reason given above the counts: a date bound of 3.9 must not become 3 unremarked.
         "date_lower": pa.Column("Int64", pa.Check.ge(0), nullable=False),
@@ -114,8 +118,8 @@ OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         # as <NA> so nullable=False rejects it. A missing flag must fail (§7.1a, §12).
         # (Column-level coerce=False does not help: schema-level coerce wins in pandera 0.32.)
         "disease_ascertainment_excluded": pa.Column("boolean", nullable=False),
-        "cohort_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        "ingest_version": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "cohort_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
+        "ingest_version": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
     },
     checks=[
         pa.Check.ac_le_an(error="ac must not exceed an"),
@@ -146,7 +150,9 @@ CARRIER_OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
     {
         "variant_id": pa.Column(str, pa.Check.str_matches(VARIANT_ID_PATTERN), nullable=False),
         "rsid": pa.Column(str, nullable=True, required=True),
-        "population_id": pa.Column(str, nullable=False),
+        # An identity that joins to the P0 registry, so it has to be a name. It carried no
+        # check at all, which let a lone space or a literal "NA" through (#340).
+        "population_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
         "lat": pa.Column(float, pa.Check.in_range(-90.0, 90.0), nullable=False),
         "lon": pa.Column(float, pa.Check.in_range(-180.0, 180.0), nullable=False),
         "radius_km": pa.Column(float, pa.Check.gt(0.0), nullable=False),
@@ -155,15 +161,15 @@ CARRIER_OBSERVATIONS_SCHEMA = pa.DataFrameSchema(
         # numpy int coercion would truncate one into a plausible-looking measurement (#192).
         "carriers": pa.Column("Int64", pa.Check.ge(0), nullable=False),
         "n_individuals": pa.Column("Int64", pa.Check.gt(0), nullable=False),
-        "source_record_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False, unique=True),
-        "source": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        "assay": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "source_record_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False, unique=True),
+        "source": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
+        "assay": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
         "date_lower": pa.Column("Int64", pa.Check.ge(0), nullable=False),
         "date_upper": pa.Column("Int64", pa.Check.ge(0), nullable=False),
         "sampling_design": pa.Column(str, pa.Check.isin(SAMPLING_DESIGNS), nullable=False),
         "disease_ascertainment_excluded": pa.Column("boolean", nullable=False),
-        "cohort_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        "ingest_version": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "cohort_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
+        "ingest_version": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
     },
     checks=[
         pa.Check.carriers_le_individuals(error="carriers must not exceed n_individuals"),

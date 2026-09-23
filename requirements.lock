@@ -48,13 +48,15 @@ colorama==0.4.6 ; sys_platform == 'win32'
     #   tqdm
 contourpy==1.4.0
     # via matplotlib
+coverage==7.16.1
+    # via pytest-cov
 cycler==0.12.1
     # via matplotlib
 duckdb==1.5.5
     # via genomeos (pyproject.toml)
 fastapi==0.141.1
     # via genomeos (pyproject.toml)
-filelock==3.32.6
+filelock==4.0.1
     # via pytensor
 fonttools==4.65.0
     # via matplotlib
@@ -70,21 +72,21 @@ httpcore==1.0.9
     # via httpx
 httpx==0.28.1
     # via genomeos (pyproject.toml)
-idna==3.19
+idna==3.20
     # via
     #   anyio
     #   httpx
 iniconfig==2.3.0
     # via pytest
-jax==0.11.1
+jax==0.11.2
     # via numpyro
-jaxlib==0.11.1
+jaxlib==0.11.2
     # via
     #   jax
     #   numpyro
 kiwisolver==1.5.1
     # via matplotlib
-lazy-loader==0.5
+lazy-loader==0.6
     # via arviz-base
 llvmlite==0.49.0
     # via numba
@@ -124,7 +126,7 @@ numpy==2.4.6
     #   scipy
     #   xarray
     #   xarray-einstats
-numpyro==0.21.0
+numpyro==0.22.0
     # via genomeos (pyproject.toml)
 opt-einsum==3.4.0
     # via jax
@@ -135,7 +137,7 @@ packaging==26.3
     #   pandera
     #   pytest
     #   xarray
-pandas==3.0.5
+pandas==3.0.6
     # via
     #   genomeos (pyproject.toml)
     #   pandera
@@ -146,7 +148,9 @@ pandera==0.32.1
 pillow==12.3.0
     # via matplotlib
 pluggy==1.6.0
-    # via pytest
+    # via
+    #   pytest
+    #   pytest-cov
 pyarrow==25.0.1
     # via genomeos (pyproject.toml)
 pydantic==2.13.5
@@ -162,13 +166,17 @@ pygments==2.21.0
     #   rich
 pymc==6.3.2
     # via genomeos (pyproject.toml)
-pyparsing==3.3.2
+pyparsing==3.3.3
     # via
     #   matplotlib
     #   rasterio
 pytensor==3.3.2
     # via pymc
 pytest==8.4.2
+    # via
+    #   genomeos (pyproject.toml)
+    #   pytest-cov
+pytest-cov==7.1.0
     # via genomeos (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via
@@ -178,7 +186,7 @@ rasterio==1.5.1
     # via genomeos (pyproject.toml)
 rich==15.0.0
     # via pymc
-ruff==0.16.7
+ruff==0.16.8
     # via genomeos (pyproject.toml)
 scipy==1.18.1
     # via

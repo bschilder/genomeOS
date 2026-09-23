@@ -1,0 +1,292 @@
+{
+  "artifact": "zero-inflated-beta-binomial-method-preflight",
+  "comparison": {
+    "folds": [
+      {
+        "beta_binomial": {
+          "concentration": 11.779804208403442,
+          "log_likelihood": -3178.3177705520407,
+          "max_equivalent_parameter_relative_span": 0.0,
+          "mean": 0.04413931815727325,
+          "model": "beta_binomial",
+          "n_equivalent_starts": 1,
+          "n_rows": 770,
+          "n_starts": 9,
+          "n_successful_starts": 9,
+          "structural_zero_probability": 0.0
+        },
+        "fold": 0,
+        "mean_group_log_score_delta": 0.0302677073249984,
+        "mean_log_score_delta": 0.01660995710510997,
+        "mean_positive_log_score_delta": -0.006102232222819124,
+        "mean_zero_log_score_delta": 0.08521969569989578,
+        "n_test": 193,
+        "n_test_groups": 76,
+        "n_train": 770,
+        "zero_inflated_beta_binomial": {
+          "concentration": 13.201613152064898,
+          "log_likelihood": -3175.100333087201,
+          "max_equivalent_parameter_relative_span": 0.0,
+          "mean": 0.04705486766537782,
+          "model": "zero_inflated_beta_binomial",
+          "n_equivalent_starts": 1,
+          "n_rows": 770,
+          "n_starts": 12,
+          "n_successful_starts": 12,
+          "structural_zero_probability": 0.05953357270487551
+        }
+      },
+      {
+        "beta_binomial": {
+          "concentration": 11.16569180680274,
+          "log_likelihood": -3199.848000989914,
+          "max_equivalent_parameter_relative_span": 0.0,
+          "mean": 0.045764392055242534,
+          "model": "beta_binomial",
+          "n_equivalent_starts": 1,
+          "n_rows": 770,
+          "n_starts": 9,
+          "n_successful_starts": 9,
+          "structural_zero_probability": 0.0
+        },
+        "fold": 1,
+        "mean_group_log_score_delta": -0.09308831525635795,
+        "mean_log_score_delta": -0.10438051079774145,
+        "mean_positive_log_score_delta": -0.1449564581743119,
+        "mean_zero_log_score_delta": 0.08537171369857316,
+        "n_test": 193,
+        "n_test_groups": 76,
+        "n_train": 770,
+        "zero_inflated_beta_binomial": {
+          "concentration": 15.242717708518471,
+          "log_likelihood": -3179.8907681045857,
+          "max_equivalent_parameter_relative_span": 0.0,
+          "mean": 0.053184580688607104,
+          "model": "zero_inflated_beta_binomial",
+          "n_equivalent_starts": 1,
+          "n_rows": 770,
+          "n_starts": 12,
+          "n_successful_starts": 12,
+          "structural_zero_probability": 0.13367922672195193
+        }
+      },
+      {
+        "beta_binomial": {
+          "concentration": 11.693369719970768,
+          "log_likelihood": -3143.4547129595485,
+          "max_equivalent_parameter_relative_span": 0.0,
+          "mean": 0.04349254325327684,
+          "model": "beta_binomial",
+          "n_equivalent_starts": 1,
+          "n_rows": 770,
+          "n_starts": 9,
+          "n_successful_starts": 9,
+          "structural_zero_probability": 0.0
+        },
+        "fold": 2,
+        "mean_group_log_score_delta": 0.020174777083916243,
+        "mean_log_score_delta": 0.013448479587738737,
+        "mean_positive_log_score_delta": -0.00022205980381781036,
+        "mean_zero_log_score_delta": 0.0559144104636378,
+        "n_test": 193,
+        "n_test_groups": 78,
+        "n_train": 770,
+        "zero_inflated_beta_binomial": {
+          "concentration": 13.291076351218525,
+          "log_likelihood": -3139.5303070098244,
+          "max_equivalent_parameter_relative_span": 0.0010031690845727762,
+          "mean": 0.04669135531014723,
+          "model": "zero_inflated_beta_binomial",
+          "n_equivalent_starts": 2,
+          "n_rows": 770,
+          "n_starts": 12,
+          "n_successful_starts": 12,
+          "structural_zero_probability": 0.06566365361943294
+        }
+      },
+      {
+        "beta_binomial": {
+          "concentration": 11.22088706688347,
+          "log_likelihood": -3098.99961694173,
+          "max_equivalent_parameter_relative_span": 0.0,
+          "mean": 0.04077691724500037,
+          "model": "beta_binomial",
+          "n_equivalent_starts": 1,
+          "n_rows": 771,
+          "n_starts": 9,
+          "n_successful_starts": 9,
+          "structural_zero_probability": 0.0
+        },
+        "fold": 3,
+        "mean_group_log_score_delta": 0.0036350341249297823,
+        "mean_log_score_delta": 0.014343758665789247,
+        "mean_positive_log_score_delta": 0.012610389758338695,
+        "mean_zero_log_score_delta": 0.02708025194227373,
+        "n_test": 192,
+        "n_test_groups": 77,
+        "n_train": 771,
+        "zero_inflated_beta_binomial": {
+          "concentration": 12.895504065680512,
+          "log_likelihood": -3094.949453598414,
+          "max_equivalent_parameter_relative_span": 0.0007304222606242588,
+          "mean": 0.04444576185636709,
+          "model": "zero_inflated_beta_binomial",
+          "n_equivalent_starts": 2,
+          "n_rows": 771,
+          "n_starts": 12,
+          "n_successful_starts": 12,
+          "structural_zero_probability": 0.07924208845405595
+        }
+      },
+      {
+        "beta_binomial": {
+          "concentration": 12.037055683082214,
+          "log_likelihood": -3122.394609281837,
+          "max_equivalent_parameter_relative_span": 0.0004905714934428493,
+          "mean": 0.04365760469646707,
+          "model": "beta_binomial",
+          "n_equivalent_starts": 6,
+          "n_rows": 771,
+          "n_starts": 9,
+          "n_successful_starts": 9,
+          "structural_zero_probability": 0.0
+        },
+        "fold": 4,
+        "mean_group_log_score_delta": 0.03130879686153176,
+        "mean_log_score_delta": 0.02104148078437044,
+        "mean_positive_log_score_delta": -0.0038064789011201003,
+        "mean_zero_log_score_delta": 0.09558535984084204,
+        "n_test": 192,
+        "n_test_groups": 77,
+        "n_train": 771,
+        "zero_inflated_beta_binomial": {
+          "concentration": 13.138762255443808,
+          "log_likelihood": -3120.580517515172,
+          "max_equivalent_parameter_relative_span": 0.002520139772001403,
+          "mean": 0.04596083972367592,
+          "model": "zero_inflated_beta_binomial",
+          "n_equivalent_starts": 6,
+          "n_rows": 771,
+          "n_starts": 12,
+          "n_successful_starts": 12,
+          "structural_zero_probability": 0.04819080585595585
+        }
+      }
+    ],
+    "folds_improved": 4,
+    "groups_split": 0,
+    "mean_group_log_score_delta": -0.0013282776153133353,
+    "mean_log_score_delta": -0.00784028486792694,
+    "mean_positive_log_score_delta": -0.029334598094343144,
+    "mean_zero_log_score_delta": 0.07416052009085088,
+    "n_folds": 5,
+    "n_groups": 384,
+    "n_rows": 963
+  },
+  "configuration": {
+    "fold_strategy": "cohort_grouped",
+    "min_an": 50,
+    "n_folds": 5,
+    "profile_max": 0.3,
+    "profile_points": 31
+  },
+  "decision": {
+    "advance_to_spatial_mixture": false,
+    "gate_checks": {
+      "at_least_four_of_five_folds_improve": true,
+      "cohort_macro_log_score_improves": false,
+      "no_positive_count_log_score_regression": false,
+      "optimizer_starts_all_succeed": true
+    },
+    "rule": "all predeclared checks must pass"
+  },
+  "environmental_covariates_used": [],
+  "evidence_kind": "method_preflight",
+  "executed_source_sha256": {
+    "genomeos/validation/zero_inflated_preflight.py": "9c0a1188ea72110f0cc8b0a8ee2deb6fedb3de9a08bb0fb02c1b6fe65e78e70d",
+    "scripts/preflight_zero_inflated_counts.py": "b62af1a845d5ef9250e441aeaa97d76602cc43689b68fb7d0b29acb3df70f548"
+  },
+  "full_data_fits": {
+    "beta_binomial": {
+      "concentration": 11.555765364448883,
+      "log_likelihood": -3936.6436934864796,
+      "max_equivalent_parameter_relative_span": 0.0002578557293762131,
+      "mean": 0.04356348954623475,
+      "model": "beta_binomial",
+      "n_equivalent_starts": 4,
+      "n_rows": 963,
+      "n_starts": 9,
+      "n_successful_starts": 9,
+      "structural_zero_probability": 0.0
+    },
+    "marginal_mean": {
+      "beta_binomial": 0.04356348954623475,
+      "zero_inflated_beta_binomial": 0.043721946582392965
+    },
+    "zero_count_probability": {
+      "an": [
+        100,
+        500,
+        1000,
+        2000
+      ],
+      "beta_binomial": [
+        0.3098321204925881,
+        0.14355382815962436,
+        0.10181174268180153,
+        0.07201584686162002
+      ],
+      "zero_inflated_beta_binomial": [
+        0.30653320377501897,
+        0.1654654210003859,
+        0.13504454662887572,
+        0.1152284116019404
+      ]
+    },
+    "zero_inflated_beta_binomial": {
+      "concentration": 13.480880762250175,
+      "log_likelihood": -3929.907956573605,
+      "max_equivalent_parameter_relative_span": 0.0008981630385218355,
+      "mean": 0.04749029856037289,
+      "model": "zero_inflated_beta_binomial",
+      "n_equivalent_starts": 2,
+      "n_rows": 963,
+      "n_starts": 12,
+      "n_successful_starts": 12,
+      "structural_zero_probability": 0.07934993234858981
+    }
+  },
+  "inputs": {
+    "observations": {
+      "artifact": "piel-comparable-observations.parquet",
+      "eligible_cohorts": 384,
+      "eligible_positive_rows": 763,
+      "eligible_rows": 963,
+      "eligible_zero_rows": 200,
+      "rows": 994,
+      "rows_below_min_an": 31,
+      "sha256": "466034e22015ce5f4e0b90067adb2232491b625591d50c8ac83d955565345b4b"
+    }
+  },
+  "issue": 103,
+  "limitations": [
+    "This scalar preflight is not a spatial occurrence or allele-frequency model.",
+    "The extra-zero probability is a distributional component, not a reviewed label of population absence.",
+    "Cohort-blocked development folds are not sealed independent geographic validation.",
+    "The likelihood profile is descriptive; mixture-boundary inference is nonstandard.",
+    "A favorable result would still require a separately reviewed spatial model and held-out validation."
+  ],
+  "model_semantics": {
+    "beta_binomial": "ordinary beta-binomial count mass",
+    "observed_zero_is_structural_absence": false,
+    "zero_inflated_beta_binomial": "at AC=0, structural-zero mass plus beta-binomial sampling-zero mass; at AC>0, beta-binomial mass weighted by one minus structural-zero mass"
+  },
+  "outputs": {
+    "fold_metrics.csv": "b7ca92868f0a7315246d24961cbc1ccf1877879bd706c8dd50f0c276be97b38a",
+    "structural_zero_profile.csv": "039810a847d306a01f9ea3f47aa5bf0eb21ddb62683be44fd0a3fcc03f0cbe23",
+    "zero-inflated-count-preflight.png": "c79416f3b5670ee68ff49cae8752e2f1e414abfcc6cb88d32155e679013a78f8"
+  },
+  "publication_eligible": false,
+  "schema_version": 1,
+  "spatial_fit_performed": false
+}

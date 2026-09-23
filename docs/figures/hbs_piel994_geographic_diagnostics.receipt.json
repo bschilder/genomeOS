@@ -1,0 +1,30 @@
+{
+  "artifact": "hbs-piel994-geographic-diagnostic",
+  "inputs": {
+    "cells": {
+      "artifact": "cells.parquet",
+      "sha256": "d20aeb9f70b57c6dccb1c21afd45708ac35d0b2b692aae480076be23dd06241e"
+    },
+    "observations": {
+      "artifact": "piel-comparable-observations.parquet",
+      "sha256": "466034e22015ce5f4e0b90067adb2232491b625591d50c8ac83d955565345b4b"
+    },
+    "results": {
+      "artifact": "parity-results-year-aligned.json",
+      "sha256": "7bfbac19ceeb3041abfdb09b8a5a299e5ba7a0a99a1b14412b87e24034adbaba"
+    },
+    "ss_parity": {
+      "artifact": "parity-ss-supported_only-year-aligned.csv",
+      "sha256": "1849c38ad625fc03b8c9ff515e3e530bb91ddac97dc91f05227f860a0869ef69"
+    },
+    "as_parity": {
+      "artifact": "parity-as-supported_only-year-aligned.csv",
+      "sha256": "0c0f903a968bd1145b60973d4be1478d47661269b38f630929775638eaeda2d7"
+    }
+  },
+  "executed_source_sha256": "0abb084e296093a724ee52cf0ac8d25d3c6a199f45ca418c03dff5e252840786",
+  "output": {
+    "path": "docs/figures/hbs_piel994_geographic_diagnostics.png",
+    "sha256": "5b95c6763e7eb8ccd5f9cd57abf5d92446f648ef1775896e08e5ff35f2ccc8ad"
+  }
+}

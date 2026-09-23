@@ -2,7 +2,7 @@
 
     python scripts/build_observations.py \
         --registry data/registry --gnomad data/raw/gnomad_hgdp_1kg_freqs.tsv \
-        --map-surveys data/raw/map_hbs_surveys.tsv \
+        --map-surveys data/curated/map_hbs_surveys.csv \
         --literature-evidence data/raw/literature_evidence.tsv \
         --literature-field-evidence data/raw/literature_field_evidence.tsv \
         --out data/observations
@@ -11,14 +11,18 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import pandas as pd
 
-from genomeos.observations.ingest import write_observations
-from genomeos.observations.sources import gnomad_hgdp_1kg as gnomad
-from genomeos.observations.sources import map_surveys, publications
-from genomeos.registry.publication import read_registry
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from genomeos.observations.ingest import write_observations  # noqa: E402
+from genomeos.observations.sources import gnomad_hgdp_1kg as gnomad  # noqa: E402
+from genomeos.observations.sources import map_surveys, publications  # noqa: E402
+from genomeos.registry.publication import read_registry  # noqa: E402
 
 VERSION = "0.1.0"
 
@@ -27,7 +31,12 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--registry", type=Path, required=True)
     ap.add_argument("--gnomad", type=Path, required=True)
-    ap.add_argument("--map-surveys", type=Path, required=True)
+    ap.add_argument(
+        "--map-surveys",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     ap.add_argument("--literature-evidence", type=Path)
     ap.add_argument("--literature-field-evidence", type=Path)
     ap.add_argument("--out", type=Path, required=True)

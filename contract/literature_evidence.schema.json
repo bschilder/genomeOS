@@ -18,12 +18,14 @@
     },
     "assay": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "citation_id": {
       "dtype": "string[pyarrow]",
@@ -32,12 +34,14 @@
     },
     "citation_text": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "cohort_id": {
       "dtype": "string[pyarrow]",
@@ -116,19 +120,23 @@
     },
     "notes": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "population_label": {
       "dtype": "string[pyarrow]",
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
       }
     },
     "record_locator": {
@@ -146,12 +154,14 @@
     },
     "reported_frequency": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "reuse_checked_at": {
       "dtype": "string[pyarrow]",
@@ -160,12 +170,14 @@
     },
     "reuse_evidence": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "reuse_status": {
       "dtype": "string[pyarrow]",
@@ -184,12 +196,14 @@
     },
     "sample_id": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "sampling_design": {
       "dtype": "string[pyarrow]",
@@ -216,12 +230,14 @@
     },
     "verification_reference": {
       "dtype": "string[pyarrow]",
-      "nullable": true,
-      "str_length": {
-        "exact_value": null,
-        "max_value": null,
-        "min_value": 1
-      }
+      "meaningful_text": {
+        "error": "this value resembles a spelling of absence (-, n/a, na, none, not reported, null, tbd, unknown). It has been preserved for human review. Confirm whether the source intended a real literal value or missing metadata; missingness must use the field's explicit recorded state rather than looking like trusted metadata.",
+        "raise_warning": true
+      },
+      "non_blank_text": {
+        "error": "required text must contain at least one non-whitespace character"
+      },
+      "nullable": true
     },
     "verification_status": {
       "dtype": "string[pyarrow]",

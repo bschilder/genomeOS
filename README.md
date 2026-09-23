@@ -1,5 +1,14 @@
 ![genomeOS — Explore genomes across the world](docs/images/genomeos-banner.png)
 
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
+[![Coverage](https://img.shields.io/badge/coverage-91%25-brightgreen.svg)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
+[![CI](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
+[![Package: v0.1.0](https://img.shields.io/badge/package-v0.1.0-2496ED?logo=docker&logoColor=white)](https://github.com/users/bschilder/packages/container/package/genomeos)
+
+<!-- Coverage is measured locally; scripts/render_coverage_badge.py updates the value above.
+     Version badges follow project.version; docker.yml publishes the matching v-prefixed tag. -->
+
 An open atlas of human genetic variation — across the world's populations, and inside the
 cell — where every number can be traced back to the measurement behind it.
 
@@ -184,3 +193,13 @@ By default the service uses `sqlite:///./genomeos.db` and `demo/artifacts` for l
 Production requires a PostgreSQL `DATABASE_URL` and an explicit `ATLAS_ARTIFACT_ROOT`. GCP
 operations must use the
 [repository-local gcloud wrapper](docs/repo-gcloud-auth.md).
+
+## License
+
+Except where stated otherwise, project-authored source code and documentation in this repository
+are licensed under the [Apache License 2.0](LICENSE).
+
+Third-party datasets, model outputs, and bundled components are not relicensed by this notice.
+Their source-specific terms remain controlling and are recorded in the relevant provenance,
+licence, or notice files. See [non-commercial data policy](docs/non-commercial-data.md) for how
+genomeOS keeps restricted inputs separable.

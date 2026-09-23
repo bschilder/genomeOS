@@ -12,7 +12,9 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 @pytest.fixture
 def obs() -> pd.DataFrame:
-    observations, _report = map_surveys.load(FIXTURES / "map_hbs_surveys.csv", "0.1.0")
+    observations, _report = map_surveys.load(
+        FIXTURES / "map_hbs_curated_synthetic.csv", "0.1.0"
+    )
     return observations
 
 
@@ -26,6 +28,12 @@ def test_round_trip_preserves_row_count_and_counts(tmp_path, obs):
     back = read_observations(tmp_path)
     assert len(back) == len(obs)
     assert back["ac"].sum() == obs["ac"].sum()
+    before = obs.set_index("source_record_id")
+    after = back.set_index("source_record_id")
+    assert after.loc["map-surveys:9001", "radius_km"] == 73.25
+    assert after.loc["map-surveys:9001", "cohort_id"] == before.loc[
+        "map-surveys:9001", "cohort_id"
+    ]
 
 
 def test_read_can_filter_to_one_variant(tmp_path, obs):

@@ -17,6 +17,8 @@ from pathlib import Path
 import pandas as pd
 import pandera.pandas as pa
 
+from genomeos.schema_checks import REVIEWABLE_TEXT
+
 ENTITY_TYPES: tuple[str, ...] = (
     "sequence_variant",
     "named_allele",
@@ -59,7 +61,7 @@ PROPOSAL_METHODS: tuple[str, ...] = (
     "deterministic_import",
 )
 
-_NONEMPTY = pa.Check.str_length(min_value=1)
+_NONEMPTY = REVIEWABLE_TEXT
 _HTTPS_OR_EMPTY = pa.Check.str_matches(r"^https://.+|^$")
 
 CURATED_VARIANTS_SCHEMA = pa.DataFrameSchema(
