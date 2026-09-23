@@ -88,7 +88,7 @@ def _command(registry: Path, out: Path) -> list[str]:
         "--gnomad",
         str(FIXTURES / "gnomad_hgdp_1kg_freqs.tsv"),
         "--map-surveys",
-        str(FIXTURES / "map_hbs_surveys.csv"),
+        str(FIXTURES / "map_hbs_curated_synthetic.csv"),
         "--literature-evidence",
         str(LITERATURE / "evidence.tsv"),
         "--literature-field-evidence",
@@ -227,7 +227,7 @@ def test_observations_build_can_add_requested_wbbc_counts(tmp_path):
         "--gnomad",
         str(FIXTURES / "gnomad_hgdp_1kg_freqs.tsv"),
         "--map-surveys",
-        str(FIXTURES / "map_hbs_surveys.csv"),
+        str(FIXTURES / "map_hbs_curated_synthetic.csv"),
         "--wbbc-vcf",
         str(first_vcf),
         "--wbbc-vcf",
@@ -482,4 +482,28 @@ def test_build_observations_refuses_incomplete_registry_before_output(tmp_path):
 
     assert completed.returncode != 0
     assert "manifest" in completed.stderr
+    assert not out.exists()
+
+
+def test_build_observations_refuses_raw_map_export_without_creating_store(tmp_path):
+    registry = tmp_path / "registry"
+    out = tmp_path / "observations"
+    _write_registry(registry)
+    command = _command(registry, out)
+    map_flag = command.index("--map-surveys")
+    command[map_flag + 1] = str(FIXTURES / "map_hbs_surveys.csv")
+    stale_package = tmp_path / "stale-package" / "genomeos"
+    stale_package.mkdir(parents=True)
+    (stale_package / "__init__.py").write_text(
+        'raise RuntimeError("stale genomeos package imported")\n'
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(stale_package.parent)
+
+    completed = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, text=True)
+
+    assert completed.returncode != 0
+    assert "explicit spatial support" in completed.stderr
+    assert "curated MAP CSV" in completed.stderr
+    assert "stale genomeos package imported" not in completed.stderr
     assert not out.exists()

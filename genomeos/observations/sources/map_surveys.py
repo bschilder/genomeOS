@@ -1,7 +1,10 @@
 """Malaria Atlas Project HbS survey adapter (design §6, §8, §7.1a, P1).
 
 The open georeferenced HbS survey database behind Piel et al. 2010/2013, published by MAP as the
-``Explorer:HbS_Data`` layer. Two reasons it matters disproportionately for its size:
+``Explorer:HbS_Data`` layer. Ingestion requires a separately curated CSV whose retained rows carry
+an explicit sampling bounding-disc radius and provenance for both the coordinate interpretation
+and radius. Parser acceptance is structural; it does not qualify that evidence for publication.
+Two reasons the source matters disproportionately for its size:
 
 1. It is the input to **golden test 1** (HbS parity, §8) — the only end-to-end validation of the
    pipeline against independently published national estimates.
@@ -11,13 +14,13 @@ The open georeferenced HbS survey database behind Piel et al. 2010/2013, publish
 
 Survey sites carry their own coordinates, so this adapter needs no registry join.
 
-``cohort_id`` is the **contributing study**, not the survey site. The two differ: 332 retained
-surveys come from 151 studies, and 41 studies contribute more than one site. Keying cohorts by
-site would give one cohort level per observation, which is not a cohort effect at all — it is an
-observation-level overdispersion term, unidentifiable as the study-level effect §7.1d wants and
-free to absorb the spatial signal the GP exists to explain. Grouping by study leaves cohort
-effects estimable, because replicated studies supply the within-cohort contrast that identifies
-them.
+``cohort_id`` is the **contributing study**, not the survey site. In the current Piel-comparable
+run, 994 retained surveys come from 385 studies, and 136 studies contribute more than one site.
+Keying cohorts by site would give one cohort level per observation, which is not a cohort effect
+at all — it is an observation-level overdispersion term, unidentifiable as the study-level effect
+§7.1d wants and free to absorb the spatial signal the GP exists to explain. Grouping by study
+leaves cohort effects estimable, because replicated studies supply the within-cohort contrast
+that identifies them.
 
 Allele counts come from the reported genotypes: ``ac = hbas + 2·hbss`` over ``an = 2·sample_size``.
 
@@ -37,19 +40,19 @@ are refused with a stated reason and counted in the returned report — never dr
 - ``incomplete_genotypes`` — one of HbAA/HbAS/HbSS is absent, so no allele count is derivable.
   Treating a missing ``hbss`` as zero would bias frequencies downward exactly where the variant
   is common.
-- ``no_area_type`` and ``unbounded_area`` — §6 gives ``uncertainty_radius_km`` no default, and
-  §7 places each observation as a disc of that radius rather than as a point. A survey with no
-  stated extent, or one recorded only as ">100 km²" with no upper bound, cannot be placed
-  honestly: understating the extent would let a diffuse survey act as a pinpoint measurement.
+Spatial support is a hard input contract rather than a count-refusal reason. Area classes remain
+source evidence but cannot establish a bounding radius: an equal-area circle does not bound an
+arbitrarily shaped sampling footprint. A retained row without valid explicit support fails the
+entire input (§6, §7, §12).
 """
 
 from __future__ import annotations
 
-import math
-import re
+import csv
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from genomeos.observations.schema import OBSERVATIONS_SCHEMA
@@ -58,23 +61,12 @@ SOURCE = "map_surveys"
 HBS_VARIANT_ID = "chr11-5227002-T-A"  # rs334, HBB Glu6Val, GRCh38
 RSID = "rs334"
 
-#: MAP's area classes, mapped to the radius of a circle of the class's upper-bound area. The
-#: upper bound is used because a survey labelled "≤10 km²" may occupy any of it.
-_AREA_KM2_UPPER: dict[str, float] = {
-    "point": 10.0,
-    "wide-area": 25.0,
-    "small polygon": 100.0,
-}
-_UNBOUNDED_AREA = "large polygon"
-
-#: ">100 km²" has no upper bound, and 301 otherwise-usable surveys carry no area class at all.
-#: Refusing both discarded 388 real measurements over a metadata gap. Instead they are assigned
-#: a deliberately coarse extent: §7 places each observation as a disc of this radius, so a
-#: too-large radius makes a survey *less* influential and spreads its evidence, while a too-small
-#: one lets a diffuse survey act as a pinpoint measurement. Erring coarse is the safe direction,
-#: and the assumption is visible here rather than buried in a default.
-_UNBOUNDED_AREA_KM2 = 500.0
-_UNKNOWN_AREA_KM2 = 500.0
+SUPPORT_COLUMNS: tuple[str, ...] = (
+    "radius_km",
+    "support_kind",
+    "coordinate_provenance",
+    "radius_provenance",
+)
 
 #: Minimum share of `sample_size` that the reported genotypes must account for. Below this the
 #: typed subset is assumed to be screen-positives rather than incomplete fieldwork, and the row is
@@ -134,19 +126,40 @@ class IngestReport:
         return "\n".join(lines)
 
 
-def _radius_km(area_type: object) -> float:
-    """Radius of a circle with the area class's upper-bound area.
+def _explicit_radii(rows: pd.DataFrame) -> pd.Series:
+    """Validate and return declared sampling bounding-disc radii for retained rows."""
+    def first_survey(invalid: pd.Series) -> str:
+        index = invalid.index[invalid.to_numpy().nonzero()[0][0]]
+        return f"MAP survey {rows.at[index, 'id']}"
 
-    Unclassed and unbounded surveys get a deliberately coarse extent rather than a refusal; see
-    the note on `_UNKNOWN_AREA_KM2`.
-    """
-    if not isinstance(area_type, str) or not area_type.strip():
-        return math.sqrt(_UNKNOWN_AREA_KM2 / math.pi)
-    key = re.split(r"[(]", area_type.strip().lower())[0].strip()
-    if key.startswith(_UNBOUNDED_AREA):
-        return math.sqrt(_UNBOUNDED_AREA_KM2 / math.pi)
-    area = _AREA_KM2_UPPER.get(key, _UNKNOWN_AREA_KM2)
-    return math.sqrt(area / math.pi)
+    invalid_kind = rows["support_kind"].ne("sampling_bounding_disc")
+    if invalid_kind.any():
+        raise ValueError(
+            f"{first_survey(invalid_kind)}: invalid support_kind; "
+            "explicit spatial support required"
+        )
+
+    for field in ("coordinate_provenance", "radius_provenance"):
+        values = rows[field]
+        textual = values.map(lambda value: isinstance(value, str))
+        invalid = ~textual | values.where(textual, "").str.strip().eq("")
+        if invalid.any():
+            raise ValueError(
+                f"{first_survey(invalid)}: blank {field}; explicit spatial support required"
+            )
+
+    radius_text = rows["radius_km"].astype("string").str.strip().str.lower()
+    radius = pd.to_numeric(rows["radius_km"], errors="coerce")
+    invalid_radius = radius.isna() | radius_text.isin({"true", "false"})
+    if invalid_radius.any():
+        raise ValueError(f"{first_survey(invalid_radius)}: invalid radius_km")
+
+    invalid_range = ~np.isfinite(radius) | radius.le(0)
+    if invalid_range.any():
+        raise ValueError(
+            f"{first_survey(invalid_range)}: radius_km must be finite and positive"
+        )
+    return radius.astype(float)
 
 
 def _population_id(survey_id: object) -> str:
@@ -184,6 +197,16 @@ def load(
     if not 0.0 < min_genotyped_fraction <= 1.0:
         raise ValueError("min_genotyped_fraction must be in (0, 1]")
 
+    with path.open(newline="") as source:
+        header = next(csv.reader(source), [])
+    duplicate_support = sorted(
+        field for field in SUPPORT_COLUMNS if header.count(field) > 1
+    )
+    if duplicate_support:
+        raise ValueError(
+            f"{path}: duplicate columns {duplicate_support}; explicit spatial support required"
+        )
+
     raw = pd.read_csv(path)
     required = {
         "id", "latitude", "longitude", "sample_size", "hbaa", "hbas", "hbss", "area_type",
@@ -192,6 +215,12 @@ def load(
     missing = required - set(raw.columns)
     if missing:
         raise ValueError(f"{path}: missing required columns {sorted(missing)}")
+    missing_support = set(SUPPORT_COLUMNS) - set(raw.columns)
+    if missing_support:
+        raise ValueError(
+            f"{path}: missing explicit spatial support columns {sorted(missing_support)}; "
+            "supply a curated MAP CSV with explicit spatial support"
+        )
 
     total = len(raw)
     refusals: dict[str, int] = {}
@@ -276,9 +305,8 @@ def load(
         ((genotyped < raw["sample_size"]) & keep & genotyped.notna()).sum()
     )
 
-    radius = raw["area_type"].map(_radius_km)
-
     rows = raw[keep]
+    radius = _explicit_radii(rows)
     obs = pd.DataFrame(
         {
             "variant_id": HBS_VARIANT_ID,
@@ -286,7 +314,7 @@ def load(
             "population_id": rows["id"].map(_population_id),
             "lat": rows["latitude"].astype(float),
             "lon": rows["longitude"].astype(float),
-            "radius_km": radius[keep].astype(float),
+            "radius_km": radius,
             "ac": (rows["hbas"] + 2 * rows["hbss"]).astype(int),
             # Two alleles per *typed* individual. See the note on the denominator above.
             "an": (2 * genotyped[keep]).astype(int),

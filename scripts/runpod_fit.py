@@ -6,8 +6,11 @@ structure needs ~800 km, i.e. m≈24 and ~14,000 basis coefficients. The fits ar
 batch work (§5) and are embarrassingly parallel across variants, which is exactly the shape a
 GPU pod serves well.
 
-    python scripts/runpod_fit.py --plan                 # show what would be launched, cost first
-    python scripts/runpod_fit.py --launch --hsgp-m 20
+    python scripts/runpod_fit.py --plan --job gpucheck  # show what would be launched, cost first
+
+HbS jobs remain listed so old invocations receive an actionable refusal, but they cannot launch
+until a qualified curated MAP input has a delivery contract. This prevents an area-only export
+from failing inside a billed pod that then holds itself open.
 
 Nothing here runs on the serving path.
 """
@@ -154,6 +157,8 @@ JOB_COMMANDS = {
     ),
 }
 
+HBS_JOBS = frozenset({"fit", "validate+fit", "surfaces", "validate"})
+
 
 def entrypoint(args) -> str:
     """Pod start command.
@@ -292,6 +297,13 @@ def main() -> None:
     ap.add_argument("--launch", action="store_true", help="actually create the pod")
     ap.add_argument("--plan", action="store_true", help="print the request and exit")
     args = ap.parse_args()
+
+    if args.job in HBS_JOBS:
+        raise SystemExit(
+            f"RunPod job {args.job!r} is unavailable: MAP HbS fitting requires a curated CSV "
+            "with explicit spatial support, and this launcher has no qualified input-delivery "
+            "contract. Raw MAP area classes cannot supply that support (issue #190)."
+        )
 
     spec = plan(args)
     cheapest = min(price for _, price in GPU_PREFERENCE)

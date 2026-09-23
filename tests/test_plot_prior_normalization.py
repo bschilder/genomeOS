@@ -17,10 +17,11 @@ from scripts.plot_prior_normalization import (
     render,
 )
 
+FIXTURE = Path(__file__).parent / "fixtures" / "map_hbs_curated_synthetic.csv"
+
 
 def test_conditional_counterexample_matches_the_authored_numeric_control():
-    fixture = Path(__file__).parent / "fixtures" / "map_hbs_surveys.csv"
-    observation_lat, observation_lon = _load_regional_geometry(fixture)
+    observation_lat, observation_lon = _load_regional_geometry(FIXTURE)
     result = compute_counterexample(observation_lat, observation_lon)
     assert len(result["observation_lat"]) == 6
     assert len(result["query_lat"]) == 414
@@ -58,8 +59,7 @@ def test_conditional_counterexample_matches_the_authored_numeric_control():
 
 def test_prior_normalization_figure_is_created_standalone(tmp_path):
     out = tmp_path / "prior-normalization.png"
-    fixture = Path(__file__).parent / "fixtures" / "map_hbs_surveys.csv"
-    assert render(out, fixture) == out
+    assert render(out, FIXTURE) == out
     assert out.stat().st_size > 10_000
 
 
@@ -72,9 +72,6 @@ def test_prior_normalization_figure_is_created_standalone(tmp_path):
 # leaving a perfectly valid PNG behind. This project's review figures carry invariants, so those
 # need a test rather than a person remembering to look.
 # ---------------------------------------------------------------------------
-
-FIXTURE = Path(__file__).parent / "fixtures" / "map_hbs_surveys.csv"
-
 
 @pytest.fixture(scope="module")
 def drawn():

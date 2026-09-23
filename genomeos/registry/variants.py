@@ -22,6 +22,8 @@ from pathlib import Path
 import pandas as pd
 import pandera.pandas as pa
 
+from genomeos.schema_checks import REVIEWABLE_TEXT
+
 #: A locus is either resolved to a coordinate, or recorded as unresolvable with a reason. An
 #: absent row means "not attempted" — a third state, distinguishable from both (§6).
 RESOLUTION_STATUSES: tuple[str, ...] = ("resolved", "unresolved")
@@ -43,7 +45,7 @@ _STRAND = rf"^(?:{'|'.join(STRANDS)})$|^$"
 
 VARIANT_NORMALIZATION_SCHEMA = pa.DataFrameSchema(
     {
-        "variant_id": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False, unique=True),
+        "variant_id": pa.Column(str, REVIEWABLE_TEXT, nullable=False, unique=True),
         "status": pa.Column(str, pa.Check.isin(RESOLUTION_STATUSES), nullable=False),
         # Blank on an unresolved row; the loader enforces that pairing, which pandera cannot.
         "rsid": pa.Column(str, pa.Check.str_matches(rf"{_RSID}|^$"), nullable=False),
@@ -53,13 +55,13 @@ VARIANT_NORMALIZATION_SCHEMA = pa.DataFrameSchema(
         # Always required: it is the input to the round-trip check, so it is kept even on a
         # refused row, where it is often the evidence of *why* the row could not resolve.
         "printed_alleles": pa.Column(str, pa.Check.str_matches(_PRINTED_ALLELES), nullable=False),
-        "printed_convention": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "printed_convention": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
         "strand": pa.Column(str, pa.Check.str_matches(_STRAND), nullable=False),
         "strand_evidence": pa.Column(str, nullable=False),
         "reference_resource": pa.Column(str, nullable=False),
         "naming_citation": pa.Column(str, nullable=False),
-        "resolved_at": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
-        "reviewed_by": pa.Column(str, pa.Check.str_length(min_value=1), nullable=False),
+        "resolved_at": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
+        "reviewed_by": pa.Column(str, REVIEWABLE_TEXT, nullable=False),
         "verification_status": pa.Column(
             str, pa.Check.isin(VERIFICATION_STATUSES), nullable=False
         ),

@@ -1,9 +1,10 @@
 # Global allele-frequency benchmark runner
 
-This repository includes an offline, deterministic runner for the B0 engineering baseline in
-issue #189. B0 updates an explicit Beta prior with pooled training allele counts separately for
-each variant, samples the resulting latent frequency, and scores held-out binomial allele counts.
-The sampled frequency is shared across held-out observations of the same variant within a draw.
+This repository includes offline, deterministic runners for the B0 engineering baseline, the B1
+local count comparator, and the unchanged current single-variant spatial GP in issue #189. B0
+updates an explicit Beta prior with pooled training allele counts separately for each variant,
+samples the resulting latent frequency, and scores held-out binomial allele counts. The sampled
+frequency is shared across held-out observations of the same variant within a draw.
 
 B0 is not a spatial/current-resident model and has no cohort, survey-design, or recruited-sample
 heterogeneity term. Its outputs always state `publication_eligible=false`. A successful synthetic
@@ -50,6 +51,142 @@ geographic footprint, qualify recruitment as representative of present-day resid
 the fitted approximation or serving behavior, or demonstrate an accuracy improvement. The HbS, G6PD,
 carrier-screening, external-validation, redistribution and publication gates remain unchanged,
 and no serving-path inference is authorized.
+
+## Current spatial-GP runner
+
+`scripts/benchmark_spatial_gp.py` composes the same unseen-cohort interface with the reviewed
+split builder and exact count diagnostics. It accepts exactly one modern allele per run, keeps
+every declared cohort in one held-out block, and makes one batched query and scoring call per
+fitted fold. The loop over folds remains because every fold is a distinct posterior fit; the
+adapter adds no observation-by-draw loop.
+
+The fit configuration is a JSON object containing every `FitConfig` field. Requiring the complete
+resolved object prevents library or source defaults from silently changing a rerun. Generate a
+starting file from the installed checkout, inspect it, and commit or hash the reviewed copy with
+the research inputs:
+
+```bash
+PYTHONPATH=. python -c \
+  'import json; from dataclasses import asdict; from genomeos.surfaces.config import FitConfig; print(json.dumps(asdict(FitConfig()), indent=2, sort_keys=True))' \
+  > /tmp/current-gp-fit-config.json
+
+PYTHONPATH=. python scripts/benchmark_spatial_gp.py \
+  --observations /path/to/one-variant-observations.parquet \
+  --assignments /path/to/reviewed-assignments.tsv \
+  --dependencies /path/to/dependencies.tsv \
+  --fit-config /tmp/current-gp-fit-config.json \
+  --data-version DATA_VERSION \
+  --buffer-km 300 \
+  --seed 42 \
+  --cdf-backend scipy \
+  --evidence-kind observational_research \
+  --assignment-review-status reviewed \
+  --dependency-review-status not_checked \
+  --checkpoint-dir /new/checkpoint/directory \
+  --out /new/output/directory
+```
+
+The observations input may be TSV or Parquet. Assignments and dependencies remain literal TSV
+contracts. `assignment-review-status=algorithmic_development_unreviewed` and
+`dependency-review-status=not_checked` preserve useful development runs without misrepresenting
+their qualification. Declaring either input `reviewed` is caller-supplied provenance, not an
+automated scientific decision. Every output remains `publication_eligible=false`, and the manifest
+sets `scientific_promotion_decision=not_made` even when all computational folds complete.
+
+The checkpoint directory must also be new. After each fold reaches `completed`, `failed`, or
+`infeasible`, the runner atomically publishes one integrity-hashed fold artifact before starting
+the next fit. The final output directory appears only after every planned fold is terminal and its
+manifest has been written successfully. Checkpoints are recovery artifacts and are never accepted
+as a complete benchmark publication.
+
+Resume is explicit: repeat every scientific and provenance argument unchanged, replace
+`--checkpoint-dir NEW_DIRECTORY` with `--resume-from EXISTING_DIRECTORY`, and provide a new
+`--out` path. Resume refuses changes to input-file hashes, resolved configuration or CDF backend,
+the planned split ledger, the complete fit/predictive seed schedule, Git revision, science-source
+hashes, package versions, evidence kind, or qualification fields. It also refuses corrupt,
+unknown, overwritten, or noncontiguous fold artifacts. Every terminal fold is reused, including a
+failed or infeasible fold; resume is not an implicit retry mechanism.
+
+The public checkpoint APIs bind every supplied `BenchmarkSplit` field to the exact canonical
+record at its ordinal in the header's frozen `planned_splits` ledger. Training and held-out IDs,
+held-out `block_id`, exclusions and their reasons, input fingerprint, buffer, edge separation,
+and data version must match, including order. Loading requires the entire supplied ledger even
+when no fold is yet retained; missing, duplicated, reordered or extra splits are hard errors.
+The runner checks this binding before fitting and finalizes by reloading the complete terminal
+ledger through `finalize_checkpoint_benchmark`. A mismatched caller plan cannot reuse or publish
+results under another frozen split identity. Valid checkpoint bytes and terminal failures remain
+unchanged; no migration, automatic repair or retry is introduced.
+
+Each fitted fold retains its maximum rank-normalized R-hat, minimum bulk ESS, minimum tail ESS,
+the parameter responsible for each extreme, and the number of post-tuning divergent transitions.
+A spatial-benchmark fold is `completed` only when maximum R-hat is at most the configured
+`max_rhat`, both ESS extrema are at least the configured `min_ess`, and the divergence count is
+zero. A diagnostic failure is an immutable `failed` checkpoint with no admissible predictions;
+resume reuses that failure and cannot selectively retry it under the same benchmark identity.
+Checkpoint writing, loading, and finalization also check retained completed folds against the
+frozen configuration. A `completed` label paired with failing diagnostics is an invalid artifact:
+it raises before publication or further fitting, rather than being rewritten or retried. A valid
+content hash does not waive this check, and schema-v1 checkpoints remain unsupported.
+
+Before fitting, the runner verifies that the selected likelihood's exact scorer can cover every
+denominator. A single unsupported row produces a failed status for every planned fold, zero fits,
+and a nonzero exit after writing the complete evidence record. It never drops that row, switches
+likelihoods, or reports a partial benchmark. Fit/prediction failures inside otherwise supported
+folds are likewise retained while later folds continue.
+
+## Local count comparator
+
+`scripts/benchmark_local_count.py` implements the source-neutral B1 comparator from issue #307.
+It uses a compact triweight kernel over great-circle distance between reviewed recruitment
+footprint edges. At each query, the same weight multiplies AC and `AN - AC`; those weighted counts
+update an explicit Beta generalized-Bayes power posterior. Fractional weighted evidence is never
+described as literal sampled alleles. No environmental layer, pathogen label, publisher identity,
+or held-out count enters the model.
+
+Candidate bandwidths are a finite, strictly increasing list declared on the command line. Each
+outer fold selects among them using only new buffered folds inside its training partition. A
+candidate is eligible only if every inner fold completes, it emits the declared minimum fraction
+of inner queries, and it has a valid normalized held-out count score. Ties prefer the narrower
+bandwidth. The outer test counts are used only after selection for scoring.
+
+The compact kernel, minimum local-row count, and minimum kernel-weighted allele denominator form
+the support rule. A query failing either evidence threshold is `unknown`; the runner does not
+substitute B0, a prior-only value, or the nearest observation. Every requested row remains in
+`support.tsv`, while `predictions.tsv` contains only emitted rows. `summary.json` reports requested,
+emitted, excluded, and excluded-fraction totals alongside an explicitly supported-only use of the
+shared hierarchical count summary.
+
+```bash
+PYTHONPATH=. python scripts/benchmark_local_count.py \
+  --observations /path/to/one-variant-observations.tsv \
+  --assignments /path/to/reviewed-assignments.tsv \
+  --dependencies /path/to/dependencies.tsv \
+  --data-version DATA_VERSION \
+  --bandwidth-km 500 \
+  --bandwidth-km 1000 \
+  --bandwidth-km 2000 \
+  --prior-alpha 1 \
+  --prior-beta 1 \
+  --buffer-km 300 \
+  --minimum-inner-emission-fraction 0.5 \
+  --minimum-training-observations 2 \
+  --minimum-effective-alleles 100 \
+  --posterior-draws 2048 \
+  --seed 42 \
+  --evidence-kind observational_research \
+  --analysis-role prespecified_primary \
+  --assignment-review-status reviewed \
+  --dependency-review-status reviewed \
+  --out /new/output/directory
+```
+
+The output manifest names the generalized posterior semantics and records
+`environmental_covariates=false`, `source_specific_features=false`, the complete configuration,
+input and source hashes, immutable outer splits, terminal fold outcomes, package versions, and
+`publication_eligible=false`. This comparator evaluates a local-count hypothesis; it does not
+privilege MAP or any other source family. `analysis_role` distinguishes the prespecified primary
+comparison from a post-hoc sensitivity, while the two review-status fields prevent algorithmic
+development blocks or an unchecked dependency file from being represented as reviewed evidence.
 
 ## Source-tree invocation
 
@@ -101,9 +238,11 @@ The reviewed dependency TSV has exactly these columns:
 source_record_id_a  source_record_id_b
 ```
 
-Each row is an undirected dependency edge between known observation IDs. A header-only file means
-there are no reviewed explicit edges. Shared cohort IDs remain automatically connected by the
-public split builder; an empty dependency file does not certify participant independence.
+Each row is an undirected dependency edge between known observation IDs. For the B0 runner, a
+header-only file means there are no reviewed explicit edges. The current-GP runner additionally
+requires an explicit dependency review status, so an empty diagnostic file can remain
+`not_checked`. Shared cohort IDs remain automatically connected by the public split builder; an
+empty dependency file never certifies participant independence.
 
 `evidence_kind` is supplied explicitly as either `synthetic_fixture` or
 `observational_research`. This label does not verify permissions, study independence, registry
@@ -119,7 +258,7 @@ content:
 | `inventory.json` | Public P1 inventory counts and unresolved qualification limitations. |
 | `manifest.json` | B0 identity, nonpublication label, exact configuration and hash, raw input and generated-output hashes/sizes, source counts, Git revision, package versions, hashes of the actual imported science files, immutable splits, fold statuses, and distinct posterior/PIT seeds. It is written last. |
 | `predictions.tsv` | One completed-fold row per held-out observation: identities and grouping labels, observed AC/AN, posterior parameters/mean, seeds, and all ten public predictive diagnostics. A true zero probability is written as `-Infinity`. |
-| `fold_status.tsv` | Every planned split with expected test IDs, `completed`/`failed`/`infeasible`, reason, and its two deterministic seeds. |
+| `fold_status.tsv` | Every planned split with expected test IDs, `completed`/`failed`/`infeasible`, reason, and retained R-hat, bulk/tail ESS, responsible parameter names, and divergence count when fitting reached diagnostics. |
 | `summary.json` | Explicit B0/evidence/nonpublication metadata plus the public hierarchical benchmark summary. |
 
 The configuration hash covers the model inputs, the combined input hash covers all raw bytes
@@ -130,6 +269,20 @@ as the recorded Git revision. The runner puts its own checkout first on the impo
 that every imported science module resolves to the expected file under that root, and hashes those
 resolved files; a conflicting editable installation cannot silently change executed science.
 
+The current-GP runner writes the same five files. Its prediction rows contain the block, variant,
+observed counts, and deterministic fit/prediction seeds instead of B0 posterior-alpha/beta fields.
+Its manifest identifies `B2-current`, records the complete resolved `FitConfig`, both review-state
+declarations, the selected CDF backend, and hashes of the fitted observation/prediction modules.
+Every split record also carries the same sampler diagnostics as `fold_status.tsv`; these values are
+inside both the split-manifest hash and the per-fold checkpoint integrity hash.
+
+The local-count runner adds `support.tsv` and `bandwidth_selection.tsv`. The first retains every
+requested query and its support or refusal evidence. The second records every candidate's
+inner-fold requested and emitted counts, emission fraction, normalized log score, completion
+counts, and eligibility for every outer fold. Its prediction rows include the selected bandwidth,
+distance to the nearest training footprint, weighted evidence, posterior parameters, and
+deterministic seeds.
+
 For each completed fold and variant, the posterior is
 `Beta(prior_alpha + sum(AC), prior_beta + sum(AN - AC))` using training rows only. A held-out
 variant absent from training makes the fold infeasible; it is never assigned a prior-only result or
@@ -138,11 +291,20 @@ and recorded per fold.
 
 ## Gates that remain open
 
-This fixture runner is only a reusable WP0/WP1 engineering prerequisite. It does not complete the
-qualified input inventory, certify dependencies or a present-day resident target, reproduce the
-current production model, establish genuinely sealed external evidence, implement all required
-holdout tracks/strata/joint-site scores, or provide an empirical B0/B1/B2 comparison. Those WP0 and
-WP1 gates remain required on reviewed, permitted data.
+These runners are reusable WP0/WP1 engineering prerequisites. They do not complete the qualified
+input inventory, certify dependencies or a present-day resident target, establish genuinely
+sealed external evidence, implement all required holdout tracks/strata/joint-site scores, or
+provide a completed B0/B1/B2 comparison. The first HbS B1 run is recorded in the
+[local-count evidence note](research/hbs-local-count-benchmark-2026-09-16.md): the prespecified
+local grid is infeasible for global geographic holdouts, while a post-hoc 2,000 km sensitivity
+finds positive-count gains on only 21.9% of rows and regresses zero counts. The bounded scorer now
+admits the complete count domain without dropping rows. The later
+[current-GP B2 development run](research/hbs-current-gp-benchmark-2026-09-17.md) completed all five
+folds and 994 held-out rows: balanced macro log score improved by 316.44 nats and MAE fell by 21.1%
+against pooled B0. It remains unqualified because the 50% and 80% intervals over-cover, all five
+fits warned about R-hat above 1.01, one fit diverged, numerical per-fold diagnostics were not
+retained, dependencies were not reviewed, and geography remained algorithmic development evidence.
+Those WP0 and WP1 gates remain required on reviewed, permitted data.
 
 WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
 admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
@@ -155,15 +317,26 @@ permission does not qualify any source or publish any scientific result in this 
 
 ## Count-scoring numerical domain
 
-`CountPredictive.log_prob` evaluates interior beta-binomial draws by finite products of paired
-probability factors, using `log1p` near one instead of subtracting nearly equal log-beta
-normalizers. Its deterministic work is O(draws × AN); it refuses AN above 65,536 for any interior
-beta-binomial draw. This cap limits each draw batch to 16 support chunks, with temporary factor
-arrays bounded by 128 draws × 4,096 terms (524,288 float64 elements each). It is an engineering
-work budget, not a scientific threshold or a binomial approximation. Diagnostics call this scorer
-first and inherit its refusal. Binomial and exact p=0/1 draws retain the existing AN maximum
-2,147,483,647, as do CDF/quantile-only queries with their existing bounded tail-sum arithmetic.
-The existing beta shape/concentration checks also remain in force.
+`CountPredictive.log_prob` evaluates interior beta-binomial draws from the nearer endpoint mass
+and a shorter-side adjustment. It evaluates two equivalent rising-factorial factorizations and
+selects the one with the smaller sum of intermediate log magnitudes for each posterior draw. Each
+ratio uses a 16-factor exact prefix and a fixed Euler--Maclaurin tail. Work and temporary arrays are
+bounded independently of AN; the scorer never materializes `0, ..., AN` or substitutes a binomial
+distribution.
+An independent 160-digit Decimal oracle covers the actual 2,571,112-allele HbS maximum and the
+declared 2,147,483,647 count ceiling. The declared absolute log-mass error envelope is `1e-5`
+throughout that domain. A 75-case cross-product over five means, three concentrations through
+`2**26`, and five endpoint/interior count fractions measured a maximum error of
+`8.158385753631592e-6`; the million-scale high-concentration central case measured
+`9.313225746154785e-10`. The direct tail-log subtraction is used when the equivalent single-log
+argument approaches negative one, where forming its small complement would amplify float64
+rounding. Mixture integration, allele
+complement symmetry, small-support normalization, exact Bernoulli identities, and boundary-heavy
+means remain regression-tested. The existing beta shape/concentration checks remain in force.
+
+CDF/quantile queries retain their exact bounded-memory tail-sum arithmetic. Their memory does not
+grow with AN, but runtime can grow with the shorter queried support tail; log-mass acceleration does
+not imply constant-time quantiles.
 
 The accepted quantile levels remain `0 < q <= 1`; the 100% endpoint is the exact mixture support
 maximum (zero only when all draws have p=0, otherwise AN), independent of CDF rounding. Earlier
