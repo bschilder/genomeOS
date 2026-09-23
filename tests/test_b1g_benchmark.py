@@ -145,6 +145,38 @@ def test_nested_selection_uses_the_fixed_grid_and_exact_tie_break():
     assert len(result.predictions) == 2
 
 
+def test_inner_selection_skips_interval_diagnostics(monkeypatch):
+    observations, assignments = _inputs()
+    plan = plan_b1g_benchmark(
+        observations,
+        assignments,
+        (),
+        buffer_km=1.0,
+        data_version="fixture-v1",
+        config=_config(),
+        seed=42,
+    )
+    _, fit_function, predict_function = _fake_functions()
+    quantile_calls: list[tuple[float, ...]] = []
+    original_quantiles = CountPredictive.quantiles
+
+    def tracked_quantiles(self, an, probabilities):
+        quantile_calls.append(tuple(float(value) for value in probabilities))
+        return original_quantiles(self, an, probabilities)
+
+    monkeypatch.setattr(CountPredictive, "quantiles", tracked_quantiles)
+
+    result = evaluate_b1g_fold(
+        plan,
+        plan.splits[0],
+        fit_function=fit_function,
+        predict_function=predict_function,
+    )
+
+    assert result.status.status == "completed"
+    assert quantile_calls == [(0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975)]
+
+
 def test_outer_counts_cannot_change_training_only_selection():
     observations, assignments = _inputs()
     changed = observations.copy()

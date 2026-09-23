@@ -11,6 +11,7 @@ from pandera.errors import SchemaError
 
 from genomeos.validation.benchmark import (
     BenchmarkFoldStatus,
+    cohort_macro_mean_log_score,
     inventory_observations,
     summarize_benchmark,
     validate_allele_observations,
@@ -238,6 +239,35 @@ def test_reporter_uses_cohort_then_cell_macro_weighting_and_rmse_after_mse():
     assert result["metrics"]["rmse"] == pytest.approx(np.sqrt(0.75))
     assert [row["mae"] for row in result["cell_metrics"]] == pytest.approx([0.5, 1.0])
     assert result["metrics"]["mae"] != pytest.approx(2 / 5)
+
+
+def test_log_score_only_metric_matches_the_full_report_weighting():
+    predictions = pd.DataFrame(
+        [
+            _prediction("a1", cohort_id="large", log_score=-0.2),
+            _prediction("a2", cohort_id="large", log_score=-0.2),
+            _prediction("a3", cohort_id="large", log_score=-0.2),
+            _prediction("a4", cohort_id="small", log_score=-1.0),
+            _prediction("b1", region_id="region-b", cohort_id="other", log_score=-2.0),
+        ]
+    )
+    status = _completed(expected_test_ids=("a1", "a2", "a3", "a4", "b1"))
+    full = summarize_benchmark(predictions, (status,), ("split-a",))
+
+    log_score_only = predictions.loc[
+        :,
+        [
+            "split_id",
+            "source_record_id",
+            "region_id",
+            "variant_group",
+            "cohort_id",
+            "log_score",
+        ],
+    ]
+
+    assert cohort_macro_mean_log_score(log_score_only) == pytest.approx(-1.3)
+    assert cohort_macro_mean_log_score(log_score_only) == full["metrics"]["mean_log_score"]
 
 
 def test_failed_and_infeasible_statuses_are_retained_and_mark_comparison_incomplete():
