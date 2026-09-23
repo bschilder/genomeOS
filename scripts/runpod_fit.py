@@ -265,7 +265,7 @@ def _request(path: str, payload: dict | None = None) -> dict:
 def plan(args) -> dict:
     gpu_ids = [gpu for gpu, _ in GPU_PREFERENCE]
     return {
-        "name": f"genomeos-hbs-{args.job}",
+        "name": f"@brian hbs-fit-{args.job} [alert-after=12h]",
         "imageName": IMAGE,
         "gpuTypeIds": gpu_ids,
         "gpuCount": 1,

@@ -26,4 +26,6 @@ def test_non_hbs_plan_remains_available(monkeypatch, capsys):
 
     runpod_fit.main()
 
-    assert "pass --launch to create it" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert '"name": "@brian hbs-fit-gpucheck [alert-after=12h]"' in output
+    assert "pass --launch to create it" in output
