@@ -8,7 +8,9 @@ import re
 from pathlib import Path
 
 _README_BADGE = re.compile(r"\[!\[Coverage\]\([^)]*\)\]\([^)]*\)")
-_COVERAGE_DESTINATION = "website/public/_static/coverage.svg"
+_COVERAGE_DESTINATION = (
+    "https://github.com/bschilder/genomeOS/actions/workflows/ci.yml"
+)
 
 
 def _colour(percent: int) -> str:
