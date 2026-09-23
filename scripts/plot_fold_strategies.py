@@ -1,6 +1,6 @@
 """What each cross-validation fold strategy does to the studies it splits (#127).
 
-    python scripts/plot_fold_strategies.py --observations data/raw/map_hbs_surveys.csv \
+    python scripts/plot_fold_strategies.py --observations data/curated/map_hbs_surveys.csv \
         --out docs/figures/fold_strategies.png
 
 `cohort_id` is the contributing study, and a study effect is identified by *within-study
@@ -18,6 +18,7 @@ term is estimated from.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -27,6 +28,9 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from genomeos.observations.sources import map_surveys  # noqa: E402
 from genomeos.validation.crossval import (  # noqa: E402
@@ -47,7 +51,12 @@ _BLURB = {
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--observations", type=Path, required=True)
+    ap.add_argument(
+        "--observations",
+        type=Path,
+        required=True,
+        help="curated MAP HbS CSV with explicit spatial support",
+    )
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--n-folds", type=int, default=5)
     ap.add_argument("--dpi", type=int, default=170)

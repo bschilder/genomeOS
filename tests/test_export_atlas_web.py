@@ -16,6 +16,7 @@ from scripts import export_atlas_web
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
 VARIANT_ID = "chr11-5227002-T-A"
 PUBLIC_ALLOWLIST = Path("website/src/atlas/public-artifacts.json")
+CURATED_HBS = Path(__file__).parent / "fixtures" / "map_hbs_curated_synthetic.csv"
 
 
 def _write_source_tree(root: Path) -> Path:
@@ -166,25 +167,7 @@ def test_every_declared_external_resource_resolves_against_the_real_registry() -
 
 
 def _write_hbs_csv(path: Path) -> None:
-    pd.DataFrame(
-        [
-            {
-                "id": 1,
-                "latitude": 5.56,
-                "longitude": -0.2,
-                "country": "Ghana",
-                "sample_size": 10,
-                "hbaa": 8,
-                "hbas": 2,
-                "hbss": 0,
-                "malaria_hypothesis": "YES",
-                "population_estimates": "YES",
-                "area_type": "Point (≤ 10 km2)",
-                "source": "IBDTEST",
-                "citation": "Example citation.",
-            }
-        ]
-    ).to_csv(path, index=False)
+    pd.read_csv(CURATED_HBS).iloc[[0]].to_csv(path, index=False)
 
 
 def _write_allowlist(path: Path) -> None:
@@ -272,11 +255,14 @@ def test_export_preserves_support_versions_and_observation_evidence(
     assert {cell["support"] for cell in surface["cells"]} == {"observed", "unknown"}
     assert surface["artifact"]["hf_revision"] == HF_REVISION
     assert surface["artifact"]["model_version"] == "v1"
-    assert all(row["radius_km"] > 0 for row in observations["observations"])
-    assert observations["observations"][0]["citation_text"] == "Example citation."
-    assert observations["observations"][0]["population_label"] == "Ghana"
-    assert observations["observations"][0]["study_id"] == "map-study-IBDTEST"
-    assert observations["observations"][0]["study_label"] == "IBDTEST"
+    assert observations["observations"][0]["radius_km"] == 73.25
+    assert observations["observations"][0]["source_record_id"] == "map-surveys:9001"
+    assert observations["observations"][0]["citation_text"] == (
+        "Synthetic contract example; not a publication"
+    )
+    assert observations["observations"][0]["population_label"] == "Synthetic"
+    assert observations["observations"][0]["study_id"] == "map-study-SYNTHETIC-001"
+    assert observations["observations"][0]["study_label"] == "SYNTHETIC-001"
     assert catalog["artifacts"][0]["surface_sha256"]
     assert catalog["artifacts"][0]["observations_sha256"]
     assert catalog["artifacts"][0]["downloads"]["manifest"]["sha256"]
@@ -546,6 +532,20 @@ def test_export_refuses_missing_observation_radius(
     monkeypatch.setattr(export_atlas_web.map_surveys, "load", load_without_radius)
     with pytest.raises(ValueError, match="radius_km"):
         _export(export_inputs)
+
+
+def test_export_refuses_hbs_source_without_explicit_support_before_catalog_write(
+    export_inputs: dict[str, Path],
+) -> None:
+    source = pd.read_csv(export_inputs["hbs"]).drop(
+        columns=["radius_km", "support_kind", "coordinate_provenance", "radius_provenance"]
+    )
+    source.to_csv(export_inputs["hbs"], index=False)
+
+    with pytest.raises(ValueError, match="explicit spatial support"):
+        _export(export_inputs)
+
+    assert not (export_inputs["out"] / "catalog.json").exists()
 
 
 def test_export_refuses_missing_discovery_metadata(export_inputs: dict[str, Path]) -> None:

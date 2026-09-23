@@ -214,7 +214,7 @@ python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv \
   --release-version 0.1.0 --out data/registry-fixture-v1
 python scripts/build_observations.py --registry data/registry-fixture-v1 \
   --gnomad tests/fixtures/gnomad_hgdp_1kg_freqs.tsv \
-  --map-surveys tests/fixtures/map_hbs_surveys.csv \
+  --map-surveys tests/fixtures/map_hbs_curated_synthetic.csv \
   --literature-evidence tests/fixtures/literature/promotable/evidence.tsv \
   --literature-field-evidence tests/fixtures/literature/promotable/field_evidence.tsv \
   --out data/observations

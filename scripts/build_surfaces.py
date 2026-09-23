@@ -1,6 +1,6 @@
 """Fit every variant in one batch, and publish what was excluded (design §12, P2; #40).
 
-    python scripts/build_surfaces.py --hbs data/raw/map_hbs_surveys.csv \
+    python scripts/build_surfaces.py --hbs data/curated/map_hbs_surveys.csv \
         --g6pd data/raw/map_g6pd_surveys.csv --out data/surfaces
 
 This is the multi-variant entry point. It exists to make one property true: **every variant that
@@ -15,14 +15,18 @@ without repeating the inference — a palette change should not cost nine minute
 from __future__ import annotations
 
 import argparse
+import sys
 from dataclasses import replace
 from pathlib import Path
 
 import pandas as pd
 
-from genomeos.observations.sources import map_g6pd, map_surveys
-from genomeos.surfaces.batch import jobs_from_sources, run_batch, write_exclusions
-from genomeos.surfaces.fit import FitConfig, save_fit
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from genomeos.observations.sources import map_g6pd, map_surveys  # noqa: E402
+from genomeos.surfaces.batch import jobs_from_sources, run_batch, write_exclusions  # noqa: E402
+from genomeos.surfaces.fit import FitConfig, save_fit  # noqa: E402
 
 #: Loaders keyed by the CLI flag that supplies their export.
 LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}
@@ -46,7 +50,7 @@ LENGTHSCALE_SIGMA: dict[str, float] = {"phenotype:g6pd-deficiency": 0.4}
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--hbs", type=Path, help="MAP HbS survey export CSV")
+    ap.add_argument("--hbs", type=Path, help="curated MAP HbS CSV with explicit spatial support")
     ap.add_argument("--g6pd", type=Path, help="MAP G6PD survey export CSV")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--data-version", default="map-2026-08")

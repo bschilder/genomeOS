@@ -5,7 +5,8 @@ at their survey coordinates. It deliberately draws no fitted surface and no inte
 between points, because §4's first invariant is that what was measured and what was inferred are
 never conflated, and that applies to a review figure as much as to the product.
 
-    python scripts/plot_observations.py --layer hbs --observations data/raw/map_hbs_surveys.csv \
+    python scripts/plot_observations.py --layer hbs \
+        --observations data/curated/map_hbs_surveys.csv \
         --out docs/figures/hbs_observations.png
 
 `--layer` selects the adapter. G6PD is X-linked, so its allele frequency comes from hemizygous
@@ -19,12 +20,16 @@ weight as one of 10,000 — the same reason §11 encodes sample size as opacity 
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from genomeos.observations.sources import map_g6pd, map_surveys  # noqa: E402
 from genomeos.viz.basemap import draw_countries  # noqa: E402
@@ -93,7 +98,12 @@ def plot(observations, report, out: Path, title: str, value_label: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--layer", choices=("hbs", "g6pd"), default="hbs")
-    ap.add_argument("--observations", type=Path, required=True, help="MAP survey export CSV")
+    ap.add_argument(
+        "--observations",
+        type=Path,
+        required=True,
+        help="MAP survey CSV; HbS requires curated explicit spatial support",
+    )
     ap.add_argument("--out", type=Path, required=True)
     args = ap.parse_args()
 
