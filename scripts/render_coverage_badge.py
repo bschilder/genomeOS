@@ -7,10 +7,8 @@ import json
 import re
 from pathlib import Path
 
-_README_BADGE = re.compile(
-    r"(?P<prefix>\[!\[Coverage\]\()[^)]*"
-    r"(?P<suffix>\)\]\(https://github\.com/bschilder/genomeOS/actions/workflows/ci\.yml\))"
-)
+_README_BADGE = re.compile(r"\[!\[Coverage\]\([^)]*\)\]\([^)]*\)")
+_COVERAGE_DESTINATION = "website/public/_static/coverage.svg"
 
 
 def _colour(percent: int) -> str:
@@ -44,10 +42,8 @@ def _shields_colour(percent: int) -> str:
 def update_readme_badge(readme: Path, percent: int) -> None:
     text = readme.read_text(encoding="utf-8")
     image_url = f"https://img.shields.io/badge/coverage-{percent}%25-{_shields_colour(percent)}.svg"
-    updated, replacements = _README_BADGE.subn(
-        rf"\g<prefix>{image_url}\g<suffix>",
-        text,
-    )
+    badge = f"[![Coverage]({image_url})]({_COVERAGE_DESTINATION})"
+    updated, replacements = _README_BADGE.subn(badge, text)
     if replacements != 1:
         raise ValueError(f"{readme}: expected exactly one coverage badge, found {replacements}")
     readme.write_text(updated, encoding="utf-8")
