@@ -7,7 +7,7 @@ import re
 from typing import Literal
 
 from genomeos.validation.reference_acquisition_types import AcquisitionWindowReceipt
-from genomeos.validation.reference_counts import ReferenceCount, validate_reference_counts
+from genomeos.validation.reference_count_types import ReferenceCount, validate_reference_counts
 from genomeos.validation.reference_genotypes import VariantCounts
 from genomeos.validation.reference_preparation_types import PreparationWindowReceipt
 from genomeos.validation.reference_window_types import ReferenceWindow
