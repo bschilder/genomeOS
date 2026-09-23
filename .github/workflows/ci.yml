@@ -34,10 +34,10 @@ jobs:
       - name: Coverage badge is current
         run: |
           python scripts/render_coverage_badge.py
-          if [[ -n "$(git status --porcelain -- website/public/_static/coverage.svg)" ]]; then
-            echo "Coverage changed; regenerate the badge with scripts/render_coverage_badge.py."
-            git diff -- website/public/_static/coverage.svg
-            git status --short -- website/public/_static/coverage.svg
+          if [[ -n "$(git status --porcelain -- README.md website/public/_static/coverage.svg)" ]]; then
+            echo "Coverage changed; regenerate its README badge with scripts/render_coverage_badge.py."
+            git diff -- README.md website/public/_static/coverage.svg
+            git status --short -- README.md website/public/_static/coverage.svg
             exit 1
           fi
       - name: Upload coverage report

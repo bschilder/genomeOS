@@ -1,0 +1,59 @@
+{
+  "schema": "hbs-amplitude-prior-sensitivity-preregistration-v1",
+  "issue": 103,
+  "objective": "Test whether tighter GP-amplitude priors can suppress the supported Nordic background without erasing the current model's endemic peaks.",
+  "method": "self_normalized_importance_reweighting",
+  "original_prior": {
+    "family": "HalfNormal",
+    "scale": 1.0
+  },
+  "candidate_scales": [
+    1.0,
+    0.75,
+    0.5
+  ],
+  "draw_alignment": "Use the exact 500 selected_draw_indices in draws-manifest.json to align posterior amplitude/intercept samples with frequency_draws.npy rows.",
+  "diagnostics": {
+    "minimum_effective_sample_size": 200.0,
+    "maximum_single_normalized_weight": 0.05,
+    "nordic_supported_box": {
+      "latitude_degrees": [55.0, 72.0],
+      "longitude_degrees": [4.0, 32.0],
+      "support_in": [
+        "observed",
+        "interpolated"
+      ]
+    },
+    "endemic_peak_cells": {
+      "baseline_post_median_at_least": 0.08,
+      "support_in": [
+        "observed",
+        "interpolated"
+      ]
+    },
+    "summaries": [
+      "amplitude",
+      "intercept",
+      "invlogit_intercept",
+      "population_weighted_nordic_frequency",
+      "population_weighted_endemic_peak_frequency",
+      "endemic_minus_nordic_frequency"
+    ],
+    "posterior_summary": "weighted median and central 50/95 percent intervals"
+  },
+  "decision_rule": "A candidate is only worth a full refit if it passes both importance-weight diagnostics, lowers the Nordic frequency, and does not lower the endemic-minus-Nordic contrast. This preflight cannot establish held-out count improvement, calibration, or publication eligibility.",
+  "inputs": {
+    "fit_sha256": "004d6d3cd71cff861968cb091bbd9e97cd8b3a7548c1c9d10491b5da9d5c2a78",
+    "draw_manifest_sha256": "1acfb7c0b1fd11fb98e472a737caa26da9705a72a2457596d7cb192044f2b26e",
+    "frequency_draws_sha256": "a3b6f12e6da45d713f3b6e6e3d784833f5ed5c1de28c977265fe5405c27b9fd5",
+    "cells_sha256": "d20aeb9f70b57c6dccb1c21afd45708ac35d0b2b692aae480076be23dd06241e"
+  },
+  "claims_excluded": [
+    "full_refit_equivalence",
+    "heldout_predictive_improvement",
+    "calibration_improvement",
+    "golden_test_pass",
+    "model_promotion"
+  ],
+  "environmental_covariates_used": false
+}

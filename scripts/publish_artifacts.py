@@ -1,7 +1,7 @@
 """Publish per-cell surface artifacts from saved fits (design §5, §6).
 
     python scripts/publish_artifacts.py --fits data/store/fits --out data/store/artifacts \
-        --hbs data/raw/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv \
+        --hbs data/curated/map_hbs_surveys.csv --g6pd data/raw/map_g6pd_surveys.csv \
         --population-cells data/store/worldpop-res4-2020.parquet \
         --population-source worldpop-1km-unconstrained \
         --population-version Global_2000_2020/2020/0_Mosaicked/ppp_2020_1km_Aggregated.tif \
@@ -24,27 +24,31 @@ artifact rather than re-running NUTS.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 
 import h3
 import numpy as np
 
-from genomeos.geo.population import PopulationGrid, publication_target_cells
-from genomeos.observations.sources import (
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
+
+from genomeos.geo.population import PopulationGrid, publication_target_cells  # noqa: E402
+from genomeos.observations.sources import (  # noqa: E402
     afnd_carriers,
     afnd_cytokines,
     afnd_frequencies,
     map_g6pd,
     map_surveys,
 )
-from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish
-from genomeos.surfaces.fit import load_fit
-from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
+from genomeos.surfaces.artifacts import ArtifactManifest, cell_table, publish  # noqa: E402
+from genomeos.surfaces.fit import load_fit  # noqa: E402
+from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION  # noqa: E402
 
 try:
-    from scripts.build_population_grid import read_population_grid
+    from scripts.build_population_grid import read_population_grid  # noqa: E402
 except ModuleNotFoundError:  # Direct `python scripts/publish_artifacts.py` entry.
-    from build_population_grid import read_population_grid
+    from build_population_grid import read_population_grid  # noqa: E402
 
 LAYERS = {"hbs": map_surveys.load, "g6pd": map_g6pd.load}
 
@@ -73,7 +77,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--fits", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--hbs", type=Path)
+    ap.add_argument("--hbs", type=Path, help="curated MAP HbS CSV with explicit spatial support")
     ap.add_argument("--g6pd", type=Path)
     # AFND holds one file per corpus rather than per variant, so publishing it means publishing
     # every allele the adapter retains, not one named layer.
