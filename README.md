@@ -2,7 +2,7 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
-[![Coverage](https://raw.githubusercontent.com/bschilder/genomeOS/main/website/public/_static/coverage.svg)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
+[![Coverage](https://genome-os.org/_static/coverage.svg)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
 [![CI](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
 [![Package: v0.1.0](https://img.shields.io/badge/package-v0.1.0-2496ED?logo=docker&logoColor=white)](https://github.com/users/bschilder/packages/container/package/genomeos)
 
