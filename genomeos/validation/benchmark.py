@@ -25,6 +25,9 @@ declared cohort label is an operational weighting unit, not a certified independ
 genuine zero predictive probability is represented as the JSON string ``"-Infinity"`` at every
 affected aggregation level. Its raw observation count is reported in every cohort and cell record
 and at the global level; this audit count is summed, never averaged.
+
+``cohort_macro_mean_log_score`` exposes the same weighting for model-selection paths that require
+only the proper score and therefore should not compute interval or calibration diagnostics.
 """
 
 from __future__ import annotations
@@ -51,6 +54,7 @@ _PREDICTION_ID_COLUMNS = (
     "variant_group",
     "cohort_id",
 )
+_LOG_SCORE_COLUMNS = _PREDICTION_ID_COLUMNS + ("log_score",)
 _DIAGNOSTIC_COLUMNS = (
     "log_score",
     "absolute_error",
@@ -198,12 +202,19 @@ def inventory_observations(observations: pd.DataFrame) -> dict[str, object]:
     }
 
 
-def _require_predictions(predictions: pd.DataFrame) -> pd.DataFrame:
+def _validate_log_score_values(values: pd.Series) -> None:
+    for value in values.array:
+        numeric = _require_real(value, "log_score")
+        if np.isnan(numeric) or numeric == np.inf or numeric > 0.0:
+            raise ValueError("log_score values must be nonpositive and finite or -Infinity")
+
+
+def _require_log_score_predictions(predictions: pd.DataFrame) -> pd.DataFrame:
     if not isinstance(predictions, pd.DataFrame):
         raise TypeError("predictions must be a pandas DataFrame")
     if predictions.columns.duplicated().any():
         raise ValueError("predictions must not contain duplicate column labels")
-    required = _PREDICTION_ID_COLUMNS + _DIAGNOSTIC_COLUMNS
+    required = _LOG_SCORE_COLUMNS
     missing = sorted(set(required) - set(predictions.columns))
     if missing:
         raise ValueError(f"predictions is missing required columns: {missing}")
@@ -214,6 +225,17 @@ def _require_predictions(predictions: pd.DataFrame) -> pd.DataFrame:
     duplicated = result.duplicated(subset=["split_id", "source_record_id"], keep=False)
     if duplicated.any():
         raise ValueError("prediction (split_id, source_record_id) keys must be unique")
+    _validate_log_score_values(result["log_score"])
+    return result
+
+
+def _require_predictions(predictions: pd.DataFrame) -> pd.DataFrame:
+    _require_log_score_predictions(predictions)
+    required = _PREDICTION_ID_COLUMNS + _DIAGNOSTIC_COLUMNS
+    missing = sorted(set(required) - set(predictions.columns))
+    if missing:
+        raise ValueError(f"predictions is missing required columns: {missing}")
+    result = predictions.loc[:, required].copy(deep=True)
     validate_predictive_diagnostics(result.loc[:, _DIAGNOSTIC_COLUMNS])
     return result
 
@@ -239,10 +261,7 @@ def validate_predictive_diagnostics(diagnostics: pd.DataFrame) -> pd.DataFrame:
             numeric = _require_real(value, column)
             if not isfinite(numeric) or not 0.0 <= numeric <= 1.0:
                 raise ValueError(f"{column} values must be finite and between 0 and 1")
-    for value in result["log_score"].array:
-        numeric = _require_real(value, "log_score")
-        if np.isnan(numeric) or numeric == np.inf or numeric > 0.0:
-            raise ValueError("log_score values must be nonpositive and finite or -Infinity")
+    _validate_log_score_values(result["log_score"])
     for column in _COVERAGE_COLUMNS:
         if not all(isinstance(value, (bool, np.bool_)) for value in result[column].array):
             raise ValueError(f"{column} values must be Boolean")
@@ -302,6 +321,32 @@ def _mean(values: pd.Series) -> float:
     if np.isneginf(numeric).any():
         return -np.inf
     return float(np.mean(numeric))
+
+
+def _aggregate_log_scores(frame: pd.DataFrame, group_columns: tuple[str, ...]) -> pd.DataFrame:
+    records: list[dict[str, object]] = []
+    for keys, group in frame.groupby(list(group_columns), sort=True, dropna=False):
+        key_tuple = keys if isinstance(keys, tuple) else (keys,)
+        record = dict(zip(group_columns, key_tuple, strict=True))
+        record["log_score"] = _mean(group["log_score"])
+        records.append(record)
+    return pd.DataFrame.from_records(records)
+
+
+def cohort_macro_mean_log_score(predictions: pd.DataFrame) -> float | None:
+    """Return the benchmark's cohort-then-cell macro mean from log scores alone."""
+    validated = _require_log_score_predictions(predictions)
+    if validated.empty:
+        return None
+    cohort_cells = _aggregate_log_scores(
+        validated,
+        ("region_id", "variant_group", "cohort_id"),
+    )
+    cells = _aggregate_log_scores(
+        cohort_cells,
+        ("region_id", "variant_group"),
+    )
+    return _mean(cells["log_score"])
 
 
 def _aggregate_rows(frame: pd.DataFrame, group_columns: tuple[str, ...], count_name: str) -> pd.DataFrame:

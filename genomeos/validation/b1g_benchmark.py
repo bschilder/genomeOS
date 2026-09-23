@@ -22,7 +22,6 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, replace
 from typing import Literal
 
-import numpy as np
 import pandas as pd
 
 from genomeos.surfaces.config import FitConfig
@@ -31,6 +30,7 @@ from genomeos.validation.b1g_basis import B1GBasisConfig
 from genomeos.validation.b1g_fit import B1GFit, B1GPrediction, fit_b1g, predict_b1g
 from genomeos.validation.benchmark import (
     BenchmarkFoldStatus,
+    cohort_macro_mean_log_score,
     summarize_benchmark,
     validate_allele_observations,
     validate_predictive_diagnostics,
@@ -249,10 +249,15 @@ def _prediction_frame(
     fit_seed: int,
     predictive_seed: int,
 ) -> pd.DataFrame:
-    expected = tuple(sorted(testing["source_record_id"]))
-    if prediction.observation_ids != expected:
-        raise ValueError("B1G prediction identities do not exactly cover the held-out fold")
-    ordered = testing.sort_values("source_record_id").reset_index(drop=True)
+    ordered, identity = _prediction_identity(
+        testing,
+        assignments,
+        split,
+        prediction,
+        basis_config=basis_config,
+        fit_seed=fit_seed,
+        predictive_seed=predictive_seed,
+    )
     diagnostics = validate_predictive_diagnostics(
         predictive_diagnostics(
             prediction.predictive,
@@ -261,6 +266,23 @@ def _prediction_frame(
             seed=predictive_seed,
         )
     )
+    return pd.concat([identity, diagnostics], axis=1).loc[:, PREDICTION_COLUMNS]
+
+
+def _prediction_identity(
+    testing: pd.DataFrame,
+    assignments: pd.DataFrame,
+    split: BenchmarkSplit,
+    prediction: B1GPrediction,
+    *,
+    basis_config: B1GBasisConfig,
+    fit_seed: int,
+    predictive_seed: int,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    expected = tuple(sorted(testing["source_record_id"]))
+    if prediction.observation_ids != expected:
+        raise ValueError("B1G prediction identities do not exactly cover the held-out fold")
+    ordered = testing.sort_values("source_record_id").reset_index(drop=True)
     identity = ordered.loc[
         :, ["source_record_id", "variant_id", "cohort_id", "ac", "an"]
     ].merge(
@@ -276,7 +298,37 @@ def _prediction_frame(
     identity["basis_count"] = basis_config.basis_count
     identity["fit_seed"] = fit_seed
     identity["predictive_seed"] = predictive_seed
-    return pd.concat([identity, diagnostics], axis=1).loc[:, PREDICTION_COLUMNS]
+    return ordered, identity
+
+
+def _prediction_log_score_frame(
+    testing: pd.DataFrame,
+    assignments: pd.DataFrame,
+    split: BenchmarkSplit,
+    prediction: B1GPrediction,
+    *,
+    basis_config: B1GBasisConfig,
+    fit_seed: int,
+    predictive_seed: int,
+) -> pd.DataFrame:
+    ordered, identity = _prediction_identity(
+        testing,
+        assignments,
+        split,
+        prediction,
+        basis_config=basis_config,
+        fit_seed=fit_seed,
+        predictive_seed=predictive_seed,
+    )
+    count, denominator = prediction.predictive.validated_counts(
+        ordered["ac"].to_numpy(),
+        ordered["an"].to_numpy(),
+    )
+    columns = ["split_id", "source_record_id", "region_id", "variant_group", "cohort_id"]
+    frame = identity.loc[:, columns].copy()
+    frame["log_score"] = prediction.predictive.log_prob(count, denominator)
+    cohort_macro_mean_log_score(frame)
+    return frame
 
 
 def _fit_and_score(
@@ -290,6 +342,7 @@ def _fit_and_score(
     seed: int,
     fit_function: FitFunction,
     predict_function: PredictFunction,
+    diagnostic_scope: Literal["full", "log_score"] = "full",
 ) -> tuple[pd.DataFrame, SamplerDiagnostics, int, int]:
     fit_seed = derive_b1g_seed(
         seed, split.split_id, basis_config.radius_km, basis_config.basis_count, "fit"
@@ -308,7 +361,13 @@ def _fit_and_score(
         seed=predictive_seed,
         cdf_backend=benchmark_config.cdf_backend,
     )
-    frame = _prediction_frame(
+    if diagnostic_scope == "full":
+        frame_function = _prediction_frame
+    elif diagnostic_scope == "log_score":
+        frame_function = _prediction_log_score_frame
+    else:
+        raise ValueError("diagnostic_scope must be 'full' or 'log_score'")
+    frame = frame_function(
         testing,
         assignments,
         split,
@@ -346,7 +405,6 @@ def _select_candidate(
     scores: list[B1GCandidateScore] = []
     for basis_config in config.candidate_configs:
         frames = []
-        statuses = []
         failures = []
         inner_records: list[B1GInnerFoldRecord] = []
         for split in inner_splits:
@@ -363,7 +421,12 @@ def _select_candidate(
             try:
                 if not split.train_ids:
                     raise ValueError("no training observations")
-                frame, diagnostics, returned_fit_seed, returned_predictive_seed = _fit_and_score(
+                (
+                    frame,
+                    diagnostics,
+                    returned_fit_seed,
+                    returned_predictive_seed,
+                ) = _fit_and_score(
                     by_id.loc[list(split.train_ids)].reset_index(drop=True),
                     by_id.loc[list(split.test_ids)].reset_index(drop=True),
                     assignments,
@@ -373,11 +436,11 @@ def _select_candidate(
                     seed=seed,
                     fit_function=fit_function,
                     predict_function=predict_function,
+                    diagnostic_scope="log_score",
                 )
                 if (returned_fit_seed, returned_predictive_seed) != (fit_seed, predictive_seed):
                     raise RuntimeError("derived inner seeds changed during fit")
                 frames.append(frame)
-                statuses.append(BenchmarkFoldStatus(split.split_id, "completed", split.test_ids, None))
                 inner_records.append(
                     B1GInnerFoldRecord(
                         split.split_id,
@@ -392,7 +455,6 @@ def _select_candidate(
             except Exception as error:
                 reason = f"{split.split_id}: {type(error).__name__}: {error}"
                 failures.append(reason)
-                statuses.append(BenchmarkFoldStatus(split.split_id, "failed", split.test_ids, reason))
                 diagnostics = getattr(error, "diagnostics", None)
                 if not isinstance(diagnostics, SamplerDiagnostics):
                     diagnostics = None
@@ -408,17 +470,9 @@ def _select_candidate(
                     )
                 )
         predictions = pd.concat(frames, ignore_index=True) if frames else _empty_predictions()
-        summary = summarize_benchmark(
-            predictions,
-            statuses,
-            tuple(split.split_id for split in inner_splits),
-        )
-        metric = summary["metrics"]["mean_log_score"]
-        mean_log_score = (
-            -np.inf if metric == "-Infinity" else float(metric) if metric is not None else None
-        )
+        mean_log_score = cohort_macro_mean_log_score(predictions) if frames else None
         requested = sum(len(split.test_ids) for split in inner_splits)
-        scored = int(summary["scored_observation_count"])
+        scored = len(predictions)
         eligible = not failures and scored == requested and mean_log_score is not None
         scores.append(
             B1GCandidateScore(
