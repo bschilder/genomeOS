@@ -33,11 +33,11 @@ jobs:
         run: pytest -v --cov=genomeos --cov-report=term-missing --cov-report=json
       - name: Coverage badge is current
         run: |
-          python scripts/render_coverage_badge.py
-          if [[ -n "$(git status --porcelain -- website/public/_static/coverage.svg)" ]]; then
-            echo "Coverage changed; regenerate website/public/_static/coverage.svg with scripts/render_coverage_badge.py."
-            git diff -- website/public/_static/coverage.svg
-            git status --short -- website/public/_static/coverage.svg
+          python scripts/render_coverage_badge.py --readme README.md
+          if [[ -n "$(git status --porcelain -- README.md website/public/_static/coverage.svg)" ]]; then
+            echo "Coverage changed; regenerate its README badge with scripts/render_coverage_badge.py."
+            git diff -- README.md website/public/_static/coverage.svg
+            git status --short -- README.md website/public/_static/coverage.svg
             exit 1
           fi
       - name: Upload coverage report

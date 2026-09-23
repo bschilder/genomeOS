@@ -2,11 +2,11 @@
 
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Version: 0.1.0](https://img.shields.io/badge/version-0.1.0-blue.svg)](pyproject.toml)
-[![Coverage](https://genome-os.org/_static/coverage.svg)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/coverage-90%25-brightgreen.svg)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
 [![CI](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)
 [![Package: v0.1.0](https://img.shields.io/badge/package-v0.1.0-2496ED?logo=docker&logoColor=white)](https://github.com/users/bschilder/packages/container/package/genomeos)
 
-<!-- Coverage is measured locally; scripts/render_coverage_badge.py updates the first-party SVG.
+<!-- Coverage is measured locally; scripts/render_coverage_badge.py updates the value above.
      Version badges follow project.version; docker.yml publishes the matching v-prefixed tag. -->
 
 An open atlas of human genetic variation — across the world's populations, and inside the
