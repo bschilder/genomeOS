@@ -25,6 +25,11 @@ from genomeos.validation.b1g_checkpoint import (
     load_b1g_fold_shards,
     write_b1g_fold_shard,
 )
+from genomeos.validation.nested_folds import (
+    THREE_INNER_FOLD_ALGORITHM,
+    InnerFoldGroup,
+    plan_three_inner_folds,
+)
 from genomeos.validation.spatial_gp_checkpoint import (
     build_checkpoint_header,
     initialize_checkpoint,
@@ -40,28 +45,28 @@ def _plan() -> B1GBenchmarkPlan:
         {
             "variant_id": "chr11-5227002-T-A",
             "rsid": "rs334",
-            "population_id": ["pop-a", "pop-b"],
-            "lat": [-40.0, 40.0],
-            "lon": [-100.0, 100.0],
+            "population_id": ["pop-a", "pop-b", "pop-c", "pop-d"],
+            "lat": [-40.0, -10.0, 10.0, 40.0],
+            "lon": [-150.0, -50.0, 50.0, 150.0],
             "radius_km": 1.0,
-            "ac": [1, 2],
-            "an": [100, 100],
-            "source_record_id": ["obs-a", "obs-b"],
+            "ac": [1, 2, 3, 4],
+            "an": [100, 100, 100, 100],
+            "source_record_id": ["obs-a", "obs-b", "obs-c", "obs-d"],
             "source": "synthetic",
             "assay": "genotype",
             "date_lower": 0,
             "date_upper": 0,
             "sampling_design": "population_random",
             "disease_ascertainment_excluded": False,
-            "cohort_id": ["cohort-a", "cohort-b"],
+            "cohort_id": ["cohort-a", "cohort-b", "cohort-c", "cohort-d"],
             "ingest_version": "test",
         }
     )
     assignments = pd.DataFrame(
         {
-            "source_record_id": ["obs-a", "obs-b"],
-            "block_id": ["a", "b"],
-            "region_id": ["region-a", "region-b"],
+            "source_record_id": ["obs-a", "obs-b", "obs-c", "obs-d"],
+            "block_id": ["a", "b", "c", "d"],
+            "region_id": ["region-a", "region-b", "region-c", "region-d"],
             "variant_group": "hbs",
         }
     )
@@ -115,37 +120,50 @@ def _header(plan: B1GBenchmarkPlan) -> dict[str, object]:
 
 
 def _candidate(
-    inner_id: str,
+    grouping_sha256: str,
     *,
     radius_km: float,
     basis_count: int,
+    groups: tuple[InnerFoldGroup, ...],
     diagnostics: SamplerDiagnostics = GOOD,
 ) -> B1GCandidateScore:
-    inner = B1GInnerFoldRecord(
-        split_id=inner_id,
-        status="completed",
-        expected_test_ids=(f"{inner_id}-test",),
-        fit_seed=1,
-        predictive_seed=2,
-        sampler_diagnostics=diagnostics,
-        failure_reason=None,
+    inner_folds = tuple(
+        B1GInnerFoldRecord(
+            split_id=f"inner-{index}",
+            status="completed",
+            expected_test_ids=tuple(f"obs-{block}" for block in groups[index].source_block_ids),
+            fit_seed=index + 1,
+            predictive_seed=index + 11,
+            sampler_diagnostics=diagnostics,
+            failure_reason=None,
+            inner_block_id=f"inner-{index}",
+            source_block_ids=groups[index].source_block_ids,
+            grouping_algorithm=THREE_INNER_FOLD_ALGORITHM,
+            grouping_sha256=grouping_sha256,
+        )
+        for index in range(3)
     )
     return B1GCandidateScore(
         radius_km,
         basis_count,
-        1,
-        1,
+        3,
+        3,
         -1.0,
-        1,
+        3,
         0,
         (),
         True,
-        (inner,),
+        inner_folds,
     )
 
 
 def _fold(plan: B1GBenchmarkPlan, ordinal: int) -> B1GFoldResult:
     split = plan.splits[ordinal]
+    grouping = plan_three_inner_folds(
+        plan.assignments[
+            plan.assignments["source_record_id"].isin(split.train_ids)
+        ].loc[:, ["source_record_id", "block_id"]]
+    )
     record_id = split.test_ids[0]
     observation = plan.observations.set_index("source_record_id").loc[record_id]
     assignment = plan.assignments.set_index("source_record_id").loc[record_id]
@@ -179,9 +197,10 @@ def _fold(plan: B1GBenchmarkPlan, ordinal: int) -> B1GFoldResult:
         predictions=pd.DataFrame.from_records([row], columns=PREDICTION_COLUMNS),
         candidate_scores=tuple(
             _candidate(
-                f"inner-{index}",
+                grouping.grouping_sha256,
                 radius_km=config.radius_km,
                 basis_count=config.basis_count,
+                groups=grouping.groups,
             )
             for index, config in enumerate(plan.config.candidate_configs)
         ),
@@ -222,15 +241,15 @@ def test_parallel_shards_round_trip_and_finalize_in_any_write_order(tmp_path):
     checkpoint = tmp_path / "checkpoint"
     initialize_checkpoint(checkpoint, header)
 
-    write_b1g_fold_shard(checkpoint, header, plan, 1, _fold(plan, 1), _runtime())
-    write_b1g_fold_shard(checkpoint, header, plan, 0, _fold(plan, 0), _runtime())
+    for ordinal in (3, 1, 0, 2):
+        write_b1g_fold_shard(checkpoint, header, plan, ordinal, _fold(plan, ordinal), _runtime())
 
     shards = load_b1g_fold_shards(checkpoint, header, plan)
-    assert tuple(shard.ordinal for shard in shards) == (0, 1)
+    assert tuple(shard.ordinal for shard in shards) == (0, 1, 2, 3)
     assert all(shard.runtime == _runtime() for shard in shards)
     result = finalize_b1g_checkpoint(checkpoint, header, plan)
     assert result.summary["comparison_complete"] is True
-    assert len(result.predictions) == 2
+    assert len(result.predictions) == 4
 
 
 def test_infeasible_fold_before_inner_planning_is_preserved(tmp_path):
@@ -278,6 +297,7 @@ def test_shard_is_immutable_and_integrity_checked(tmp_path):
 
     artifact = checkpoint / "folds" / "0000.json"
     document = json.loads(artifact.read_text())
+    assert document["schema_version"] == 2
     document["runtime"]["elapsed_seconds"] = 99.0
     artifact.write_text(json.dumps(document))
     with pytest.raises(ValueError, match="integrity"):
@@ -292,7 +312,10 @@ def test_eligible_candidate_cannot_hide_bad_inner_diagnostics(tmp_path):
     fold = _fold(plan, 0)
     candidates = list(fold.candidate_scores)
     bad_inner = replace(candidates[0].inner_folds[0], sampler_diagnostics=BAD)
-    candidates[0] = replace(candidates[0], inner_folds=(bad_inner,))
+    candidates[0] = replace(
+        candidates[0],
+        inner_folds=(bad_inner, *candidates[0].inner_folds[1:]),
+    )
     contradictory = replace(fold, candidate_scores=tuple(candidates))
 
     with pytest.raises(ValueError, match="eligible candidate.*convergence"):
@@ -302,6 +325,62 @@ def test_eligible_candidate_cannot_hide_bad_inner_diagnostics(tmp_path):
             plan,
             0,
             contradictory,
+            _runtime(),
+        )
+
+
+def test_checkpoint_refuses_candidate_with_four_inner_folds(tmp_path):
+    plan = _plan()
+    header = _header(plan)
+    checkpoint = tmp_path / "checkpoint"
+    initialize_checkpoint(checkpoint, header)
+    fold = _fold(plan, 0)
+    candidates = list(fold.candidate_scores)
+    extra = replace(
+        candidates[0].inner_folds[0],
+        split_id="inner-3",
+        inner_block_id="inner-3",
+        source_block_ids=("source-3",),
+    )
+    candidates[0] = replace(
+        candidates[0],
+        requested_count=4,
+        scored_count=4,
+        completed_inner_fold_count=4,
+        inner_folds=(*candidates[0].inner_folds, extra),
+    )
+
+    with pytest.raises(ValueError, match="exactly three inner folds"):
+        write_b1g_fold_shard(
+            checkpoint,
+            header,
+            plan,
+            0,
+            replace(fold, candidate_scores=tuple(candidates)),
+            _runtime(),
+        )
+
+
+def test_checkpoint_refuses_candidates_with_different_grouping_evidence(tmp_path):
+    plan = _plan()
+    header = _header(plan)
+    checkpoint = tmp_path / "checkpoint"
+    initialize_checkpoint(checkpoint, header)
+    fold = _fold(plan, 0)
+    candidates = list(fold.candidate_scores)
+    changed = replace(candidates[1].inner_folds[0], grouping_sha256="e" * 64)
+    candidates[1] = replace(
+        candidates[1],
+        inner_folds=(changed, *candidates[1].inner_folds[1:]),
+    )
+
+    with pytest.raises(ValueError, match="disagrees with the frozen inner-fold grouping"):
+        write_b1g_fold_shard(
+            checkpoint,
+            header,
+            plan,
+            0,
+            replace(fold, candidate_scores=tuple(candidates)),
             _runtime(),
         )
 

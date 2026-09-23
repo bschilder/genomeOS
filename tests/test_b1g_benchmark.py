@@ -24,10 +24,13 @@ GOOD_DIAGNOSTICS = SamplerDiagnostics(
 )
 
 
-def _inputs() -> tuple[pd.DataFrame, pd.DataFrame]:
+def _inputs(
+    coordinates: dict[str, float] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
     records = []
     assignments = []
-    coordinates = {"a": -150.0, "b": -50.0, "c": 50.0, "d": 150.0}
+    if coordinates is None:
+        coordinates = {"a": -150.0, "b": -50.0, "c": 50.0, "d": 150.0}
     for block, lon in coordinates.items():
         for index in range(2):
             record_id = f"{block}-{index}"
@@ -143,6 +146,37 @@ def test_nested_selection_uses_the_fixed_grid_and_exact_tie_break():
     )
     assert len(calls) == 28  # 9 candidates × 3 inner folds, then one outer fit.
     assert len(result.predictions) == 2
+
+
+def test_five_outer_blocks_still_use_exactly_three_inner_folds():
+    observations, assignments = _inputs(
+        {"a": -160.0, "b": -80.0, "c": 0.0, "d": 80.0, "e": 160.0}
+    )
+    plan = plan_b1g_benchmark(
+        observations,
+        assignments,
+        (),
+        buffer_km=1.0,
+        data_version="fixture-v1",
+        config=_config(),
+        seed=42,
+    )
+    calls, fit_function, predict_function = _fake_functions()
+
+    result = evaluate_b1g_fold(
+        plan,
+        plan.splits[0],
+        fit_function=fit_function,
+        predict_function=predict_function,
+    )
+
+    assert result.status.status == "completed"
+    assert all(len(score.inner_folds) == 3 for score in result.candidate_scores)
+    assert len(calls) == 28  # 9 candidates × 3 inner folds, then one outer fit.
+    first_candidate = result.candidate_scores[0]
+    source_blocks = [set(inner.source_block_ids) for inner in first_candidate.inner_folds]
+    assert set.union(*source_blocks) == {"b", "c", "d", "e"}
+    assert sum(len(blocks) for blocks in source_blocks) == 4
 
 
 def test_inner_selection_skips_interval_diagnostics(monkeypatch):

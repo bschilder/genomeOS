@@ -38,6 +38,7 @@ import genomeos.validation.b1g_benchmark as benchmark_module  # noqa: E402
 import genomeos.validation.b1g_checkpoint as checkpoint_module  # noqa: E402
 import genomeos.validation.b1g_fit as fit_module  # noqa: E402
 import genomeos.validation.benchmark as reporting_module  # noqa: E402
+import genomeos.validation.nested_folds as nested_folds_module  # noqa: E402
 import genomeos.validation.predictive as predictive_module  # noqa: E402
 import genomeos.validation.splits as splits_module  # noqa: E402
 from genomeos.surfaces.config import FitConfig  # noqa: E402
@@ -54,6 +55,10 @@ from genomeos.validation.b1g_checkpoint import (  # noqa: E402
     write_b1g_fold_shard,
 )
 from genomeos.validation.benchmark import inventory_observations, validate_allele_observations  # noqa: E402
+from genomeos.validation.nested_folds import (  # noqa: E402
+    THREE_INNER_FOLD_ALGORITHM,
+    THREE_INNER_FOLD_COUNT,
+)
 from genomeos.validation.spatial_gp_checkpoint import (  # noqa: E402
     build_checkpoint_header,
     initialize_checkpoint,
@@ -97,6 +102,7 @@ SCIENCE_SOURCE_FILES = {
     "genomeos/validation/b1g_checkpoint.py": Path(checkpoint_module.__file__).resolve(),
     "genomeos/validation/b1g_fit.py": Path(fit_module.__file__).resolve(),
     "genomeos/validation/benchmark.py": Path(reporting_module.__file__).resolve(),
+    "genomeos/validation/nested_folds.py": Path(nested_folds_module.__file__).resolve(),
     "genomeos/validation/predictive.py": Path(predictive_module.__file__).resolve(),
     "genomeos/validation/splits.py": Path(splits_module.__file__).resolve(),
     "scripts/benchmark_b1g.py": Path(__file__).resolve(),
@@ -320,6 +326,10 @@ def _build_campaign(args: argparse.Namespace):
         "cdf_backend": args.cdf_backend,
         "data_version": args.data_version,
         "fit_config": asdict(fit_config),
+        "inner_fold_protocol": {
+            "algorithm": THREE_INNER_FOLD_ALGORITHM,
+            "fold_count": THREE_INNER_FOLD_COUNT,
+        },
         "query_chunk_size": args.query_chunk_size,
         "sampler_convergence_gate": {
             "maximum_divergences": 0,
@@ -407,6 +417,9 @@ def _evidence_tables(shards):
                 }
                 inner_record["expected_test_ids"] = json.dumps(
                     list(inner.expected_test_ids), separators=(",", ":")
+                )
+                inner_record["source_block_ids"] = json.dumps(
+                    list(inner.source_block_ids), separators=(",", ":")
                 )
                 inner_rows.append(
                     {
