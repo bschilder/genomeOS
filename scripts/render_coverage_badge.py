@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
+
+_README_BADGE = re.compile(
+    r"(?P<prefix>\[!\[Coverage\]\()[^)]*"
+    r"(?P<suffix>\)\]\(https://github\.com/bschilder/genomeOS/actions/workflows/ci\.yml\))"
+)
 
 
 def _colour(percent: int) -> str:
@@ -19,6 +25,32 @@ def _colour(percent: int) -> str:
     if percent >= 50:
         return "#fe7d37"
     return "#e05d44"
+
+
+def _shields_colour(percent: int) -> str:
+    if percent >= 90:
+        return "brightgreen"
+    if percent >= 80:
+        return "green"
+    if percent >= 70:
+        return "yellowgreen"
+    if percent >= 60:
+        return "yellow"
+    if percent >= 50:
+        return "orange"
+    return "red"
+
+
+def update_readme_badge(readme: Path, percent: int) -> None:
+    text = readme.read_text(encoding="utf-8")
+    image_url = f"https://img.shields.io/badge/coverage-{percent}%25-{_shields_colour(percent)}.svg"
+    updated, replacements = _README_BADGE.subn(
+        rf"\g<prefix>{image_url}\g<suffix>",
+        text,
+    )
+    if replacements != 1:
+        raise ValueError(f"{readme}: expected exactly one coverage badge, found {replacements}")
+    readme.write_text(updated, encoding="utf-8")
 
 
 def render_badge(percent: int) -> str:
@@ -53,13 +85,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--coverage-json", type=Path, default=Path("coverage.json"))
     parser.add_argument("--out", type=Path, default=Path("website/public/_static/coverage.svg"))
+    parser.add_argument("--readme", type=Path)
     args = parser.parse_args()
 
     report = json.loads(args.coverage_json.read_text())
     percent = round(float(report["totals"]["percent_covered"]))
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render_badge(percent))
-    print(f"Wrote {args.out} ({percent}%)")
+    if args.readme is None:
+        print(f"Wrote {args.out} ({percent}%)")
+    else:
+        update_readme_badge(args.readme, percent)
+        print(f"Wrote {args.out} and updated {args.readme} ({percent}%)")
 
 
 if __name__ == "__main__":

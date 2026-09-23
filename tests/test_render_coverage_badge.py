@@ -33,3 +33,42 @@ def test_generator_writes_svg_without_a_readme_or_pages_checkout(tmp_path: Path)
 
     assert result.returncode == 0, result.stderr
     assert 'aria-label="coverage: 85%"' in badge.read_text(encoding="utf-8")
+
+
+def test_generator_updates_the_readme_badge_when_requested(tmp_path: Path) -> None:
+    report = tmp_path / "coverage.json"
+    badge = tmp_path / "coverage.svg"
+    readme = tmp_path / "README.md"
+    report.write_text(
+        json.dumps({"totals": {"percent_covered": 84.6}}),
+        encoding="utf-8",
+    )
+    readme.write_text(
+        "[![Coverage](https://genome-os.org/_static/coverage.svg)]"
+        "(https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(Path(__file__).parents[1] / "scripts" / "render_coverage_badge.py"),
+            "--coverage-json",
+            str(report),
+            "--out",
+            str(badge),
+            "--readme",
+            str(readme),
+        ],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        "[![Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)]"
+        "(https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)"
+        in readme.read_text(encoding="utf-8")
+    )
