@@ -8,8 +8,13 @@ import re
 from pathlib import Path
 
 _README_BADGE = re.compile(r"\[!\[Coverage\]\([^)]*\)\]\([^)]*\)")
+_COVERAGE_IMAGE = (
+    "https://raw.githubusercontent.com/bschilder/genomeOS/main/"
+    "website/public/_static/coverage.svg"
+)
 _COVERAGE_DESTINATION = (
-    "https://github.com/bschilder/genomeOS/actions/workflows/ci.yml"
+    "https://github.com/bschilder/genomeOS/blob/main/"
+    "website/public/_static/coverage.svg"
 )
 
 
@@ -27,24 +32,9 @@ def _colour(percent: int) -> str:
     return "#e05d44"
 
 
-def _shields_colour(percent: int) -> str:
-    if percent >= 90:
-        return "brightgreen"
-    if percent >= 80:
-        return "green"
-    if percent >= 70:
-        return "yellowgreen"
-    if percent >= 60:
-        return "yellow"
-    if percent >= 50:
-        return "orange"
-    return "red"
-
-
 def update_readme_badge(readme: Path, percent: int) -> None:
     text = readme.read_text(encoding="utf-8")
-    image_url = f"https://img.shields.io/badge/coverage-{percent}%25-{_shields_colour(percent)}.svg"
-    badge = f"[![Coverage]({image_url})]({_COVERAGE_DESTINATION})"
+    badge = f"[![Coverage]({_COVERAGE_IMAGE})]({_COVERAGE_DESTINATION})"
     updated, replacements = _README_BADGE.subn(badge, text)
     if replacements != 1:
         raise ValueError(f"{readme}: expected exactly one coverage badge, found {replacements}")

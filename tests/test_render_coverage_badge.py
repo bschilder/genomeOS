@@ -68,7 +68,8 @@ def test_generator_updates_the_readme_badge_when_requested(tmp_path: Path) -> No
 
     assert result.returncode == 0, result.stderr
     assert (
-        "[![Coverage](https://img.shields.io/badge/coverage-85%25-green.svg)]"
-        "(https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)"
+        "[![Coverage](https://raw.githubusercontent.com/bschilder/genomeOS/main/"
+        "website/public/_static/coverage.svg)]"
+        "(https://github.com/bschilder/genomeOS/blob/main/website/public/_static/coverage.svg)"
         in readme.read_text(encoding="utf-8")
     )
