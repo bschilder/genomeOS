@@ -297,6 +297,30 @@ def build_b1g_basis(
         raise ValueError("B1G requires modern observations")
 
     centres = select_b1g_centres(training, config=config)
+    return build_b1g_basis_from_centres(queries, centres=centres, config=config)
+
+
+def build_b1g_basis_from_centres(
+    query_observations: pd.DataFrame,
+    *,
+    centres: B1GCentreSet,
+    config: B1GBasisConfig,
+) -> B1GBasisMatrix:
+    """Evaluate fixed training-only centres for footprint queries in bounded chunks."""
+    if not isinstance(config, B1GBasisConfig):
+        raise TypeError("config must be a B1GBasisConfig")
+    if not isinstance(centres, B1GCentreSet):
+        raise TypeError("centres must be a B1GCentreSet")
+    queries = validate_allele_observations(query_observations)
+    if queries.empty:
+        raise ValueError("query_observations must not be empty")
+    variants = tuple(sorted(set(queries["variant_id"])))
+    if len(variants) != 1 or variants[0].startswith("phenotype:"):
+        raise ValueError("query observations must describe one non-phenotype variant")
+    if ((queries["date_lower"] != 0) | (queries["date_upper"] != 0)).any():
+        raise ValueError("B1G requires modern observations")
+    if len(centres.source_record_ids) != config.basis_count:
+        raise ValueError("centre count must match config.basis_count")
     queries = queries.sort_values("source_record_id").reset_index(drop=True)
     centre_lat = np.radians(np.asarray(centres.latitudes))
     centre_lon = np.radians(np.asarray(centres.longitudes))
