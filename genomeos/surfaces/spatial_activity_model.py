@@ -1,9 +1,13 @@
-"""Research-only spatial activity model graph (design §§7–8; issue #384).
+"""Research-only spatial activity model graph (design §§7–8; issues #384 and #391).
 
 The ordinary and candidate arms share one conditional-frequency HSGP, one beta-binomial
 concentration prior, and the same optional replicated-cohort term. The candidate adds a second
 HSGP for the probability that the active count component applies. Its binary state is never
 sampled: ``activity_beta_binomial_logp`` integrates it from the observed count law.
+
+Each sampled spatial intercept is the exact mean of its field at the training locations. The
+HSGP deviations are centered over those locations while the intercept prior is shifted by the
+same amount, preserving the original prior and prediction fields under a one-to-one transform.
 
 This module only builds a pure offline PyMC graph from explicit arrays and configuration. It does
 not sample, score, serialize, inspect real HbS outcomes, or imply that either latent component has
@@ -20,6 +24,7 @@ from typing import Literal
 import numpy as np
 import pymc as pm
 import pytensor.tensor as pt
+from pymc.gp.hsgp_approx import calc_eigenvalues, calc_eigenvectors, set_boundary
 
 from genomeos.surfaces.activity_likelihood import activity_beta_binomial_logp
 
@@ -196,20 +201,45 @@ def _spatial_field(
         sigma=config.lengthscale_sigma,
     )
     amplitude = pm.HalfNormal(f"{name}_amplitude", sigma=amplitude_sigma)
+    covariance = amplitude**2 * pm.gp.cov.Matern52(3, ls=lengthscale)
+    x_center = (pt.max(x_observed, axis=0) + pt.min(x_observed, axis=0)).eval() / 2
+    centered_observed = x_observed - x_center
+    boundaries = set_boundary(centered_observed, config.hsgp_c)
+    eigenvalues = calc_eigenvalues(boundaries, config.hsgp_m)
+    observed_basis = calc_eigenvectors(
+        centered_observed,
+        boundaries,
+        eigenvalues,
+        config.hsgp_m,
+    )
+    prediction_basis = calc_eigenvectors(
+        x_prediction - x_center,
+        boundaries,
+        eigenvalues,
+        config.hsgp_m,
+    )
+    sqrt_psd = pt.sqrt(covariance.power_spectral_density(pt.sqrt(eigenvalues)))
+    coefficients = pm.Normal(
+        f"{name}_field_hsgp_coeffs",
+        mu=0.0,
+        sigma=1.0,
+        size=int(np.prod(config.hsgp_m)),
+    )
+    weighted_coefficients = coefficients * sqrt_psd
+    raw_observed = observed_basis @ weighted_coefficients
+    raw_predicted = prediction_basis @ weighted_coefficients
+    training_mean = pt.mean(raw_observed)
     intercept = pm.Normal(
         f"{name}_intercept",
-        mu=intercept_mu,
+        mu=intercept_mu + training_mean,
         sigma=intercept_sigma,
     )
-    covariance = amplitude**2 * pm.gp.cov.Matern52(3, ls=lengthscale)
-    gp = pm.gp.HSGP(
-        m=list(config.hsgp_m),
-        c=config.hsgp_c,
-        cov_func=covariance,
-        mean_func=pm.gp.mean.Constant(intercept),
+    observed = pm.Deterministic(
+        f"{name}_field", intercept + raw_observed - training_mean
     )
-    observed = gp.prior(f"{name}_field", X=x_observed)
-    predicted = gp.conditional(f"{name}_field_pred", Xnew=x_prediction)
+    predicted = pm.Deterministic(
+        f"{name}_field_pred", intercept + raw_predicted - training_mean
+    )
     return observed, predicted
 
 

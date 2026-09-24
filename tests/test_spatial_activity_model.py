@@ -65,6 +65,95 @@ def test_candidate_builds_two_continuous_fields_and_marginalized_observation() -
     assert np.isfinite(graph.model.compile_logp()(graph.model.initial_point()))
 
 
+def test_spatial_intercepts_are_exact_training_field_means() -> None:
+    from genomeos.surfaces.spatial_activity_model import build_spatial_activity_model
+
+    x, ac, an, x_pred = _inputs()
+    graph = build_spatial_activity_model(
+        x,
+        ac,
+        an,
+        x_pred,
+        cohort_index=np.array([0, 0, 1, 1]),
+        mode="spatial_activity",
+        config=_config(),
+    )
+    point = graph.model.initial_point()
+    coefficients = np.zeros(8)
+    coefficients[0] = 1.0
+    point["conditional_field_hsgp_coeffs"] = coefficients
+    point["activity_field_hsgp_coeffs"] = coefficients
+    targets = graph.model.replace_rvs_by_values(
+        [
+            graph.model["conditional_field"],
+            graph.model["conditional_intercept"],
+            graph.model["activity_field"],
+            graph.model["activity_intercept"],
+        ]
+    )
+    evaluate = graph.model.compile_fn(
+        targets,
+        inputs=graph.model.value_vars,
+        on_unused_input="ignore",
+    )
+
+    conditional_field, conditional_intercept, activity_field, activity_intercept = evaluate(point)
+
+    assert np.mean(conditional_field) == pytest.approx(conditional_intercept, abs=1e-12)
+    assert np.mean(activity_field) == pytest.approx(activity_intercept, abs=1e-12)
+
+
+def test_centering_preserves_legacy_training_and_prediction_fields() -> None:
+    from genomeos.surfaces.spatial_activity_model import build_spatial_activity_model
+
+    x, ac, an, x_pred = _inputs()
+    graph = build_spatial_activity_model(
+        x,
+        ac,
+        an,
+        x_pred,
+        cohort_index=np.array([0, 0, 1, 1]),
+        mode="spatial_activity",
+        config=_config(),
+    )
+    point = graph.model.initial_point()
+    coefficients = np.zeros(8)
+    coefficients[0] = 1.0
+    point["conditional_field_hsgp_coeffs"] = coefficients
+    point["activity_field_hsgp_coeffs"] = coefficients
+    point["conditional_intercept"] = -2.830984483090557
+    point["activity_intercept"] = 2.169015516909443
+    targets = graph.model.replace_rvs_by_values(
+        [
+            graph.model["conditional_field"],
+            graph.model["conditional_field_pred"],
+            graph.model["activity_field"],
+            graph.model["activity_field_pred"],
+        ]
+    )
+    evaluate = graph.model.compile_fn(
+        targets,
+        inputs=graph.model.value_vars,
+        on_unused_input="ignore",
+    )
+
+    conditional, conditional_pred, activity, activity_pred = evaluate(point)
+
+    np.testing.assert_allclose(
+        conditional,
+        [-2.907869200730861, -2.795065020725002, -2.677107192786309, -2.943896518120055],
+    )
+    np.testing.assert_allclose(
+        conditional_pred,
+        [-2.846720760106925, -2.779499261894901],
+    )
+    np.testing.assert_allclose(
+        activity,
+        [2.092130799269139, 2.204934979274998, 2.322892807213691, 2.056103481879945],
+    )
+    np.testing.assert_allclose(activity_pred, [2.153279239893075, 2.220500738105099])
+
+
 def test_ordinary_arm_uses_same_contract_with_activity_fixed_to_one() -> None:
     from genomeos.surfaces.spatial_activity_model import build_spatial_activity_model
 
