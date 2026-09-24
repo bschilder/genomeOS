@@ -1,4 +1,4 @@
-"""Optional float64 CuPy CDF evaluation for count predictions (design §7, §8; #189).
+"""Optional float64 CuPy CDF evaluation for count predictions (design §7, §8; #189, #394).
 
 This module is a numerical backend for ``CountPredictive`` and ``ActivityCountPredictive``. It
 receives already validated, host-resident draw and count arrays through public typed interfaces;
@@ -11,6 +11,8 @@ scaled-probability core. Lower-concentration draws and larger denominators retai
 sums, pivoting at probability one half so subtraction uses the directly summed smaller tail.
 Query, draw, and support batches are chosen from current free device memory using a conservative
 peak-byte model and fixed caps. No array dimension depends on the complete allele-number support.
+Exact-tail queries are scheduled by tail length before batching so one long tail does not pad a
+batch of otherwise short queries; results are restored to the caller's original query order.
 """
 
 from __future__ import annotations
@@ -143,17 +145,24 @@ class CuPyCDF:
             raise FloatingPointError("CuPy CDF produced a non-finite or out-of-range probability")
         return result
 
-    def _query_arrays(self, ac: np.ndarray, an: np.ndarray) -> tuple[Any, Any, Any]:
+    def _query_arrays(
+        self,
+        ac: np.ndarray,
+        an: np.ndarray,
+        order: np.ndarray | None = None,
+    ) -> tuple[Any, Any, Any]:
         queries = ac.shape[0]
         observations = ac.shape[1]
-        count = self._cp.asarray(ac.reshape(-1), dtype=self._cp.int64)
-        denominator = self._cp.asarray(
-            np.broadcast_to(an, (queries, observations)).reshape(-1),
-            dtype=self._cp.int64,
-        )
-        observation = self._cp.asarray(
-            np.tile(np.arange(observations, dtype=np.int64), queries)
-        )
+        count_host = ac.reshape(-1)
+        denominator_host = np.broadcast_to(an, (queries, observations)).reshape(-1)
+        observation_host = np.tile(np.arange(observations, dtype=np.int64), queries)
+        if order is not None:
+            count_host = count_host[order]
+            denominator_host = denominator_host[order]
+            observation_host = observation_host[order]
+        count = self._cp.asarray(count_host, dtype=self._cp.int64)
+        denominator = self._cp.asarray(denominator_host, dtype=self._cp.int64)
+        observation = self._cp.asarray(observation_host)
         return count, denominator, observation
 
     def _binomial_cdf(
@@ -294,7 +303,16 @@ class CuPyCDF:
         divisor = mean_draws.shape[0] if normalization_draws is None else normalization_draws
         if type(divisor) is not int or divisor <= 0:
             raise ValueError("normalization_draws must be a positive integer")
-        count, denominator, observation = self._query_arrays(ac, an)
+        count_host = ac.reshape(-1)
+        denominator_host = np.broadcast_to(an, ac.shape).reshape(-1)
+        short_tail_terms = np.minimum(
+            np.maximum(count_host + 1, 0),
+            np.maximum(denominator_host - count_host, 0),
+        )
+        # The support tensor uses the longest tail in each row batch. Group similar work while
+        # retaining denominator as a deterministic tie-breaker, then scatter results back below.
+        order = np.lexsort((denominator_host, short_tail_terms))
+        count, denominator, observation = self._query_arrays(ac, an, order)
         output = cp.empty(count.shape, dtype=cp.float64)
         for row_start in range(0, count.size, row_chunk_size):
             row_stop = min(row_start + row_chunk_size, count.size)
@@ -363,7 +381,10 @@ class CuPyCDF:
                     values = values * weights
                 total += cp.sum(values, axis=1)
             output[row_start:row_stop] = total / divisor
-        return cp.asnumpy(output).reshape(ac.shape)
+        ordered_output = cp.asnumpy(output)
+        restored_output = np.empty_like(ordered_output)
+        restored_output[order] = ordered_output
+        return restored_output.reshape(ac.shape)
 
 
 class ActivityCuPyCDF(CuPyCDF):
