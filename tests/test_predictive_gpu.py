@@ -145,6 +145,49 @@ def test_mixed_high_concentration_routing_compacts_and_batches_draw_subgroups(mo
     )
 
 
+def test_legacy_tail_batches_group_similar_work_and_restore_query_order(monkeypatch):
+    class NumpyDevice:
+        float64 = np.float64
+        int64 = np.int64
+
+        def __getattr__(self, name):
+            return getattr(np, name)
+
+        @staticmethod
+        def asnumpy(value):
+            return np.asarray(value)
+
+    tail_lengths: list[list[int]] = []
+
+    def tail_logsum(self, mean, concentration, denominator, start, stop, support_chunk_size):
+        del concentration, denominator, support_chunk_size
+        lengths = np.asarray(stop - start)
+        tail_lengths.append(lengths.tolist())
+        return np.broadcast_to(-1.0 - lengths[:, np.newaxis] / 1_000.0, mean.shape)
+
+    monkeypatch.setattr(CuPyCDF, "_tail_logsum", tail_logsum)
+    evaluator = object.__new__(CuPyCDF)
+    evaluator._cp = NumpyDevice()
+    count = np.asarray([[99, 0, 89, 1]])
+    denominator = np.asarray([200, 200, 200, 200])
+
+    result = evaluator._legacy_beta_binomial_cdf_arrays(
+        count,
+        denominator,
+        np.full((1, 4), 0.5),
+        np.full((1, 4), 20.0),
+        (2, 1, 2_048),
+    )
+
+    assert tail_lengths == [[1, 2], [90, 100]]
+    np.testing.assert_allclose(
+        result,
+        np.exp(-1.0 - np.asarray([[100, 1, 90, 2]]) / 1_000.0),
+        rtol=0.0,
+        atol=1e-16,
+    )
+
+
 def _profile_command(out: Path) -> list[str]:
     return [
         sys.executable,
