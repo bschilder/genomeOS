@@ -201,6 +201,36 @@ def test_fold_runner_retries_once_with_doubled_budget() -> None:
     assert calls[0].seed == calls[1].seed == result.fit_seed
 
 
+def test_cupy_admission_failure_stops_before_graph_fit(monkeypatch) -> None:
+    from genomeos.validation import spatial_activity_runner as module
+
+    called = False
+
+    def refuse(_backend):
+        raise RuntimeError("CUDA admission failed")
+
+    def fit(_graph, *, config):
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(module, "_require_cdf_backend", refuse)
+    plan = _plan()
+    synthetic = module.simulate_spatial_activity_plan_scenario(plan, plan.scenarios[0])
+
+    with pytest.raises(RuntimeError, match="CUDA admission failed"):
+        module.evaluate_spatial_activity_fold(
+            plan,
+            synthetic,
+            plan.outer_splits[0],
+            mode="spatial_activity",
+            split_role="outer",
+            fit_function=fit,
+            cdf_backend="cupy",
+        )
+
+    assert called is False
+
+
 def test_fold_runner_stops_after_second_convergence_failure() -> None:
     from genomeos.validation.spatial_activity_runner import (
         evaluate_spatial_activity_fold,

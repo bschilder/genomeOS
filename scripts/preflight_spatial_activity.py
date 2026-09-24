@@ -83,7 +83,9 @@ SCIENCE_SOURCE_PATHS = (
     "genomeos/surfaces/spatial_activity_model.py",
     "genomeos/validation/benchmark.py",
     "genomeos/validation/nested_folds.py",
+    "genomeos/validation/count_legacy.py",
     "genomeos/validation/predictive.py",
+    "genomeos/validation/predictive_cupy.py",
     "genomeos/validation/spatial_activity_artifacts.py",
     "genomeos/validation/spatial_activity_assessment.py",
     "genomeos/validation/spatial_activity_campaign.py",
@@ -118,6 +120,7 @@ def _common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--sampler-config", required=True, type=Path)
     parser.add_argument("--data-version", required=True)
     parser.add_argument("--buffer-km", required=True, type=_positive_float)
+    parser.add_argument("--cdf-backend", required=True, choices=("scipy", "cupy"))
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -302,9 +305,12 @@ def _plan_node(plan: SpatialActivityPreflightPlan) -> dict[str, object]:
 def _manifest_document(
     plan: SpatialActivityPreflightPlan,
     input_files: dict[str, object],
+    *,
+    cdf_backend: str,
 ) -> dict[str, object]:
     tasks = plan_spatial_activity_tasks(plan)
     return {
+        "cdf_backend": cdf_backend,
         "code_revision": _code_revision(),
         "evidence_kind": "synthetic_preflight",
         "format": FORMAT,
@@ -339,7 +345,7 @@ def _verified_plan(
     args: argparse.Namespace,
 ) -> tuple[SpatialActivityPreflightPlan, dict[str, object]]:
     plan, input_files = _build_plan(args)
-    document = _manifest_document(plan, input_files)
+    document = _manifest_document(plan, input_files, cdf_backend=args.cdf_backend)
     try:
         retained = args.manifest.read_bytes()
     except OSError as error:
@@ -351,7 +357,10 @@ def _verified_plan(
 
 def _run_manifest(args: argparse.Namespace) -> int:
     plan, input_files = _build_plan(args)
-    _write_exclusive(args.out, _canonical(_manifest_document(plan, input_files)))
+    _write_exclusive(
+        args.out,
+        _canonical(_manifest_document(plan, input_files, cdf_backend=args.cdf_backend)),
+    )
     return 0
 
 
@@ -361,7 +370,7 @@ def _run_task(args: argparse.Namespace) -> int:
     task = tasks.get(args.task_id)
     if task is None:
         raise ValueError("task_id is not present in the verified campaign manifest")
-    result = evaluate_spatial_activity_task(plan, task)
+    result = evaluate_spatial_activity_task(plan, task, cdf_backend=args.cdf_backend)
     write_spatial_activity_task_result(args.results_dir, result)
     return 0 if result.result.status.status == "completed" else 2
 
@@ -394,7 +403,11 @@ def _run_shard(args: argparse.Namespace) -> int:
             if result.task != task:
                 raise ValueError(f"retained task result contradicts planned task {task_id}")
         else:
-            result = evaluate_spatial_activity_task(plan, task)
+            result = evaluate_spatial_activity_task(
+                plan,
+                task,
+                cdf_backend=args.cdf_backend,
+            )
             write_spatial_activity_task_result(args.results_dir, result)
         terminal_failure |= result.result.status.status != "completed"
     return 2 if terminal_failure else 0
@@ -455,7 +468,7 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     try:
         return run(_parser().parse_args())
-    except (OSError, TypeError, ValueError) as error:
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 2
 

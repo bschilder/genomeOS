@@ -131,6 +131,8 @@ def _common(paths: dict[str, Path]) -> list[str]:
         "activity-cli-test-v1",
         "--buffer-km",
         "300",
+        "--cdf-backend",
+        "cupy",
     ]
 
 
@@ -150,6 +152,7 @@ def test_manifest_is_canonical_complete_and_refuses_overwrite(tmp_path) -> None:
     assert document["evidence_kind"] == "synthetic_preflight"
     assert document["publication_eligible"] is False
     assert document["real_hbs_fit_permitted"] is False
+    assert document["cdf_backend"] == "cupy"
     assert document["task_count"] == 720
     assert len(document["tasks"]) == 720
     assert sum(task["split_role"] == "outer" for task in document["tasks"]) == 180
@@ -169,8 +172,8 @@ def test_run_rebuilds_manifest_and_writes_one_terminal_task(monkeypatch, tmp_pat
     task_id = json.loads(manifest.read_bytes())["tasks"][0]["task_id"]
     calls = []
 
-    def evaluate(plan, task):
-        calls.append((plan, task))
+    def evaluate(plan, task, *, cdf_backend):
+        calls.append((plan, task, cdf_backend))
         return SpatialActivityTaskResult(
             task=task,
             result=SpatialActivityFoldResult(
@@ -212,6 +215,7 @@ def test_run_rebuilds_manifest_and_writes_one_terminal_task(monkeypatch, tmp_pat
     assert status == 2
     assert len(calls) == 1
     assert calls[0][1].task_id == task_id
+    assert calls[0][2] == "cupy"
     assert (results / f"{task_id}.json").is_file()
 
 
@@ -255,7 +259,8 @@ def test_run_shard_reuses_process_and_resumes_valid_artifacts(monkeypatch, tmp_p
     task_file.write_text("\n".join(task_ids) + "\n")
     calls = []
 
-    def evaluate(plan, task):
+    def evaluate(plan, task, *, cdf_backend):
+        assert cdf_backend == "cupy"
         calls.append(task.task_id)
         return SpatialActivityTaskResult(
             task=task,

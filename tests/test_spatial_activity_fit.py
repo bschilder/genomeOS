@@ -326,6 +326,7 @@ def test_ordinary_without_training_cohort_effect_preserves_reference_draws(monke
         fitted,
         prediction_cohort_index=np.array([0, 0, 1]),
         seed=99,
+        cdf_backend="cupy",
     )
 
     np.testing.assert_array_equal(
@@ -333,6 +334,7 @@ def test_ordinary_without_training_cohort_effect_preserves_reference_draws(monke
         np.broadcast_to(np.array([0.1, 0.2, 0.3]), (12, 3)),
     )
     np.testing.assert_array_equal(predictive.activity_probability_draws, np.ones((12, 3)))
+    assert predictive.cdf_backend == "cupy"
 
 
 @pytest.mark.parametrize(

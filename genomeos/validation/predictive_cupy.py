@@ -1,9 +1,10 @@
 """Optional float64 CuPy CDF evaluation for count predictions (design §7, §8; #189).
 
-This module is a numerical backend for ``CountPredictive``. It receives already validated,
-host-resident draw and count arrays through a public typed interface; validation policy remains
-owned by ``genomeos.validation.predictive``. CuPy is imported only when ``CuPyCDF`` is explicitly
-constructed, and a missing library or CUDA device is an error rather than a CPU fallback.
+This module is a numerical backend for ``CountPredictive`` and ``ActivityCountPredictive``. It
+receives already validated, host-resident draw and count arrays through public typed interfaces;
+validation policy remains owned by their predictive modules. CuPy is imported only when a GPU
+evaluator is explicitly constructed, and a missing library or CUDA device is an error rather than
+a CPU fallback.
 
 High-concentration beta-binomial queries through ``AN=65_536`` use the shared complete-support
 scaled-probability core. Lower-concentration draws and larger denominators retain exact finite tail
@@ -87,6 +88,19 @@ def _load_cupy() -> tuple[Any, Any]:
     if device_count < 1:
         raise RuntimeError("cdf_backend='cupy' requires an available CUDA device")
     return cp, special
+
+
+def require_cupy_cdf() -> None:
+    """Require one accessible CUDA device and successful float64 CuPy arithmetic."""
+    cp, _ = _load_cupy()
+    try:
+        probe = cp.asarray([0.25], dtype=cp.float64)
+        observed = cp.asnumpy(probe + probe)
+        cp.cuda.Stream.null.synchronize()
+    except cp.cuda.runtime.CUDARuntimeError as error:
+        raise RuntimeError("cdf_backend='cupy' float64 device preflight failed") from error
+    if not np.array_equal(observed, np.asarray([0.5])):
+        raise RuntimeError("cdf_backend='cupy' float64 device preflight produced a wrong result")
 
 
 class CuPyCDF:
@@ -269,9 +283,17 @@ class CuPyCDF:
         mean_draws: Any,
         concentration_draws: Any,
         chunk_plan: tuple[int, int, int],
+        *,
+        draw_weights: Any | None = None,
+        normalization_draws: int | None = None,
     ) -> np.ndarray:
         cp = self._cp
         row_chunk_size, draw_chunk_size, support_chunk_size = chunk_plan
+        if draw_weights is not None and draw_weights.shape != mean_draws.shape:
+            raise ValueError("draw_weights must match the selected predictive draw shape")
+        divisor = mean_draws.shape[0] if normalization_draws is None else normalization_draws
+        if type(divisor) is not int or divisor <= 0:
+            raise ValueError("normalization_draws must be a positive integer")
         count, denominator, observation = self._query_arrays(ac, an)
         output = cp.empty(count.shape, dtype=cp.float64)
         for row_start in range(0, count.size, row_chunk_size):
@@ -336,6 +358,107 @@ class CuPyCDF:
                     raise FloatingPointError(
                         "CuPy CDF produced a non-finite or out-of-range component probability"
                     )
+                if draw_weights is not None:
+                    weights = draw_weights[draw_start:draw_stop, obs].T
+                    values = values * weights
                 total += cp.sum(values, axis=1)
-            output[row_start:row_stop] = total / mean_draws.shape[0]
+            output[row_start:row_stop] = total / divisor
         return cp.asnumpy(output).reshape(ac.shape)
+
+
+class ActivityCuPyCDF(CuPyCDF):
+    """Exact device CDF for an inactive-zero plus beta-binomial draw mixture."""
+
+    def __init__(
+        self,
+        mean_draws: np.ndarray,
+        concentration: np.ndarray,
+        activity_probability: np.ndarray,
+    ) -> None:
+        if activity_probability.shape != mean_draws.shape:
+            raise ValueError("activity_probability must match the predictive draw shape")
+        if not np.all(np.isfinite(activity_probability)) or np.any(
+            (activity_probability < 0.0) | (activity_probability > 1.0)
+        ):
+            raise ValueError("activity_probability must be finite and between zero and one")
+        super().__init__(mean_draws, concentration)
+        self._activity_host = np.asarray(activity_probability, dtype=np.float64)
+        self._activity = self._cp.asarray(activity_probability, dtype=self._cp.float64)
+
+    def __call__(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
+        """Return activity-mixture CDFs for a query-by-observation threshold matrix."""
+        if ac.ndim != 2 or an.ndim != 1 or ac.shape[1] != an.shape[0]:
+            raise ValueError("validated CDF arrays have incompatible shapes")
+        free_device_bytes, _ = self._cp.cuda.runtime.memGetInfo()
+        chunk_plan = _cdf_chunk_plan(
+            rows=ac.size,
+            draws=self._mean.shape[0],
+            free_device_bytes=int(free_device_bytes),
+        )
+        result = self._activity_beta_binomial_cdf(ac, an, chunk_plan)
+        if not np.all(np.isfinite(result)) or np.any((result < 0.0) | (result > 1.0)):
+            raise FloatingPointError(
+                "activity CuPy CDF produced a non-finite or out-of-range probability"
+            )
+        return result
+
+    def _activity_beta_binomial_cdf(
+        self,
+        ac: np.ndarray,
+        an: np.ndarray,
+        chunk_plan: tuple[int, int, int],
+    ) -> np.ndarray:
+        draws = self._mean.shape[0]
+        inactive = np.mean(1.0 - self._activity_host, axis=0)
+        result = np.where(ac < 0, 0.0, inactive[np.newaxis, :])
+        direct = (an <= _DIRECT_MAX_COUNT) & self._direct_observations
+        if np.any(direct):
+            direct_columns = np.flatnonzero(direct).astype(np.int64, copy=False)
+            routing_masks, routing_groups = np.unique(
+                self._high_concentration[:, direct_columns].T,
+                axis=0,
+                return_inverse=True,
+            )
+            for group_id, high in enumerate(routing_masks):
+                columns = direct_columns[routing_groups == group_id]
+                high_indices = np.flatnonzero(high).astype(np.int64, copy=False)
+                legacy_indices = np.flatnonzero(~high).astype(np.int64, copy=False)
+                if legacy_indices.size:
+                    result[:, columns] += self._legacy_beta_binomial_cdf_arrays(
+                        ac[:, columns],
+                        an[columns],
+                        self._mean[legacy_indices][:, columns],
+                        self._concentration[legacy_indices][:, columns],
+                        chunk_plan,
+                        draw_weights=self._activity[legacy_indices][:, columns],
+                        normalization_draws=draws,
+                    )
+                count = self._cp.asarray(ac[:, columns], dtype=self._cp.int64)
+                denominator = self._cp.asarray(an[columns], dtype=self._cp.int64)
+                for draw_index in high_indices:
+                    probabilities = beta_binomial_probability_queries(
+                        self._mean[draw_index : draw_index + 1, columns],
+                        self._concentration[draw_index : draw_index + 1, columns],
+                        denominator,
+                        count,
+                        array_module=self._cp,
+                        max_count=int(np.max(an[columns])),
+                    )
+                    component = self._cp.asnumpy(
+                        probability_float64(probabilities.lower, array_module=self._cp)
+                    )
+                    weights = self._activity_host[draw_index, columns]
+                    result[:, columns] += component * weights[np.newaxis, :] / draws
+        if np.any(~direct):
+            columns = np.flatnonzero(~direct).astype(np.int64, copy=False)
+            result[:, columns] += self._legacy_beta_binomial_cdf_arrays(
+                ac[:, columns],
+                an[columns],
+                self._mean[:, columns],
+                self._concentration[:, columns],
+                chunk_plan,
+                draw_weights=self._activity[:, columns],
+                normalization_draws=draws,
+            )
+        result = np.where(ac < 0, 0.0, result)
+        return np.where(ac >= an[np.newaxis, :], 1.0, result)
