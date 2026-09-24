@@ -192,14 +192,14 @@ def test_corpus_without_a_discovery_block_is_not_counted(tmp_path: Path) -> None
 
 
 def test_cli_refuses_a_missing_fixtures_root(tmp_path: Path) -> None:
-    _run_main(["check_manifest_payload_counts.py", "--fixtures-root", str(tmp_path / "absent")], 1)
+    _run_main(["--fixtures-root", str(tmp_path / "absent")], 1)
 
 
 def test_cli_exits_nonzero_and_names_both_numbers(
     tmp_path: Path, capsys: pytest.CaptureFixture
 ) -> None:
     build_corpus(tmp_path, manifest_rows=25)
-    _run_main(["check_manifest_payload_counts.py", "--fixtures-root", str(tmp_path)], 1)
+    _run_main(["--fixtures-root", str(tmp_path)], 1)
     output = capsys.readouterr().out
     assert "records 25 candidate(s)" in output and "matching 58" in output
     assert "truncated or" in output
@@ -215,7 +215,7 @@ def test_cli_gives_set_specific_remediation_for_substituted_identifier(
         encoding="utf-8",
     )
 
-    _run_main(["check_manifest_payload_counts.py", "--fixtures-root", str(tmp_path)], 1)
+    _run_main(["--fixtures-root", str(tmp_path)], 1)
 
     output = capsys.readouterr().out
     assert "candidate set differs" in output
@@ -224,7 +224,7 @@ def test_cli_gives_set_specific_remediation_for_substituted_identifier(
 
 
 def test_cli_passes_on_the_committed_corpora(capsys: pytest.CaptureFixture) -> None:
-    _run_main(["check_manifest_payload_counts.py"], 0)
+    _run_main([], 0)
     assert "reconciliation passed (2 corpora)" in capsys.readouterr().out
 
 
@@ -241,7 +241,6 @@ def test_fork_gate_runs_trusted_code_over_candidate_data() -> None:
     assert "python candidate/" not in workflow
 
 
-def _run_main(argv: list[str], expected: int) -> None:
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(sys, "argv", argv)
-        assert main() == expected
+def _run_main(arguments: list[str], expected: int) -> None:
+    """Call the gate the way CI does: an explicit argument list, no patched global state."""
+    assert main(arguments) == expected

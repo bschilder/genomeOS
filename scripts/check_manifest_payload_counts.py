@@ -188,7 +188,7 @@ def inspect(corpus: Path) -> Corpus:
     return Corpus(problems, lines, True)
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--fixtures-root",
@@ -196,7 +196,7 @@ def main() -> int:
         help="directory holding corpus fixtures (default: %(default)s, relative to the repo root)",
     )
     parser.add_argument("--corpus", default=None, help="check only this corpus directory name")
-    arguments = parser.parse_args()
+    arguments = parser.parse_args(argv)
 
     root = Path(arguments.fixtures_root)
     root = root if root.is_absolute() else ROOT / root
