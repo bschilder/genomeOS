@@ -245,10 +245,16 @@ def fit_spatial_activity_graph(
     with graph.model:
         idata = pm.sample(**sample_kwargs)
     try:
+        diagnostic_var_names = tuple(variable.name for variable in graph.model.free_RVs)
+        if not diagnostic_var_names or any(
+            not isinstance(name, str) or not name for name in diagnostic_var_names
+        ):
+            raise ValueError("model free variables must have nonempty names")
         diagnostics = summarize_sampler_diagnostics(
             idata,
             chains=config.chains,
             draws=config.draws,
+            var_names=diagnostic_var_names,
         )
     except (TypeError, ValueError, ArithmeticError) as error:
         raise SpatialActivityConvergenceError(

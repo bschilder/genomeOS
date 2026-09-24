@@ -135,9 +135,12 @@ def test_fit_samples_matched_graph_and_retains_aligned_prediction_draws(monkeypa
         "genomeos.surfaces.spatial_activity_fit.pm.sample_posterior_predictive",
         posterior_predictive,
     )
+    def diagnostics(*args, **kwargs):
+        calls["diagnostics"] = (args, kwargs)
+        return _diagnostics()
+
     monkeypatch.setattr(
-        "genomeos.surfaces.spatial_activity_fit.summarize_sampler_diagnostics",
-        lambda *_args, **_kwargs: _diagnostics(),
+        "genomeos.surfaces.spatial_activity_fit.summarize_sampler_diagnostics", diagnostics
     )
 
     graph = _graph()
@@ -159,12 +162,43 @@ def test_fit_samples_matched_graph_and_retains_aligned_prediction_draws(monkeypa
         "random_seed": 42,
         "progressbar": False,
     }
+    diagnostic_names = calls["diagnostics"][1]["var_names"]
+    assert diagnostic_names == tuple(variable.name for variable in graph.model.free_RVs)
+    assert "activity_intercept" in diagnostic_names
     assert fitted.mode == "spatial_activity"
     assert fitted.conditional_mean_draws.shape == (12, 3)
     assert fitted.activity_probability_draws.shape == (12, 3)
     assert fitted.concentration_draws.shape == (12,)
     assert fitted.cohort_sd_draws.shape == (12,)
     assert fitted.diagnostics == _diagnostics()
+
+
+def test_ordinary_diagnostics_exclude_analytic_activity_constant(monkeypatch) -> None:
+    from genomeos.surfaces.spatial_activity_fit import fit_spatial_activity_graph
+
+    calls = {}
+    monkeypatch.setattr(
+        "genomeos.surfaces.spatial_activity_fit.pm.sample", lambda **_kwargs: _idata()
+    )
+    monkeypatch.setattr(
+        "genomeos.surfaces.spatial_activity_fit.pm.sample_posterior_predictive",
+        lambda *_args, **_kwargs: _posterior_predictive(activity=1.0),
+    )
+
+    def diagnostics(*_args, **kwargs):
+        calls["var_names"] = kwargs["var_names"]
+        return _diagnostics()
+
+    monkeypatch.setattr(
+        "genomeos.surfaces.spatial_activity_fit.summarize_sampler_diagnostics", diagnostics
+    )
+    graph = _graph(mode="ordinary")
+
+    fit_spatial_activity_graph(graph, config=_sampler_config())
+
+    assert calls["var_names"] == tuple(variable.name for variable in graph.model.free_RVs)
+    assert "activity_probability" not in calls["var_names"]
+    assert not any(name.startswith("activity_") for name in calls["var_names"])
 
 
 def test_fit_refuses_nonconvergence_before_predictive_sampling(monkeypatch) -> None:
