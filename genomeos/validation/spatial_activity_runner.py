@@ -47,6 +47,13 @@ AttemptState = Literal["completed", "nonconverged", "failed"]
 FitFunction = Callable[..., SpatialActivityFit]
 
 
+def _require_cdf_backend(cdf_backend: str) -> None:
+    if cdf_backend == "cupy":
+        from genomeos.validation.predictive_cupy import require_cupy_cdf
+
+        require_cupy_cdf()
+
+
 @dataclass(frozen=True)
 class SpatialActivityFitAttempt:
     """One retained sampler budget and terminal outcome."""
@@ -193,6 +200,7 @@ def evaluate_spatial_activity_fold(
     split_role: SplitRole,
     scenario: SpatialActivityScenario | None = None,
     fit_function: FitFunction = fit_spatial_activity_graph,
+    cdf_backend: str = "scipy",
 ) -> SpatialActivityFoldResult:
     """Run one arm with at most one recorded doubled-budget convergence retry."""
     if not isinstance(plan, SpatialActivityPreflightPlan):
@@ -207,6 +215,8 @@ def evaluate_spatial_activity_fold(
         raise ValueError("split_role must be outer or inner")
     if not callable(fit_function):
         raise TypeError("fit_function must be callable")
+    if cdf_backend not in {"scipy", "cupy"}:
+        raise ValueError("cdf_backend must be either 'scipy' or 'cupy'")
     selected_scenario = synthetic.scenario if scenario is None else scenario
     if selected_scenario not in plan.scenarios or synthetic.scenario != selected_scenario:
         raise ValueError("synthetic data and requested scenario must match the frozen plan")
@@ -258,6 +268,7 @@ def evaluate_spatial_activity_fold(
             state="infeasible",
             reason="spatial lengthscale prior requires at least two training observations",
         )
+    _require_cdf_backend(cdf_backend)
     truth_index = _truth_by_id(synthetic)
     train_truth = np.asarray([truth_index[value] for value in training["source_record_id"]])
     test_truth = np.asarray([truth_index[value] for value in testing["source_record_id"]])
@@ -354,6 +365,7 @@ def evaluate_spatial_activity_fold(
             fitted,
             prediction_cohort_index=_cohort_index(testing["cohort_id"]),
             seed=predictive_seed,
+            cdf_backend=cdf_backend,
         )
         observation_truth = np.asarray(
             synthetic.observation_conditional_mean_truth,

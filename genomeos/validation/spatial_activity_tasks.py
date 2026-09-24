@@ -212,6 +212,7 @@ def evaluate_spatial_activity_task(
     task: SpatialActivityTask,
     *,
     fit_function: FitFunction = fit_spatial_activity_graph,
+    cdf_backend: str = "scipy",
 ) -> SpatialActivityTaskResult:
     """Evaluate one manifest task without coupling it to other workers."""
     scenario, split = resolve_spatial_activity_task(plan, task)
@@ -224,5 +225,6 @@ def evaluate_spatial_activity_task(
         split_role=task.split_role,
         scenario=scenario,
         fit_function=fit_function,
+        cdf_backend=cdf_backend,
     )
     return SpatialActivityTaskResult(task=task, result=result)

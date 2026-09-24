@@ -16,7 +16,8 @@ from dataclasses import dataclass
 
 import numpy as np
 from scipy.special import betaln, gammaln, logsumexp
-from scipy.stats import betabinom
+
+from genomeos.validation.count_legacy import beta_binomial_cdf
 
 SEED = 42
 
@@ -99,8 +100,11 @@ class ActivityCountPredictive:
     conditional_mean_draws: np.ndarray
     activity_probability_draws: np.ndarray
     concentration_draws: np.ndarray
+    cdf_backend: str = "scipy"
 
     def __post_init__(self) -> None:
+        if not isinstance(self.cdf_backend, str) or self.cdf_backend not in {"scipy", "cupy"}:
+            raise ValueError("cdf_backend must be either 'scipy' or 'cupy'")
         mean = _probabilities(
             self.conditional_mean_draws,
             "conditional_mean_draws",
@@ -188,23 +192,47 @@ class ActivityCountPredictive:
         """Return the posterior mean of the marginal allele-frequency expectation."""
         return np.mean(self.mean_draws, axis=0)
 
-    def _cdf_matrix(self, ac: np.ndarray, an: np.ndarray) -> np.ndarray:
-        count = ac[:, np.newaxis, :]
-        denominator = an[np.newaxis, np.newaxis, :]
-        alpha = (
-            self.conditional_mean_draws * self.concentration_draws
-        )[np.newaxis, :, :]
-        beta = (
-            (1.0 - self.conditional_mean_draws) * self.concentration_draws
-        )[np.newaxis, :, :]
-        beta_binomial = betabinom.cdf(count, denominator, alpha, beta)
-        activity = self.activity_probability_draws[np.newaxis, :, :]
-        mixture = np.where(
-            count < 0,
-            0.0,
-            (1.0 - activity) + activity * beta_binomial,
+    def _cdf_one(self, observation: int, ac: int, an: int) -> float:
+        if ac == -1:
+            return 0.0
+        if ac == an:
+            return 1.0
+        component = np.asarray(
+            [
+                beta_binomial_cdf(ac, an, float(mean), float(concentration))
+                for mean, concentration in zip(
+                    self.conditional_mean_draws[:, observation],
+                    self.concentration_draws[:, observation],
+                    strict=True,
+                )
+            ]
         )
-        return np.mean(mixture, axis=1)
+        activity = self.activity_probability_draws[:, observation]
+        return float(np.mean((1.0 - activity) + activity * component))
+
+    def _cdf_evaluator(self):
+        if self.cdf_backend == "scipy":
+
+            def scipy_cdf(count: np.ndarray, denominator: np.ndarray) -> np.ndarray:
+                return np.asarray(
+                    [
+                        [
+                            self._cdf_one(observation, int(row[observation]), int(n))
+                            for observation, n in enumerate(denominator)
+                        ]
+                        for row in count
+                    ]
+                )
+
+            return scipy_cdf
+
+        from genomeos.validation.predictive_cupy import ActivityCuPyCDF
+
+        return ActivityCuPyCDF(
+            self.conditional_mean_draws,
+            self.concentration_draws,
+            self.activity_probability_draws,
+        )
 
     def cdf(self, ac: object, an: object) -> np.ndarray:
         """Return integrated ``P(Y <= ac)`` with ``ac=-1`` as the lower boundary."""
@@ -213,7 +241,26 @@ class ActivityCountPredictive:
             an,
             allow_cdf_boundary=True,
         )
-        return self._cdf_matrix(count[np.newaxis, :], denominator)[0]
+        return self._cdf_evaluator()(count[np.newaxis, :], denominator)[0]
+
+    def _count_moments(self, denominator: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        n = denominator[np.newaxis, :].astype(float)
+        probability = self.conditional_mean_draws
+        conditional_mean = n * probability
+        conditional_variance = (
+            n
+            * probability
+            * (1.0 - probability)
+            * (n + self.concentration_draws)
+            / (1.0 + self.concentration_draws)
+        )
+        active = self.activity_probability_draws
+        mean = np.mean(active * conditional_mean, axis=0)
+        second_moment = np.mean(
+            active * (conditional_variance + conditional_mean**2),
+            axis=0,
+        )
+        return mean, np.maximum(second_moment - mean**2, 0.0)
 
     def quantiles(self, an: object, probabilities: object) -> np.ndarray:
         """Return exact left-continuous count quantiles by bounded binary search."""
@@ -237,11 +284,29 @@ class ActivityCountPredictive:
             denominator,
             0,
         )
-        high = np.broadcast_to(upper_support, low.shape).copy()
+        cdf = self._cdf_evaluator()
+        zero_cdf = cdf(np.zeros((1, self.n_observations), dtype=np.int64), denominator)[0]
+        resolved_at_zero = levels[:, np.newaxis] <= zero_cdf[np.newaxis, :]
+        mean, variance = self._count_moments(denominator)
+        cantelli_distance = np.sqrt(
+            variance[np.newaxis, :] * levels[:, np.newaxis] / (1.0 - levels[:, np.newaxis])
+        )
+        bracket = np.ceil(mean[np.newaxis, :] + cantelli_distance).astype(np.int64)
+        high = np.where(
+            resolved_at_zero,
+            0,
+            np.clip(bracket, 0, upper_support[np.newaxis, :]),
+        )
+        bracket_cdf = cdf(high, denominator)
+        high = np.where(
+            (~resolved_at_zero) & (bracket_cdf < levels[:, np.newaxis]),
+            upper_support[np.newaxis, :],
+            high,
+        )
         while np.any(high - low > 1):
             active = high - low > 1
             midpoint = (low + high) // 2
-            values = self._cdf_matrix(np.where(active, midpoint, high), denominator)
+            values = cdf(np.where(active, midpoint, high), denominator)
             move_high = active & (values >= levels[:, np.newaxis])
             high = np.where(move_high, midpoint, high)
             low = np.where(active & ~move_high, midpoint, low)

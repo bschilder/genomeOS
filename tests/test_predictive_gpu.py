@@ -16,6 +16,7 @@ import pytest
 from genomeos.validation import predictive_cupy as predictive_cupy_module
 from genomeos.validation.predictive import MAX_COUNT, CountPredictive, predictive_diagnostics
 from genomeos.validation.predictive_cupy import CuPyCDF
+from genomeos.validation.spatial_activity_preflight import ActivityCountPredictive
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILER = ROOT / "scripts" / "profile_count_scoring.py"
@@ -408,6 +409,53 @@ def test_gpu_complete_diagnostics_match_cpu_across_row_and_draw_chunks(concentra
         np.testing.assert_array_equal(cpu_frame[column], gpu_frame[column])
     pd.testing.assert_frame_equal(cpu_frame, gpu_frame, rtol=1e-9, atol=1e-11)
     np.testing.assert_array_equal(cpu.sample_counts(an, seed=456), gpu.sample_counts(an, seed=456))
+
+
+@requires_gpu
+def test_gpu_activity_diagnostics_match_bounded_cpu_across_row_and_draw_chunks():
+    """Activity weights and inactive zeros must survive every GPU chunk boundary."""
+    rng = np.random.default_rng(42)
+    conditional = rng.uniform(0.01, 0.99, size=(257, 17))
+    activity = rng.uniform(0.0, 1.0, size=(257, 17))
+    activity[:, 0] = 0.0
+    activity[:, 1] = 1.0
+    concentration = rng.uniform(5.0, 100.0, size=(257, 17))
+    an = np.array([1, 1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47])
+    ac = np.array([0, 1, 0, 3, 2, 1, 11, 5, 8, 19, 3, 14, 1, 30, 20, 0, 46])
+    cpu = ActivityCountPredictive(conditional, activity, concentration, cdf_backend="scipy")
+    gpu = ActivityCountPredictive(conditional, activity, concentration, cdf_backend="cupy")
+
+    cpu_frame = predictive_diagnostics(cpu, ac, an, seed=123)
+    gpu_frame = predictive_diagnostics(gpu, ac, an, seed=123)
+    levels = np.array([0.025, 0.1, 0.25, 0.5, 0.75, 0.9, 0.975])
+
+    np.testing.assert_array_equal(cpu.quantiles(an, levels), gpu.quantiles(an, levels))
+    pd.testing.assert_frame_equal(cpu_frame, gpu_frame, rtol=1e-9, atol=1e-11)
+    np.testing.assert_array_equal(cpu.sample_counts(an, seed=456), gpu.sample_counts(an, seed=456))
+
+
+@requires_gpu
+def test_gpu_activity_cdf_handles_genome_scale_denominators_without_full_support():
+    """A genome-scale AN with a one-term tail must not allocate the complete support."""
+    conditional = np.array([[0.2], [0.4], [0.6]])
+    activity = np.array([[0.25], [0.5], [0.75]])
+    concentration = np.array([[20.0], [40.0], [80.0]])
+    cpu = ActivityCountPredictive(conditional, activity, concentration)
+    gpu = ActivityCountPredictive(
+        conditional,
+        activity,
+        concentration,
+        cdf_backend="cupy",
+    )
+
+    np.testing.assert_allclose(
+        gpu.cdf([0], [2_571_112]),
+        cpu.cdf([0], [2_571_112]),
+        rtol=1e-9,
+        atol=1e-11,
+    )
+    np.testing.assert_array_equal(gpu.cdf([-1], [2_571_112]), [0.0])
+    np.testing.assert_array_equal(gpu.cdf([2_571_112], [2_571_112]), [1.0])
 
 
 @requires_gpu

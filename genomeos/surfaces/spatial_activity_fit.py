@@ -336,6 +336,7 @@ def predict_spatial_activity_counts(
     *,
     prediction_cohort_index: object,
     seed: int = SEED,
+    cdf_backend: str = "scipy",
 ) -> ActivityCountPredictive:
     """Create a marginal count predictive with shared new-cohort effects."""
     if not isinstance(fitted, SpatialActivityFit):
@@ -359,4 +360,5 @@ def predict_spatial_activity_counts(
         conditional_mean_draws=conditional,
         activity_probability_draws=fitted.activity_probability_draws,
         concentration_draws=concentration,
+        cdf_backend=cdf_backend,
     )
