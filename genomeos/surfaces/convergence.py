@@ -85,10 +85,35 @@ def _extreme(dataset: object, *, maximum: bool, field: str) -> tuple[float, str]
     return selected_value, selected_name
 
 
+def _diagnostic_variable_names(
+    idata: object, var_names: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    if var_names is None:
+        return None
+    if not isinstance(var_names, tuple) or not var_names:
+        raise ValueError("var_names must be a nonempty tuple of unique posterior variable names")
+    if any(not isinstance(name, str) or not name.strip() for name in var_names):
+        raise ValueError("var_names must be a nonempty tuple of unique posterior variable names")
+    if len(set(var_names)) != len(var_names):
+        raise ValueError("var_names must be a nonempty tuple of unique posterior variable names")
+    posterior = getattr(idata, "posterior", None)
+    data_vars = getattr(posterior, "data_vars", None)
+    if data_vars is None:
+        raise ValueError("posterior variables are unavailable")
+    missing = tuple(name for name in var_names if name not in data_vars)
+    if missing:
+        raise ValueError(f"posterior is missing diagnostic variables: {missing}")
+    return var_names
+
+
 def summarize_sampler_diagnostics(
-    idata: object, *, chains: int, draws: int
+    idata: object,
+    *,
+    chains: int,
+    draws: int,
+    var_names: tuple[str, ...] | None = None,
 ) -> SamplerDiagnostics:
-    """Return finite extrema after validating the retained divergence array."""
+    """Return finite extrema for the requested sampled variables and all divergences."""
     if isinstance(chains, bool) or not isinstance(chains, Integral) or chains < 2:
         raise ValueError("chains must be an integer of at least two")
     if isinstance(draws, bool) or not isinstance(draws, Integral) or draws < 1:
@@ -104,15 +129,17 @@ def summarize_sampler_diagnostics(
         raise ValueError("sample_stats.diverging must match configured chain and draw axes")
     if flags.dtype != np.dtype(bool):
         raise ValueError("sample_stats.diverging must be Boolean")
+    selected_names = _diagnostic_variable_names(idata, var_names)
+    diagnostic_kwargs = {} if selected_names is None else {"var_names": list(selected_names)}
 
     max_rhat, max_rhat_parameter = _extreme(
-        az.rhat(idata, method="rank"), maximum=True, field="r_hat"
+        az.rhat(idata, method="rank", **diagnostic_kwargs), maximum=True, field="r_hat"
     )
     min_bulk_ess, min_bulk_ess_parameter = _extreme(
-        az.ess(idata, method="bulk"), maximum=False, field="bulk ESS"
+        az.ess(idata, method="bulk", **diagnostic_kwargs), maximum=False, field="bulk ESS"
     )
     min_tail_ess, min_tail_ess_parameter = _extreme(
-        az.ess(idata, method="tail"), maximum=False, field="tail ESS"
+        az.ess(idata, method="tail", **diagnostic_kwargs), maximum=False, field="tail ESS"
     )
     return SamplerDiagnostics(
         max_rhat=max_rhat,

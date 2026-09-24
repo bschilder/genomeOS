@@ -58,6 +58,42 @@ def test_sampler_diagnostics_retain_worst_parameter_and_divergences(monkeypatch)
     )
 
 
+def test_sampler_diagnostics_can_limit_extrema_to_sampled_variables():
+    draws = np.asarray(
+        [
+            [-1.0, -0.2, 0.4, 1.2, -0.7, 0.1, 0.8, 1.5],
+            [-0.9, -0.1, 0.5, 1.1, -0.6, 0.2, 0.9, 1.4],
+            [-1.1, -0.3, 0.3, 1.3, -0.8, 0.0, 0.7, 1.6],
+            [-0.8, 0.0, 0.6, 1.0, -0.5, 0.3, 1.0, 1.3],
+        ],
+        dtype=np.float64,
+    )
+    idata = subject.az.from_dict(
+        {
+            "posterior": {
+                "sampled": draws,
+                "activity_probability": np.ones_like(draws),
+            },
+            "sample_stats": {"diverging": np.zeros_like(draws, dtype=bool)},
+        }
+    )
+
+    with pytest.raises(ValueError, match="activity_probability"):
+        summarize_sampler_diagnostics(idata, chains=4, draws=8)
+
+    observed = summarize_sampler_diagnostics(
+        idata,
+        chains=4,
+        draws=8,
+        var_names=("sampled",),
+    )
+
+    assert observed.max_rhat_parameter == "sampled"
+    assert observed.min_bulk_ess_parameter == "sampled"
+    assert observed.min_tail_ess_parameter == "sampled"
+    assert observed.divergence_count == 0
+
+
 @pytest.mark.parametrize(
     ("diagnostics", "message"),
     [
