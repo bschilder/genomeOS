@@ -276,6 +276,108 @@ declarations, the selected CDF backend, and hashes of the fitted observation/pre
 Every split record also carries the same sampler diagnostics as `fold_status.tsv`; these values are
 inside both the split-manifest hash and the per-fold checkpoint integrity hash.
 
+## Spatial-activity simulation preflight
+
+Issue [#384](https://github.com/bschilder/genomeOS/issues/384) adds a simulation-only preflight for
+a spatially varying activity probability. It reuses an existing one-variant benchmark's record
+identities, coordinates, denominators, cohort labels, dependency evidence, and geographic splits.
+It does not reuse the observed allele counts: every campaign count is newly generated from one of
+the 18 frozen synthetic scenarios. A passing campaign can make a separately preregistered real-data
+fit eligible; it cannot publish a surface or establish that the latent components have a biological
+meaning.
+
+The manifest command requires all scientific inputs and both activity-model configurations
+explicitly. It refuses an existing output:
+
+```bash
+python scripts/preflight_spatial_activity.py manifest \
+  --observations /private/input/observations.tsv \
+  --assignments /private/input/assignments.tsv \
+  --dependencies /private/input/dependencies.tsv \
+  --baseline-fit-config /private/input/baseline-fit-config.json \
+  --model-config /private/input/activity-model-config.json \
+  --sampler-config /private/input/activity-sampler-config.json \
+  --data-version reviewed-input-version \
+  --buffer-km 300 \
+  --out /private/run/campaign-manifest.json
+```
+
+The canonical manifest hashes every input and every science source used to build, execute, encode,
+and decide the campaign. It contains the complete five-outer/three-inner split ledger whenever all
+inner plans are feasible, the three registered seeds, six conditions, two matched model arms, and
+one content-addressed record per independent fit. For the registered five-fold protocol this is
+720 tasks. Workers should fan those task IDs out in parallel; each invocation evaluates exactly one
+task and creates one task-ID-named JSON artifact:
+
+```bash
+python scripts/preflight_spatial_activity.py run \
+  --observations /private/input/observations.tsv \
+  --assignments /private/input/assignments.tsv \
+  --dependencies /private/input/dependencies.tsv \
+  --baseline-fit-config /private/input/baseline-fit-config.json \
+  --model-config /private/input/activity-model-config.json \
+  --sampler-config /private/input/activity-sampler-config.json \
+  --data-version reviewed-input-version \
+  --buffer-km 300 \
+  --manifest /private/run/campaign-manifest.json \
+  --task-id TASK_SHA256 \
+  --results-dir /private/run/results
+```
+
+For dedicated GPUs, put an ordered subset of task hashes in a newline-delimited file and use one
+long-lived process per GPU:
+
+```bash
+python scripts/preflight_spatial_activity.py run-shard \
+  --observations /private/input/observations.tsv \
+  --assignments /private/input/assignments.tsv \
+  --dependencies /private/input/dependencies.tsv \
+  --baseline-fit-config /private/input/baseline-fit-config.json \
+  --model-config /private/input/activity-model-config.json \
+  --sampler-config /private/input/activity-sampler-config.json \
+  --data-version reviewed-input-version \
+  --buffer-km 300 \
+  --manifest /private/run/campaign-manifest.json \
+  --tasks /private/run/shard-01.txt \
+  --results-dir /private/run/results
+```
+
+This keeps Python and JAX state alive across fits while separate shards run in parallel. It never
+runs competing fits on one GPU. Resume validates every existing artifact against its digest,
+filename, and planned task before skipping it; incomplete tasks are created exclusively on the
+next invocation.
+
+Before fitting, every worker reconstructs the manifest byte-for-byte. A changed input, split,
+configuration, source file, or Git revision fails before sampling. Successful and refused fits both
+produce authenticated canonical JSON. The artifact retains observed synthetic AC/AN, row-level
+count diagnostics, zero/positive summaries, truth-recovery diagnostics, component-dependence
+denominators, seeds, convergence evidence, and the single allowed retry. It deliberately excludes
+the live PyMC trace.
+
+After all task files have been retrieved, finalization verifies the complete ledger and writes the
+registered decision:
+
+```bash
+python scripts/preflight_spatial_activity.py finalize \
+  --observations /private/input/observations.tsv \
+  --assignments /private/input/assignments.tsv \
+  --dependencies /private/input/dependencies.tsv \
+  --baseline-fit-config /private/input/baseline-fit-config.json \
+  --model-config /private/input/activity-model-config.json \
+  --sampler-config /private/input/activity-sampler-config.json \
+  --data-version reviewed-input-version \
+  --buffer-km 300 \
+  --manifest /private/run/campaign-manifest.json \
+  --results-dir /private/run/results \
+  --out /private/run/campaign-result.json
+```
+
+The final report hashes the manifest and every task artifact. It exits zero only when every task is
+complete and all preregistered null, localized-truth, calibration, and sensitivity gates pass. A
+scientific refusal is written before exit status 2; missing, duplicated, mislabeled, or contradictory
+evidence is a hard error. Every report remains `evidence_kind="synthetic_preflight"` and
+`publication_eligible=false`.
+
 The local-count runner adds `support.tsv` and `bandwidth_selection.tsv`. The first retains every
 requested query and its support or refusal evidence. The second records every candidate's
 inner-fold requested and emitted counts, emission fraction, normalized log score, completion
@@ -306,10 +408,12 @@ fits warned about R-hat above 1.01, one fit diverged, numerical per-fold diagnos
 retained, dependencies were not reviewed, and geography remained algorithmic development evidence.
 Those WP0 and WP1 gates remain required on reviewed, permitted data.
 
-WP2 observation-aware likelihood, footprint, ascertainment, and cohort validation; WP3 covariate
-admission; WP4 statistical/shared/connectivity models; WP5 neural challengers; WP6 multiallelic,
-LD, and GPU work; and WP7 temporal/origin modeling are all unimplemented by this runner. The HbS,
-G6PD, and carrier-screening publication gates remain unchanged. The owner's resolved
+WP2 remains incomplete: the activity campaign supplies controlled simulation evidence for one
+observation-aware likelihood, while footprint, ascertainment, cohort validation, and any eligible
+real-data comparison remain open. WP3 covariate admission; WP4 statistical/shared/connectivity
+models; WP5 neural challengers; WP6 multiallelic, LD, and GPU work; and WP7 temporal/origin
+modeling remain outside these runners. The HbS, G6PD, and carrier-screening publication gates
+remain unchanged. The owner's resolved
 [#66 decision](https://github.com/bschilder/genomeOS/issues/66#issuecomment-5565166083) permits
 redistribution of fitted surfaces with source attribution and biocultural notices, a clear
 observed/inferred distinction, and explicit source restrictions honored. That conditional policy

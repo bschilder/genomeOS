@@ -48,6 +48,8 @@ def test_assessment_reports_required_count_strata_and_truth_recovery() -> None:
     )
 
     assert len(assessment.diagnostics) == 3
+    assert tuple(assessment.diagnostics["observed_ac"]) == (0, 2, 4)
+    assert tuple(assessment.diagnostics["observed_an"]) == (20, 20, 20)
     assert assessment.all_rows.n_observations == 3
     assert assessment.zero_rows.n_observations == 1
     assert assessment.positive_rows.n_observations == 2
