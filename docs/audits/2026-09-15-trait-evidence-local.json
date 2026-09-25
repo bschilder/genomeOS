@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "coverage": "inspected_database_only",
+  "phenotype_count": 0,
+  "association_count": 0,
+  "release_count": 0,
+  "asset_count": 0,
+  "limit": 200,
+  "offset": 0,
+  "assets": [],
+  "orphan_associations": 0,
+  "limitations": [
+    "This audit checks registered metadata, not source contents or independent review.",
+    "Full summary-statistics coverage, LD and sample overlap are not qualified by this index.",
+    "Counted-allele map links and distinct-trait gene attribution are not registered.",
+    "Genetic correlation, colocalization and pleiotropy protocols are not implemented or validated."
+  ]
+}

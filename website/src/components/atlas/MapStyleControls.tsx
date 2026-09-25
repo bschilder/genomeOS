@@ -1,5 +1,7 @@
 /** Basemap, terrain, and globe presentation controls for Atlas design §11. */
 
+import { useAtlasControlId } from './AtlasScope';
+
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
 import type {
   BasemapId,
@@ -41,6 +43,7 @@ export function MapStyleControls({
   onTerrain,
   onView,
 }: MapStyleControlsProps) {
+  const controlId = useAtlasControlId();
   return (
     <div className="atlas-control-grid atlas-control-grid--map">
       <EarthStylePicker
@@ -107,9 +110,9 @@ export function MapStyleControls({
           />
         </label>
         <div className="atlas-check-row">
-          <label htmlFor="atlas-day-night-lighting">
+          <label htmlFor={controlId('atlas-day-night-lighting')}>
             <input
-              id="atlas-day-night-lighting"
+              id={controlId('atlas-day-night-lighting')}
               type="checkbox"
               checked={state.dayNightLighting}
               disabled={disabled}
@@ -126,7 +129,7 @@ export function MapStyleControls({
 
       <div className="atlas-field atlas-field--range">
         <span className="atlas-field__title">
-          <label htmlFor="atlas-earth-opacity">
+          <label htmlFor={controlId('atlas-earth-opacity')}>
             Earth opacity · {Math.round(state.earthOpacity * 100)}%
           </label>
           <InfoTip label="Earth opacity">
@@ -135,7 +138,7 @@ export function MapStyleControls({
           </InfoTip>
         </span>
         <input
-          id="atlas-earth-opacity"
+          id={controlId('atlas-earth-opacity')}
           type="range"
           min="0.15"
           max="1"
@@ -195,7 +198,7 @@ export function MapStyleControls({
               <label key={view}>
                 <input
                   type="radio"
-                  name="view"
+                  name={controlId('view')}
                   value={view}
                   checked={state.view === view}
                   onChange={() => onView(view)}
