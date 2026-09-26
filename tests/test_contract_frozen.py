@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -7,9 +8,14 @@ REPO = Path(__file__).resolve().parents[1]
 
 
 def test_frozen_contract_matches_the_live_schemas():
+    # Running a script puts the script's directory on sys.path, not the cwd, so without this the
+    # subprocess resolves `genomeos` through the editable install — which in a git worktree is a
+    # different checkout. The test then failed with a ModuleNotFoundError that reads as contract
+    # drift for any module that exists only on the branch under test (#258).
     result = subprocess.run(
         [sys.executable, "scripts/freeze_contract.py", "--check"],
         cwd=REPO,
+        env={**os.environ, "PYTHONPATH": str(REPO)},
         capture_output=True,
         text=True,
     )
