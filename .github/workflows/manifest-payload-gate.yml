@@ -1,0 +1,53 @@
+name: manifest-payload-gate
+
+# Security boundary: install and execute only the base revision. The candidate checkout is data.
+on:
+  pull_request_target:
+    paths:
+      - "tests/fixtures/literature/**"
+      - "scripts/check_manifest_payload_counts.py"
+      - ".github/workflows/manifest-payload-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - "tests/fixtures/literature/**"
+      - "scripts/check_manifest_payload_counts.py"
+      - ".github/workflows/manifest-payload-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out trusted validator
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.base.sha || github.sha }}
+          path: trusted
+          persist-credentials: false
+      - name: Check out candidate data
+        if: github.event_name == 'pull_request_target'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: candidate
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install trusted validator dependencies
+        run: python -m pip install -e './trusted[atlas]'
+      - name: Reconcile candidate data
+        if: github.event_name == 'pull_request_target'
+        run: >-
+          python trusted/scripts/check_manifest_payload_counts.py
+          --fixtures-root "$GITHUB_WORKSPACE/candidate/tests/fixtures/literature"
+      - name: Reconcile main
+        if: github.event_name == 'push'
+        run: >-
+          python trusted/scripts/check_manifest_payload_counts.py
+          --fixtures-root "$GITHUB_WORKSPACE/trusted/tests/fixtures/literature"
