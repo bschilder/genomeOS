@@ -45,9 +45,15 @@ ruff check .
 python scripts/freeze_contract.py --check
 python scripts/check_module_size.py
 python scripts/check_private_files.py
+python scripts/check_commercial_use.py
 python scripts/smoke.py
 pytest
 ```
+
+If you touched `website/`, or `scripts/export_atlas_web.py` that feeds it, also run the website
+gates from `website/` — `npm run format:check`, `npm run check`, `npm test`, and the build, link
+and browser checks. The full list, and why an exporter-only change needs them, is under
+"Commands" in [`AGENTS.md`](AGENTS.md).
 
 If you changed a schema, run `python scripts/freeze_contract.py` and commit the `contract/` diff.
 That diff is the review surface for schema change, and CI fails if it is stale.

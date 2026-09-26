@@ -198,10 +198,26 @@ python scripts/check_commercial_use.py     # non-commercial data marking; CI run
 python scripts/smoke.py                    # mandatory fast verification; CI runs this
 pytest                                    # CI runs this
 
+cd website && npm ci                      # website gates run from website/ on Node 24
+npm run format:check                      # prettier; CI runs this
+npm run check                             # astro check / TypeScript; CI runs this
+npm test                                  # vitest unit and content contracts; CI runs this
+npm run build && npm run check:links -- dist /    # site build and links; CI runs this
+npm run build:fallback && npm run check:links -- dist-fallback /genomeOS/  # CI runs this
+npm run test:e2e                          # Playwright browser + accessibility; CI runs this
+cd ..
+
 genomeos init-db                          # Pan-UKB API
 uvicorn genomeos.api:app --reload
 python scripts/http_smoke.py --base-url http://127.0.0.1:8000  # live API + preview proof
 ```
+
+The website gates are the `pages` workflow's `validate` job, and CI runs them **only when a PR
+touches `website/**`**. Run them yourself whenever you change `website/` *or what it consumes*:
+`website/src/atlas/contracts.ts` is one half of a two-sided payload contract whose other half is
+`scripts/export_atlas_web.py`. A PR that changes only the exporter does not trigger the `pages`
+workflow, so the Python gates can pass while the TypeScript half is broken — on #295 it was
+`npm run check` that caught fixtures missing a newly required field (#296).
 
 The fixture-backed diagnostic preview is at `/preview`. It proves the P4 read path only and is
 not the P5 product UI. Demo artifacts are synthetic, mounted read-only in containers, and must
