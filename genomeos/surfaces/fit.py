@@ -391,6 +391,15 @@ class SurfaceFit:
         )
 
 
+#: Inducing candidates are compared on distance rounded to this many decimals of a km (1 mm).
+#: Cells collocated with observations sit 0 to ~1e-12 km from them, and that residue is libm
+#: noise that differs by platform: ranking on it let the same config, data and seed select a
+#: different basis on macOS than on Linux (#280). 1 mm is far below any spacing on §6's ladder,
+#: so no real distance difference is erased. Rounding narrows the window for a flip to values
+#: straddling a 1 mm boundary; it cannot close it, and a tie that straddles one is still possible.
+DISTANCE_TIE_DECIMALS = 6
+
+
 def h3_inducing_points(
     lat: np.ndarray,
     lon: np.ndarray,
@@ -412,6 +421,11 @@ def h3_inducing_points(
     a sorted index is geographically arbitrary: it once selected a contiguous block on a single
     icosahedral face, putting every inducing point in the Arctic a median 8,800 km from the data
     while looking beautifully uniform. Uniform spacing is necessary and nowhere near sufficient.
+
+    Distances are compared at `DISTANCE_TIE_DECIMALS`. Candidates clearly nearer than the
+    budget's cut are kept outright; the tier that ties *at* the cut — typically cells collocated
+    with observations, more of them than the budget — is settled by maximin spacing
+    (`_maximin_fill`), not by float noise and not by index (#280).
     """
     import h3
 
@@ -444,13 +458,72 @@ def h3_inducing_points(
     if len(centres) == 0:
         raise ValueError("no H3 cells within reach of the observations")
 
-    # Rank by distance to the nearest observation and keep the closest.
-    distance = _haversine_km(
-        centres[:, 0][:, None], centres[:, 1][:, None], lat[None, :], lon[None, :]
-    ).min(axis=1)
-    keep = np.argsort(distance)[:n_inducing]
-    centres = centres[keep]
+    # Rank by distance to the nearest observation and keep the closest. The stable sort orders
+    # equal distances by cell id; that only orders cells already kept, which matters because the
+    # order indexes the inducing field. It never decides which cells are kept.
+    distance = np.round(
+        _haversine_km(
+            centres[:, 0][:, None], centres[:, 1][:, None], lat[None, :], lon[None, :]
+        ).min(axis=1),
+        DISTANCE_TIE_DECIMALS,
+    )
+    order = np.argsort(distance, kind="stable")
+    if len(order) > n_inducing:
+        cut = distance[order[n_inducing - 1]]
+        nearer = order[distance[order] < cut]
+        tied = order[distance[order] == cut]
+        picks = _maximin_fill(
+            centres[tied], centres[nearer], np.column_stack([lat, lon]), n_inducing - len(nearer)
+        )
+        order = np.concatenate([nearer, tied[picks]])
+    centres = centres[order]
     return to_unit_sphere(centres[:, 0], centres[:, 1])
+
+
+def _maximin_fill(
+    candidates: np.ndarray, kept: np.ndarray, observations: np.ndarray, n: int
+) -> np.ndarray:
+    """Indices of `n` candidates, each picked as far as possible from every point kept so far.
+
+    All rows are `(lat, lon)` in degrees. Every candidate is equally near the data — that is why
+    they tie — so the only geographic ground left for choosing is spread: a greedy maximin pick
+    spends the remaining budget covering the most ground, the rule #267's review figure already
+    uses. With nothing kept yet, the first pick is the candidate nearest the observations' mean
+    direction on the sphere, a data-derived anchor. Scores are rounded like the distances, and a
+    score still tied after that goes to the lowest candidate position — a total order among
+    places indistinguishable at 1 mm, never the selection rule. A zero mean direction (data in
+    exact balance) scores every candidate alike and lands on that order too, with no special case.
+    """
+    from genomeos.geo.h3util import _haversine_km
+
+    def km_to_nearest(points: np.ndarray) -> np.ndarray:
+        return _haversine_km(
+            candidates[:, 0][:, None],
+            candidates[:, 1][:, None],
+            points[:, 0][None, :],
+            points[:, 1][None, :],
+        ).min(axis=1)
+
+    available = np.ones(len(candidates), dtype=bool)
+    picks: list[int] = []
+    if len(kept):
+        nearest = km_to_nearest(kept)
+    else:
+        xyz = to_unit_sphere(candidates[:, 0], candidates[:, 1])
+        pull = to_unit_sphere(observations[:, 0], observations[:, 1]).mean(axis=0)
+        off_centre_km = EARTH_RADIUS_KM * np.arctan2(
+            np.linalg.norm(np.cross(xyz, pull), axis=1), xyz @ pull
+        )
+        picks.append(int(np.argmin(np.round(off_centre_km, DISTANCE_TIE_DECIMALS))))
+        available[picks[0]] = False
+        nearest = km_to_nearest(candidates[picks])
+    while len(picks) < n:
+        score = np.where(available, np.round(nearest, DISTANCE_TIE_DECIMALS), -np.inf)
+        pick = int(np.argmax(score))
+        picks.append(pick)
+        available[pick] = False
+        nearest = np.minimum(nearest, km_to_nearest(candidates[[pick]]))
+    return np.asarray(picks, dtype=int)
 
 
 def inducing_points(x: np.ndarray, n_inducing: int, seed: int) -> np.ndarray:
