@@ -113,13 +113,49 @@ for each label with exact lat/lon/uncertainty_radius_km.
   (boilerplate/permissive license does not restrict factual-data reuse).
 - reuse_evidence checks array is committed with each record.
 
-## Reconciliation vs MAP/Piel (issue #151 deliverable, NOT YET DONE)
+## Reconciliation vs MAP/Piel (issue #151 deliverable, in progress)
 
-- The Piel 2010 (ncomms1104) survey database source list has not yet been
-  checked for this study. Expected next step: compare study identity with
-  the MAP adapter corpus rows in the P1 build and report exact matches /
-  explained transformations / duplicates / unresolved mismatches. This
-  audit doc will be extended when the reconciliation report exists.
+### Step 1 — the Piel 2010 source list does not contain this study
+
+Checked 2026-10-01 against the source list of the assembly behind the MAP HbS corpus: Piel et al.
+2010, *Nature Communications* 1:104 (doi:10.1038/ncomms1104), Supplementary Figures S1-S2,
+Supplementary Methods and **Supplementary References**, 25 pages, 342 numbered entries.
+
+- Retrieved file: `41467_2010_BFncomms1104_MOESM456_ESM.pdf`, 438,548 bytes,
+  SHA-256 `8f4f11a8ea0b9bd57d5b5cc8b9d1d326cb83b4ee1d70bbae3930839fee9cf3a5`.
+- Method: extract all 25 pages to text (62,627 characters) and search the full text for the study's
+  identifiers. Nothing was searched by title only.
+- Result: **0 occurrences** of `Salih`, of PMID 20128890, of `BMC Med Genet`, and of the paper's
+  village and population labels (`Um-Salala`, `Hausa`, `Massalit`).
+- Control: the same text does contain Sudan studies — 8 occurrences of `Sudan`, in references to
+  other work (Bayoumi et al. 1985, Fur and Baggara tribes; Fleming et al. 1979, Sudan savanna of
+  Nigeria; Foy et al. 1964, Kenya and the Southern Sudan; Lauder & Ibrahim 1970, south-west
+  Kordofan; Omer et al. 1972, tribes of the Sudan; Roberts & Lehmann 1955, southern Sudanese
+  peoples; Saha 1981, a Sudanese population). So the search finds Sudan entries when they exist,
+  and this study is not among them.
+
+**What this establishes.** Salih et al. 2010 (BMC Med Genet 11:21, PMID 20128890) is not a cited
+source of the Piel 2010 assembly. For this corpus row the duplicate risk against the Piel path is
+therefore not merely unresolved: at the level of that source list there is no Piel survey record
+for a study published in January 2010 to collide with, and the row is an addition to the region
+rather than a re-count of a cohort already in the P1 build.
+
+**What it does not establish.** The current MAP `Explorer:HbS_Data` layer is a later and larger
+release than the 2010 assembly, so this check does not exclude a match against the layer the parity
+run actually consumes. That comparison needs the curated CSV the `map_surveys` adapter takes as
+input (994 retained surveys from 385 studies in the 2026-09-16 parity run). That CSV is not
+committed to this repository and is not present on the machine this check ran on, so exact matches,
+explained transformations and duplicate identities against the live layer remain **unestablished**.
+No identity was inferred from geography or from a title.
+
+### Step 2 — how to finish it
+
+The remaining comparison is mechanical once the input is available: load the curated MAP HbS CSV,
+select rows whose contributing study or citation resolves to this paper, and report each as an
+exact match, an explained transformation, or an unresolved mismatch, refusing any match that rests
+on a coordinate or a title alone. The result belongs in this section, and the row's promotion
+status stays refused until then for the reasons already recorded above (verification pending,
+methods `not_reviewed`, and no reviewed `literature` P0 alias for the two population labels).
 
 ## Corrections applied
 
