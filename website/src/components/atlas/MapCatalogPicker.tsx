@@ -19,6 +19,7 @@ import type {
   AtlasCatalog,
   DiscoveryGroup,
 } from '../../atlas/contracts';
+import { clampPickerTop, siteHeaderBottom } from './site-header';
 
 interface MapCatalogPickerProps {
   catalog: AtlasCatalog;
@@ -117,7 +118,7 @@ export function MapCatalogPicker({
       left: roomOnRight
         ? rect.right + gutter
         : Math.max(gutter, window.innerWidth - width - gutter),
-      top: Math.max(76, Math.min(rect.top, 104)),
+      top: clampPickerTop(rect.top, siteHeaderBottom(), 18),
       width,
     });
   }, []);

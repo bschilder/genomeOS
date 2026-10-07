@@ -62,3 +62,12 @@ describe('mobile CSS placement (mobile sheets design §A.1.12)', () => {
     }
   });
 });
+
+describe('Atlas page shell (mobile sheets design §A.1.2)', () => {
+  it('scopes the no-overscroll page class to the Atlas page', () => {
+    expect(builtPage('app')).toMatch(/<html lang="en" class="atlas-page"/);
+    for (const route of ['', 'project', 'working-groups', 'contribute']) {
+      expect(builtPage(route)).not.toContain('atlas-page');
+    }
+  });
+});

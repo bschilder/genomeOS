@@ -21,6 +21,7 @@ import {
 } from '../../atlas/earth-style-catalog';
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
 import { InfoTip } from './InfoTip';
+import { clampPickerTop, siteHeaderBottom } from './site-header';
 
 interface EarthStylePickerProps {
   basemap: BasemapId;
@@ -98,7 +99,7 @@ export function EarthStylePicker({
       : Math.max(gutter, rect.left - width - gutter);
     setPosition({
       left,
-      top: Math.max(76, Math.min(rect.top, 96)),
+      top: clampPickerTop(rect.top, siteHeaderBottom(), 10),
       width,
     });
   }, []);

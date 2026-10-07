@@ -96,6 +96,25 @@ for (const phone of PHONE_PROFILES) {
         { polling: 'raf', timeout: 30_000 },
       );
     });
+
+    test('/app/ fills the phone below the header without vertical scroll', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const shell = await page.evaluate(() => ({
+        clientHeight: document.documentElement.clientHeight,
+        explorerBottom: document
+          .querySelector('.atlas-explorer')!
+          .getBoundingClientRect().bottom,
+        innerHeight: window.innerHeight,
+        scrollHeight: document.documentElement.scrollHeight,
+      }));
+      expect(shell.scrollHeight).toBeLessThanOrEqual(shell.clientHeight);
+      expect(
+        Math.abs(shell.explorerBottom - shell.innerHeight),
+      ).toBeLessThanOrEqual(0.5);
+    });
   });
 }
 

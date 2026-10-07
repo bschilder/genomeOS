@@ -109,6 +109,94 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   ).toBeVisible();
 });
 
+test('Atlas fills the viewport below the header without page scroll', async ({
+  page,
+}) => {
+  // Reduced motion turns off the header's min-height transition, so the
+  // compact-class check below reads the settled height, not the first frame.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const shell = await page.evaluate(() => {
+    const root = document.documentElement;
+    const explorer = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect();
+    const header = document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect();
+    return {
+      clientHeight: root.clientHeight,
+      explorerBottom: explorer.bottom,
+      explorerTop: explorer.top,
+      headerBottom: header.bottom,
+      innerHeight: window.innerHeight,
+      overscroll: getComputedStyle(root).overscrollBehaviorY,
+      scrollHeight: root.scrollHeight,
+    };
+  });
+  expect(shell.scrollHeight).toBeLessThanOrEqual(shell.clientHeight);
+  expect(
+    Math.abs(shell.explorerBottom - shell.innerHeight),
+  ).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(shell.explorerTop - shell.headerBottom)).toBeLessThanOrEqual(
+    0.5,
+  );
+  expect(shell.overscroll).toBe('none');
+
+  const header = page.locator('[data-site-header]');
+  const before = await header.boundingBox();
+  await header.evaluate((element) =>
+    element.classList.add('site-header--compact'),
+  );
+  const after = await header.boundingBox();
+  expect(after!.height).toBeCloseTo(before!.height, 1);
+
+  await page.goto('/');
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).overscrollBehaviorY,
+    ),
+  ).toBe('auto');
+});
+
+test('Atlas pickers open a gutter below the site header', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'phone pickers are full-screen by CSS');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const headerBottom = await page
+    .locator('[data-site-header]')
+    .evaluate((element) => element.getBoundingClientRect().bottom);
+
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  const catalog = await page
+    .getByRole('dialog', { name: 'Select dataset' })
+    .boundingBox();
+  expect(catalog!.y - headerBottom).toBeGreaterThanOrEqual(7.5);
+  expect(catalog!.y - headerBottom).toBeLessThanOrEqual(18.5);
+  await page.keyboard.press('Escape');
+
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .getByRole('button', { name: 'Choose basemap and terrain' })
+    .click();
+  const earth = await page
+    .getByRole('dialog', { name: 'Basemap and terrain' })
+    .boundingBox();
+  expect(earth!.y - headerBottom).toBeGreaterThanOrEqual(7.5);
+  expect(earth!.y - headerBottom).toBeLessThanOrEqual(10.5);
+});
+
 test('Atlas status shows progress while a replacement dataset stays pending', async ({
   page,
 }) => {

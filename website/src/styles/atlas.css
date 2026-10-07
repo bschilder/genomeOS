@@ -1,7 +1,29 @@
+/* The Atlas page is one 100svh column: header, then the explorer (mobile sheets design §A.1.2). */
+html.atlas-page {
+  overscroll-behavior-y: none;
+}
+
+html.atlas-page body {
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+html.atlas-page #main-content {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+html.atlas-page .site-header--compact .site-header__inner {
+  min-height: 4.75rem;
+}
+
 .atlas-explorer {
   position: relative;
-  min-height: calc(100svh - 4.75rem);
-  height: calc(100svh - 4.75rem);
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   isolation: isolate;
   background:
@@ -1976,11 +1998,6 @@ body:has(.atlas-explorer) .skip-link {
 
   .atlas-status__meter {
     width: 100%;
-  }
-
-  .atlas-explorer {
-    min-height: calc(100svh - 4.75rem);
-    height: calc(100svh - 4.75rem);
   }
 
   .atlas-controls {
