@@ -13,6 +13,10 @@ verifies every object from disk. ``surface_sha256``, ``surface_url`` and the sur
 downloads keep naming the full canonical artifact the subset was cut from; those files are not
 copied. ``--from-dir`` reads catalog keys, so a bucket download works after Part C too.
 
+The tree is written to a hidden sibling of ``--out`` and renamed onto it only once complete, so a
+failed or interrupted run leaves the previous tree (or none), never a partial one that the next run
+would refuse. ``--out`` may not be, contain or lie inside ``--from-dir``.
+
     python scripts/build_atlas_e2e_fixture.py \\
         --from-dir website/public/data/atlas --out website/tests/fixtures/atlas/e2e
 """
@@ -22,6 +26,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
+import secrets
 import shutil
 import sys
 from collections import Counter
@@ -78,11 +84,29 @@ def _read(from_dir: Path, key: str, sha256: str) -> bytes:
     return data
 
 
-def prepare_out(out: Path) -> None:
+def _sibling(path: Path, suffix: str) -> Path:
+    """A hidden, unique sibling of the resolved ``path``: same filesystem, so renames are atomic."""
+    return path.with_name(f".{path.name}.{os.getpid()}-{secrets.token_hex(4)}.{suffix}")
+
+
+def _refuse_unsafe_out(out: Path, source: Path | None) -> None:
+    """Refuse an ``out`` that overlaps ``source`` or is a non-empty directory with no catalog."""
+    if source is not None:
+        target, origin = out.resolve(), source.resolve()
+        if target == origin or target in origin.parents or origin in target.parents:
+            raise ValueError(f"{out}: refusing to write a fixture tree that overlaps its source {source}")
+    if out.exists() and any(out.iterdir()) and not (out / "catalog.json").is_file():
+        raise ValueError(f"{out}: refusing to replace a directory that is not a fixture tree")
+
+
+def prepare_out(out: Path, *, source: Path | None = None) -> None:
+    """Leave ``out`` an empty directory, replacing only a fixture tree that does not overlap ``source``."""
+    out = Path(out).resolve()
+    _refuse_unsafe_out(out, source)
     if out.exists():
-        if any(out.iterdir()) and not (out / "catalog.json").is_file():
-            raise ValueError(f"{out}: refusing to replace a directory that is not a fixture tree")
-        shutil.rmtree(out)
+        retired = _sibling(out, "old")
+        out.rename(retired)  # an interrupted delete leaves a hidden sibling, never a partial ``out``
+        shutil.rmtree(retired)
     out.mkdir(parents=True)
 
 
@@ -93,10 +117,34 @@ def build_fixture(
     cell_budget: int = CELL_BUDGET,
     observation_budget: int = OBSERVATION_BUDGET,
 ) -> dict[str, Any]:
-    """Write the compact tree under ``out`` and return its catalog."""
-    from_dir, out = Path(from_dir), Path(out)
+    """Write the compact tree under ``out`` and return its catalog.
+
+    Every source object is read and every output object written and verified in a hidden sibling of
+    ``out`` first; only a complete tree is renamed onto ``out``.
+    """
+    from_dir, out = Path(from_dir), Path(out).resolve()
+    _refuse_unsafe_out(out, from_dir)
     source = json.loads((from_dir / "catalog.json").read_text(encoding="utf-8"))
-    prepare_out(out)
+    staging, retired = _sibling(out, "tmp"), _sibling(out, "old")
+    staging.mkdir(parents=True)
+    try:
+        catalog = _write_tree(from_dir, source, staging, cell_budget, observation_budget)
+        _refuse_unsafe_out(out, from_dir)
+        if out.exists():
+            out.rename(retired)
+        staging.rename(out)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    if retired.exists():
+        shutil.rmtree(retired)
+    return catalog
+
+
+def _write_tree(
+    from_dir: Path, source: Mapping[str, Any], out: Path, cell_budget: int, observation_budget: int
+) -> dict[str, Any]:
+    """Write the compact objects and ``catalog.json`` into the empty directory ``out``."""
     rows: list[int] = []
     grid: list[str] | None = None
     subsets: dict[str, dict[str, Any]] = {}

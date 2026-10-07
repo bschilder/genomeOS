@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
+import subprocess
+import sys
 from pathlib import Path
 
 import h3
@@ -23,6 +26,12 @@ def _tree(root: Path) -> dict[str, bytes]:
         for path in sorted(root.rglob("*"))
         if path.is_file()
     }
+
+
+def _copy_export(tmp_path: Path) -> Path:
+    source = tmp_path / "src"
+    shutil.copytree(GOLDEN_EXPORT, source)
+    return source
 
 
 def _golden_cells() -> list[str]:
@@ -74,6 +83,92 @@ def test_refuses_to_replace_a_directory_that_is_not_a_fixture_tree(tmp_path: Pat
     with pytest.raises(ValueError, match="not a fixture tree"):
         e2e.build_fixture(GOLDEN_EXPORT, tmp_path / "out", cell_budget=9, observation_budget=1)
     assert (tmp_path / "out" / "notes.txt").read_text() == "keep me"
+
+
+def test_a_rerun_replaces_the_previous_fixture_tree(tmp_path: Path) -> None:
+    out = tmp_path / "out"
+    e2e.build_fixture(GOLDEN_EXPORT, out, cell_budget=9, observation_budget=1)
+    e2e.build_fixture(GOLDEN_EXPORT, out)  # a different grid key: the 9-cell objects must go
+    e2e.build_fixture(GOLDEN_EXPORT, tmp_path / "fresh")
+    assert _tree(out) == _tree(tmp_path / "fresh")
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["fresh", "out"]  # no staging left
+
+
+@pytest.mark.parametrize("out", ["", "e2e", ".."], ids=["same", "inside", "containing"])
+def test_refuses_an_out_that_overlaps_the_source(tmp_path: Path, out: str) -> None:
+    source = _copy_export(tmp_path)
+    before = _tree(source)
+    with pytest.raises(ValueError, match="overlaps its source"):
+        e2e.build_fixture(source, source / out, cell_budget=9, observation_budget=1)
+    assert _tree(source) == before
+    assert not (source / "e2e").exists()
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["src"]
+
+
+def test_a_failed_run_keeps_the_previous_tree_and_leaves_nothing_behind(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = _copy_export(tmp_path)
+    out = tmp_path / "out"
+    # The second artifact fails after the first one's observations were written.
+    surface = source / json.loads((source / "catalog.json").read_text())["artifacts"][1]["surface_url"]
+    good = surface.read_bytes()
+    surface.write_bytes(good + b" ")
+    with pytest.raises(ValueError, match="sha256 does not match"):
+        e2e.build_fixture(source, out, cell_budget=9, observation_budget=1)
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["src"]
+    surface.write_bytes(good)
+    e2e.build_fixture(source, out, cell_budget=9, observation_budget=1)  # the re-run is not refused
+    previous = _tree(out)
+
+    def interrupt(*args: object, **kwargs: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(e2e.encode_atlas_web, "encode_catalog", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        e2e.build_fixture(source, out)
+    assert _tree(out) == previous
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["out", "src"]
+
+
+def test_prepare_out_empties_a_fixture_tree_and_refuses_its_source(tmp_path: Path) -> None:
+    tree = tmp_path / "tree"
+    (tree / "grids").mkdir(parents=True)
+    (tree / "catalog.json").write_text("{}")
+    (tree / "grids" / "old.gosa").write_bytes(b"old")
+    with pytest.raises(ValueError, match="overlaps its source"):
+        e2e.prepare_out(tree, source=tree / "grids")
+    assert (tree / "grids" / "old.gosa").read_bytes() == b"old"
+    e2e.prepare_out(tree)
+    assert tree.is_dir() and not any(tree.iterdir())
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["tree"]
+    e2e.prepare_out(tmp_path / "new" / "tree")
+    assert (tmp_path / "new" / "tree").is_dir()
+
+
+def test_cli_writes_the_tree_named_by_from_dir_and_out(tmp_path: Path) -> None:
+    out = tmp_path / "cli"
+    script = ROOT / "scripts" / "build_atlas_e2e_fixture.py"
+    argv = [sys.executable, str(script), "--from-dir", str(GOLDEN_EXPORT), "--out", str(out)]
+    result = subprocess.run(argv, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == f"wrote 2 compact artifacts to {out}\n"
+    e2e.build_fixture(GOLDEN_EXPORT, tmp_path / "api")
+    assert _tree(out) == _tree(tmp_path / "api")
+
+
+def test_cli_defaults_read_the_published_export_and_write_the_committed_tree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[Path, Path]] = []
+
+    def build(from_dir: Path, out: Path) -> dict:
+        calls.append((from_dir, out))
+        return {"artifacts": []}
+
+    monkeypatch.setattr(e2e, "build_fixture", build)
+    assert e2e.main([]) == 0
+    assert calls == [(ROOT / "website" / "public" / "data" / "atlas", COMMITTED)]
 
 
 def test_committed_e2e_tree_is_complete_and_self_consistent() -> None:
