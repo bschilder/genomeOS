@@ -7,6 +7,7 @@ import {
   decodeRender,
   GosaError,
 } from '../src/atlas/gosa/decode';
+import type { DecodedGrid } from '../src/atlas/gosa/types';
 import {
   editFloats,
   goldenBytes,
@@ -42,6 +43,33 @@ function decodeAs(
     grid,
     ref: change(refWith(ref, 'render', bytes)),
   });
+}
+
+/** Decode the golden format-1 render tier against a changed copy of the loaded grid. */
+function decodeOnGrid(change: (grid: DecodedGrid) => DecodedGrid) {
+  const bytes = goldenRender(formatOne);
+  return decodeRender(toBuffer(bytes), {
+    grid: change(grid),
+    ref: refWith(formatOne, 'render', bytes),
+  });
+}
+
+/** The error a decode raises, or undefined. */
+function thrown(run: () => unknown): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  return undefined;
+}
+
+function expectIdentityMismatch(error: unknown, field: string): void {
+  expect(error).toBeInstanceOf(GosaError);
+  expect(error).toMatchObject({ code: 'identity' });
+  expect((error as Error).message).toMatch(
+    new RegExp(`Atlas artifact identity mismatch for ${field}`),
+  );
 }
 
 describe('decodeRender on the golden fixtures', () => {
@@ -122,30 +150,52 @@ describe('decodeRender binding to the catalog', () => {
       }),
     ],
   ] as const)('raises identity for a different %s', (field, change) => {
-    let caught: unknown;
-    try {
-      decodeAs(
-        formatOne,
-        undefined,
-        change as (ref: ArtifactRef) => ArtifactRef,
-      );
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).toBeInstanceOf(GosaError);
-    expect(caught).toMatchObject({ code: 'identity' });
-    expect((caught as Error).message).toMatch(
-      new RegExp(`Atlas artifact identity mismatch for ${field}`),
+    expectIdentityMismatch(
+      thrown(() =>
+        decodeAs(
+          formatOne,
+          undefined,
+          change as (ref: ArtifactRef) => ArtifactRef,
+        ),
+      ),
+      field,
     );
   });
 
+  it.each([
+    ['post_mean', 0],
+    ['post_mean', 1],
+    ['post_sd', 0],
+    ['post_sd', 1],
+  ] as const)(
+    'raises identity when only metric_domains.%s[%i] differs',
+    (metric, bound) => {
+      expectIdentityMismatch(
+        thrown(() =>
+          decodeAs(formatOne, undefined, (ref) => {
+            const domain: [number, number] = [...ref.metric_domains[metric]];
+            domain[bound] += 0.001;
+            return {
+              ...ref,
+              metric_domains: { ...ref.metric_domains, [metric]: domain },
+            };
+          }),
+        ),
+        'metric_domains',
+      );
+    },
+  );
+
   it('compares target-grid identity on a format-2 artifact', () => {
-    expect(() =>
-      decodeAs(formatTwo, undefined, (ref) => ({
-        ...ref,
-        target_grid_version: 'another-grid-version',
-      })),
-    ).toThrow(/target_grid_version/);
+    expectIdentityMismatch(
+      thrown(() =>
+        decodeAs(formatTwo, undefined, (ref) => ({
+          ...ref,
+          target_grid_version: 'another-grid-version',
+        })),
+      ),
+      'target_grid_version',
+    );
   });
 
   it('binds n_cells, the source surface and the grid', () => {
@@ -171,6 +221,20 @@ describe('decodeRender binding to the catalog', () => {
           ...ref,
           web: { ...ref.web, grid_sha256: '0'.repeat(64) },
         })),
+      ),
+    ).toBe('grid_sha256');
+  });
+
+  it('binds n_cells and grid_sha256 to the loaded grid when the catalog agrees', () => {
+    expect(gosaCode(() => decodeOnGrid((loaded) => loaded))).toBe('no error');
+    expect(
+      gosaCode(() =>
+        decodeOnGrid((loaded) => ({ ...loaded, n: loaded.n + 1 })),
+      ),
+    ).toBe('n_cells');
+    expect(
+      gosaCode(() =>
+        decodeOnGrid((loaded) => ({ ...loaded, gridSha256: '0'.repeat(64) })),
       ),
     ).toBe('grid_sha256');
   });
