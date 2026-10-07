@@ -9,6 +9,11 @@ import {
   observationArtifactSchema,
   surfaceArtifactSchema,
 } from '../src/atlas/contracts';
+import {
+  decodeDetail,
+  decodeGrid,
+  decodeRender,
+} from '../src/atlas/gosa/decode';
 import { populatedPlaceCatalogSchema } from '../src/atlas/place-context';
 
 const dataDirectory = fileURLToPath(
@@ -43,6 +48,14 @@ function readPayload(filename: string): {
     digest: createHash('sha256').update(bytes).digest('hex'),
     value: JSON.parse(bytes.toString()),
   };
+}
+
+function readBuffer(key: string): ArrayBuffer {
+  const bytes = readFileSync(`${dataDirectory}/${key}`);
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength,
+  ) as ArrayBuffer;
 }
 
 /** SHA-256 of the little-endian u64 H3 column, as `encode_atlas_web.py` declares grids. */
@@ -133,4 +146,23 @@ describe('published Atlas data', () => {
       );
     }
   }, 60_000);
+
+  it('decodes every staged grid, render and detail object with the TS GOSA decoder', () => {
+    const catalog = atlasCatalogSchema.parse(readPayload('catalog.json').value);
+    const [[gridSha256, entry]] = Object.entries(catalog.grids);
+    const grid = decodeGrid(readBuffer(entry.url), { entry, gridSha256 });
+    expect(grid.n).toBe(77_844);
+    for (const ref of catalog.artifacts) {
+      const render = decodeRender(readBuffer(ref.web.render.url), {
+        grid,
+        ref,
+      });
+      const detail = decodeDetail(readBuffer(ref.web.detail.url), {
+        grid,
+        ref,
+        render,
+      });
+      expect(detail.post_mean, ref.id).toHaveLength(ref.n_cells);
+    }
+  }, 120_000);
 });
