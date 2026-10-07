@@ -2,6 +2,7 @@ import { cellToChildren, splitLongToH3Index } from 'h3-js';
 import { describe, expect, it } from 'vitest';
 
 import type { GridEntry } from '../src/atlas/contracts';
+import { parseContainer } from '../src/atlas/gosa/container';
 import { decodeGrid } from '../src/atlas/gosa/decode';
 import {
   assembleContainer,
@@ -99,6 +100,21 @@ describe('decodeGrid hard errors', () => {
 
   it('raises truncated for a container shorter than its preamble', () => {
     expect(gosaCode(() => decodeMutated(golden.slice(0, 8)))).toBe('truncated');
+  });
+
+  it('raises truncated when the declared header runs past the end of the container', () => {
+    // Check 5: `12 + header_length` beyond the file is refused before the header is read, here one
+    // byte past the end and at the u32 maximum.
+    for (const headerLength of [golden.byteLength - 12 + 1, 0xffffffff]) {
+      const bytes = golden.slice();
+      new DataView(bytes.buffer).setUint32(8, headerLength, true);
+      expect(gosaCode(() => decodeMutated(bytes))).toBe('truncated');
+    }
+    // A header ending exactly at the last byte passes check 5; its text then takes in the padding
+    // and the shuffled cells, which are not UTF-8.
+    const exact = golden.slice();
+    new DataView(exact.buffer).setUint32(8, exact.byteLength - 12, true);
+    expect(gosaCode(() => decodeMutated(exact))).toBe('header_encoding');
   });
 
   it.each([
@@ -271,5 +287,52 @@ describe('decodeGrid hard errors', () => {
     expect(gosaCode(() => decodeMutated(golden, {}, 'f'.repeat(64)))).toBe(
       'grid_sha256',
     );
+  });
+});
+
+describe('parseContainer column list (check 11)', () => {
+  // Check 11 is tier-generic. The grid's single column cannot be aliased by a joined
+  // `name:dtype:encoding` string (its fields would have to be exact), so the golden render
+  // container, the shortest normative list that can be, is re-packed here.
+  const render = goldenBytes(catalog.artifacts[0].web.render.url);
+
+  it('accepts the golden render column list', () => {
+    expect(gosaCode(() => parseContainer(render, 'render'))).toBe('no error');
+  });
+
+  // Each list is shorter than the normative render list, but its fields carry the `:` and `,` a
+  // joined string would use, so it spells the normative list when joined. Lengths and offsets
+  // stay valid for the columns present, so only check 11 can refuse it.
+  const aliases: [string, (readonly [string, string, string])[]][] = [
+    [
+      'one column whose encoding absorbs the other two',
+      [['support', 'u8', 'raw,post_mean:f32:shuffle,post_sd:f32:shuffle']],
+    ],
+    [
+      'two columns whose last encoding absorbs the third',
+      [
+        ['support', 'u8', 'raw'],
+        ['post_mean', 'f32', 'shuffle,post_sd:f32:shuffle'],
+      ],
+    ],
+    [
+      'one column whose name absorbs the first column',
+      [['support:u8:raw,post_mean', 'f32', 'shuffle,post_sd:f32:shuffle']],
+    ],
+  ];
+
+  it.each(aliases)('raises columns for %s', (_label, triples) => {
+    const split = splitContainer(render);
+    const columns = triples.map(([name, dtype, encoding], index) => ({
+      ...split.header.columns[index],
+      dtype,
+      encoding,
+      name,
+    }));
+    const bytes = assembleContainer(
+      { ...split.header, columns },
+      split.payloads.slice(0, triples.length),
+    );
+    expect(gosaCode(() => parseContainer(bytes, 'render'))).toBe('columns');
   });
 });

@@ -181,12 +181,29 @@ function requireZeros(bytes: Uint8Array, from: number, to: number): void {
   }
 }
 
-function describeColumns(
+type ColumnTriple = readonly [name: string, dtype: string, encoding: string];
+
+function columnTriples(
   columns: readonly { dtype: string; encoding: string; name: string }[],
-): string {
-  return columns
-    .map(({ dtype, encoding, name }) => `${name}:${dtype}:${encoding}`)
-    .join(',');
+): ColumnTriple[] {
+  return columns.map(({ dtype, encoding, name }) => [name, dtype, encoding]);
+}
+
+/**
+ * Check 11 compares the `[name, dtype, encoding]` lists element by element. A joined string would
+ * alias a shorter list whose fields carry the delimiters (one render column with encoding
+ * `raw,post_mean:f32:shuffle,post_sd:f32:shuffle`), which surface_codec.py's list equality refuses.
+ */
+function sameColumns(
+  listed: readonly ColumnTriple[],
+  normative: readonly ColumnTriple[],
+): boolean {
+  return (
+    listed.length === normative.length &&
+    listed.every((triple, index) =>
+      triple.every((field, part) => field === normative[index][part]),
+    )
+  );
 }
 
 /** Container-intrinsic checks 1–15 of the contract table, in that order. */
@@ -246,12 +263,12 @@ export function parseContainer(
     }
   }
   const expected = TIER_COLUMNS[tier];
-  const listed = describeColumns(header.columns);
-  const normative = describeColumns(expected);
-  if (listed !== normative) {
+  const listed = columnTriples(header.columns);
+  const normative = columnTriples(expected);
+  if (!sameColumns(listed, normative)) {
     fail(
       'columns',
-      `GOSA ${tier} columns are [${listed}], expected [${normative}]`,
+      `GOSA ${tier} columns are ${JSON.stringify(listed)}, expected ${JSON.stringify(normative)}`,
     );
   }
   header.columns.forEach((column, index) => {
