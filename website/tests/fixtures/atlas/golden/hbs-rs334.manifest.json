@@ -1,0 +1,1 @@
+{"artifact_format":1,"correlation_range_km":500.0,"data_version":"map-test","likelihood":"beta_binomial","model_version":"v1","n_cells":10,"n_observations":1,"resolution":3,"support_counts":{"interpolated":4,"observed":2,"prior_dominated":2,"unknown":2},"variant_id":"chr11-5227002-T-A"}
