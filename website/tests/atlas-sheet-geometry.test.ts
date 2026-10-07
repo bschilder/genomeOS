@@ -163,16 +163,39 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     const steady = new VelocityTracker();
     steady.add(78, 0);
     steady.add(178, 100);
-    expect(steady.velocity()).toBe(1);
+    expect(steady.velocity(100)).toBe(1);
     const stale = new VelocityTracker();
     stale.add(78, 0);
     stale.add(100, 50);
     stale.add(110, 300);
-    expect(stale.velocity()).toBeCloseTo(10 / 250, 6);
+    expect(stale.velocity(300)).toBeCloseTo(10 / 250, 6);
     const burst = new VelocityTracker();
     burst.add(78, 10);
     burst.add(300, 10);
-    expect(burst.velocity()).toBe(222);
-    expect(new VelocityTracker().velocity()).toBe(0);
+    expect(burst.velocity(10)).toBe(222);
+    expect(new VelocityTracker().velocity(0)).toBe(0);
+  });
+
+  it('holds the last height until release, so nudge, hold, release is no flick', () => {
+    const nudge = new VelocityTracker();
+    nudge.add(379, 0);
+    nudge.add(419, 40);
+    expect(nudge.velocity(40)).toBe(1);
+    expect(nudge.velocity(90)).toBeCloseTo(40 / 90, 6);
+    expect(nudge.velocity(120)).toBeCloseTo(0.2, 6);
+    expect(nudge.velocity(1040)).toBe(0);
+    expect(
+      releaseSheetState({
+        from: 'half',
+        height: 419,
+        snaps: SNAPS,
+        velocity: nudge.velocity(1040),
+      }),
+    ).toBe('half');
+    const late = new VelocityTracker();
+    late.add(78, 0);
+    late.add(178, 100);
+    expect(late.velocity(108)).toBeCloseTo(0.92, 6);
+    expect(late.velocity(50)).toBe(1);
   });
 });

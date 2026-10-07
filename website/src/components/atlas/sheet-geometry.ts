@@ -93,7 +93,12 @@ export function sheetStateLabel(state: SheetState): string {
   return state === 'half' ? 'half height' : 'full height';
 }
 
-/** Sheet-height change per millisecond over the last 100 ms; positive grows the sheet. */
+/**
+ * Sheet-height change per millisecond over the 100 ms before release; positive
+ * grows the sheet. Pointer events fire only on movement, so the sheet is held at
+ * its last sampled height until `now`: a nudge, a hold and a release reads as
+ * still, not as a flick.
+ */
 export class VelocityTracker {
   #samples: { height: number; time: number }[] = [];
 
@@ -106,10 +111,27 @@ export class VelocityTracker {
       this.#samples.shift();
   }
 
-  velocity(): number {
+  /** `now` is the release time, on the same clock as `add`'s `time`. */
+  velocity(now: number): number {
     const first = this.#samples[0];
     const last = this.#samples.at(-1);
     if (!first || !last || first === last) return 0;
-    return (last.height - first.height) / Math.max(1, last.time - first.time);
+    const end = Math.max(now, last.time);
+    const start = Math.max(first.time, end - VELOCITY_WINDOW_MS);
+    return (last.height - this.#heightAt(start)) / Math.max(1, end - start);
+  }
+
+  /** Linear between samples, held at the last height after the last sample. */
+  #heightAt(time: number): number {
+    const next = this.#samples.findIndex((sample) => sample.time >= time);
+    if (next < 0) return this.#samples.at(-1)!.height;
+    const after = this.#samples[next]!;
+    const before = this.#samples[next - 1];
+    if (!before) return after.height;
+    return (
+      before.height +
+      ((after.height - before.height) * (time - before.time)) /
+        (after.time - before.time)
+    );
   }
 }

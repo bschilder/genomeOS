@@ -4170,7 +4170,7 @@ drag through CDP, `window.scrollY`, no pointercancel, mouse drag, synthetic poin
           from: session.from,
           height: session.height,
           snaps: current,
-          velocity: session.velocity.velocity(),
+          velocity: session.velocity.velocity(event.timeStamp),
         });
         finishDrag(next);
         if (next !== stateRef.current) setState(next);
