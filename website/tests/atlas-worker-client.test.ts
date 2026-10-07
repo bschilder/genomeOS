@@ -169,6 +169,65 @@ describe('AtlasWorkerClient', () => {
     await expect(request).rejects.toThrow('Atlas data worker failed: boom');
   });
 
+  it('fails a retry after a worker crash instead of posting it to the dead worker', async () => {
+    const worker = new InProcessWorker({
+      ...ATLAS_WORKER_HANDLERS,
+      'load-grid': () => new Promise<void>(() => undefined),
+    });
+    const { client: atlas } = client(worker);
+    const load = () =>
+      atlas.loadGrid(toBuffer(goldenBytes(entry.url)), { entry, gridSha256 });
+    const first = load();
+    await Promise.resolve();
+    worker.crash('boom');
+    await expect(first).rejects.toThrow('Atlas data worker failed: boom');
+    expect(worker.terminated).toBe(true);
+    // RF5: "Retry data" must end in another failure, not an endless "Loading".
+    await expect(load()).rejects.toThrow('Atlas data worker failed: boom');
+    expect(worker.received).toHaveLength(1);
+  });
+
+  it('fails every request once the worker script failed to load', async () => {
+    // A blocked (CSP `worker-src`) or unsupported module worker fires one bare `error` event
+    // and never answers (RF5).
+    const worker = new InProcessWorker({
+      ...ATLAS_WORKER_HANDLERS,
+      'load-grid': () => new Promise<void>(() => undefined),
+    });
+    const { client: atlas } = client(worker);
+    worker.dispatchEvent(new Event('error'));
+    await expect(
+      atlas.loadGrid(toBuffer(goldenBytes(entry.url)), { entry, gridSha256 }),
+    ).rejects.toThrow('Atlas data worker failed: unknown error');
+    expect(worker.received).toHaveLength(0);
+  });
+
+  it('fails every request after terminate() without posting it', async () => {
+    const { client: atlas, worker } = client();
+    atlas.terminate();
+    expect(worker.terminated).toBe(true);
+    await expect(
+      atlas.loadGrid(toBuffer(goldenBytes(entry.url)), { entry, gridSha256 }),
+    ).rejects.toThrow('Atlas data worker terminated');
+    expect(worker.received).toHaveLength(0);
+  });
+
+  it('keeps failing retries when the Worker cannot start', async () => {
+    vi.stubGlobal(
+      'Worker',
+      class {
+        constructor() {
+          throw new Error('blocked by policy');
+        }
+      },
+    );
+    const atlas = startAtlasWorker();
+    const load = () =>
+      atlas.loadGrid(toBuffer(goldenBytes(entry.url)), { entry, gridSha256 });
+    await expect(load()).rejects.toThrow(/could not start: blocked by policy/);
+    await expect(load()).rejects.toThrow(/could not start: blocked by policy/);
+  });
+
   it('yields a failing client when the Worker cannot start', async () => {
     vi.stubGlobal(
       'Worker',

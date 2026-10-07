@@ -92,11 +92,17 @@ class UnavailableWorker extends EventTarget {
   terminate(): void {}
 }
 
+/**
+ * A worker `error` event or `terminate()` is final: the client stops the worker, fails every
+ * pending request and rejects every later one with the same error without posting it. A dead
+ * worker so ends each load, and each "Retry data", in a failure, never an endless "Loading" (RF5).
+ */
 export class AtlasWorkerClient {
   readonly #pending = new Map<number, Pending>();
   readonly #renders = new Map<string, DecodedRender>();
   readonly #timings = new Set<(timing: StepTiming) => void>();
   readonly #worker: Worker;
+  #failure: Error | null = null;
   #nextId = 1;
 
   constructor(worker: Worker = createDataWorker()) {
@@ -104,13 +110,15 @@ export class AtlasWorkerClient {
     worker.addEventListener('message', (event: MessageEvent<WorkerOutbound>) =>
       this.#receive(event.data),
     );
+    // A script that fails to load fires a bare Event, so `message` may be undefined.
     worker.addEventListener('error', (event: ErrorEvent) =>
-      this.#failAll(
+      this.#die(
         new Error(
           `Atlas data worker failed: ${event.message || 'unknown error'}`,
         ),
       ),
     );
+    // One undeliverable response with an unknown id; the worker itself is still running.
     worker.addEventListener('messageerror', () =>
       this.#failAll(new Error('Atlas data worker sent an unreadable message')),
     );
@@ -173,9 +181,9 @@ export class AtlasWorkerClient {
     return () => this.#timings.delete(listener);
   }
 
+  /** Final: pending and later requests reject with "Atlas data worker terminated". */
   terminate(): void {
-    this.#worker.terminate();
-    this.#failAll(new Error('Atlas data worker terminated'));
+    this.#die(new Error('Atlas data worker terminated'));
   }
 
   #request<K extends WorkerResponseType>(
@@ -185,6 +193,7 @@ export class AtlasWorkerClient {
     onMessage?: (message: WorkerResponse) => void,
   ): Promise<WorkerResponseOf<K>> {
     if (signal?.aborted) return Promise.reject(abortError());
+    if (this.#failure) return Promise.reject(this.#failure);
     const id = this.#nextId++;
     return new Promise<WorkerResponseOf<K>>((resolve, reject) => {
       const onAbort = () => {
@@ -261,6 +270,13 @@ export class AtlasWorkerClient {
       // A measure is diagnostic only; clock skew must never break loading.
     }
     for (const listener of this.#timings) listener(timing);
+  }
+
+  /** The first cause wins; a later `terminate()` of a crashed worker keeps the crash message. */
+  #die(error: Error): void {
+    this.#failure ??= error;
+    this.#worker.terminate();
+    this.#failAll(this.#failure);
   }
 
   #failAll(error: Error): void {
