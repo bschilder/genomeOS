@@ -25,6 +25,30 @@ import {
 /** Byte copy of tests/fixtures/atlas-web/mutations (tests/test_atlas_web_fixtures.py asserts it). */
 const CORPUS = path.join(GOLDEN_DIR, 'mutations');
 
+/**
+ * The eleven mutation classes spec §B.3 names, each with the corpus file that carries it and the
+ * code both decoders must give. Several classes share a code (five are `h3_cell`, two
+ * `grid_order`), so coverage is checked per file, not per code. Mirrors `SPEC_MUTATIONS` in
+ * tests/test_atlas_web_fixtures.py.
+ */
+const SPEC_MUTATIONS: readonly (readonly [
+  specClass: string,
+  file: string,
+  code: GosaErrorCode,
+])[] = [
+  ['reserved = 1', 'grid-reserved-1.gosa', 'reserved'],
+  ['pad byte 0x01', 'render-pad-byte.gosa', 'padding'],
+  ['one trailing byte', 'grid-trailing-byte.gosa', 'trailing_bytes'],
+  ['offset + 8', 'render-offset-plus-8.gosa', 'offset'],
+  ['MSB-first planes', 'grid-msb-first-planes.gosa', 'grid_order'],
+  ['a zero delta', 'grid-zero-delta.gosa', 'grid_order'],
+  ['a set reserved H3 bit', 'grid-reserved-h3-bit.gosa', 'h3_cell'],
+  ['mode ≠ 1', 'grid-mode-2.gosa', 'h3_cell'],
+  ['a digit 7 inside the resolution', 'grid-digit-7.gosa', 'h3_cell'],
+  ['base cell > 121', 'grid-base-cell-122.gosa', 'h3_cell'],
+  ['wrong resolution', 'grid-wrong-resolution.gosa', 'h3_cell'],
+];
+
 interface MutationCase {
   artifact: string | null;
   base: string;
@@ -93,19 +117,25 @@ describe('shared GOSA mutation corpus (fast-load design §B.3)', () => {
     expect(manifest.mutations.map(({ file }) => file).sort()).toEqual(files);
   });
 
-  it('covers every mutation class the spec names', () => {
-    const codes = new Set(manifest.mutations.map(({ code }) => code));
-    for (const code of [
-      'reserved',
-      'padding',
-      'trailing_bytes',
-      'offset',
-      'grid_order',
-      'h3_cell',
-    ] as const) {
-      expect(codes).toContain(code);
-    }
+  it('names each of the eleven spec classes once, each in its own corpus file', () => {
+    expect(new Set(SPEC_MUTATIONS.map(([specClass]) => specClass)).size).toBe(
+      11,
+    );
+    expect(new Set(SPEC_MUTATIONS.map(([, file]) => file)).size).toBe(11);
   });
+
+  it.each(SPEC_MUTATIONS)(
+    'holds the spec class "%s" as %s, refused with %s',
+    (_specClass, file, code) => {
+      const listed = manifest.mutations.filter(
+        (testCase) => testCase.file === file,
+      );
+      expect(listed.map((testCase) => testCase.code)).toEqual([code]);
+      expect(
+        listed.map((testCase) => gosaCode(() => decodeCase(testCase))),
+      ).toEqual([code]);
+    },
+  );
 
   it.each(
     manifest.mutations.map((testCase) => [testCase.file, testCase] as const),
