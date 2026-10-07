@@ -2346,7 +2346,8 @@ body:has(.atlas-explorer) .skip-link {
     border: 0;
     border-radius: 0.5rem;
     background: transparent;
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
   }
 
   .atlas-sheet__handle::before {
@@ -2421,6 +2422,20 @@ body:has(.atlas-explorer) .skip-link {
 
   .atlas-sheet__body > .atlas-controls__intro {
     display: none;
+  }
+
+  .atlas-explorer[data-sheet-dragging]
+    :is(.atlas-controls, .atlas-right-rail, .atlas-legend, .atlas-data-credit),
+  .atlas-explorer[data-sheet-dragging] .atlas-scene .cesium-viewer-bottom {
+    transition: none;
+  }
+
+  /* Docked strips stay at --atlas-sheet-rest and follow the drag on the compositor. */
+  .atlas-explorer[data-sheet-dragging] :is(.atlas-legend, .atlas-data-credit),
+  .atlas-explorer[data-sheet-dragging] .atlas-scene .cesium-viewer-bottom {
+    transform: translateY(
+      calc(var(--atlas-sheet-rest) - var(--atlas-sheet-offset))
+    );
   }
 
   /* end of mobile sheet rules */

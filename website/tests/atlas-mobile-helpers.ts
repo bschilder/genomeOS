@@ -128,3 +128,60 @@ export async function dockedStackInOrder(page: Page): Promise<boolean> {
     return true;
   });
 }
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface TouchGesture {
+  move(to: Point): Promise<void>;
+  end(): Promise<void>;
+}
+
+/** One finger through Chrome's real input pipeline (CDP), so touch-action and pointer events behave as on a phone. */
+export async function startTouch(page: Page, at: Point): Promise<TouchGesture> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', {
+    touchPoints: [{ id: 1, x: at.x, y: at.y }],
+    type: 'touchStart',
+  });
+  return {
+    async move(to) {
+      await cdp.send('Input.dispatchTouchEvent', {
+        touchPoints: [{ id: 1, x: to.x, y: to.y }],
+        type: 'touchMove',
+      });
+    },
+    async end() {
+      await cdp.send('Input.dispatchTouchEvent', {
+        touchPoints: [],
+        type: 'touchEnd',
+      });
+      await cdp.detach();
+    },
+  };
+}
+
+export async function touchDrag(
+  page: Page,
+  from: Point,
+  to: Point,
+  steps = 8,
+): Promise<void> {
+  const gesture = await startTouch(page, from);
+  for (let step = 1; step <= steps; step += 1) {
+    await gesture.move({
+      x: from.x + ((to.x - from.x) * step) / steps,
+      y: from.y + ((to.y - from.y) * step) / steps,
+    });
+    await page.waitForTimeout(16);
+  }
+  await gesture.end();
+}
+
+export async function centreOf(locator: Locator): Promise<Point> {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  return { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+}

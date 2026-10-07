@@ -1,8 +1,11 @@
 /**
  * Bottom-sheet state machine for the Atlas phone layout (mobile sheets design
  * 2026-10-07 §A.1.5): peek, half and full snaps, tap and keyboard cycling,
- * inert peek bodies, Escape back to peek, and the --atlas-sheet-offset /
- * --atlas-sheet-rest docking variables written on the explorer element.
+ * handle-only pointer drags (8 px slop, 120 ms projection, one-state flicks,
+ * click suppression after a drag), inert peek bodies, Escape back to peek,
+ * and the --atlas-sheet-offset / --atlas-sheet-rest docking variables on the
+ * explorer element — written once per animation frame while dragging, with
+ * no React re-render.
  */
 
 import {
@@ -12,12 +15,17 @@ import {
   useRef,
   useState,
   type ButtonHTMLAttributes,
+  type PointerEvent as ReactPointerEvent,
   type Ref,
   type RefCallback,
 } from 'react';
 
 import {
+  DRAG_SLOP_PX,
+  VelocityTracker,
+  clampSheetHeight,
   nextSheetState,
+  releaseSheetState,
   snapHeights,
   type SheetSnaps,
   type SheetState,
@@ -52,6 +60,16 @@ export interface BottomSheet {
   bodyInert: boolean;
 }
 
+interface DragSession {
+  dragging: boolean;
+  from: SheetState;
+  height: number;
+  pointerId: number;
+  startHeight: number;
+  startY: number;
+  velocity: VelocityTracker;
+}
+
 function writeSheetOffset(
   explorer: HTMLElement,
   px: number,
@@ -71,6 +89,9 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
   const sheet = useRef<HTMLElement | null>(null);
   const handle = useRef<HTMLButtonElement | null>(null);
   const snaps = useRef<SheetSnaps | null>(null);
+  const drag = useRef<DragSession | null>(null);
+  const frame = useRef(0);
+  const suppressClick = useRef(false);
 
   const sheetRef = useCallback<RefCallback<HTMLElement>>((node) => {
     sheet.current = node;
@@ -89,7 +110,8 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
       peekHeight: peekHeight(root),
       topChromeBottom: measures.current.topChrome(),
     });
-    writeSheetOffset(explorer, snaps.current[stateRef.current], true);
+    if (!drag.current?.dragging)
+      writeSheetOffset(explorer, snaps.current[stateRef.current], true);
   }, [enabled, explorer]);
 
   useLayoutEffect(settle, [settle, state]);
@@ -97,6 +119,7 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
     if (!enabled || !explorer) return;
     return observeSheetLayout(explorer, settle);
   }, [enabled, explorer, settle]);
+  useEffect(() => () => cancelAnimationFrame(frame.current), []);
 
   // Entering peek: focus leaves the soon-inert body for the handle first.
   const releaseBodyFocus = useCallback(() => {
@@ -131,10 +154,36 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
 
   useEscapeLayer(enabled && state !== 'peek', () => setState('peek'), 'sheet');
 
+  const finishDrag = (restState: SheetState) => {
+    cancelAnimationFrame(frame.current);
+    frame.current = 0;
+    if (!explorer) return;
+    explorer.removeAttribute('data-sheet-dragging');
+    if (snaps.current)
+      writeSheetOffset(explorer, snaps.current[restState], true);
+  };
+
+  const cancelDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    const session = drag.current;
+    if (!session || event.pointerId !== session.pointerId) return;
+    drag.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (session.dragging) finishDrag(session.from);
+  };
+
   const handleProps: SheetHandleProps = {
     ref: handleRef,
-    onClick: () => cycle(),
+    onClick: (event) => {
+      if (suppressClick.current) {
+        suppressClick.current = false;
+        event.preventDefault();
+        return;
+      }
+      cycle();
+    },
     onKeyDown: (event) => {
+      suppressClick.current = false;
       if (event.key !== 'Enter' && event.key !== ' ') return;
       event.preventDefault();
       if (!event.repeat) cycle();
@@ -144,6 +193,77 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
       // dispatches a native click on Space keyup even though keydown was
       // cancelled; cancel the keyup so Space cycles exactly once.
       if (event.key === ' ') event.preventDefault();
+    },
+    onLostPointerCapture: cancelDrag,
+    onPointerCancel: cancelDrag,
+    onPointerDown: (event) => {
+      suppressClick.current = false;
+      const current = snaps.current;
+      if (!enabled || !current || drag.current) return;
+      if (event.pointerType === 'mouse' && event.button !== 0) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+      const startHeight = current[stateRef.current];
+      const velocity = new VelocityTracker();
+      velocity.add(startHeight, event.timeStamp);
+      drag.current = {
+        dragging: false,
+        from: stateRef.current,
+        height: startHeight,
+        pointerId: event.pointerId,
+        startHeight,
+        startY: event.clientY,
+        velocity,
+      };
+    },
+    onPointerMove: (event) => {
+      const session = drag.current;
+      const current = snaps.current;
+      if (
+        !session ||
+        !current ||
+        !explorer ||
+        event.pointerId !== session.pointerId
+      )
+        return;
+      if (
+        !session.dragging &&
+        Math.abs(event.clientY - session.startY) < DRAG_SLOP_PX
+      )
+        return;
+      if (!session.dragging) {
+        session.dragging = true;
+        explorer.setAttribute('data-sheet-dragging', '');
+      }
+      session.height = clampSheetHeight(
+        session.startHeight + session.startY - event.clientY,
+        current,
+      );
+      session.velocity.add(session.height, event.timeStamp);
+      if (frame.current) return;
+      frame.current = requestAnimationFrame(() => {
+        frame.current = 0;
+        const live = drag.current;
+        if (live?.dragging) writeSheetOffset(explorer, live.height, false);
+      });
+    },
+    onPointerUp: (event) => {
+      const session = drag.current;
+      const current = snaps.current;
+      if (!session || event.pointerId !== session.pointerId) return;
+      drag.current = null;
+      if (!session.dragging || !current) return;
+      suppressClick.current = true;
+      window.setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
+      const next = releaseSheetState({
+        from: session.from,
+        height: session.height,
+        snaps: current,
+        velocity: session.velocity.velocity(event.timeStamp),
+      });
+      finishDrag(next);
+      if (next !== stateRef.current) setState(next);
     },
   };
 

@@ -2,12 +2,15 @@ import { expect, test } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 import {
+  centreOf,
   controlsSheet,
   dockedStackInOrder,
   PHONE_PROFILES,
   setSheetState,
   sheetGeometry,
   skipUnlessProject,
+  startTouch,
+  touchDrag,
   waitForAtlasReady,
 } from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
@@ -537,6 +540,175 @@ for (const phone of PHONE_PROFILES) {
       expect(triggerBox!.y + triggerBox!.height).toBeLessThanOrEqual(
         noticeBox!.y,
       );
+    });
+
+    test('touch drags step the controls sheet without page scroll or pointercancel', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const handle = sheet.locator('.atlas-sheet__handle');
+      await handle.evaluate((element) => {
+        element.dataset.cancels = '0';
+        element.addEventListener('pointercancel', () => {
+          element.dataset.cancels = String(Number(element.dataset.cancels) + 1);
+        });
+      });
+      const explorer = page.locator('.atlas-explorer');
+      const offset = () =>
+        explorer.evaluate((element) =>
+          Number.parseFloat(
+            element.style.getPropertyValue('--atlas-sheet-offset'),
+          ),
+        );
+      const start = await sheetGeometry(page);
+      const lift = start.explorerHeight / 2 - start.sheetHeight;
+
+      const from = await centreOf(handle);
+      const gesture = await startTouch(page, from);
+      for (let step = 1; step <= 4; step += 1) {
+        await gesture.move({ x: from.x, y: from.y - (lift * step) / 8 });
+        await page.waitForTimeout(16);
+      }
+      await expect.poll(offset).toBeGreaterThan(start.sheetHeight + 20);
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      for (let step = 5; step <= 8; step += 1) {
+        await gesture.move({ x: from.x, y: from.y - (lift * step) / 8 });
+        await page.waitForTimeout(16);
+      }
+      await gesture.end();
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+
+      const atHalf = await centreOf(handle);
+      await touchDrag(page, atHalf, {
+        x: atHalf.x,
+        y: atHalf.y - start.explorerHeight / 4,
+      });
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'full');
+
+      const scrollBefore = await page.evaluate(() => window.scrollY);
+      const atFull = await centreOf(handle);
+      await touchDrag(page, atFull, {
+        x: atFull.x,
+        y: atFull.y + start.explorerHeight / 4,
+      });
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+      expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+
+      const body = sheet.locator('.atlas-sheet__body');
+      await body.evaluate((element) => element.scrollTo(0, 0));
+      const inBody = await centreOf(body);
+      await touchDrag(page, inBody, { x: inBody.x, y: inBody.y + 150 });
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+      expect(await page.evaluate(() => window.scrollY)).toBe(scrollBefore);
+      expect(await body.evaluate((element) => element.scrollTop)).toBe(0);
+      await expect(handle).toHaveAttribute('data-cancels', '0');
+    });
+
+    test('a mouse drag moves one step and the next click and Enter still cycle', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const handle = sheet.locator('.atlas-sheet__handle');
+      const start = await sheetGeometry(page);
+      const from = await centreOf(handle);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x, from.y - 40, { steps: 4 });
+      await page.mouse.move(
+        from.x,
+        from.y - (start.explorerHeight / 2 - start.sheetHeight),
+        { steps: 4 },
+      );
+      await page.mouse.up();
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+      await page.waitForTimeout(100);
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+      await handle.click();
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'full');
+      await handle.focus();
+      await page.keyboard.press('Enter');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+    });
+
+    test('a pointercancel mid-drag restores the pre-drag state', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const handle = sheet.locator('.atlas-sheet__handle');
+      const explorer = page.locator('.atlas-explorer');
+      // `HTMLElement` selects the HTMLElementEventMap overload, so `event` is a
+      // PointerEvent; the default `SVGElement | HTMLElement` leaves it a plain Event.
+      await handle.evaluate((element: HTMLElement) => {
+        element.addEventListener(
+          'pointerdown',
+          (event) => {
+            element.dataset.pointerId = String(event.pointerId);
+          },
+          { once: true },
+        );
+      });
+      const before = await sheetGeometry(page);
+      const from = await centreOf(handle);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(from.x, from.y - 60, { steps: 3 });
+      await expect(explorer).toHaveAttribute('data-sheet-dragging', '');
+      const pointerId = Number(await handle.getAttribute('data-pointer-id'));
+      await handle.dispatchEvent('pointercancel', {
+        bubbles: true,
+        isPrimary: true,
+        pointerId,
+        pointerType: 'mouse',
+      });
+      await expect(explorer).not.toHaveAttribute('data-sheet-dragging', '');
+      await page.mouse.move(8, 8);
+      await page.mouse.up();
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      await expect
+        .poll(async () =>
+          Math.abs(
+            (await sheetGeometry(page)).sheetHeight - before.sheetHeight,
+          ),
+        )
+        .toBeLessThanOrEqual(1);
+      const variables = await explorer.evaluate((element) => ({
+        offset: element.style.getPropertyValue('--atlas-sheet-offset'),
+        rest: element.style.getPropertyValue('--atlas-sheet-rest'),
+      }));
+      expect(variables.offset).toBe(variables.rest);
+    });
+
+    test('a one-finger drag at the centre turns the globe', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const before = new URL(page.url()).searchParams.get('lon');
+      expect(before).not.toBeNull();
+      const centre = await centreOf(
+        page.locator('.atlas-scene canvas').first(),
+      );
+      await touchDrag(
+        page,
+        centre,
+        { x: centre.x + 120, y: centre.y + 10 },
+        10,
+      );
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get('lon'), {
+          timeout: 10_000,
+        })
+        .not.toBe(before);
     });
   });
 }
