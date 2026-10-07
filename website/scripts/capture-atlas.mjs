@@ -7,6 +7,39 @@ import { chromium } from 'playwright';
 
 import { installAtlasBrowserFixture } from '../tests/atlas-browser-fixture.ts';
 
+const PROFILES = {
+  desktop: {
+    context: { deviceScaleFactor: 1, viewport: { height: 1440, width: 2560 } },
+    elevation: 'true',
+    height: '1400000',
+  },
+  mobile: {
+    context: {
+      deviceScaleFactor: 3,
+      hasTouch: true,
+      isMobile: true,
+      viewport: { height: 844, width: 390 },
+    },
+    elevation: 'false',
+    height: '7000000',
+  },
+};
+const MOBILE_STAGES = new Set(['before', 'after']);
+
+const profileName = process.env.ATLAS_CAPTURE_PROFILE ?? 'desktop';
+const mobileStage = process.env.ATLAS_CAPTURE_MOBILE_STAGE ?? 'after';
+if (!Object.hasOwn(PROFILES, profileName)) {
+  throw new Error(
+    `ATLAS_CAPTURE_PROFILE must be one of ${Object.keys(PROFILES).join(', ')}, not ${profileName}`,
+  );
+}
+if (!MOBILE_STAGES.has(mobileStage)) {
+  throw new Error(
+    `ATLAS_CAPTURE_MOBILE_STAGE must be before or after, not ${mobileStage}`,
+  );
+}
+const profile = PROFILES[profileName];
+
 const websiteRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -16,7 +49,9 @@ const outputPath = path.resolve(
   '..',
   'docs',
   'figures',
-  'cesium-globe-explorer.png',
+  profileName === 'mobile'
+    ? `atlas-mobile-${mobileStage}.png`
+    : 'cesium-globe-explorer.png',
 );
 const suppliedBaseUrl = process.env.ATLAS_CAPTURE_BASE_URL;
 const baseUrl = suppliedBaseUrl ?? 'http://127.0.0.1:4323';
@@ -52,10 +87,7 @@ if (!suppliedBaseUrl) {
 let browser;
 try {
   browser = await chromium.launch({ headless: true });
-  const page = await browser.newPage({
-    deviceScaleFactor: 1,
-    viewport: { height: 1440, width: 2560 },
-  });
+  const page = await browser.newPage(profile.context);
   const pageErrors = [];
   const consoleErrors = [];
   page.on('pageerror', (error) => pageErrors.push(error));
@@ -67,11 +99,11 @@ try {
     surfaceScope: 'regional',
   });
   const query = new URLSearchParams({
-    elevation: process.env.ATLAS_CAPTURE_ELEVATION ?? 'true',
+    elevation: process.env.ATLAS_CAPTURE_ELEVATION ?? profile.elevation,
     entity: process.env.ATLAS_CAPTURE_ENTITY ?? 'hbs-rs334',
     exaggeration: '2',
     heading: '0',
-    height: '1400000',
+    height: profile.height,
     lat: '8',
     layers:
       process.env.ATLAS_CAPTURE_LAYERS ??
@@ -103,7 +135,7 @@ try {
     width: window.innerWidth,
   }));
   process.stdout.write(
-    `Captured ${dimensions.width}×${dimensions.height}: ${outputPath}\n`,
+    `Captured ${profileName} ${dimensions.width}×${dimensions.height}: ${outputPath}\n`,
   );
 } finally {
   await browser?.close();
