@@ -7,6 +7,7 @@ import type { ArtifactRef, ExternalInfo } from '../../atlas/contracts';
 import { downloadExternalInfo } from '../../atlas/external-info';
 import { AlphagenomeEvidence } from './AlphagenomeEvidence';
 import { GnomadEvidence } from './GnomadEvidence';
+import { useEscapeLayer } from './useEscapeStack';
 
 type ExternalSource = 'gnomad' | 'dbsnp' | 'alphagenome';
 
@@ -242,14 +243,7 @@ export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
     setOpen(false);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', dismiss);
-    return () => window.removeEventListener('keydown', dismiss);
-  }, [open]);
+  useEscapeLayer(open, close, 'external');
 
   const lookup = (next: ExternalSource) => {
     activeRequest.current?.abort();

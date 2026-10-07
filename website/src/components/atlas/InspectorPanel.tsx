@@ -10,6 +10,7 @@ import type {
 import type { ObservationColorEncoding } from '../../atlas/observation-encoding';
 import type { ObservationPlaceContext } from '../../atlas/place-context';
 import { sitePath } from '../../lib/paths';
+import { useEscapeLayer } from './useEscapeStack';
 
 export type InspectorSelection =
   | { kind: 'surface'; value: SurfaceCell }
@@ -67,6 +68,7 @@ export function InspectorPanel({
   selection,
   onClose,
 }: InspectorPanelProps) {
+  useEscapeLayer(true, onClose, 'inspector');
   if (selection.kind === 'surface') {
     const cell = selection.value;
     const [centroidLat, centroidLon] = cellToLatLng(cell.h3_index);

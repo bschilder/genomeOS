@@ -56,6 +56,7 @@ import { ExplorerControls } from './ExplorerControls';
 import { HoverPreview } from './HoverPreview';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 import { nextPaint, useAtlasActivity } from './useAtlasActivity';
+import { EscapeStackProvider } from './useEscapeStack';
 import { useObservationPlaces } from './useObservationPlaces';
 
 interface AtlasExplorerProps {
@@ -603,182 +604,173 @@ export default function AtlasExplorer({
     });
   };
 
-  useEffect(() => {
-    if (!selection) return;
-    const dismissInspector = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      scene.current?.setSelection(null);
-      setSelection(null);
-    };
-    window.addEventListener('keydown', dismissInspector);
-    return () => window.removeEventListener('keydown', dismissInspector);
-  }, [selection]);
-
   return (
-    <div
-      className="atlas-explorer"
-      data-atlas-explorer="AtlasExplorer"
-      data-atlas-active={activeArtifact?.id ?? ''}
-      data-atlas-ready={status === 'ready' ? 'true' : 'false'}
-      role="application"
-      aria-label="genomeOS globe explorer"
-    >
+    <EscapeStackProvider>
       <div
-        className="atlas-scene"
-        ref={sceneElement}
-        role="region"
-        aria-label="Interactive globe canvas"
-      />
+        className="atlas-explorer"
+        data-atlas-explorer="AtlasExplorer"
+        data-atlas-active={activeArtifact?.id ?? ''}
+        data-atlas-ready={status === 'ready' ? 'true' : 'false'}
+        role="application"
+        aria-label="genomeOS globe explorer"
+      >
+        <div
+          className="atlas-scene"
+          ref={sceneElement}
+          role="region"
+          aria-label="Interactive globe canvas"
+        />
 
-      {catalog && state ? (
-        <ExplorerControls
-          capabilities={capabilities}
-          catalog={catalog}
-          dataBaseUrl={dataBaseUrl}
-          state={state}
-          disabled={false}
-          onEntity={chooseEntity}
-          onExternalInfo={(source, signal) => {
-            const selected = catalog.artifacts.find(
-              (artifact) => artifact.id === state.entityId,
-            );
-            if (!selected || activeArtifact?.id !== selected.id)
-              return Promise.reject(
-                new Error('Wait for the selected map to finish loading.'),
+        {catalog && state ? (
+          <ExplorerControls
+            capabilities={capabilities}
+            catalog={catalog}
+            dataBaseUrl={dataBaseUrl}
+            state={state}
+            disabled={false}
+            onEntity={chooseEntity}
+            onExternalInfo={(source, signal) => {
+              const selected = catalog.artifacts.find(
+                (artifact) => artifact.id === state.entityId,
               );
-            return provider.getExternalInfo(selected, source, signal);
-          }}
-          onMetric={(metric: Metric) =>
-            setState((current) =>
-              current
-                ? {
-                    ...current,
-                    metric,
-                    paletteMode: 'metric-default',
-                    surfacePalette: defaultPalette(metric),
-                  }
-                : current,
-            )
-          }
-          onBasemap={(basemap) => update({ basemap })}
-          onBasemapBrightness={(basemapBrightness) =>
-            update({ basemapBrightness })
-          }
-          onBasemapOpacity={(basemapOpacity) => update({ basemapOpacity })}
-          onCountryBorderColor={(countryBorderColor) =>
-            update({ countryBorderColor })
-          }
-          onCountryBorderOpacity={(countryBorderOpacity) =>
-            update({ countryBorderOpacity })
-          }
-          onDayNightLighting={(dayNightLighting) =>
-            update({ dayNightLighting })
-          }
-          onTerrain={(terrain) => update({ terrain })}
-          onSurfacePalette={(surfacePalette) =>
-            update({ paletteMode: 'custom', surfacePalette })
-          }
-          onSurfaceOpacity={(surfaceOpacity) => update({ surfaceOpacity })}
-          onEarthOpacity={(earthOpacity) => update({ earthOpacity })}
-          onOceanColor={(oceanColor) => update({ oceanColor })}
-          onSurfaceGeometry={(surfaceGeometry) => update({ surfaceGeometry })}
-          onCellEdges={(cellEdges) => update({ cellEdges })}
-          onEdgeColorMode={(edgeColorMode) => update({ edgeColorMode })}
-          onEdgeFixedColor={(edgeFixedColor) => update({ edgeFixedColor })}
-          onObservationShape={(observationShape) =>
-            update({ observationShape })
-          }
-          onObservationColor={(observationColor) =>
-            update({ observationColor })
-          }
-          onObservationGradient={(observationGradient) =>
-            update({ observationGradient })
-          }
-          onObservationOpacity={(observationOpacity) =>
-            update({ observationOpacity })
-          }
-          onObservationSize={(observationSize) => update({ observationSize })}
-          onObservationRange={(observationSizeRange) =>
-            update({ observationSizeRange })
-          }
-          onObservationSolidColor={(observationSolidColor) =>
-            update({ observationSolidColor })
-          }
-          onSamplingAreas={(samplingAreas) => update({ samplingAreas })}
-          onSamplingAreaColor={(samplingAreaColor) =>
-            update({ samplingAreaColor })
-          }
-          onLayer={chooseLayer}
-          onView={(view: ExplorerSceneMode) => update({ view })}
-          onElevation={chooseElevation}
-          onExaggeration={(exaggeration) => update({ exaggeration })}
-          onHome={() => scene.current?.home(!reducedMotion)}
-          onZoom={(direction) => scene.current?.zoom(direction)}
-        />
-      ) : (
-        <aside className="atlas-controls atlas-controls--loading">
-          <p className="atlas-kicker atlas-kicker--brand">
-            <span className="brand-name">genomeOS</span> Atlas
-          </p>
-          <h1>Explore human genetic variation</h1>
-          <p>Loading the public catalog…</p>
-        </aside>
-      )}
-
-      <AtlasStatus
-        status={status}
-        activity={activity}
-        contextStatus={contextStatus}
-        sceneWarnings={sceneWarnings}
-        corrections={corrections}
-        error={error}
-        webglFailed={webglFailed}
-        onRetry={() => {
-          if (webglFailed) setSceneAttempt((value) => value + 1);
-          else setDataAttempt((value) => value + 1);
-        }}
-      />
-      {viewNotice && (
-        <p className="atlas-view-notice" role="status">
-          {viewNotice}
-        </p>
-      )}
-      {activeArtifact && state && (
-        <AtlasLegend artifact={activeArtifact} state={state} />
-      )}
-      {state && hover && (
-        <HoverPreview
-          colorEncoding={colorEncodingFor(hover.selection)}
-          placeContext={placeContextFor(hover.selection)}
-          position={hover.position}
-          selection={hover.selection}
-        />
-      )}
-      <div className="atlas-right-rail">
-        {activeArtifact && selection && (
-          <InspectorPanel
-            artifact={activeArtifact}
-            colorEncoding={colorEncodingFor(selection)}
-            placeContext={placeContextFor(selection)}
-            selection={selection}
-            onClose={() => {
-              scene.current?.setSelection(null);
-              setSelection(null);
+              if (!selected || activeArtifact?.id !== selected.id)
+                return Promise.reject(
+                  new Error('Wait for the selected map to finish loading.'),
+                );
+              return provider.getExternalInfo(selected, source, signal);
             }}
+            onMetric={(metric: Metric) =>
+              setState((current) =>
+                current
+                  ? {
+                      ...current,
+                      metric,
+                      paletteMode: 'metric-default',
+                      surfacePalette: defaultPalette(metric),
+                    }
+                  : current,
+              )
+            }
+            onBasemap={(basemap) => update({ basemap })}
+            onBasemapBrightness={(basemapBrightness) =>
+              update({ basemapBrightness })
+            }
+            onBasemapOpacity={(basemapOpacity) => update({ basemapOpacity })}
+            onCountryBorderColor={(countryBorderColor) =>
+              update({ countryBorderColor })
+            }
+            onCountryBorderOpacity={(countryBorderOpacity) =>
+              update({ countryBorderOpacity })
+            }
+            onDayNightLighting={(dayNightLighting) =>
+              update({ dayNightLighting })
+            }
+            onTerrain={(terrain) => update({ terrain })}
+            onSurfacePalette={(surfacePalette) =>
+              update({ paletteMode: 'custom', surfacePalette })
+            }
+            onSurfaceOpacity={(surfaceOpacity) => update({ surfaceOpacity })}
+            onEarthOpacity={(earthOpacity) => update({ earthOpacity })}
+            onOceanColor={(oceanColor) => update({ oceanColor })}
+            onSurfaceGeometry={(surfaceGeometry) => update({ surfaceGeometry })}
+            onCellEdges={(cellEdges) => update({ cellEdges })}
+            onEdgeColorMode={(edgeColorMode) => update({ edgeColorMode })}
+            onEdgeFixedColor={(edgeFixedColor) => update({ edgeFixedColor })}
+            onObservationShape={(observationShape) =>
+              update({ observationShape })
+            }
+            onObservationColor={(observationColor) =>
+              update({ observationColor })
+            }
+            onObservationGradient={(observationGradient) =>
+              update({ observationGradient })
+            }
+            onObservationOpacity={(observationOpacity) =>
+              update({ observationOpacity })
+            }
+            onObservationSize={(observationSize) => update({ observationSize })}
+            onObservationRange={(observationSizeRange) =>
+              update({ observationSizeRange })
+            }
+            onObservationSolidColor={(observationSolidColor) =>
+              update({ observationSolidColor })
+            }
+            onSamplingAreas={(samplingAreas) => update({ samplingAreas })}
+            onSamplingAreaColor={(samplingAreaColor) =>
+              update({ samplingAreaColor })
+            }
+            onLayer={chooseLayer}
+            onView={(view: ExplorerSceneMode) => update({ view })}
+            onElevation={chooseElevation}
+            onExaggeration={(exaggeration) => update({ exaggeration })}
+            onHome={() => scene.current?.home(!reducedMotion)}
+            onZoom={(direction) => scene.current?.zoom(direction)}
+          />
+        ) : (
+          <aside className="atlas-controls atlas-controls--loading">
+            <p className="atlas-kicker atlas-kicker--brand">
+              <span className="brand-name">genomeOS</span> Atlas
+            </p>
+            <h1>Explore human genetic variation</h1>
+            <p>Loading the public catalog…</p>
+          </aside>
+        )}
+
+        <AtlasStatus
+          status={status}
+          activity={activity}
+          contextStatus={contextStatus}
+          sceneWarnings={sceneWarnings}
+          corrections={corrections}
+          error={error}
+          webglFailed={webglFailed}
+          onRetry={() => {
+            if (webglFailed) setSceneAttempt((value) => value + 1);
+            else setDataAttempt((value) => value + 1);
+          }}
+        />
+        {viewNotice && (
+          <p className="atlas-view-notice" role="status">
+            {viewNotice}
+          </p>
+        )}
+        {activeArtifact && state && (
+          <AtlasLegend artifact={activeArtifact} state={state} />
+        )}
+        {state && hover && (
+          <HoverPreview
+            colorEncoding={colorEncodingFor(hover.selection)}
+            placeContext={placeContextFor(hover.selection)}
+            position={hover.position}
+            selection={hover.selection}
           />
         )}
-        <div data-atlas-external-slot />
+        <div className="atlas-right-rail">
+          {activeArtifact && selection && (
+            <InspectorPanel
+              artifact={activeArtifact}
+              colorEncoding={colorEncodingFor(selection)}
+              placeContext={placeContextFor(selection)}
+              selection={selection}
+              onClose={() => {
+                scene.current?.setSelection(null);
+                setSelection(null);
+              }}
+            />
+          )}
+          <div data-atlas-external-slot />
+        </div>
+        <p className="atlas-data-credit">
+          Scientific data and provenance:{' '}
+          <a
+            href="https://huggingface.co/datasets/bschilder/genomeos-data"
+            target="_blank"
+            rel="noreferrer"
+          >
+            <span className="brand-name">genomeOS</span> public dataset
+          </a>
+        </p>
       </div>
-      <p className="atlas-data-credit">
-        Scientific data and provenance:{' '}
-        <a
-          href="https://huggingface.co/datasets/bschilder/genomeos-data"
-          target="_blank"
-          rel="noreferrer"
-        >
-          <span className="brand-name">genomeOS</span> public dataset
-        </a>
-      </p>
-    </div>
+    </EscapeStackProvider>
   );
 }
