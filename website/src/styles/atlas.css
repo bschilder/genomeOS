@@ -2290,7 +2290,8 @@ body:has(.atlas-explorer) .skip-link {
     --atlas-sheet-offset: 4.5rem;
     --atlas-sheet-rest: 4.5rem;
     --atlas-top-slot-top: 0.65rem;
-    --atlas-top-slot-height: 3.25rem;
+    /* The slot shows only the catalog trigger, whose height map-catalog.css owns. */
+    --atlas-top-slot-height: var(--atlas-map-catalog-trigger-min-height);
   }
 
   .atlas-explorer:has(> .atlas-warning-banner) {

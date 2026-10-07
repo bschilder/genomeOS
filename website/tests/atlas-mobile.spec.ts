@@ -514,6 +514,30 @@ for (const phone of PHONE_PROFILES) {
       ]);
       expect(bannerBox!.y + bannerBox!.height).toBeLessThanOrEqual(slotBox!.y);
     });
+
+    test('a view notice opens below the top selector', async ({ page }) => {
+      // The notice is placed from --atlas-top-slot-height, which must follow
+      // the trigger's height in map-catalog.css.
+      await page.goto('/app/?view=map');
+      await waitForAtlasReady(page);
+      await setSheetState(controlsSheet(page), 'full');
+      await page
+        .locator('summary')
+        .filter({ hasText: /^Inferred surface$/ })
+        .click();
+      await page.getByLabel('Statistical elevation', { exact: true }).check();
+      const notice = page.locator('.atlas-view-notice');
+      await expect(notice).toBeVisible();
+      const [triggerBox, noticeBox] = await Promise.all([
+        page
+          .locator('.atlas-top-slot .atlas-map-catalog__trigger')
+          .boundingBox(),
+        notice.boundingBox(),
+      ]);
+      expect(triggerBox!.y + triggerBox!.height).toBeLessThanOrEqual(
+        noticeBox!.y,
+      );
+    });
   });
 }
 
