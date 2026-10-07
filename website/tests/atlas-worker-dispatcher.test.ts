@@ -4,7 +4,11 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { atlasCatalogSchema } from '../src/atlas/contracts';
-import { decodeGrid, decodeRender } from '../src/atlas/gosa/decode';
+import {
+  decodeDetail,
+  decodeGrid,
+  decodeRender,
+} from '../src/atlas/gosa/decode';
 import { artifactKeyFor } from '../src/atlas/surface-columns';
 import {
   createDispatcher,
@@ -114,8 +118,43 @@ describe('Atlas worker dispatcher', () => {
     expect(terminal(sent, 2)).toMatchObject({
       code: 'internal',
       gosaCode: null,
+      message: expect.stringContaining('load the grid first'),
       type: 'error',
     });
+    expect(sent.some(({ message }) => message.type === 'step-timing')).toBe(
+      false,
+    );
+  });
+
+  it('refuses a detail tier before its grid', async () => {
+    // Without the resident-grid check the decode would still fail, but later and as a TypeError
+    // inside the catalog binding; the message and the missing verify step pin the refusal.
+    const { dispatch, sent } = harness();
+    const grid = decodeGrid(toBuffer(goldenBytes(entry.url)), {
+      entry,
+      gridSha256,
+    });
+    const render = decodeRender(toBuffer(goldenBytes(ref.web.render.url)), {
+      grid,
+      ref,
+    });
+    dispatch({
+      buf: toBuffer(goldenBytes(ref.web.detail.url)),
+      id: 3,
+      ref,
+      render,
+      type: 'load-detail',
+    });
+    await settle();
+    expect(terminal(sent, 3)).toMatchObject({
+      code: 'internal',
+      gosaCode: null,
+      message: expect.stringContaining('load the grid first'),
+      type: 'error',
+    });
+    expect(sent.some(({ message }) => message.type === 'step-timing')).toBe(
+      false,
+    );
   });
 
   it('decodes render and detail tiers and keeps the render resident by artifact key', async () => {
@@ -147,7 +186,32 @@ describe('Atlas worker dispatcher', () => {
       type: 'load-detail',
     });
     await settle();
-    expect(terminal(sent, 3)?.type).toBe('detail-ready');
+    const detailed = terminal(sent, 3);
+    expect(detailed?.type).toBe('detail-ready');
+    if (detailed?.type !== 'detail-ready') return;
+    const expected = decodeDetail(toBuffer(goldenBytes(ref.web.detail.url)), {
+      grid,
+      ref,
+      render,
+    });
+    expect(Array.from(detailed.detail.post_mean)).toEqual(
+      Array.from(expected.post_mean),
+    );
+    // The detail tier is not kept in the worker, so its own buffers travel, one per column in
+    // tier order; a repeated buffer would make postMessage throw DataCloneError.
+    const transfer = sent.find(({ message }) => message === detailed)!.transfer;
+    const { detail } = detailed;
+    expect(transfer).toEqual([
+      detail.post_mean.buffer,
+      detail.post_sd.buffer,
+      detail.q025.buffer,
+      detail.q975.buffer,
+      detail.posterior_contraction.buffer,
+      detail.dist_nearest_obs_km.buffer,
+    ]);
+    expect(new Set(transfer).size).toBe(6);
+    // Grid steps carry no artifact; render and detail steps name theirs (R9). No step has a chunk.
+    const key = artifactKeyFor(ref);
     expect(
       sent
         .map(({ message }) => message)
@@ -155,14 +219,19 @@ describe('Atlas worker dispatcher', () => {
           (message): message is StepTimingMessage =>
             message.type === 'step-timing' && message.step !== 'topology',
         )
-        .map((message) => message.step),
+        .map(({ artifactKey, chunk, id, step }) => [
+          id,
+          step,
+          artifactKey,
+          chunk,
+        ]),
     ).toEqual([
-      'verify-grid',
-      'decode-grid',
-      'verify-render',
-      'decode-render',
-      'verify-detail',
-      'decode-detail',
+      [1, 'verify-grid', null, null],
+      [1, 'decode-grid', null, null],
+      [2, 'verify-render', key, null],
+      [2, 'decode-render', key, null],
+      [3, 'verify-detail', key, null],
+      [3, 'decode-detail', key, null],
     ]);
   });
 
@@ -212,12 +281,22 @@ describe('Atlas worker dispatcher', () => {
     });
   });
 
-  it('reports an unknown message type as internal', async () => {
+  // `toString` and `constructor` resolve through Object.prototype on a plain registry and, called
+  // as handlers, return without throwing, which would leave the request with no terminal message.
+  it.each([
+    'unknown',
+    'toString',
+    'constructor',
+    'hasOwnProperty',
+    '__proto__',
+  ])('reports message type %s as internal', async (type) => {
     const { dispatch, sent } = harness();
-    dispatch({ id: 9, type: 'unknown' } as unknown as WorkerInbound);
+    dispatch({ id: 9, type } as unknown as WorkerInbound);
     await settle();
     expect(terminal(sent, 9)).toMatchObject({
       code: 'internal',
+      gosaCode: null,
+      message: `Atlas data worker has no handler for ${type}`,
       type: 'error',
     });
   });

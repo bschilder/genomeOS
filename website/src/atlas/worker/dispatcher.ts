@@ -52,19 +52,33 @@ export function errorCodeFor(
   return 'internal';
 }
 
+type AnyRequestHandler = (
+  request: WorkerRequest,
+  context: HandlerContext,
+) => Promise<void> | void;
+
+/**
+ * The registry's own handler for `type`. An inherited lookup would resolve `toString` or
+ * `constructor` to Object.prototype's, which return without throwing and so would leave the
+ * request with no terminal message.
+ */
+function handlerFor(
+  handlers: HandlerRegistry,
+  type: string,
+): AnyRequestHandler | undefined {
+  if (!Object.hasOwn(handlers, type)) return undefined;
+  const handler: unknown = (handlers as Record<string, unknown>)[type];
+  return typeof handler === 'function'
+    ? (handler as AnyRequestHandler)
+    : undefined;
+}
+
 async function run(
   request: WorkerRequest,
   handlers: HandlerRegistry,
   context: HandlerContext,
 ): Promise<void> {
-  const handler = (handlers as Partial<Record<string, unknown>>)[
-    request.type
-  ] as
-    | ((
-        request: WorkerRequest,
-        context: HandlerContext,
-      ) => Promise<void> | void)
-    | undefined;
+  const handler = handlerFor(handlers, request.type);
   if (!handler) {
     throw new Error(
       `Atlas data worker has no handler for ${String(request.type)}`,
