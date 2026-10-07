@@ -53,11 +53,14 @@ describe('Atlas web-object encoding in the Pages workflow (fast-load spec §B.5)
     );
   });
 
-  it('runs when the encoder, codec or Python package metadata change', () => {
+  it('runs when the encoder, codec, Python package metadata or lock change', () => {
+    // Both jobs install with `-c requirements.lock`, and the h3 pin test above reads it, so a
+    // lock-only change (e.g. an h3 bump) must re-run this workflow.
     for (const filter of [
       '"genomeos/publication/**"',
       '"scripts/encode_atlas_web.py"',
       '"pyproject.toml"',
+      '"requirements.lock"',
     ])
       expect(pagesWorkflow.split(filter)).toHaveLength(3); // push and pull_request
   });
