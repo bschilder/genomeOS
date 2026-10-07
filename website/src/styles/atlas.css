@@ -1877,6 +1877,10 @@ body:has(.atlas-explorer) .site-footer {
   display: none;
 }
 
+.mobile-nav__icon {
+  display: none;
+}
+
 @media (min-width: 75.01rem) {
   .atlas-control-grid,
   .atlas-fieldset--display,
@@ -1948,20 +1952,10 @@ body:has(.atlas-explorer) .site-footer {
     gap: 0.5rem;
   }
 
-  .atlas-navbar-status-slot {
-    width: min(9rem, 40vw);
-    min-width: 0;
-    flex: 0 1 9rem;
-  }
-
   .atlas-navbar-status-slot .atlas-status {
     width: 100%;
     min-width: 0;
     max-width: 12rem;
-  }
-
-  .atlas-status__copy small {
-    display: none;
   }
 
   .atlas-status__meter {
@@ -2246,6 +2240,65 @@ body:has(.atlas-explorer) .site-footer {
 
 .atlas-inspector .atlas-map-options__menu a > span {
   font-size: 0.688rem;
+}
+
+/* Mobile sheets and header (mobile sheets design 2026-10-07 §A.1). These
+ * rules sit after the dense rules so they win over them, and before the
+ * preference blocks so reduced motion, high contrast and coarse pointers
+ * still win over them (§A.1.12). */
+@media (max-width: 52rem) {
+  body:has(.atlas-explorer) .wordmark {
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+  }
+
+  body:has(.atlas-explorer) .site-header__actions {
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  body:has(.atlas-explorer) .mobile-nav summary {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+  }
+
+  body:has(.atlas-explorer) .mobile-nav summary::after {
+    content: none;
+  }
+
+  /* The .visually-hidden utility (global.css), scoped to this breakpoint. */
+  body:has(.atlas-explorer) .mobile-nav__label,
+  .atlas-status__copy small {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  body:has(.atlas-explorer) .mobile-nav__icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    display: block;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-width: 1.8;
+  }
+
+  .atlas-navbar-status-slot {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  /* end of mobile sheet rules */
 }
 
 @media (prefers-reduced-motion: reduce) {

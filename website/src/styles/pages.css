@@ -639,6 +639,13 @@
     min-height: auto;
     border-right: 0;
   }
+  .contribution-detail__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .status-definitions div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
+  }
   .resource-links__grid a:nth-child(2n) {
     border-right: 0;
   }

@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
+import { topLevelRoutes } from './site-routes';
 
 test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
 test.afterEach(async ({ page }) => {
@@ -15,15 +16,6 @@ async function chooseAtlasMap(page: Page, id: string): Promise<void> {
     .click();
   await page.locator(`[role="option"][data-map-id="${id}"]`).click();
 }
-
-const topLevelRoutes = [
-  '/',
-  '/project/',
-  '/working-groups/',
-  '/contribute/',
-  '/app/',
-  '/docs/',
-];
 
 const brandAuditRoutes = [
   ...topLevelRoutes,
