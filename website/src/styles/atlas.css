@@ -1881,6 +1881,22 @@ body:has(.atlas-explorer) .site-footer {
   display: none;
 }
 
+/*
+ * /app/ draws under the safe areas (viewport-fit=cover, mobile sheets design
+ * §A.1.1), at every width a landscape phone reaches. The header background
+ * still runs edge to edge; its padding tops the page gutter up to each side
+ * inset, so the wordmark and Menu start at max(gutter, inset), like the
+ * explorer's max(0.65rem, env(…)) rules. Zero insets leave it unchanged.
+ */
+body:has(.atlas-explorer) .site-header {
+  padding-inline: max(0px, env(safe-area-inset-left) - var(--space-page))
+    max(0px, env(safe-area-inset-right) - var(--space-page));
+}
+
+body:has(.atlas-explorer) .skip-link {
+  left: max(0.75rem, env(safe-area-inset-left));
+}
+
 @media (min-width: 75.01rem) {
   .atlas-control-grid,
   .atlas-fieldset--display,

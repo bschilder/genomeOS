@@ -98,3 +98,68 @@ for (const phone of PHONE_PROFILES) {
     });
   });
 }
+
+/*
+ * /app/ sets viewport-fit=cover (§A.1.1), so a landscape iPhone lays the page
+ * under the notch and the rounded corners and reports them as side insets.
+ * Chromium takes the insets from a CDP override; these are Apple's landscape
+ * values for each size (812 px is inside 52rem, 844 and 932 px are not).
+ */
+const LANDSCAPE_PHONES = [
+  { inset: 50, viewport: { height: 375, width: 812 } },
+  { inset: 47, viewport: { height: 390, width: 844 } },
+  { inset: 59, viewport: { height: 430, width: 932 } },
+] as const;
+
+for (const phone of LANDSCAPE_PHONES) {
+  const { height, width } = phone.viewport;
+  test.describe(`${width}x${height} landscape phone`, () => {
+    test.use({
+      deviceScaleFactor: 3,
+      hasTouch: true,
+      isMobile: true,
+      viewport: phone.viewport,
+    });
+    test.beforeEach(({}, testInfo) =>
+      skipUnlessProject(testInfo, 'mobile-chromium'),
+    );
+
+    test('the Atlas header stays inside the side safe areas', async ({
+      page,
+    }) => {
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+        insets: { bottom: 21, left: phone.inset, right: phone.inset, top: 0 },
+      });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      await page.locator('.skip-link').focus();
+      const header = await page.evaluate(() => {
+        const box = (selector: string) =>
+          document.querySelector(selector)!.getBoundingClientRect();
+        const inner = document.querySelector('.site-header__inner')!;
+        return {
+          backgroundLeft: box('.site-header').left,
+          backgroundRight: box('.site-header').right,
+          clientWidth: document.documentElement.clientWidth,
+          innerClientWidth: inner.clientWidth,
+          innerScrollWidth: inner.scrollWidth,
+          menuRight: box('.mobile-nav summary').right,
+          skipLinkLeft: box('.skip-link').left,
+          wordmarkLeft: box('.wordmark').left,
+        };
+      });
+      const safeRight = header.clientWidth - phone.inset;
+      // Soft, so one run names every element that sits under an inset.
+      expect.soft(header.wordmarkLeft).toBeGreaterThanOrEqual(phone.inset);
+      expect.soft(header.menuRight).toBeLessThanOrEqual(safeRight);
+      expect.soft(header.skipLinkLeft).toBeGreaterThanOrEqual(phone.inset);
+      expect(header.innerScrollWidth).toBeLessThanOrEqual(
+        header.innerClientWidth,
+      );
+      // The header background still runs edge to edge under the insets.
+      expect(header.backgroundLeft).toBe(0);
+      expect(header.backgroundRight).toBe(header.clientWidth);
+    });
+  });
+}

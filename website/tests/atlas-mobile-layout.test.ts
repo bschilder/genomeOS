@@ -48,12 +48,17 @@ describe('mobile CSS placement (mobile sheets design §A.1.12)', () => {
     const dense = css.indexOf('/* Dense Atlas UI');
     const mobile = css.indexOf('/* Mobile sheets');
     const end = css.indexOf('/* end of mobile sheet rules */');
-    const reducedMotion = css.indexOf(
-      '@media (prefers-reduced-motion: reduce)',
-    );
     expect(dense).toBeGreaterThan(-1);
     expect(mobile).toBeGreaterThan(dense);
     expect(end).toBeGreaterThan(mobile);
-    expect(reducedMotion).toBeGreaterThan(end);
+    // indexOf finds the first block of each kind, so an earlier copy above
+    // the mobile rules (which they would then override) fails too.
+    for (const preference of [
+      '@media (prefers-reduced-motion: reduce)',
+      '@media (prefers-contrast: more)',
+      '@media (pointer: coarse)',
+    ]) {
+      expect(css.indexOf(preference), preference).toBeGreaterThan(end);
+    }
   });
 });
