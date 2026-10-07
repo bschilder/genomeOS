@@ -1743,6 +1743,11 @@ html.atlas-page .site-header--compact .site-header__inner {
   cursor: pointer;
 }
 
+/* Panel bodies add no box; they let the phone panel sheet go inert at peek (§A.1.6). */
+.atlas-panel-body {
+  display: contents;
+}
+
 .atlas-inspector h2 {
   margin: 0 2.5rem 0 0;
   font-family: var(--font-display);
@@ -2042,25 +2047,6 @@ body:has(.atlas-explorer) .skip-link {
 
   .atlas-legend__mode {
     display: none;
-  }
-
-  .atlas-inspector {
-    width: 100%;
-    max-height: none;
-  }
-
-  .atlas-right-rail,
-  .atlas-explorer:has(.atlas-warning-banner) .atlas-right-rail {
-    top: auto;
-    right: 0.65rem;
-    bottom: 0.65rem;
-    left: 0.65rem;
-    width: auto;
-    max-height: 58%;
-  }
-
-  .atlas-external-details {
-    max-height: 52svh;
   }
 
   .atlas-external-frequency-grid {
@@ -2444,6 +2430,81 @@ body:has(.atlas-explorer) .skip-link {
   .atlas-explorer[data-sheet-dragging] :is(.atlas-legend, .atlas-data-credit),
   .atlas-explorer[data-sheet-dragging] .atlas-scene .cesium-viewer-bottom {
     translate: 0 calc(var(--atlas-sheet-rest) - var(--atlas-sheet-offset));
+  }
+
+  .atlas-controls[hidden] {
+    display: none;
+  }
+
+  .atlas-right-rail,
+  .atlas-explorer:has(.atlas-warning-banner) .atlas-right-rail {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state],
+  .atlas-explorer:has(.atlas-warning-banner)
+    .atlas-right-rail[data-sheet-state] {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: var(--atlas-sheet-offset);
+    max-height: none;
+    padding: 0 max(0.65rem, env(safe-area-inset-right))
+      env(safe-area-inset-bottom) max(0.65rem, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid rgb(112 230 255 / 25%);
+    border-width: 1px 0 0;
+    border-radius: 0.8rem 0.8rem 0 0;
+    background: linear-gradient(145deg, rgb(8 29 57 / 93%), rgb(3 13 30 / 88%));
+    box-shadow: 0 -0.75rem 2.5rem rgb(0 0 0 / 34%);
+    pointer-events: auto;
+    backdrop-filter: blur(20px) saturate(125%);
+    transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector,
+  .atlas-right-rail[data-sheet-state] .atlas-external-details {
+    width: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+    justify-self: stretch;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector {
+    padding: 0.2rem 0.3rem 1rem;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot]:empty {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot],
+  .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot] > div {
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__scroll {
+    overscroll-behavior: contain;
+  }
+
+  .atlas-right-rail[data-sheet-state='peek']
+    :is(.atlas-inspector, .atlas-external-details__scroll) {
+    overflow: hidden;
   }
 
   /* end of mobile sheet rules */

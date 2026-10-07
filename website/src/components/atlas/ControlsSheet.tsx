@@ -2,6 +2,8 @@
  * The explorer controls dock, restyled in place as the phone controls bottom
  * sheet (Atlas design §11; mobile sheets design 2026-10-07 §A.1.5). Desktop
  * renders the same single tree with no handle and a display: contents body.
+ * While a panel sheet is open on a phone the controls are inert and hidden,
+ * keeping their snap state for when the panel closes (§A.1.6).
  */
 
 import { useId, type ReactNode } from 'react';
@@ -9,6 +11,7 @@ import { useId, type ReactNode } from 'react';
 import { BottomSheetHandle } from './BottomSheetHandle';
 import { dockedHeight, topChromeBottom } from './sheet-layout';
 import { useBottomSheet } from './useBottomSheet';
+import { useOpenPanel } from './useExplorerPanels';
 import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
 
 interface ControlsSheetProps {
@@ -25,10 +28,12 @@ export function ControlsSheet({
   summary,
 }: ControlsSheetProps) {
   const isMobile = useMediaQuery(MOBILE_QUERY);
+  const panelOpen = useOpenPanel() !== null;
+  const hidden = isMobile && panelOpen;
   const bodyId = useId();
   const sheet = useBottomSheet({
     dockedHeight: () => (explorer ? dockedHeight(explorer) : 0),
-    enabled: isMobile,
+    enabled: isMobile && !panelOpen,
     explorer,
     initial: 'peek',
     topChrome: () => (explorer ? topChromeBottom(explorer) : 0),
@@ -38,6 +43,8 @@ export function ControlsSheet({
       aria-label="Explorer controls"
       className="atlas-controls"
       data-sheet-state={isMobile ? sheet.state : undefined}
+      hidden={hidden}
+      inert={hidden}
       ref={sheet.sheetRef}
     >
       {isMobile && (

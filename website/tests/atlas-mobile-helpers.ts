@@ -185,3 +185,44 @@ export async function centreOf(locator: Locator): Promise<Point> {
   expect(box).not.toBeNull();
   return { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
 }
+
+export const INSPECTOR_CAMERA = new URLSearchParams({
+  heading: '0',
+  height: '1000000',
+  lat: '40.4407',
+  lon: '-3.7201',
+  pitch: '-90',
+}).toString();
+
+const CENTRE_OFFSETS = [
+  [0, 0],
+  [-18, 0],
+  [18, 0],
+  [0, -18],
+  [0, 18],
+  [-18, -18],
+  [18, -18],
+  [-18, 18],
+  [18, 18],
+] as const;
+
+export function panelSheet(page: Page): Locator {
+  return page.locator('.atlas-right-rail');
+}
+
+/** Taps near the globe centre (as the desktop picking test clicks) until an inspector opens. */
+export async function tapSelectNearCenter(page: Page): Promise<void> {
+  const inspector = page.locator('.atlas-inspector');
+  const centre = await centreOf(page.locator('.atlas-scene canvas').first());
+  for (const [dx, dy] of CENTRE_OFFSETS) {
+    await page.touchscreen.tap(centre.x + dx, centre.y + dy);
+    const opened = await inspector
+      .waitFor({ state: 'visible', timeout: 1_500 })
+      .then(
+        () => true,
+        () => false,
+      );
+    if (opened) return;
+  }
+  await expect(inspector).toBeVisible();
+}

@@ -5,11 +5,14 @@ import {
   centreOf,
   controlsSheet,
   dockedStackInOrder,
+  INSPECTOR_CAMERA,
+  panelSheet,
   PHONE_PROFILES,
   setSheetState,
   sheetGeometry,
   skipUnlessProject,
   startTouch,
+  tapSelectNearCenter,
   touchDrag,
   waitForAtlasReady,
 } from './atlas-mobile-helpers';
@@ -833,6 +836,209 @@ for (const phone of PHONE_PROFILES) {
           timeout: 10_000,
         })
         .not.toBe(before);
+    });
+
+    test('tapping the globe opens the inspector sheet and Escape restores the controls', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+      await waitForAtlasReady(page);
+      await page.locator('[data-atlas-external-slot]').evaluate((element) => {
+        (element as HTMLElement).dataset.probe = 'stable';
+      });
+      const controls = controlsSheet(page);
+      const rail = panelSheet(page);
+      await tapSelectNearCenter(page);
+      const inspector = page.locator('.atlas-inspector');
+      await expect(inspector).toBeVisible();
+      await expect(rail).toHaveAttribute('data-sheet-state', 'half');
+      await expect(rail.locator('.atlas-sheet__handle')).toHaveAccessibleName(
+        'Selection details, half height',
+      );
+      await expect(controls).toBeHidden();
+      await expect(controls).toHaveAttribute('inert', '');
+      await expect(
+        page.getByRole('heading', {
+          level: 1,
+          name: 'Explore human genetic variation',
+        }),
+      ).toHaveCount(1);
+      await expect.poll(() => dockedStackInOrder(page)).toBe(true);
+
+      await page
+        .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+        .click();
+      const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+      await expect(catalog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(catalog).toHaveCount(0);
+      await expect(inspector).toBeVisible();
+
+      await page.keyboard.press('Escape');
+      await expect(inspector).toHaveCount(0);
+      await expect(controls).toBeVisible();
+      await expect(controls).not.toHaveAttribute('inert');
+      await expect(controls).toHaveAttribute('data-sheet-state', 'peek');
+      expect(
+        await page.evaluate(
+          () =>
+            document.activeElement !== null &&
+            document.activeElement !== document.body,
+        ),
+      ).toBe(true);
+      await expect(
+        page.locator('[data-atlas-external-slot][data-probe="stable"]'),
+      ).toHaveCount(1);
+    });
+
+    test('More info opens the panel sheet on its Close button and gives focus back', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+      await waitForAtlasReady(page);
+      const controls = controlsSheet(page);
+      const rail = panelSheet(page);
+      await setSheetState(controls, 'half');
+      const moreInfo = page.getByRole('button', { name: 'More info' });
+      await moreInfo.click();
+      const external = page.getByRole('complementary', {
+        name: 'External variant information',
+      });
+      await expect(external).toBeVisible();
+      const close = external.getByRole('button', {
+        name: 'Close external information',
+      });
+      await expect(close).toBeFocused();
+      await expect(controls).toBeHidden();
+      await expect(rail).toHaveAttribute('data-sheet-state', 'half');
+      await expect(rail.locator('.atlas-sheet__handle')).toHaveAccessibleName(
+        'External information, half height',
+      );
+
+      await close.click();
+      await expect(external).toHaveCount(0);
+      await expect(controls).toBeVisible();
+      await expect(controls).toHaveAttribute('data-sheet-state', 'half');
+      await expect(moreInfo).toBeFocused();
+
+      await moreInfo.click();
+      await expect(external).toBeVisible();
+      await setSheetState(rail, 'peek');
+      await expect(rail.locator('.atlas-panel-body')).toHaveAttribute(
+        'inert',
+        '',
+      );
+      const [railBox, titleBox, closeBox] = await Promise.all([
+        rail.boundingBox(),
+        external
+          .getByRole('heading', { name: 'Variant information' })
+          .boundingBox(),
+        close.boundingBox(),
+      ]);
+      for (const box of [titleBox, closeBox]) {
+        expect(box!.y).toBeGreaterThanOrEqual(railBox!.y);
+        expect(box!.y + box!.height).toBeLessThanOrEqual(
+          railBox!.y + railBox!.height + 1,
+        );
+      }
+
+      await tapSelectNearCenter(page);
+      await expect(page.locator('.atlas-inspector')).toBeVisible();
+      await expect(external).toHaveCount(0);
+      await expect(rail).toHaveAttribute('data-sheet-state', 'half');
+      expect(
+        await page.evaluate(
+          () =>
+            document.activeElement !== null &&
+            document.activeElement !== document.body,
+        ),
+      ).toBe(true);
+
+      // Escape on the inspector restores the controls sheet's *prior* state (§A.3).
+      // The controls were left at 'half' before More info hid them, so a reset to
+      // peek is distinguishable here (the first test starts at peek, where it is not).
+      await page.keyboard.press('Escape');
+      await expect(page.locator('.atlas-inspector')).toHaveCount(0);
+      await expect(controls).toBeVisible();
+      await expect(controls).not.toHaveAttribute('inert');
+      await expect(controls).toHaveAttribute('data-sheet-state', 'half');
+      await expect(controls.locator('[data-sheet-body][inert]')).toHaveCount(0);
+      expect(
+        await page.evaluate(
+          () =>
+            document.activeElement !== null &&
+            document.activeElement !== document.body,
+        ),
+      ).toBe(true);
+    });
+
+    test('crossing the 52rem switch point with a panel open leaves the controls usable', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+      await waitForAtlasReady(page);
+      await tapSelectNearCenter(page);
+      const phoneViewport = page.viewportSize();
+      if (phoneViewport === null)
+        throw new Error('the phone context has no viewport');
+      const controls = controlsSheet(page);
+      await expect(panelSheet(page)).toHaveAttribute(
+        'data-sheet-state',
+        'half',
+      );
+      await expect(controls).toBeHidden();
+
+      await page.setViewportSize({ height: 900, width: 1280 });
+      await expect(controls).toBeVisible();
+      await expect(controls).not.toHaveAttribute('data-sheet-state');
+      await expect(controls).not.toHaveAttribute('inert');
+      await expect(page.locator('.atlas-inspector')).toBeVisible();
+
+      await page.setViewportSize(phoneViewport);
+      await expect(panelSheet(page)).toHaveAttribute(
+        'data-sheet-state',
+        /^(peek|half|full)$/,
+      );
+      expect(
+        await page.evaluate(
+          () => document.activeElement?.closest('[inert]') ?? null,
+        ),
+      ).toBeNull();
+    });
+
+    test('the click of the globe tap that opened the panel sheet does not reach it', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+      await waitForAtlasReady(page);
+      await tapSelectNearCenter(page);
+      const rail = panelSheet(page);
+      await setSheetState(rail, 'half');
+      // Picking runs on pointerup, so Chromium can hit-test the tap's click
+      // after the sheet is laid out under the finger. Replay that order: the
+      // pointer goes down outside the rail and its click lands on the handle.
+      const delivered = await page.evaluate(() => {
+        const init = { bubbles: true, cancelable: true, pointerId: 41 };
+        document
+          .querySelector('.atlas-scene')!
+          .dispatchEvent(new PointerEvent('pointerdown', init));
+        return document
+          .querySelector('.atlas-right-rail .atlas-sheet__handle')!
+          .dispatchEvent(new PointerEvent('click', init));
+      });
+      expect(delivered).toBe(false);
+      await expect(rail).toHaveAttribute('data-sheet-state', 'half');
+      // A tap that starts on the handle still cycles the sheet.
+      await rail.locator('.atlas-sheet__handle').tap();
+      await expect(rail).toHaveAttribute('data-sheet-state', 'full');
     });
   });
 }
