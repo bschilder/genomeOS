@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+from typing import Any
 
 import pytest
 
@@ -47,14 +48,14 @@ def _grid() -> bytes:
     return codec.encode_grid(CELLS, 3)
 
 
-def _render(**overrides: object) -> bytes:
+def _render(**overrides: Any) -> bytes:
     fields = {key: VALUES[key] for key in ("support", "post_mean", "post_sd")} | overrides
     return codec.encode_render(
         artifact=ARTIFACT, source_surface_sha256=SOURCE_SHA, grid_sha256=codec.grid_sha256(CELLS), **fields
     )
 
 
-def _detail(**overrides: object) -> bytes:
+def _detail(**overrides: Any) -> bytes:
     fields = {key: VALUES[key] for key in codec.DETAIL_FIELDS} | overrides
     return codec.encode_detail(
         artifact=ARTIFACT, source_surface_sha256=SOURCE_SHA, grid_sha256=codec.grid_sha256(CELLS), **fields
@@ -69,6 +70,13 @@ def _split(data: bytes) -> tuple[dict, bytes]:
 def _frame(header: object, area: bytes, *, version: int = 1, reserved: int = 0) -> bytes:
     text = json.dumps(header, sort_keys=True, separators=(",", ":")).encode()
     head = b"GOSA" + struct.pack("<HHI", version, reserved, len(text)) + text
+    return head + bytes(((len(head) + 7) & ~7) - len(head)) + area
+
+
+def _frame_text(text: str, area: bytes) -> bytes:
+    """Frame header text that ``json.dumps`` cannot write (too deep, too many digits)."""
+    raw = text.encode()
+    head = b"GOSA" + struct.pack("<HHI", 1, 0, len(raw)) + raw
     return head + bytes(((len(head) + 7) & ~7) - len(head)) + area
 
 
@@ -204,7 +212,9 @@ def test_header_encoding_json_and_schema_refusals() -> None:
         lambda h: h.update(resolution=16),
         lambda h: h.update(tier="preview"),
         lambda h: h.update(grid_sha256="A" * 64),
+        lambda h: h.update(grid_sha256="a" * 64 + "\n"),  # Python's `$` also matches before a final "\n"
         lambda h: h.update(source_surface_sha256=None),
+        lambda h: h.update(source_surface_sha256=SOURCE_SHA + "\n"),
         lambda h: h["columns"][0].update(extra=1),
         lambda h: h["columns"][0].update(length="3"),
     ):
@@ -219,22 +229,59 @@ def test_integral_float_header_numbers_are_read_as_javascript_reads_them() -> No
     assert codec.decode(_frame(header, area), tier="render").header["n_cells"] == 3
 
 
+def test_integers_past_float64_precision_are_read_as_javascript_reads_them() -> None:
+    header, area = _split(_render())
+    text = json.dumps(header, sort_keys=True, separators=(",", ":"))
+    # CPython refuses int literals over 4,300 digits; JSON.parse reads Infinity, no safe integer.
+    huge = "1" + "0" * 5000
+    n_cells = _frame_text(text.replace('"n_cells":3', f'"n_cells":{huge}'), area)
+    assert _code(n_cells, "render") == "header_schema"
+    assert _code(_frame_text(text.replace("[0.0119,0.1804]", f"[0,{huge}]"), area), "render") == "identity"
+    # 2**53 + 1 and 2**53 are one double, so to JavaScript this domain is ordered.
+    header["artifact"]["metric_domains"]["post_mean"] = [2**53 + 1, 2**53]
+    assert codec.decode(_frame(header, area), tier="render")
+
+
+def test_deep_headers_reach_the_schema_checks_as_json_parse_lets_them() -> None:
+    # V8's JSON.parse has no nesting limit; CPython's C parser raises RecursionError.
+    header, area = _split(_render())
+    text = json.dumps(header, sort_keys=True, separators=(",", ":"))
+    deep = "[" * 100_000 + "]" * 100_000
+    assert _code(_frame_text(deep, area), "render") == "header_schema"
+    n_cells = _frame_text(text.replace('"n_cells":3', f'"n_cells":{deep}'), area)
+    assert _code(n_cells, "render") == "header_schema"
+    label = _frame_text(text.replace('"label":"HbS (rs334) fixture"', f'"label":{deep}'), area)
+    assert _code(label, "render") == "identity"
+    assert _code(label, "detail") == "tier"
+    unclosed = text.replace('"n_cells":3', f'"n_cells":{deep[:-1]}')
+    assert _code(_frame_text(unclosed, area), "render") == "header_json"
+
+
 def test_identity_refusals_mirror_the_zod_artifact_identity_schema() -> None:
     render = _render()
     for edit in (
         lambda h: h["artifact"].pop("label"),
         lambda h: h["artifact"].update(label="   "),
+        lambda h: h["artifact"].update(label="\ufeff"),  # trim() strips U+FEFF; str.strip() keeps it
+        lambda h: h["artifact"].update(label="\u3000\u2028"),
         lambda h: h["artifact"].update(colour="red"),
         lambda h: h["artifact"].update(artifact_format=4),
         lambda h: h["artifact"].update(artifact_format=True),
         lambda h: h["artifact"].pop("target_grid_version"),
         lambda h: h["artifact"].update(entity_type="cell"),
         lambda h: h["artifact"].update(measurement="frequency"),
+        lambda h: h["artifact"].update(entity_type=["variant"]),  # unhashable: no TypeError
+        lambda h: h["artifact"].update(measurement={"allele_frequency": 1}),
         lambda h: h["artifact"]["metric_domains"].update(post_mean=[0.2, 0.1]),
         lambda h: h["artifact"]["metric_domains"].update(post_sd=[0.1]),
+        lambda h: h["artifact"]["metric_domains"].update(post_mean=[0, 10**400]),  # JSON.parse: Infinity
         lambda h: h["artifact"].update(resolution=4),
     ):
         assert _code(_edit_header(render, edit), "render") == "identity"
+    for label in ("\x1c", "\x85"):  # str.isspace() is true for these; ECMAScript trim() keeps them
+        assert codec.decode(
+            _edit_header(render, lambda h, label=label: h["artifact"].update(label=label)), tier="render"
+        )
     format_one = {key: value for key, value in ARTIFACT.items() if not key.startswith("target_grid")}
     assert codec.decode(
         _edit_header(render, lambda h: h.update(artifact=format_one | {"artifact_format": 1})), tier="render"
@@ -348,6 +395,49 @@ def test_encoders_refuse_what_the_decoder_would_refuse() -> None:
             post_sd=VALUES["post_sd"],
         )
     assert error.value.code == "identity"
+
+
+def _render_with(artifact: dict[str, Any], source_surface_sha256: str = SOURCE_SHA) -> bytes:
+    return codec.encode_render(
+        artifact=artifact,
+        source_surface_sha256=source_surface_sha256,
+        grid_sha256=codec.grid_sha256(CELLS),
+        support=VALUES["support"],
+        post_mean=VALUES["post_mean"],
+        post_sd=VALUES["post_sd"],
+    )
+
+
+def test_encoders_write_one_encoding_per_javascript_number() -> None:
+    integral_float: Any = 3.0
+    assert codec.encode_grid(CELLS, integral_float) == _grid()
+    assert _render_with({**ARTIFACT, "artifact_format": 2.0, "resolution": 3.0}) == _render()
+    ints = {**ARTIFACT, "metric_domains": {"post_mean": [0, 1], "post_sd": [0.0, 1.0]}}
+    floats = {**ARTIFACT, "metric_domains": {"post_mean": [0.0, 1.0], "post_sd": [0, 1]}}
+    assert _render_with(ints) == _render_with(floats)
+
+
+def test_untyped_values_fail_with_gosa_codes() -> None:
+    domain = [0.0087, 0.0279]
+    for change, code in (
+        ({"label": "HbS \ud800"}, "header_encoding"),  # a lone surrogate has no UTF-8 form
+        ({"entity_type": ["variant"]}, "identity"),
+        ({"metric_domains": {"post_mean": [0, 10**400], "post_sd": domain}}, "identity"),
+        ({"metric_domains": {"post_mean": [0, 10**5000], "post_sd": domain}}, "identity"),
+    ):
+        with pytest.raises(codec.GosaError) as error:
+            _render_with({**ARTIFACT, **change})
+        assert error.value.code == code
+    with pytest.raises(codec.GosaError) as error:
+        _render_with(ARTIFACT, source_surface_sha256=SOURCE_SHA + "\n")
+    assert error.value.code == "header_schema"
+    with pytest.raises(codec.GosaError) as error:  # its message must not repr a 5,001-digit int
+        _render(support=["observed", 10**5000, "unknown"])
+    assert error.value.code == "support_code"
+    # JSON.parse reads an escaped lone surrogate and zod accepts it, so the decoder does too.
+    header, area = _split(_render())
+    header["artifact"]["label"] = "HbS \ud800"
+    assert codec.decode(_frame(header, area), tier="render").header["artifact"]["label"] == "HbS \ud800"
 
 
 def test_error_codes_are_a_closed_vocabulary() -> None:

@@ -31,6 +31,8 @@ from typing import Any
 
 from h3.api import basic_int as h3int
 
+from genomeos.publication.ecmascript import json_parse, trim
+
 MAGIC = b"GOSA"
 FORMAT_VERSION = 1
 SCHEMA_VERSION = 1
@@ -72,7 +74,7 @@ _PROBABILITY_FIELDS = frozenset({"post_mean", "q025", "q975"})
 _MAX_SAFE_INTEGER = 2**53 - 1
 _U64_LIMIT = 2**64
 _BOM = chr(0xFEFF)
-_SHA256 = re.compile(r"^[0-9a-f]{64}$")
+_SHA256 = re.compile(r"[0-9a-f]{64}")  # used with fullmatch: `$` also matches before a final "\n"
 _IDENTITY_OPTIONAL = frozenset({"target_grid_source", "target_grid_version"})
 _IDENTITY_TEXT = (
     "data_version", "hf_dataset", "hf_revision", "id", "label", "model_version",
@@ -118,15 +120,21 @@ def _safe_int(value: Any) -> int | None:
 
 
 def _is_sha256(value: Any) -> bool:
-    return isinstance(value, str) and _SHA256.match(value) is not None
+    return isinstance(value, str) and _SHA256.fullmatch(value) is not None
 
 
 def _is_text(value: Any) -> bool:
-    return isinstance(value, str) and bool(value.strip())
+    return isinstance(value, str) and bool(trim(value))  # zod nonEmpty trims as ECMAScript does
 
 
 def _is_finite_number(value: Any) -> bool:
-    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
+    """A finite JS number; an ``int`` past the float64 range is JavaScript's ``Infinity``."""
+    if not isinstance(value, int | float) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def validate_identity(artifact: Any) -> None:
@@ -143,8 +151,9 @@ def validate_identity(artifact: Any) -> None:
     for field in (*_IDENTITY_TEXT, *sorted(_IDENTITY_OPTIONAL & set(artifact))):
         if not _is_text(artifact[field]):
             raise GosaError("identity", f"artifact {field} must be non-empty text")
-    if artifact["entity_type"] not in _ENTITY_TYPES or artifact["measurement"] not in _MEASUREMENTS:
-        raise GosaError("identity", "unknown entity_type or measurement")
+    for field, allowed in (("entity_type", _ENTITY_TYPES), ("measurement", _MEASUREMENTS)):
+        if not isinstance(artifact[field], str) or artifact[field] not in allowed:
+            raise GosaError("identity", f"artifact {field} must be one of {sorted(allowed)}")
     resolution = _safe_int(artifact["resolution"])
     if resolution is None or resolution > 15:
         raise GosaError("identity", "artifact resolution must be an integer in [0, 15]")
@@ -156,7 +165,7 @@ def validate_identity(artifact: Any) -> None:
             not isinstance(domain, list)
             or len(domain) != 2
             or not all(_is_finite_number(bound) for bound in domain)
-            or domain[0] > domain[1]
+            or float(domain[0]) > float(domain[1])  # as the doubles JavaScript compares
         ):
             raise GosaError("identity", f"metric_domains.{metric} must be an ordered finite pair")
     if artifact_format >= 2 and not _IDENTITY_OPTIONAL <= set(artifact):
@@ -217,10 +226,13 @@ def _pack(header: Mapping[str, Any], payloads: Sequence[bytes]) -> bytes:
             {"dtype": dtype, "encoding": encoding, "length": len(payload), "name": name, "offset": offset}
         )
         offset = _align8(offset + len(payload))
-    text = json.dumps(
-        {**header, "columns": columns},
-        sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
-    ).encode("utf-8")
+    try:
+        text = json.dumps(
+            {**header, "columns": columns},
+            sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False,
+        ).encode("utf-8")
+    except UnicodeEncodeError as error:  # a lone surrogate in an artifact string
+        raise GosaError("header_encoding", f"header text has no UTF-8 form: {error}") from error
     out = bytearray(MAGIC + struct.pack("<HHI", FORMAT_VERSION, 0, len(text)) + text)
     out += bytes(_align8(len(out)) - len(out))
     start = len(out)
@@ -243,9 +255,17 @@ def _artifact_header(
     validate_identity(dict(artifact))
     if not _is_sha256(source_surface_sha256) or not _is_sha256(grid_sha):
         raise GosaError("header_schema", "source_surface_sha256 and grid_sha256 must be sha256 hex")
+    # One encoding per JavaScript value: integers are written 3 (never 3.0), domain bounds 1.0.
+    canonical = {
+        **artifact, "artifact_format": _safe_int(artifact["artifact_format"]),
+        "metric_domains": {
+            key: [float(bound) for bound in pair] for key, pair in artifact["metric_domains"].items()
+        },
+        "resolution": _safe_int(artifact["resolution"]),
+    }
     return {
-        "artifact": dict(artifact), "grid_sha256": grid_sha, "n_cells": count,
-        "resolution": artifact["resolution"], "schema_version": SCHEMA_VERSION,
+        "artifact": canonical, "grid_sha256": grid_sha, "n_cells": count,
+        "resolution": canonical["resolution"], "schema_version": SCHEMA_VERSION,
         "source_surface_sha256": source_surface_sha256, "tier": tier,
     }
 
@@ -254,7 +274,8 @@ def encode_grid(h3: Sequence[int], resolution: int) -> bytes:
     """Encode the shared, strictly increasing H3 grid; refuse anything ``decode`` would refuse."""
     values = list(h3)
     count = _require_cells({"h3": values})
-    if _safe_int(resolution) is None or resolution > 15:
+    level = _safe_int(resolution)  # written as an int, so 3.0 and 3 give one container
+    if level is None or level > 15:
         raise GosaError("header_schema", "resolution must be an integer in [0, 15]")
     raw = _pack_values(values, "u64", "h3")
     for row in range(1, count):
@@ -263,7 +284,7 @@ def encode_grid(h3: Sequence[int], resolution: int) -> bytes:
     deltas = [values[0], *(values[row] - values[row - 1] for row in range(1, count))]
     header = {
         "artifact": None, "grid_sha256": hashlib.sha256(raw).hexdigest(), "n_cells": count,
-        "resolution": resolution, "schema_version": SCHEMA_VERSION, "source_surface_sha256": None,
+        "resolution": level, "schema_version": SCHEMA_VERSION, "source_surface_sha256": None,
         "tier": "grid",
     }
     data = _pack(header, [_shuffle(_pack_values(deltas, "u64", "h3"), 8)])
@@ -285,7 +306,8 @@ def encode_render(
     codes = []
     for row, state in enumerate(support):
         if not isinstance(state, str) or state not in SUPPORT_CODES:
-            raise GosaError("support_code", f"row {row}: unknown support state {state!r}")
+            shown = repr(state) if isinstance(state, str) else type(state).__name__  # repr(10**5000) raises
+            raise GosaError("support_code", f"row {row}: unknown support state {shown}")
         codes.append(SUPPORT_CODES.index(state))
     header = _artifact_header("render", artifact, source_surface_sha256, grid_sha256, count)
     payloads = [bytes(codes)]
@@ -321,10 +343,6 @@ def encode_detail(
     return data
 
 
-def _reject_constant(token: str) -> None:
-    raise ValueError(f"{token} is not JSON")
-
-
 def _parse_header(raw: memoryview) -> Any:
     try:
         text = bytes(raw).decode("utf-8")
@@ -332,7 +350,7 @@ def _parse_header(raw: memoryview) -> Any:
         raise GosaError("header_encoding", f"header is not valid UTF-8: {error}") from error
     # TextDecoder('utf-8', {fatal: true}) consumes one leading BOM; mirror it exactly.
     try:
-        return json.loads(text.removeprefix(_BOM), parse_constant=_reject_constant)
+        return json_parse(text.removeprefix(_BOM))  # JSON.parse numbers and depth, not CPython's
     except ValueError as error:
         raise GosaError("header_json", f"header is not valid JSON: {error}") from error
 
