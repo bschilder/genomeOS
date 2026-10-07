@@ -528,8 +528,13 @@ def verify_artifact_tiers(
     """Check decoded tiers against their catalog ``ref`` and each other (spec §B.2, §B.3).
 
     ``ref`` is the catalog artifact entry (identity fields, ``n_cells``, ``surface_sha256``,
-    ``support_counts``); ``grid_sha256`` is the ``grids`` key it names. The TypeScript
-    ``decodeRender``/``decodeDetail`` run the same checks with the same codes, in this order.
+    ``support_counts``); ``grid_sha256`` is the ``grids`` key it names. This runs contract checks
+    22–27 over all three tiers at once, in table order. The TypeScript decoders raise the same codes
+    but order the checks per tier: ``decodeGrid`` checks the grid digest and ``n_cells``;
+    ``decodeRender`` and ``decodeDetail`` each run 23–26 for their own tier after its intrinsic
+    checks (ruling R5); then ``decodeRender`` raises the support-histogram half of 27 and
+    ``decodeDetail`` the float32 half. A single fault gets the same code from both decoders. Faults
+    in two different tiers can report a different first code.
     """
     if (grid.tier, render.tier, detail.tier) != TIERS:
         raise ValueError("verify_artifact_tiers needs a grid, a render and a detail container")

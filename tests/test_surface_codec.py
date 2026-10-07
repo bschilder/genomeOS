@@ -511,3 +511,22 @@ def test_container_digest_and_size_are_checked_before_decoding() -> None:
         with pytest.raises(codec.GosaError) as error:
             codec.verify_container(data, tier="render", sha256=sha256, size=size)
         assert error.value.code == "container_sha256"
+    # Bytes that decode would refuse still refuse as container_sha256 when they miss their declared
+    # digest or size, so decoding cannot run first; once both match, decode's own code comes back.
+    corrupt = b"GOSB" + data[4:]
+    corrupt_digest = hashlib.sha256(corrupt).hexdigest()
+    assert _code(corrupt, "render") == "magic" and _code(data, "detail") == "tier"
+    cases = (
+        (corrupt, "render", digest, len(corrupt)),
+        (corrupt, "render", corrupt_digest, len(corrupt) + 1),
+        (data, "detail", "0" * 64, len(data)),
+    )
+    for blob, tier, sha256, size in cases:
+        with pytest.raises(codec.GosaError) as error:
+            codec.verify_container(blob, tier=tier, sha256=sha256, size=size)
+        assert error.value.code == "container_sha256"
+    matched = ((corrupt, "render", corrupt_digest, "magic"), (data, "detail", digest, "tier"))
+    for blob, tier, sha256, code in matched:
+        with pytest.raises(codec.GosaError) as error:
+            codec.verify_container(blob, tier=tier, sha256=sha256, size=len(blob))
+        assert error.value.code == code
