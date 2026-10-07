@@ -236,7 +236,7 @@ for (const phone of PHONE_PROFILES) {
           return Math.abs(geometry.sheetHeight - geometry.explorerHeight / 2);
         })
         .toBeLessThanOrEqual(2);
-      await expect(body).not.toHaveAttribute('inert', '');
+      await expect(body).not.toHaveAttribute('inert');
       await expect(
         sheet.locator('details.atlas-control-sheet').filter({
           has: page.locator('summary', { hasText: /^Scientific layers$/ }),
@@ -291,6 +291,65 @@ for (const phone of PHONE_PROFILES) {
         'inert',
         '',
       );
+    });
+
+    test('narrowing into the phone layout at peek moves focus to the handle first', async ({
+      page,
+    }) => {
+      const phoneViewport = page.viewportSize()!;
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      await page.setViewportSize({ height: phoneViewport.height, width: 1024 });
+      await expect(sheet).not.toHaveAttribute('data-sheet-state');
+      await expect(sheet.locator('.atlas-sheet__body')).not.toHaveAttribute(
+        'inert',
+      );
+      const layers = sheet.locator('summary', {
+        hasText: /^Scientific layers$/,
+      });
+      await layers.focus();
+      await expect(layers).toBeFocused();
+      // Chromium blurs an inert-ed focus only at its next rendering update, so
+      // the end state alone cannot show the order: also record which element
+      // has focus at the moment React sets `inert` on the sheet body.
+      await page.evaluate(() => {
+        const trail: string[] = [];
+        Object.assign(window, { atlasFocusTrail: trail });
+        const name = (node: EventTarget | null) =>
+          node instanceof Element
+            ? `${node.tagName.toLowerCase()}.${node.className}`
+            : 'none';
+        document.addEventListener(
+          'focusout',
+          (event) => trail.push(`focus → ${name(event.relatedTarget)}`),
+          true,
+        );
+        const setAttribute = Element.prototype.setAttribute;
+        Element.prototype.setAttribute = function (key, value) {
+          if (key === 'inert' && this.matches('[data-sheet-body]'))
+            trail.push(`inert with focus on ${name(document.activeElement)}`);
+          setAttribute.call(this, key, value);
+        };
+      });
+
+      await page.setViewportSize(phoneViewport);
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      await expect(sheet.locator('.atlas-sheet__body')).toHaveAttribute(
+        'inert',
+        '',
+      );
+      await expect(sheet.locator('.atlas-sheet__handle')).toBeFocused();
+      // Focus went straight from the summary to the handle, never to <body>,
+      // and only then did the body go inert.
+      const trail = await page.evaluate(
+        () =>
+          (window as unknown as { atlasFocusTrail: unknown }).atlasFocusTrail,
+      );
+      expect(trail).toEqual([
+        'focus → button.atlas-sheet__handle',
+        'inert with focus on button.atlas-sheet__handle',
+      ]);
     });
 
     test('the legend and credits dock above the sheet in every state', async ({

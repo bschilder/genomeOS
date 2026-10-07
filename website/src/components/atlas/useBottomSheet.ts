@@ -98,19 +98,32 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
     return observeSheetLayout(explorer, settle);
   }, [enabled, explorer, settle]);
 
-  const setState = useCallback((next: SheetState) => {
-    if (next === 'peek') {
-      const active = document.activeElement;
-      const bodies = sheet.current?.querySelectorAll('[data-sheet-body]');
-      if (
-        active &&
-        bodies &&
-        Array.from(bodies).some((body) => body.contains(active))
-      )
-        handle.current?.focus();
-    }
-    setRawState(next);
+  // Entering peek: focus leaves the soon-inert body for the handle first.
+  const releaseBodyFocus = useCallback(() => {
+    const active = document.activeElement;
+    const bodies = sheet.current?.querySelectorAll('[data-sheet-body]');
+    if (
+      active &&
+      bodies &&
+      Array.from(bodies).some((body) => body.contains(active))
+    )
+      handle.current?.focus();
   }, []);
+  const setState = useCallback(
+    (next: SheetState) => {
+      if (next === 'peek') releaseBodyFocus();
+      setRawState(next);
+    },
+    [releaseBodyFocus],
+  );
+  // `inert` follows `enabled` one commit late, so crossing into the phone
+  // layout at peek moves focus to the (just mounted) handle before the body
+  // goes inert; the follow-up render lands before paint.
+  const [inertEnabled, setInertEnabled] = useState(false);
+  useLayoutEffect(() => {
+    if (enabled && stateRef.current === 'peek') releaseBodyFocus();
+    setInertEnabled(enabled);
+  }, [enabled, releaseBodyFocus]);
   const cycle = useCallback(
     () => setState(nextSheetState(stateRef.current)),
     [setState],
@@ -135,7 +148,7 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
   };
 
   return {
-    bodyInert: enabled && state === 'peek',
+    bodyInert: enabled && inertEnabled && state === 'peek',
     cycle,
     handleProps,
     setState,
