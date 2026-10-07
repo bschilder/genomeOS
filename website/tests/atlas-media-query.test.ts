@@ -55,15 +55,21 @@ describe('phone breakpoint hook (mobile sheets design §A.1.4)', () => {
   });
 
   it('renders the desktop layout on the server', () => {
-    const store = createMediaQueryStore(
-      MOBILE_QUERY,
-      () => fakeMatchMedia(true).matchMedia,
-    );
+    const phone = fakeMatchMedia(true);
+    const store = createMediaQueryStore(MOBILE_QUERY, () => phone.matchMedia);
     expect(store.getServerSnapshot()).toBe(false);
     function Probe() {
       return String(useMediaQuery(MOBILE_QUERY));
     }
-    expect(renderToString(createElement(Probe))).toBe('false');
+    // A phone-sized window makes the client snapshot `true`, so `'false'` can
+    // only come from the server snapshot the hook hands to React.
+    vi.stubGlobal('window', { matchMedia: phone.matchMedia });
+    try {
+      expect(createMediaQueryStore(MOBILE_QUERY).getSnapshot()).toBe(true);
+      expect(renderToString(createElement(Probe))).toBe('false');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('reports no match without a window', () => {
