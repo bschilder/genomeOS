@@ -123,16 +123,20 @@ Supplementary Methods and **Supplementary References**, 25 pages, 342 numbered e
 
 - Retrieved file: `41467_2010_BFncomms1104_MOESM456_ESM.pdf`, 438,548 bytes,
   SHA-256 `8f4f11a8ea0b9bd57d5b5cc8b9d1d326cb83b4ee1d70bbae3930839fee9cf3a5`.
-- Method: extract all 25 pages to text (62,627 characters) and search the full text for the study's
-  identifiers. Nothing was searched by title only.
+- Method: extract all 25 pages to text and search the full text for the study's identifiers, not by
+  title. The extracted text is 62,551 characters with `pypdf` (62,627 with the extractor used on
+  2026-10-01; a character count is extractor-dependent, so it is not a property of the document), and
+  it includes the supplementary reference list, which is numbered inline past 300 (highest entry seen,
+  341). The reference-entry count is not stated here because the extracted numbering has gaps and a
+  count is not reproducible from text.
 - Result: **0 occurrences** of `Salih`, of PMID 20128890, of `BMC Med Genet`, and of the paper's
   village and population labels (`Um-Salala`, `Hausa`, `Massalit`).
-- Control: the same text does contain Sudan studies — 8 occurrences of `Sudan`, in references to
-  other work (Bayoumi et al. 1985, Fur and Baggara tribes; Fleming et al. 1979, Sudan savanna of
-  Nigeria; Foy et al. 1964, Kenya and the Southern Sudan; Lauder & Ibrahim 1970, south-west
-  Kordofan; Omer et al. 1972, tribes of the Sudan; Roberts & Lehmann 1955, southern Sudanese
-  peoples; Saha 1981, a Sudanese population). So the search finds Sudan entries when they exist,
-  and this study is not among them.
+- Control: the same text does contain Sudan studies — 8 occurrences of `Sudan`, all 8 named here
+  (Bayoumi et al. 1985, Fur and Baggara tribes; Fleming et al. 1979, Sudan savanna of Nigeria; Foy et
+  al. 1964, Kenya and the Southern Sudan; Lauder & Ibrahim 1970, south-west Kordofan; Nasr et al.
+  2008, eastern Sudan; Omer et al. 1972, tribes of the Sudan; Roberts & Lehmann 1955, southern
+  Sudanese peoples; Saha 1981, a Sudanese population). So the search finds Sudan entries when they
+  exist, and this study is not among them.
 
 **What this establishes.** Salih et al. 2010 (BMC Med Genet 11:21, PMID 20128890) is not a cited
 source of the Piel 2010 assembly. For this corpus row the duplicate risk against the Piel path is
@@ -140,22 +144,76 @@ therefore not merely unresolved: at the level of that source list there is no Pi
 for a study published in January 2010 to collide with, and the row is an addition to the region
 rather than a re-count of a cohort already in the P1 build.
 
-**What it does not establish.** The current MAP `Explorer:HbS_Data` layer is a later and larger
-release than the 2010 assembly, so this check does not exclude a match against the layer the parity
-run actually consumes. That comparison needs the curated CSV the `map_surveys` adapter takes as
-input (994 retained surveys from 385 studies in the 2026-09-16 parity run). That CSV is not
-committed to this repository and is not present on the machine this check ran on, so exact matches,
-explained transformations and duplicate identities against the live layer remain **unestablished**.
-No identity was inferred from geography or from a title.
+**What this step does not cover.** It reads the 2010 assembly's source list. The layer the parity
+run actually consumes is a later and larger release, so a match against that layer is a separate
+check, and it is the one Step 2 runs. No identity was inferred from geography or from a title.
 
-### Step 2 — how to finish it
+### Step 2 — the layer the parity run consumes, and the live layer, both checked
 
-The remaining comparison is mechanical once the input is available: load the curated MAP HbS CSV,
-select rows whose contributing study or citation resolves to this paper, and report each as an
-exact match, an explained transformation, or an unresolved mismatch, refusing any match that rests
-on a coordinate or a title alone. The result belongs in this section, and the row's promotion
-status stays refused until then for the reasons already recorded above (verification pending,
-methods `not_reviewed`, and no reviewed `literature` P0 alias for the two population labels).
+Run 2026-10-07. The input Step 1 could not reach is fetched by this repository's own tool rather than
+reconstructed: `scripts/fetch_map_hbs.py --out <path>` writes the `Explorer:HbS_Data` WFS response
+(`outputFormat=csv`, no credentials).
+
+- Fetch window 2026-10-07T22:08:31Z to 22:08:33Z, repeated at 22:14:06Z to 22:14:07Z. Both responses
+  are 402,028 bytes with 1,287 data rows.
+- The response is **not byte-stable**, and the reason is exactly one column: GeoServer's `FID` is a
+  per-request feature id (`HbS_Data.fid-...-6220`, `...-6728`, `...-6764` across three requests). With
+  `FID` removed every request is identical: data-column SHA-256
+  `3d6a4f6040c0806dbb4331745918999a220c56afa83d7befd7ca54e48c0702f1`, reproduced on all three
+  fetches. Whole-response SHA-256 varies per request by design of that column and three observed
+  values are `457ea3ab...`, `a5a5bf38...` and `26ad330d...`; none of them identifies the layer. A
+  later check compares the data-column hash with the byte count and the row count, and does not read a
+  changed `FID` as a changed layer.
+- Second layer checked: the committed artifact the P1 path holds,
+  `website/public/data/atlas/hbs-rs334.observations.json`, `data_version` `map-2026-08`, 1,071 survey
+  records. Every one of its 1,071 survey ids is present in the live layer.
+- The live layer has **grown**: 216 survey ids are in today's response and not in the committed
+  artifact (1,071 to 1,287). The comparison was therefore run twice, once against the immutable
+  artifact and once against the live layer, because a match found only in the newer layer could not
+  bind the P1 path.
+
+**Result: no collision, in either layer.**
+
+- Study identity: **0 occurrences** of `Salih`, of PMID 20128890, of `BMC Med Genet`, of `Um-Salala`
+  and of `Massalit`, in the committed artifact (1,071 records) and in the live layer (1,287 rows).
+- All 41 Sudan rows in the live layer are also in the committed artifact, and none of them is this
+  study. They resolve to ten other studies: Foy 1964 (13 rows), Vella 1966 (7), Omer 1972 (7),
+  Lauder & Ibrahim 1970 (3), Roberts & Lehmann 1955 (3), Saha & Patgunarajah 1981 (3), Vella 1965
+  (1), Saha 1981 (1), Samuel 1981 (1), Bayoumi 1985 (1) and Nasr 2008 (1).
+- Count identity, in the layer's own units. The allele counts are not read from a column; they are
+  derived, and the derivation is fixed by the committed artifact rather than chosen: **an = 2 x (AA +
+  AS + SS)**, with a blank `hbaa` cell recovered as `sample_size - hbas - hbss`, and **ac = hbas + 2 x
+  hbss** with a blank `hbss` read as zero. That rule reproduces the committed payload's `an` and `ac`
+  exactly on **1,071 of 1,071** records, 0 mismatches, so it is the layer's unit definition and any
+  comparison has to use it. Deriving `an` as `2 x sample_size` instead is wrong for 207 of those
+  1,071 records, and an earlier draft of this section made exactly that error.
+- Under that rule the comparison covers **1,185 of the 1,287 live rows**; 102 rows are not derivable
+  because the cells the rule needs are empty. The two corpus rows carry an/ac of 448/121 (Hausa) and
+  492/98 (Massalit). **No row in either layer carries either pair.** The nearest rows, named so the
+  refusal is checkable: at an 492, id 1193 Schiliro 1986 (Italy) has ac 5 and id 879 (Burkina Faso)
+  has ac 19; the rows carrying ac 98 are id 406 (Kenya, an 916), id 994 (Gambia, an 994) and id 1034
+  (India, an 1018); and the single row carrying ac 121 is id 1075 (Belgium, an 19,150). No row in the
+  layer has a `sample_size` of 224 at all; the two rows at 246 are id 1193 (Italy, genotype total 246,
+  ac 5) and id 91 Arends 1973 (Venezuela, genotype total 243, ac 27).
+- **Homonym control.** The single population-label hit is survey id 12: Adamson 1951, *Nigeria*,
+  "Haematological and biochemical findings in Hausa males", present in both layers. Hausa is an
+  ethnicity across Nigeria, Niger and Sudan, so a match taken on the population label alone would
+  have reported that Nigerian 1951 survey as a duplicate of the Salih Hausa row. The match is
+  refused, and this is the concrete case behind the contract's rule that a label resolves through a
+  reviewed alias and that identity is never inferred.
+
+**What this establishes for #151.** For both Salih 2010 rows the duplicate risk against the MAP/Piel
+path is now checked at three levels: the 2010 assembly's own source list (Step 1), the committed
+artifact the P1 path consumes, and the live layer as of 2026-10-07. No level produces a match, by
+study identity or by exact counts, so the rows are additions to the region rather than re-counts of a
+cohort the P1 path already holds. A match appearing in a later layer would not change this: the
+artifact is keyed by data version, and a superseded version is superseded rather than current.
+
+**What it still does not establish.** Promotion status is unchanged. Both rows stay refused for the
+reasons already recorded above: verification pending, methods `not_reviewed`, and no reviewed
+`literature` P0 alias for either population label. Reconciliation is about duplicate identity, and it
+does not satisfy promotion. The 216 ids the live layer has gained since `map-2026-08` are recorded
+here as a fact about the layer, not as a reason to refresh an immutable artifact.
 
 ## Corrections applied
 
