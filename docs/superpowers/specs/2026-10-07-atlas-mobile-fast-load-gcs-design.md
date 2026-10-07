@@ -838,12 +838,15 @@ gzip'`).
 
 ### C.4 Ordering
 
-1. Part B merged (encoder, `web` blocks, CI encode step).
+1. Part B complete on its branch (encoder, `web` blocks, CI encode step; Part B's final gates pass).
 2. Authenticated operator (the owner authorised the agent, 2026-10-07): provision `edge` mode; run
-   `encode_atlas_web.py --with-downloads --out <staging>`; run `publish_atlas_web.py`; set repository
-   variables `ATLAS_DATA_BASE_URL` and the bucket name.
-3. Part C's PR commits the rewritten catalog and removes the per-artifact files; the deploy gate
-   makes a premature merge fail its deploy rather than ship a broken site.
+   `encode_atlas_web.py --with-downloads --out <staging>` from the Part C branch tip; run
+   `publish_atlas_web.py`; set repository variables `ATLAS_DATA_BASE_URL` and the bucket name. This
+   does not wait for the owner to merge A and B: keys are content-addressed, so publishing early only
+   adds objects, and if review changes the encoded bytes the steps are re-run (idempotent).
+3. Part C's PR commits the rewritten catalog and removes the per-artifact files; it merges after
+   Part B (stacked), and the deploy gate makes a premature merge fail its deploy rather than ship a
+   broken site.
 
 ---
 
@@ -870,4 +873,5 @@ gzip'`).
 | Credit block wraps on mobile instead of one line | Required attributions cannot fit one line at 360 px | Slightly taller docked block |
 | 24 px target boxes also on desktop | Fixes an existing WCAG 2.2 2.5.8 violation | A small desktop visual change |
 | Issues filed before each part's first work commit (owner's approval authorises filing) | AGENTS "issue first" | None |
+| Part C operations run on the stacked branch before the owner merges A and B | Merges are the owner's call; content-addressed keys make early publishing safe | Re-run encode/publish if review changes Part B's bytes |
 | Stacked PRs A → B → C, one spec, one plan | AGENTS "one PR per coherent unit"; B and C share the format | Merge order is fixed |
