@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,8 @@ from scripts import encode_atlas_web, export_atlas_web
 
 #: Ascending resolution-3 cells around Madrid.
 CELLS = ("833901fffffffff", "833908fffffffff", "83390cfffffffff")
+#: A resolution-3 neighbour that sorts after every cell in ``CELLS``.
+NEXT_CELL = "83390dfffffffff"
 ROWS = (
     ("observed", 0.2, 0.01, 0.15, 0.25, 0.1, 0.0),
     ("interpolated", 0.05, 0.03, 0.01, 0.11, 0.5, 120.5),
@@ -94,6 +97,14 @@ def _write_export(
     return root
 
 
+def _tree(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
+
+
 def test_cli_writes_content_addressed_objects_and_catalog_fields(tmp_path: Path) -> None:
     export = _write_export(tmp_path / "web", {"alpha": _cells(), "beta": _cells()})
     assert encode_atlas_web.main(["--in", str(export)]) == 0
@@ -167,6 +178,66 @@ def test_refuses_a_surface_whose_h3_order_differs_from_the_shared_grid(tmp_path:
     with pytest.raises(ValueError, match="beta: h3_index sequence differs from the shared grid at row 1"):
         encode_atlas_web.encode_export(export, export)
     assert (export / "catalog.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    ("beta", "message"),
+    [
+        pytest.param(
+            [*_cells(), {**_cells()[0], "h3_index": NEXT_CELL}],
+            r"row 3 \(surface has 4 cells, grid has 3\)",
+            id="grid-is-a-prefix",
+        ),
+        pytest.param(_cells()[:2], r"row 2 \(surface has 2 cells, grid has 3\)", id="surface-is-a-prefix"),
+    ],
+)
+def test_alignment_refusal_names_the_first_row_past_a_shared_prefix(
+    tmp_path: Path, beta: list[dict[str, Any]], message: str
+) -> None:
+    export = _write_export(tmp_path / "web", {"alpha": _cells(), "beta": beta})
+    before = (export / "catalog.json").read_bytes()
+    expected = f"^beta: h3_index sequence differs from the shared grid at {message}$"
+    with pytest.raises(ValueError, match=expected):
+        encode_atlas_web.encode_export(export, export)
+    assert (export / "catalog.json").read_bytes() == before
+
+
+def test_refuses_a_surface_whose_resolution_differs_from_the_shared_grid(tmp_path: Path) -> None:
+    export = _write_export(tmp_path / "web", {"alpha": _cells(), "beta": _cells()})
+    catalog = json.loads((export / "catalog.json").read_text())
+    catalog["artifacts"][1]["resolution"] = 4  # same h3_index sequence: only the resolution differs
+    (export / "catalog.json").write_bytes(encode_atlas_web.canonical_bytes(catalog))
+    before = (export / "catalog.json").read_bytes()
+    with pytest.raises(ValueError, match=r"^beta: resolution 4 differs from the shared grid's resolution 3$"):
+        encode_atlas_web.encode_export(export, export)
+    assert (export / "catalog.json").read_bytes() == before
+
+
+@pytest.mark.parametrize(("target", "published"), [("grids/", 0), ("catalog.json", 3)])
+def test_an_interrupted_write_publishes_nothing_partial_and_a_rerun_recovers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, target: str, published: int
+) -> None:
+    export = _write_export(tmp_path / "web", {"alpha": _cells()})
+    before = _tree(export)
+    real_replace = os.replace
+
+    def interrupt(source: str | os.PathLike[str], destination: str | os.PathLike[str]) -> None:
+        if Path(destination).relative_to(export).as_posix().startswith(target):
+            raise KeyboardInterrupt  # Ctrl-C after the bytes are written, before they are published
+        real_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", interrupt)
+    with pytest.raises(KeyboardInterrupt):
+        encode_atlas_web.encode_export(export, export)
+    after = _tree(export)
+    new = sorted(set(after) - set(before))
+    assert after["catalog.json"] == before["catalog.json"]
+    assert len(new) == published and all(name.endswith(".gosa") for name in new), new  # no partials
+
+    monkeypatch.undo()
+    clean = _write_export(tmp_path / "clean", {"alpha": _cells()})
+    assert encode_atlas_web.encode_export(export, export) == encode_atlas_web.encode_export(clean, clean)
+    assert _tree(export) == _tree(clean)
 
 
 def test_refuses_a_grid_that_is_not_strictly_increasing(tmp_path: Path) -> None:

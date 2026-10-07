@@ -8,7 +8,8 @@ wrong-value bug), writes content-addressed ``grids/`` and ``surfaces/`` objects 
 writes ``catalog.json`` there with ``grids``, ``web`` and ``observations_bytes``. Before the catalog
 is written, every object is read back from disk, decoded and compared with the canonical JSON cell
 by cell: detail float64 bit-for-bit, render float32 equal to ``float32(JSON)``, support codes and
-the support histogram exact. Byte-deterministic and idempotent; needs only the ``read`` extra.
+the support histogram exact. Byte-deterministic and idempotent; every file is written to a temporary
+sibling and renamed into place, so an interrupted run can simply be re-run. Needs only the ``read`` extra.
 
     python scripts/encode_atlas_web.py [--in DIR] [--out DIR]
 """
@@ -18,7 +19,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import secrets
 import struct
 import sys
 from collections.abc import Callable, Mapping
@@ -77,6 +80,25 @@ def tier_key(ref: Mapping[str, Any], tier: str, container_sha: str) -> str:
     return data_key(f"{stem}/{tier}.{container_sha[:16]}.gosa")
 
 
+def _write_atomic(path: Path, data: bytes) -> None:
+    """Write ``data`` to a hidden sibling, fsync it, then rename it onto ``path``.
+
+    An interrupted run leaves either nothing or the complete bytes at ``path``, never a truncated
+    object at a content-addressed key (which every later run would refuse) or a truncated catalog.
+    """
+    temporary = path.with_name(f".{path.name}.{os.getpid()}-{secrets.token_hex(4)}.tmp")
+    stream = temporary.open("xb")  # exclusive: never truncates or later unlinks another writer's file
+    try:
+        with stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 def write_object(out_dir: Path, key: str, data: bytes) -> dict[str, Any]:
     """Write a content-addressed object, refusing to replace different bytes at its key."""
     path = out_dir / key
@@ -85,7 +107,7 @@ def write_object(out_dir: Path, key: str, data: bytes) -> dict[str, Any]:
             raise ValueError(f"{path}: a different object already exists at this content-addressed key")
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
+        _write_atomic(path, data)
     return {"bytes": len(data), "sha256": codec.container_sha256(data), "url": key}
 
 
@@ -149,9 +171,19 @@ def encode_catalog(
         resolution = int(ref["resolution"])
         if grid is None:
             grid = _write_grid(out_dir, h3, resolution)
-        elif h3 != grid.h3 or resolution != grid.entry["resolution"]:
-            row = next((i for i, (a, b) in enumerate(zip(h3, grid.h3, strict=False)) if a != b), len(h3))
-            raise ValueError(f"{ref['id']}: h3_index sequence differs from the shared grid at row {row}")
+        elif resolution != grid.entry["resolution"]:
+            raise ValueError(
+                f"{ref['id']}: resolution {resolution} differs from the shared grid's resolution "
+                f"{grid.entry['resolution']}"
+            )
+        elif h3 != grid.h3:
+            # Past a shared prefix, the first differing row is the first row only one of them has.
+            shared = min(len(h3), len(grid.h3))
+            row = next((i for i, (a, b) in enumerate(zip(h3, grid.h3, strict=False)) if a != b), shared)
+            raise ValueError(
+                f"{ref['id']}: h3_index sequence differs from the shared grid at row {row} "
+                f"(surface has {len(h3)} cells, grid has {len(grid.h3)})"
+            )
         common = {
             "artifact": source.payload["artifact"],
             "source_surface_sha256": source.sha256,
@@ -203,7 +235,7 @@ def encode_export(in_dir: Path, out_dir: Path) -> dict[str, Any]:
         catalog, out_dir=out_dir, load_surface=load_surface, observations_size=observations_size
     )
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "catalog.json").write_bytes(canonical_bytes(encoded))
+    _write_atomic(out_dir / "catalog.json", canonical_bytes(encoded))
     return encoded
 
 
