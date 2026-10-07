@@ -14,6 +14,27 @@ const RENDER_KEY =
   'surfaces/hbs-rs334/v3/map-2026-08/render.0123456789abcdef.gosa';
 const GRID_KEY = 'grids/h3-r4.0123456789abcdef.gosa';
 const BUCKET_BASE = 'https://storage.googleapis.com/example-bucket/atlas/web/';
+const LOCAL_BASE = 'http://127.0.0.1:4323/';
+const DOC_BASE = 'https://genome-os.org/genomeOS/app/?entity=hbs-rs334';
+
+// Each starts with "/" or "https://" and ends in "/", so a prefix test accepts it, but the URL
+// parser reads a different URL from the one written: a backslash reads as "/", tabs and newlines
+// are stripped, a query or fragment is dropped on resolution, "user@" moves the host and ".."
+// leaves the directory (or the bucket).
+const HOSTILE_BASES = [
+  '/\\evil.example/',
+  '/\t/evil.example/',
+  '/\n/evil.example/',
+  '/data/atlas/?v=1/',
+  '/data/atlas/#/',
+  '/data/../atlas/',
+  `${BUCKET_BASE}?v=1/`,
+  `${BUCKET_BASE}#/`,
+  'https://user:secret@storage.googleapis.com/example-bucket/atlas/web/',
+  'https://storage.googleapis.com@evil.example/atlas/web/',
+  'https://storage.googleapis.com/example-bucket/../atlas/web/',
+  'https://storage.googleapis.com\\evil.example/',
+];
 
 const ACCEPTED_KEYS = [
   RENDER_KEY,
@@ -79,6 +100,27 @@ describe('resolveDataUrl', () => {
       ),
     ).toThrow('Atlas data base must end in "/"');
   });
+
+  it('resolves the local fixture origin as an absolute base', () => {
+    expect(resolveDataUrl(GRID_KEY, LOCAL_BASE, DOC_BASE)).toBe(
+      `${LOCAL_BASE}${GRID_KEY}`,
+    );
+  });
+
+  it.each(REJECTED_KEYS)('refuses the key %j', (key) => {
+    expect(() => resolveDataUrl(key, '/data/atlas/', DOC_BASE)).toThrow(
+      /Atlas data key/,
+    );
+    expect(() => resolveDataUrl(key, BUCKET_BASE, DOC_BASE)).toThrow(
+      /Atlas data key/,
+    );
+  });
+
+  it.each(HOSTILE_BASES)('refuses the hostile base %j', (base) => {
+    expect(() => resolveDataUrl(GRID_KEY, base, DOC_BASE)).toThrow(
+      /Atlas data base/,
+    );
+  });
 });
 
 describe('assertDataBase', () => {
@@ -101,6 +143,34 @@ describe('assertDataBase', () => {
     '/data/atlas',
   ])('rejects %s', (base) => {
     expect(() => assertDataBase(base)).toThrow(/Atlas data base/);
+  });
+
+  it.each(HOSTILE_BASES)(
+    'rejects %j, which leaves the base once parsed',
+    (base) => {
+      expect(() => assertDataBase(base)).toThrow(
+        /root-relative or an absolute https URL/,
+      );
+    },
+  );
+
+  it('does not need URL.canParse (Safari before 17, Chrome before 120)', () => {
+    const canParse = Object.getOwnPropertyDescriptor(URL, 'canParse');
+    Reflect.deleteProperty(URL, 'canParse');
+    try {
+      expect(() => assertDataBase(BUCKET_BASE)).not.toThrow();
+      expect(() => assertDataBase(LOCAL_BASE)).not.toThrow();
+      expect(resolveDataUrl(GRID_KEY, BUCKET_BASE, DOC_BASE)).toBe(
+        `${BUCKET_BASE}${GRID_KEY}`,
+      );
+      expect(() => assertDataBase('https://user@example.org/')).toThrow(
+        /Atlas data base/,
+      );
+    } finally {
+      if (canParse !== undefined) {
+        Object.defineProperty(URL, 'canParse', canParse);
+      }
+    }
   });
 });
 
@@ -162,7 +232,7 @@ describe('dataHref', () => {
     ).toBeNull();
   });
 
-  it.each(['/data/atlas/', '/genomeOS/data/atlas/', BUCKET_BASE])(
+  it.each(['/data/atlas/', '/genomeOS/data/atlas/', BUCKET_BASE, LOCAL_BASE])(
     'resolves to the fetch URL for base %s',
     (base) => {
       const docBase = 'https://genome-os.org/genomeOS/app/?entity=hbs-rs334';
@@ -171,6 +241,15 @@ describe('dataHref', () => {
       );
     },
   );
+
+  it.each(REJECTED_KEYS)('refuses the key %j', (key) => {
+    expect(() => dataHref(key, '/data/atlas/')).toThrow(/Atlas data key/);
+    expect(() => dataHref(key, BUCKET_BASE)).toThrow(/Atlas data key/);
+  });
+
+  it.each(HOSTILE_BASES)('refuses the hostile base %j', (base) => {
+    expect(() => dataHref(GRID_KEY, base)).toThrow(/Atlas data base/);
+  });
 });
 
 describe('dataOrigin', () => {
@@ -178,4 +257,17 @@ describe('dataOrigin', () => {
     expect(dataOrigin('/data/atlas/')).toBeNull();
     expect(dataOrigin(BUCKET_BASE)).toBe('https://storage.googleapis.com');
   });
+
+  it('names the local fixture origin, port included', () => {
+    expect(dataOrigin('/genomeOS/data/atlas/')).toBeNull();
+    expect(dataOrigin(LOCAL_BASE)).toBe('http://127.0.0.1:4323');
+    expect(dataOrigin('http://localhost:4323/')).toBe('http://localhost:4323');
+  });
+
+  it.each([...HOSTILE_BASES, 'data/atlas/', BUCKET_BASE.slice(0, -1)])(
+    'refuses the base %j',
+    (base) => {
+      expect(() => dataOrigin(base)).toThrow(/Atlas data base/);
+    },
+  );
 });
