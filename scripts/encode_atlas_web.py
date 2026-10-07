@@ -71,6 +71,15 @@ def data_key(key: str) -> str:
     return key
 
 
+def read_verified(in_dir: Path, key: str, sha256: str) -> bytes:
+    """The bytes at catalog key ``key`` under ``in_dir``, refused unless their sha256 is ``sha256``."""
+    path = Path(in_dir) / data_key(key)
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != sha256:
+        raise ValueError(f"{path}: sha256 does not match the catalog")
+    return data
+
+
 def grid_key(resolution: int, container_sha: str) -> str:
     return data_key(f"grids/h3-r{resolution}.{container_sha[:16]}.gosa")
 
@@ -216,20 +225,14 @@ def encode_export(in_dir: Path, out_dir: Path) -> dict[str, Any]:
     in_dir, out_dir = Path(in_dir), Path(out_dir)
     catalog = json.loads((in_dir / "catalog.json").read_text(encoding="utf-8"))
 
-    def read_verified(key: str, sha256: str) -> bytes:
-        data = (in_dir / data_key(key)).read_bytes()
-        if hashlib.sha256(data).hexdigest() != sha256:
-            raise ValueError(f"{in_dir / key}: sha256 does not match the catalog")
-        return data
-
     def load_surface(ref: Mapping[str, Any]) -> SurfaceSource:
-        data = read_verified(ref["surface_url"], ref["surface_sha256"])
+        data = read_verified(in_dir, ref["surface_url"], ref["surface_sha256"])
         return SurfaceSource(payload=json.loads(data), sha256=ref["surface_sha256"])
 
     def observations_size(ref: Mapping[str, Any]) -> int | None:
         if not ref["observations_available"]:
             return None
-        return len(read_verified(ref["observations_url"], ref["observations_sha256"]))
+        return len(read_verified(in_dir, ref["observations_url"], ref["observations_sha256"]))
 
     encoded = encode_catalog(
         catalog, out_dir=out_dir, load_surface=load_surface, observations_size=observations_size

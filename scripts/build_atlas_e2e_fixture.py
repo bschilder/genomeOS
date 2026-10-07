@@ -77,13 +77,6 @@ def select_observations(rows: Sequence[Mapping[str, Any]], budget: int = OBSERVA
     return nearest + _evenly(ordered[NEAREST_OBSERVATIONS:], budget - len(nearest))
 
 
-def _read(from_dir: Path, key: str, sha256: str) -> bytes:
-    data = (from_dir / encode_atlas_web.data_key(key)).read_bytes()
-    if hashlib.sha256(data).hexdigest() != sha256:
-        raise ValueError(f"{key}: sha256 does not match the source catalog")
-    return data
-
-
 def _sibling(path: Path, suffix: str) -> Path:
     """A hidden, unique sibling of the resolved ``path``: same filesystem, so renames are atomic."""
     return path.with_name(f".{path.name}.{os.getpid()}-{secrets.token_hex(4)}.{suffix}")
@@ -150,7 +143,9 @@ def _write_tree(
     subsets: dict[str, dict[str, Any]] = {}
     artifacts = []
     for ref in source["artifacts"]:
-        payload = json.loads(_read(from_dir, ref["surface_url"], ref["surface_sha256"]))
+        payload = json.loads(
+            encode_atlas_web.read_verified(from_dir, ref["surface_url"], ref["surface_sha256"])
+        )
         cells = payload["cells"]
         if grid is None:
             grid = [cell["h3_index"] for cell in cells]
@@ -162,7 +157,9 @@ def _write_tree(
         counts = Counter(cell["support"] for cell in subset)
         compact = {**ref, "n_cells": len(subset), "support_counts": dict(sorted(counts.items()))}
         if ref["observations_available"]:
-            observations = json.loads(_read(from_dir, ref["observations_url"], ref["observations_sha256"]))
+            observations = json.loads(
+                encode_atlas_web.read_verified(from_dir, ref["observations_url"], ref["observations_sha256"])
+            )
             kept = select_observations(observations["observations"], observation_budget)
             data = encode_atlas_web.canonical_bytes({**observations, "observations": kept})
             key = f"{ref['id']}.observations.json"

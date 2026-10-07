@@ -5,7 +5,8 @@ The same-input parity tests compare the legacy main-thread surface builder with 
 real cells. This script takes every cell of ``cyt-il-6-174-c`` under the twelve named, contiguous
 H3 resolution-1 parents below (northern Canada across Alaska to Chukotka, crossing ±180°), and
 refuses unless the subset holds all four support states and at least one value outside
-``metric_domains``. It writes the subset as a canonical surface JSON (the real artifact identity,
+``metric_domains``. The source surface and manifest must match the source catalog's sha256 before
+``--out`` is touched. It writes the subset as a canonical surface JSON (the real artifact identity,
 cells in grid order, values bit-for-bit), the artifact manifest, a one-artifact catalog with
 observations unavailable, and that tree's own grid, render and detail objects via
 ``encode_atlas_web.encode_export``, so the fixture survives the per-artifact files leaving git.
@@ -90,14 +91,12 @@ def build_subset(from_dir: Path, out: Path) -> dict[str, Any]:
     from_dir, out = Path(from_dir), Path(out)
     source = json.loads((from_dir / "catalog.json").read_text(encoding="utf-8"))
     ref = next(artifact for artifact in source["artifacts"] if artifact["id"] == ARTIFACT_ID)
-    full = (from_dir / encode_atlas_web.data_key(ref["surface_url"])).read_bytes()
-    if hashlib.sha256(full).hexdigest() != ref["surface_sha256"]:
-        raise ValueError(f"{ref['surface_url']}: sha256 does not match the source catalog")
-    payload = json.loads(full)
+    payload = json.loads(encode_atlas_web.read_verified(from_dir, ref["surface_url"], ref["surface_sha256"]))
     cells = subset_cells(payload)
-    manifest_key = ref["downloads"]["manifest"]["url"]
-    manifest = (from_dir / encode_atlas_web.data_key(manifest_key)).read_bytes()
-    prepare_out(out, source=from_dir)  # every source is read first; ``out`` may not overlap them
+    manifest_ref = ref["downloads"]["manifest"]
+    manifest_key = manifest_ref["url"]
+    manifest = encode_atlas_web.read_verified(from_dir, manifest_key, manifest_ref["sha256"])
+    prepare_out(out, source=from_dir)  # every source is read and verified first; ``out`` may not overlap
     surface = encode_atlas_web.canonical_bytes({**payload, "cells": cells})
     surface_key = f"{ARTIFACT_ID}.surface.json"
     (out / surface_key).write_bytes(surface)

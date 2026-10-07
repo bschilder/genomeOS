@@ -93,24 +93,40 @@ def test_script_reproduces_the_committed_subset(tmp_path: Path) -> None:
     assert _tree(tmp_path / "parity") == _tree(COMMITTED)
 
 
-def test_refuses_an_out_that_is_its_own_source(tmp_path: Path) -> None:
+def _synthetic_source(source: Path) -> Path:
+    """A 4-cell source tree that ``subset_cells`` accepts, with its catalog naming each file's sha256."""
     children = sorted(h3.cell_to_children(parity.PARITY_PARENTS[0], 4))[:4]
     states = ("observed", "interpolated", "prior_dominated", "unknown")
     cells = [_cell(child, state, post_sd=0.2) for child, state in zip(children, states, strict=True)]
     artifact = {"metric_domains": {"post_mean": [0.0, 0.5], "post_sd": [0.01, 0.1]}}
     surface = json.dumps({"artifact": artifact, "cells": cells}).encode()
-    source = tmp_path / "src"
+    manifest = b"{}"
     source.mkdir()
     (source / "surface.json").write_bytes(surface)
-    (source / "manifest.json").write_text("{}")
+    (source / "manifest.json").write_bytes(manifest)
     ref = {
-        "downloads": {"manifest": {"url": "manifest.json"}},
+        "downloads": {"manifest": {"sha256": hashlib.sha256(manifest).hexdigest(), "url": "manifest.json"}},
         "id": parity.ARTIFACT_ID,
         "surface_sha256": hashlib.sha256(surface).hexdigest(),
         "surface_url": "surface.json",
     }
     (source / "catalog.json").write_text(json.dumps({"artifacts": [ref]}))
+    return source
+
+
+def test_refuses_an_out_that_is_its_own_source(tmp_path: Path) -> None:
+    source = _synthetic_source(tmp_path / "src")
     before = _tree(source)
     with pytest.raises(ValueError, match="overlaps its source"):
         parity.build_subset(source, source)
     assert _tree(source) == before
+
+
+@pytest.mark.parametrize("key", ["surface.json", "manifest.json"])
+def test_refuses_a_source_file_that_does_not_match_the_source_catalog(tmp_path: Path, key: str) -> None:
+    source = _synthetic_source(tmp_path / "src")
+    (source / key).write_bytes((source / key).read_bytes() + b" ")
+    out = tmp_path / "out"
+    with pytest.raises(ValueError, match=f"{key}: sha256 does not match the catalog"):
+        parity.build_subset(source, out)
+    assert not out.exists()
