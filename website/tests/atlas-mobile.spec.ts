@@ -687,6 +687,130 @@ for (const phone of PHONE_PROFILES) {
       expect(variables.offset).toBe(variables.rest);
     });
 
+    test('a released drag carries the docked strips on from the finger', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const handle = sheet.locator('.atlas-sheet__handle');
+      const explorer = page.locator('.atlas-explorer');
+      const start = await sheetGeometry(page);
+      // Slow the document timeline 50× so the 220 ms release transitions are
+      // still running when they are sampled.
+      const cdp = await page.context().newCDPSession(page);
+      await cdp.send('Animation.enable');
+      await cdp.send('Animation.setPlaybackRate', { playbackRate: 0.02 });
+      const from = await centreOf(handle);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      await page.mouse.move(
+        from.x,
+        from.y - (start.explorerHeight / 2 - start.sheetHeight) / 2,
+        { steps: 6 },
+      );
+      await expect
+        .poll(() =>
+          explorer.evaluate((element) =>
+            Number.parseFloat(
+              element.style.getPropertyValue('--atlas-sheet-offset'),
+            ),
+          ),
+        )
+        .toBeGreaterThan(start.sheetHeight + 20);
+      await page.mouse.up();
+      // Each docked strip's gap to the sheet's top edge, sampled at the start
+      // and the middle of the release transitions and again at rest.
+      const release = await page.evaluate(() => {
+        const sheetElement = document.querySelector('aside.atlas-controls')!;
+        const strips = [
+          '.atlas-data-credit',
+          '.atlas-scene .cesium-viewer-bottom',
+          '.atlas-legend',
+        ];
+        const gaps = () => {
+          const top = sheetElement.getBoundingClientRect().top;
+          return strips.map((selector) => {
+            const rect = document
+              .querySelector(selector)
+              ?.getBoundingClientRect();
+            return rect && rect.height > 0 ? top - rect.bottom : null;
+          });
+        };
+        const transitions = document
+          .getAnimations()
+          .filter(
+            (animation): animation is CSSTransition =>
+              animation instanceof CSSTransition,
+          );
+        for (const transition of transitions) transition.pause();
+        const samples = [0, 110].map((time) => {
+          for (const transition of transitions) transition.currentTime = time;
+          return gaps();
+        });
+        for (const transition of transitions) transition.finish();
+        return {
+          properties: transitions.map(
+            (transition) => transition.transitionProperty,
+          ),
+          rest: gaps(),
+          samples,
+        };
+      });
+      expect(release.properties).toContain('height');
+      expect(release.rest.filter((gap) => gap !== null)).not.toHaveLength(0);
+      for (const sample of release.samples) {
+        sample.forEach((gap, strip) => {
+          const rest = release.rest[strip];
+          if (rest === null || rest === undefined) expect(gap).toBeNull();
+          else expect(Math.abs(gap! - rest)).toBeLessThanOrEqual(1.5);
+        });
+      }
+    });
+
+    test('leaving the phone layout mid-drag ends the drag', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const phoneViewport = page.viewportSize()!;
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const handle = sheet.locator('.atlas-sheet__handle');
+      const explorer = page.locator('.atlas-explorer');
+      const before = await sheetGeometry(page);
+      const from = await centreOf(handle);
+      const gesture = await startTouch(page, from);
+      for (let step = 1; step <= 4; step += 1) {
+        await gesture.move({ x: from.x, y: from.y - 15 * step });
+        await page.waitForTimeout(16);
+      }
+      await expect(explorer).toHaveAttribute('data-sheet-dragging', '');
+      // A rotation or a zoom across 52rem unmounts the handle under the
+      // finger, so its lostpointercapture fires at the document.
+      await page.setViewportSize({ height: phoneViewport.height, width: 1024 });
+      await expect(sheet).not.toHaveAttribute('data-sheet-state');
+      await expect(explorer).not.toHaveAttribute('data-sheet-dragging');
+      await gesture.end();
+      await page.setViewportSize(phoneViewport);
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      await expect
+        .poll(async () =>
+          Math.abs(
+            (await sheetGeometry(page)).sheetHeight - before.sheetHeight,
+          ),
+        )
+        .toBeLessThanOrEqual(1);
+      // Every touch has a fresh pointer id, so only a cleared session lets
+      // the next drag start.
+      const atPeek = await centreOf(handle);
+      await touchDrag(page, atPeek, {
+        x: atPeek.x,
+        y: atPeek.y - (before.explorerHeight / 2 - before.sheetHeight),
+      });
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+    });
+
     test('a one-finger drag at the centre turns the globe', async ({
       page,
     }) => {

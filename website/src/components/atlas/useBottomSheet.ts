@@ -163,14 +163,28 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
       writeSheetOffset(explorer, snaps.current[restState], true);
   };
 
-  const cancelDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+  // A drag that ends without pointerup returns to its pre-drag snap.
+  const abortDrag = () => {
     const session = drag.current;
-    if (!session || event.pointerId !== session.pointerId) return;
+    if (!session) return;
     drag.current = null;
-    if (event.currentTarget.hasPointerCapture(event.pointerId))
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (handle.current?.hasPointerCapture(session.pointerId))
+      handle.current.releasePointerCapture(session.pointerId);
     if (session.dragging) finishDrag(session.from);
   };
+
+  const cancelDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.pointerId === drag.current?.pointerId) abortDrag();
+  };
+
+  // Leaving the phone layout mid-drag unmounts the handle, and its
+  // lostpointercapture then fires at the document, out of React's reach, so
+  // the session ends here instead; otherwise the sheet keeps its drag height
+  // and ignores every later pointerdown.
+  useLayoutEffect(() => {
+    if (!enabled || !explorer) return;
+    return abortDrag;
+  }, [enabled, explorer]);
 
   const handleProps: SheetHandleProps = {
     ref: handleRef,

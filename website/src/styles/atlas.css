@@ -2397,7 +2397,9 @@ body:has(.atlas-explorer) .skip-link {
 
   .atlas-legend {
     bottom: calc(var(--atlas-sheet-rest) + var(--atlas-credit-height, 3.5rem));
-    transition: bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition:
+      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .atlas-scene .cesium-viewer-bottom {
@@ -2407,7 +2409,9 @@ body:has(.atlas-explorer) .skip-link {
     ) !important;
     left: max(0.65rem, env(safe-area-inset-left)) !important;
     max-width: none;
-    transition: bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition:
+      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .atlas-top-slot {
@@ -2430,12 +2434,16 @@ body:has(.atlas-explorer) .skip-link {
     transition: none;
   }
 
-  /* Docked strips stay at --atlas-sheet-rest and follow the drag on the compositor. */
+  /*
+   * Docked strips stay at --atlas-sheet-rest and follow the drag on the
+   * compositor. On release their bottom and translate ease together over the
+   * sheet's 220 ms height curve, so they glide on from the finger instead of
+   * jumping back to the old rest. The translate property leaves each strip's
+   * own transform alone.
+   */
   .atlas-explorer[data-sheet-dragging] :is(.atlas-legend, .atlas-data-credit),
   .atlas-explorer[data-sheet-dragging] .atlas-scene .cesium-viewer-bottom {
-    transform: translateY(
-      calc(var(--atlas-sheet-rest) - var(--atlas-sheet-offset))
-    );
+    translate: 0 calc(var(--atlas-sheet-rest) - var(--atlas-sheet-offset));
   }
 
   /* end of mobile sheet rules */
