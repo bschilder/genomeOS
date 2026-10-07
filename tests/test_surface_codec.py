@@ -444,3 +444,70 @@ def test_error_codes_are_a_closed_vocabulary() -> None:
     with pytest.raises(ValueError, match="unknown GOSA error code"):
         codec.GosaError("nearly", "not a code")
     assert len(set(codec.GOSA_ERROR_CODES)) == len(codec.GOSA_ERROR_CODES)
+
+
+def _ref(**changes: object) -> dict:
+    return {
+        **ARTIFACT,
+        "n_cells": 3,
+        "support_counts": {"observed": 1, "prior_dominated": 1, "unknown": 1},
+        "surface_sha256": SOURCE_SHA,
+    } | changes
+
+
+def _tiers() -> dict[str, codec.GosaContainer]:
+    return {
+        "grid": codec.decode(_grid(), tier="grid"),
+        "render": codec.decode(_render(), tier="render"),
+        "detail": codec.decode(_detail(), tier="detail"),
+    }
+
+
+def _context_code(ref: dict, grid_sha256: str | None = None, **tiers: codec.GosaContainer) -> str:
+    with pytest.raises(codec.GosaError) as error:
+        codec.verify_artifact_tiers(
+            ref=ref, grid_sha256=grid_sha256 or codec.grid_sha256(CELLS), **(_tiers() | tiers)
+        )
+    return error.value.code
+
+
+def test_tiers_verify_against_their_catalog_ref() -> None:
+    codec.verify_artifact_tiers(ref=_ref(), grid_sha256=codec.grid_sha256(CELLS), **_tiers())
+    # An explicit zero count and an absent state are the same declaration.
+    codec.verify_artifact_tiers(
+        ref=_ref(support_counts={"observed": 1, "interpolated": 0, "prior_dominated": 1, "unknown": 1}),
+        grid_sha256=codec.grid_sha256(CELLS),
+        **_tiers(),
+    )
+
+
+def test_context_refusals_use_their_own_codes() -> None:
+    assert _context_code(_ref(), grid_sha256="0" * 64) == "grid_sha256"
+    fields = {key: VALUES[key] for key in ("support", "post_mean", "post_sd")}
+    stray = codec.encode_render(  # the grid matches the catalog key; this render names another grid
+        artifact=ARTIFACT, source_surface_sha256=SOURCE_SHA, grid_sha256="c" * 64, **fields
+    )
+    assert _context_code(_ref(), render=codec.decode(stray, tier="render")) == "grid_sha256"
+    assert _context_code(_ref(n_cells=4)) == "n_cells"
+    assert _context_code(_ref(model_version="v2")) == "identity"
+    assert _context_code(_ref(label="Another label")) == "identity"
+    domains = {"post_mean": [0.0119, 0.1804], "post_sd": [0.0087, 0.03]}
+    assert _context_code(_ref(metric_domains=domains)) == "identity"
+    assert _context_code(_ref(surface_sha256="b" * 64)) == "source_sha256"
+    assert _context_code(_ref(support_counts={"observed": 3})) == "cross_tier"
+    nudged = [0.0154, *VALUES["post_sd"][1:]]  # a detail tier from different values
+    other = codec.decode(_detail(post_sd=nudged), tier="detail")
+    assert _context_code(_ref(), detail=other) == "cross_tier"
+    # A finite float64 past the float32 range is Infinity to Math.fround: cross_tier, not OverflowError.
+    huge = codec.decode(_detail(post_sd=[1e300, *VALUES["post_sd"][1:]]), tier="detail")
+    assert _context_code(_ref(), detail=huge) == "cross_tier"
+
+
+def test_container_digest_and_size_are_checked_before_decoding() -> None:
+    data = _render()
+    digest = hashlib.sha256(data).hexdigest()
+    assert codec.verify_container(data, tier="render", sha256=digest, size=len(data)).tier == "render"
+    for sha256, size in ((digest, len(data) + 1), ("0" * 64, len(data))):
+        with pytest.raises(codec.GosaError) as error:
+            codec.verify_container(data, tier="render", sha256=sha256, size=size)
+        assert error.value.code == "container_sha256"

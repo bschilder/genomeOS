@@ -496,3 +496,73 @@ def decode(data: bytes, *, tier: str) -> GosaContainer:
             if low > mean or mean > high:
                 raise GosaError("interval_order", f"row {row}: q025 <= post_mean <= q975 is required")
     return GosaContainer(tier, header, columns)
+
+
+def verify_container(data: bytes, *, tier: str, sha256: str, size: int) -> GosaContainer:
+    """Check a container against its catalog-declared digest and decoded size, then decode it."""
+    if len(data) != size or container_sha256(data) != sha256:
+        raise GosaError("container_sha256", f"{tier} container differs from its declared sha256/bytes")
+    return decode(data, tier=tier)
+
+
+def _f32_bits(values: Sequence[float]) -> bytes:
+    return struct.pack(f"<{len(values)}f", *values)
+
+
+#: The catalog-ref fields a payload must repeat (``static-provider.ts`` ``IDENTITY_FIELDS``).
+IDENTITY_FIELDS: tuple[str, ...] = (
+    "artifact_format", "data_version", "entity_type", "hf_dataset", "hf_revision", "id",
+    "measurement", "model_version", "registry_version", "resolution", "target_grid_source",
+    "target_grid_version", "variant_id",
+)
+
+
+def verify_artifact_tiers(
+    *,
+    grid: GosaContainer,
+    render: GosaContainer,
+    detail: GosaContainer,
+    ref: Mapping[str, Any],
+    grid_sha256: str,
+) -> None:
+    """Check decoded tiers against their catalog ``ref`` and each other (spec §B.2, §B.3).
+
+    ``ref`` is the catalog artifact entry (identity fields, ``n_cells``, ``surface_sha256``,
+    ``support_counts``); ``grid_sha256`` is the ``grids`` key it names. The TypeScript
+    ``decodeRender``/``decodeDetail`` run the same checks with the same codes, in this order.
+    """
+    if (grid.tier, render.tier, detail.tier) != TIERS:
+        raise ValueError("verify_artifact_tiers needs a grid, a render and a detail container")
+    if grid.header["grid_sha256"] != grid_sha256:
+        raise GosaError("grid_sha256", "grid header digest differs from the catalog grids key")
+    for container in (grid, render, detail):
+        if container.header["n_cells"] != ref["n_cells"]:
+            raise GosaError("n_cells", f"{container.tier} n_cells != catalog n_cells {ref['n_cells']}")
+    for container in (render, detail):
+        if container.header["grid_sha256"] != grid_sha256:
+            raise GosaError("grid_sha256", f"{container.tier} names a different grid")
+        artifact = container.header["artifact"]
+        for field in IDENTITY_FIELDS:
+            if artifact.get(field) != ref.get(field):
+                raise GosaError(
+                    "identity",
+                    f"Atlas artifact identity mismatch for {field}: requested {ref.get(field)}, "
+                    f"received {artifact.get(field)}",
+                )
+        for field in ("label", "metric_domains"):
+            if artifact[field] != ref[field]:
+                raise GosaError("identity", f"Atlas artifact identity mismatch for {field}")
+        if container.header["source_surface_sha256"] != ref["surface_sha256"]:
+            raise GosaError("source_sha256", f"{container.tier} source_surface_sha256 != surface_sha256")
+    for metric in ("post_mean", "post_sd"):
+        try:
+            same = _f32_bits(detail.columns[metric]) == _f32_bits(render.columns[metric])
+        except OverflowError:  # Math.fround rounds it to Infinity, which no decoded render value is
+            same = False
+        if not same:
+            raise GosaError("cross_tier", f"float32(detail.{metric}) differs from render.{metric}")
+    declared = ref["support_counts"]
+    for code, state in enumerate(SUPPORT_CODES):
+        count = render.columns["support"].count(code)
+        if count != declared.get(state, 0):
+            raise GosaError("cross_tier", f"support {state}: {count} cells, catalog {declared.get(state, 0)}")
