@@ -12,7 +12,6 @@ test.afterEach(async ({ page }) => {
 });
 
 async function chooseAtlasMap(page: Page, id: string): Promise<void> {
-  await expandExplorerSheet(page);
   await page
     .getByRole('button', { name: /Select dataset\. Current dataset:/ })
     .click();
@@ -482,6 +481,7 @@ test('application cards reveal on scroll and respond to hover', async ({
 
 test('explorer changes entity, metric, context, and elevation', async ({
   page,
+  isMobile,
 }) => {
   test.setTimeout(90_000);
   await page.goto('/app/');
@@ -527,15 +527,20 @@ test('explorer changes entity, metric, context, and elevation', async ({
   ).toHaveText(
     'Visualize measured and predicted allele frequencies across the world',
   );
-  const controlType = await controls.evaluate((element) => ({
-    field: Number.parseFloat(
-      getComputedStyle(element.querySelector('.atlas-field')!).fontSize,
-    ),
-    section: Number.parseFloat(
-      getComputedStyle(element.querySelector('.atlas-control-sheet > summary')!)
-        .fontSize,
-    ),
-  }));
+  const controlType = await page.evaluate((phone) => {
+    const field = document.querySelector(
+      phone
+        ? '.atlas-top-slot .atlas-field--entity'
+        : '.atlas-controls .atlas-field--entity',
+    );
+    const section = document.querySelector(
+      '.atlas-controls .atlas-control-sheet > summary',
+    );
+    return {
+      field: Number.parseFloat(getComputedStyle(field!).fontSize),
+      section: Number.parseFloat(getComputedStyle(section!).fontSize),
+    };
+  }, isMobile);
   expect(controlType.field).toBeCloseTo(13.25, 1);
   expect(controlType.section).toBeCloseTo(14.4, 1);
   await chooseAtlasMap(page, 'g6pd-deficiency');
@@ -570,6 +575,27 @@ test('explorer changes entity, metric, context, and elevation', async ({
   await expect(page.getByRole('radio', { name: 'Perspective' })).toBeChecked();
   await expect(page).toHaveURL(/entity=g6pd-deficiency/);
   await expect(page).toHaveURL(/metric=post_sd/);
+});
+
+test('desktop keeps the selector in the dock and the top slot empty', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'the top selector slot is filled only on phones');
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-top-slot')).toBeEmpty();
+  await expect(
+    page
+      .getByRole('complementary', { name: 'Explorer controls' })
+      .getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+  ).toBeVisible();
+  await expect(page.locator('.atlas-controls__intro h1')).toHaveCount(1);
+  await expect(
+    page.locator('aside.atlas-controls[data-sheet-state]'),
+  ).toHaveCount(0);
 });
 
 test('explorer switches among globe, map, and perspective views', async ({
@@ -916,7 +942,6 @@ test('explorer groups and explains maps before selection', async ({ page }) => {
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
-  await expandExplorerSheet(page);
 
   await page.getByRole('button', { name: /Select dataset/i }).click();
   const picker = page.getByRole('dialog', { name: 'Select dataset' });

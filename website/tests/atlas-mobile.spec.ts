@@ -376,6 +376,144 @@ for (const phone of PHONE_PROFILES) {
       );
       expect(duration).toBeLessThan(0.001);
     });
+
+    test('the dataset selector sits on top while the sheet is at peek', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      await expect(controlsSheet(page)).toHaveAttribute(
+        'data-sheet-state',
+        'peek',
+      );
+      const trigger = page.getByRole('button', {
+        name: /Select dataset\. Current dataset:/,
+      });
+      await expect(trigger).toBeVisible();
+      await expect(
+        page
+          .locator('.atlas-top-slot')
+          .getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+      ).toHaveCount(1);
+      const placement = await trigger.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const explorer = document.querySelector('.atlas-explorer')!;
+        const bounds = explorer.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return {
+          firstChild:
+            explorer.firstElementChild?.classList.contains('atlas-top-slot') ??
+            false,
+          hitsTrigger: hit !== null && element.contains(hit),
+          topFraction: (rect.bottom - bounds.top) / bounds.height,
+        };
+      });
+      expect(placement).toEqual({
+        firstChild: true,
+        hitsTrigger: true,
+        topFraction: expect.any(Number),
+      });
+      expect(placement.topFraction).toBeLessThan(0.2);
+      await trigger.click();
+      await expect(
+        page.getByRole('dialog', { name: 'Select dataset' }),
+      ).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(trigger).toBeFocused();
+    });
+
+    test('Tab from the header reaches the selector before the globe', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      await page.locator('.mobile-nav summary').focus();
+      await page.keyboard.press('Tab');
+      await expect(
+        page.getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+      ).toBeFocused();
+      await page.keyboard.press('Tab');
+      await expect(page.locator('.atlas-scene')).toBeFocused();
+      // Cesium's attribution links are focusable descendants of the canvas region
+      // (its bottomContainer stays inside .atlas-scene, §A.1.7), so they come
+      // between the canvas and the sheet. Walk them, allowing nothing else, and
+      // stop at the first focus target outside them; a loop rather than a fixed
+      // count, because map credits and "Data attribution" load asynchronously.
+      const visited: string[] = [];
+      for (let step = 0; step < 12; step += 1) {
+        await page.keyboard.press('Tab');
+        const inCredits = await page.evaluate(
+          () =>
+            document.activeElement?.closest(
+              '.atlas-scene .cesium-viewer-bottom',
+            ) != null,
+        );
+        if (!inCredits) break;
+        visited.push(
+          await page.evaluate(
+            () =>
+              document.activeElement?.textContent?.trim() ||
+              document.activeElement?.tagName ||
+              '',
+          ),
+        );
+      }
+      expect(visited.length).toBeGreaterThan(0); // the Cesium logo is always an in-scene link
+      await expect(
+        controlsSheet(page).locator('.atlas-sheet__handle'),
+      ).toBeFocused();
+    });
+
+    test('one visually hidden h1 and no duplicated controls', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      await expect(page.locator('h1')).toHaveCount(1);
+      await expect(
+        page.locator('.atlas-top-slot > h1.visually-hidden'),
+      ).toHaveCount(1);
+      await expect(
+        page.getByRole('heading', {
+          level: 1,
+          name: 'Explore human genetic variation',
+        }),
+      ).toHaveCount(1);
+      await expect(page.locator('#atlas-earth-opacity')).toHaveCount(1);
+      await expect(page.locator('#atlas-sampling-areas')).toHaveCount(1);
+      await expect(page.locator('input[name="metric"]')).toHaveCount(2);
+      await expect(
+        page.getByRole('complementary', { name: 'Explorer controls' }),
+      ).toHaveCount(1);
+      await expect(
+        controlsSheet(page).locator('.atlas-field--entity'),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('button', { name: 'About map selection' }),
+      ).toHaveCount(1);
+      await expect(
+        page
+          .locator('.atlas-sheet__handle-row')
+          .getByRole('button', { name: 'About map selection' }),
+      ).toHaveCount(1);
+    });
+
+    test('a warning banner pushes the selector below it', async ({ page }) => {
+      await page.goto(
+        '/app/?entity=hbs-rs334&version=v1%2Fmap-2026-08&metric=post_mean',
+      );
+      await waitForAtlasReady(page);
+      const banner = page.locator('.atlas-warning-banner');
+      await expect(banner).toBeVisible();
+      const [bannerBox, slotBox] = await Promise.all([
+        banner.boundingBox(),
+        page.locator('.atlas-top-slot').boundingBox(),
+      ]);
+      expect(bannerBox!.y + bannerBox!.height).toBeLessThanOrEqual(slotBox!.y);
+    });
   });
 }
 

@@ -53,6 +53,7 @@ import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
+import { ControlsLoading } from './ExplorerHeading';
 import { HoverPreview } from './HoverPreview';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 import { nextPaint, useAtlasActivity } from './useAtlasActivity';
@@ -104,6 +105,7 @@ export default function AtlasExplorer({
   const [viewNotice, setViewNotice] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [explorerNode, setExplorerNode] = useState<HTMLDivElement | null>(null);
+  const [topSlot, setTopSlot] = useState<HTMLDivElement | null>(null);
   const {
     activity,
     begin: beginActivity,
@@ -616,6 +618,7 @@ export default function AtlasExplorer({
         aria-label="genomeOS globe explorer"
         ref={setExplorerNode}
       >
+        <div className="atlas-top-slot" ref={setTopSlot} />
         <div
           className="atlas-scene"
           ref={sceneElement}
@@ -631,6 +634,7 @@ export default function AtlasExplorer({
             state={state}
             disabled={false}
             explorer={explorerNode}
+            topSlot={topSlot}
             onEntity={chooseEntity}
             onExternalInfo={(source, signal) => {
               const selected = catalog.artifacts.find(
@@ -710,13 +714,7 @@ export default function AtlasExplorer({
             onZoom={(direction) => scene.current?.zoom(direction)}
           />
         ) : (
-          <aside className="atlas-controls atlas-controls--loading">
-            <p className="atlas-kicker atlas-kicker--brand">
-              <span className="brand-name">genomeOS</span> Atlas
-            </p>
-            <h1>Explore human genetic variation</h1>
-            <p>Loading the public catalog…</p>
-          </aside>
+          <ControlsLoading />
         )}
 
         <AtlasStatus

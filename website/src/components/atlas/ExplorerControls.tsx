@@ -1,5 +1,7 @@
 /** Accessible explorer controls for Atlas design §11. */
 
+import { createPortal } from 'react-dom';
+
 import type { AtlasCatalog, ExternalInfo } from '../../atlas/contracts';
 import type {
   ObservationColorVariable,
@@ -25,6 +27,8 @@ import { InferredSurfaceControls } from './InferredSurfaceControls';
 import { MapStyleControls } from './MapStyleControls';
 import { MapCatalogPicker } from './MapCatalogPicker';
 import { ObservationControls } from './ObservationControls';
+import { ExplorerHeading } from './ExplorerHeading';
+import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
 
 interface ExplorerControlsProps {
   capabilities: SceneCapabilities;
@@ -33,6 +37,7 @@ interface ExplorerControlsProps {
   state: ExplorerState;
   disabled: boolean;
   explorer: HTMLElement | null;
+  topSlot: HTMLElement | null;
   onBasemap: (value: BasemapId) => void;
   onBasemapBrightness: (value: number) => void;
   onBasemapOpacity: (value: number) => void;
@@ -99,6 +104,7 @@ export function ExplorerControls({
   state,
   disabled,
   explorer,
+  topSlot,
   onBasemap,
   onBasemapBrightness,
   onBasemapOpacity,
@@ -143,34 +149,56 @@ export function ExplorerControls({
   const sheetSummary = `${selectedArtifact?.label ?? state.entityId} · ${
     state.metric === 'post_mean' ? 'Posterior estimate' : 'Uncertainty'
   }`;
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  const topSlotTarget = isMobile ? topSlot : null;
+  const datasetTip = (
+    <InfoTip label="map selection">
+      Choose a versioned genetic variant, allele, gene, or phenotype map from
+      the public genomeOS catalog.
+    </InfoTip>
+  );
+  const picker = (
+    <MapCatalogPicker
+      catalog={catalog}
+      disabled={disabled}
+      selectedId={state.entityId}
+      onSelect={onEntity}
+    />
+  );
 
   return (
-    <ControlsSheet explorer={explorer} summary={sheetSummary}>
+    <ControlsSheet
+      explorer={explorer}
+      peekExtra={topSlotTarget ? datasetTip : undefined}
+      summary={sheetSummary}
+    >
       <div className="atlas-controls__intro">
         <p className="atlas-kicker atlas-kicker--brand">
           <span className="brand-name">genomeOS</span> Atlas
         </p>
-        <h1>Explore human genetic variation</h1>
+        {!topSlotTarget && <ExplorerHeading />}
         <p>
           Visualize measured and predicted allele frequencies across the world
         </p>
       </div>
 
-      <div className="atlas-field atlas-field--entity">
-        <span className="atlas-field__title">
-          <span>Select dataset</span>
-          <InfoTip label="map selection">
-            Choose a versioned genetic variant, allele, gene, or phenotype map
-            from the public genomeOS catalog.
-          </InfoTip>
-        </span>
-        <MapCatalogPicker
-          catalog={catalog}
-          disabled={disabled}
-          selectedId={state.entityId}
-          onSelect={onEntity}
-        />
-      </div>
+      {topSlotTarget ? (
+        createPortal(
+          <>
+            <ExplorerHeading />
+            <div className="atlas-field atlas-field--entity">{picker}</div>
+          </>,
+          topSlotTarget,
+        )
+      ) : (
+        <div className="atlas-field atlas-field--entity">
+          <span className="atlas-field__title">
+            <span>Select dataset</span>
+            {datasetTip}
+          </span>
+          {picker}
+        </div>
+      )}
 
       {selectedArtifact && (
         <ExternalInfoPanel artifact={selectedArtifact} load={onExternalInfo} />

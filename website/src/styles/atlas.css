@@ -70,6 +70,7 @@ html.atlas-page .site-header--compact .site-header__inner {
 }
 
 .atlas-controls,
+.atlas-top-slot,
 .atlas-legend,
 .atlas-right-rail,
 .atlas-hover-preview,
@@ -2012,23 +2013,6 @@ body:has(.atlas-explorer) .skip-link {
     font-size: 1rem;
   }
 
-  .atlas-controls__intro {
-    padding-bottom: 0.65rem;
-  }
-
-  .atlas-controls h1 {
-    max-width: 17ch;
-    font-size: 1.55rem;
-  }
-
-  .atlas-controls__intro > p:last-child {
-    display: none;
-  }
-
-  .atlas-field--entity {
-    margin-block: 0.65rem;
-  }
-
   .atlas-control-sheet__body {
     grid-template-columns: 1fr 1fr;
     gap: 0.7rem;
@@ -2125,19 +2109,21 @@ body:has(.atlas-explorer) .skip-link {
   font-size: 0.8rem;
 }
 
-.atlas-controls .atlas-field {
+:is(.atlas-controls, .atlas-top-slot) .atlas-field {
   font-size: 0.736rem;
 }
 
-.atlas-controls .atlas-map-catalog__trigger small {
+:is(.atlas-controls, .atlas-top-slot) .atlas-map-catalog__trigger small {
   font-size: 0.544rem;
 }
 
-.atlas-controls .atlas-map-catalog__trigger strong {
+:is(.atlas-controls, .atlas-top-slot) .atlas-map-catalog__trigger strong {
   font-size: 0.72rem;
 }
 
-.atlas-controls .atlas-map-catalog__trigger > span:last-child {
+:is(.atlas-controls, .atlas-top-slot)
+  .atlas-map-catalog__trigger
+  > span:last-child {
   font-size: 0.96rem;
 }
 
@@ -2183,7 +2169,7 @@ body:has(.atlas-explorer) .skip-link {
   font-size: 0.8rem;
 }
 
-.atlas-controls .atlas-info-tip__trigger {
+:is(.atlas-controls, .atlas-top-slot) .atlas-info-tip__trigger {
   font-size: 0.56rem;
 }
 
@@ -2304,7 +2290,7 @@ body:has(.atlas-explorer) .skip-link {
     --atlas-sheet-offset: 4.5rem;
     --atlas-sheet-rest: 4.5rem;
     --atlas-top-slot-top: 0.65rem;
-    --atlas-top-slot-height: 0rem;
+    --atlas-top-slot-height: 3.25rem;
   }
 
   .atlas-explorer:has(> .atlas-warning-banner) {
@@ -2420,6 +2406,20 @@ body:has(.atlas-explorer) .skip-link {
     left: max(0.65rem, env(safe-area-inset-left)) !important;
     max-width: none;
     transition: bottom 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-top-slot {
+    top: var(--atlas-top-slot-top);
+    right: max(0.65rem, env(safe-area-inset-right));
+    left: max(0.65rem, env(safe-area-inset-left));
+  }
+
+  .atlas-top-slot .atlas-field--entity {
+    margin: 0;
+  }
+
+  .atlas-sheet__body > .atlas-controls__intro {
+    display: none;
   }
 
   /* end of mobile sheet rules */

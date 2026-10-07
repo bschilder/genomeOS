@@ -90,8 +90,8 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
    `getServerSnapshot = () => false`. The "Select dataset" title is not repeated (the trigger's
    aria-label starts with it); the dataset InfoTip moves into the sheet's peek row. The dense trigger
    and InfoTip rules (`atlas.css` ~2136–2146, 2190–2192) are re-scoped to
-   `:is(.atlas-controls, .atlas-top-slot)`. Focus order on mobile: header → selector → canvas →
-   sheet.
+   `:is(.atlas-controls, .atlas-top-slot)`. Focus order on mobile: header → selector → canvas
+   (then its in-scene Cesium attribution links) → sheet.
 5. **The controls bottom sheet.** `aside.atlas-controls` is restyled in place as a bottom sheet with
    states `peek | half | full`, exposed as `data-sheet-state` on the sheet root.
    - **Handle**: a `<button>` outside every inert region, `aria-controls` the sheet body,
