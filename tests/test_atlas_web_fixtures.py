@@ -8,6 +8,7 @@ import json
 import shutil
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 import h3
 import pytest
@@ -108,9 +109,10 @@ def test_golden_objects_re_encode_byte_for_byte_from_the_json() -> None:
             post_mean=[cell["post_mean"] for cell in cells],
             post_sd=[cell["post_sd"] for cell in cells],
         )
-        detail = codec.encode_detail(
-            **common, **{field: [cell[field] for cell in cells] for field in codec.DETAIL_FIELDS}
-        )
+        # Declared ``Any``-valued so pyright does not check these lists against the ``artifact`` and
+        # ``*_sha256`` parameters, which ``**common`` supplies.
+        columns: dict[str, Any] = {field: [cell[field] for cell in cells] for field in codec.DETAIL_FIELDS}
+        detail = codec.encode_detail(**common, **columns)
         for tier, data in (("render", render), ("detail", detail)):
             declared = ref["web"][tier]
             assert data == (EXPORT / declared["url"]).read_bytes(), f"{ref['id']} {tier}"
@@ -145,9 +147,10 @@ def test_every_golden_object_re_encodes_byte_for_byte_from_its_decoded_container
                     post_sd=list(decoded.columns["post_sd"]),
                 )
             else:
-                again = codec.encode_detail(
-                    **common, **{field: list(decoded.columns[field]) for field in codec.DETAIL_FIELDS}
-                )
+                columns: dict[str, Any] = {
+                    field: list(decoded.columns[field]) for field in codec.DETAIL_FIELDS
+                }
+                again = codec.encode_detail(**common, **columns)
             assert again == data, f"{ref['id']} {tier}"
 
 

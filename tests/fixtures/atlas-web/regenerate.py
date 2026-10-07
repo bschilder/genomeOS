@@ -8,8 +8,10 @@ Writes, from the two hand-written ten-cell surfaces below:
 - ``tests/fixtures/atlas-web/export/``: a real ``export_atlas_web.py`` export of a resolution-3
   store, then encoded in place by ``encode_atlas_web.py`` (golden ``.gosa`` objects plus the
   encoded ``catalog.json``);
-- ``tests/fixtures/atlas-web/mutations/``: the shared mutation corpus, one hard error per file,
-  with ``manifest.json`` naming each file's base object, requested tier and expected error code;
+- ``tests/fixtures/atlas-web/mutations/``: the shared mutation corpus, one targeted mutation per
+  file, with ``manifest.json`` naming each file's base object, requested tier and expected error
+  code. That code is the first check the file fails in the interface contract's check order; a
+  file may also break later checks, which a conforming decoder never reaches;
 - ``website/tests/fixtures/atlas/golden/``: byte-identical copies of both trees for vitest.
 
 The cells are SYNTHETIC contract fixtures, not scientific results. They sit around Madrid (the
@@ -289,7 +291,12 @@ def _header(data: bytes, path: tuple[Any, ...], value: Any) -> bytes:
 
 
 def mutation_corpus(grid: bytes, render: bytes, detail: bytes) -> dict[str, tuple[str, str, bytes]]:
-    """``name -> (requested tier, expected GosaError code, bytes)``; one hard error per file."""
+    """``name -> (requested tier, expected GosaError code, bytes)``; one targeted mutation per file.
+
+    The code is the first check the file fails in the contract's check order, not its only
+    failure: ``detail-post-mean-above-one`` also breaks ``interval_order``, and
+    ``grid-msb-first-planes`` also yields invalid cells and a ``grid_sha256`` mismatch.
+    """
     cells = [int(cell, 16) for cell in CELLS]
     head, last = cells[:-1], cells[-1]
     header_end = 12 + struct.unpack_from("<I", render, 8)[0]
