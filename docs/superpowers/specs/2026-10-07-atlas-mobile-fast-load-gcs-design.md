@@ -166,8 +166,8 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
    `keydown` listener that closes the top layer and calls `preventDefault()`; pickers, panels,
    popovers and the sheets register and unregister their close callbacks. The independent window
    listeners (`AtlasExplorer.tsx` ~606–615, `ExternalInfoPanel.tsx` ~245–251) are replaced. The
-   sheet handle's own keyboard handling is an `onKeyDown` on the handle button (no children, so
-   portal bubbling cannot reach it).
+   sheet handle's own keyboard handling is an `onKeyDown`/`onKeyUp` on the handle button (`onKeyUp`
+   only cancels Space's native keyup activation) (no children, so portal bubbling cannot reach it).
 10. **Touch targets (WCAG 2.2 SC 2.5.8 as axe measures it).** Every enabled interactive target in
     the explorer is ≥ 24 × 24 CSS px or has a non-overlapping 24 px circle. InfoTip triggers and the
     legend summary keep their glyph but grow to a ≥ 24 px box via padding/min-size **on desktop

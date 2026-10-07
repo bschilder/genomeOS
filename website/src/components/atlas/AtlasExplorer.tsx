@@ -103,6 +103,7 @@ export default function AtlasExplorer({
   const [webglFailed, setWebglFailed] = useState(false);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(false);
+  const [explorerNode, setExplorerNode] = useState<HTMLDivElement | null>(null);
   const {
     activity,
     begin: beginActivity,
@@ -613,6 +614,7 @@ export default function AtlasExplorer({
         data-atlas-ready={status === 'ready' ? 'true' : 'false'}
         role="application"
         aria-label="genomeOS globe explorer"
+        ref={setExplorerNode}
       >
         <div
           className="atlas-scene"
@@ -628,6 +630,7 @@ export default function AtlasExplorer({
             dataBaseUrl={dataBaseUrl}
             state={state}
             disabled={false}
+            explorer={explorerNode}
             onEntity={chooseEntity}
             onExternalInfo={(source, signal) => {
               const selected = catalog.artifacts.find(

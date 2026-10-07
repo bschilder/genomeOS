@@ -18,6 +18,7 @@ import type {
   TerrainId,
 } from '../../atlas/url-state';
 import type { Metric, PaletteId } from '../../atlas/visual-encoding';
+import { ControlsSheet } from './ControlsSheet';
 import { InfoTip } from './InfoTip';
 import { ExternalInfoPanel } from './ExternalInfoPanel';
 import { InferredSurfaceControls } from './InferredSurfaceControls';
@@ -31,6 +32,7 @@ interface ExplorerControlsProps {
   dataBaseUrl: string;
   state: ExplorerState;
   disabled: boolean;
+  explorer: HTMLElement | null;
   onBasemap: (value: BasemapId) => void;
   onBasemapBrightness: (value: number) => void;
   onBasemapOpacity: (value: number) => void;
@@ -96,6 +98,7 @@ export function ExplorerControls({
   dataBaseUrl,
   state,
   disabled,
+  explorer,
   onBasemap,
   onBasemapBrightness,
   onBasemapOpacity,
@@ -137,9 +140,12 @@ export function ExplorerControls({
     selectedArtifact?.observations_available !== false;
   const downloadUrl = (path: string) =>
     `${dataBaseUrl.endsWith('/') ? dataBaseUrl : `${dataBaseUrl}/`}${path.replace(/^\/+/, '')}`;
+  const sheetSummary = `${selectedArtifact?.label ?? state.entityId} · ${
+    state.metric === 'post_mean' ? 'Posterior estimate' : 'Uncertainty'
+  }`;
 
   return (
-    <aside className="atlas-controls" aria-label="Explorer controls">
+    <ControlsSheet explorer={explorer} summary={sheetSummary}>
       <div className="atlas-controls__intro">
         <p className="atlas-kicker atlas-kicker--brand">
           <span className="brand-name">genomeOS</span> Atlas
@@ -398,6 +404,6 @@ export function ExplorerControls({
           </p>
         </details>
       </div>
-    </aside>
+    </ControlsSheet>
   );
 }

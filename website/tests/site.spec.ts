@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
+import { expandExplorerSheet } from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
 
 test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
@@ -11,6 +12,7 @@ test.afterEach(async ({ page }) => {
 });
 
 async function chooseAtlasMap(page: Page, id: string): Promise<void> {
+  await expandExplorerSheet(page);
   await page
     .getByRole('button', { name: /Select dataset\. Current dataset:/ })
     .click();
@@ -486,6 +488,7 @@ test('explorer changes entity, metric, context, and elevation', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   const layers = page.getByRole('group', { name: 'Layers' });
   await expect(
@@ -578,6 +581,7 @@ test('explorer switches among globe, map, and perspective views', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
   });
+  await expandExplorerSheet(page);
   await page.locator('summary').filter({ hasText: /^Map$/ }).click();
   await page
     .locator('summary')
@@ -624,6 +628,7 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await expect(
     page.getByRole('button', { name: /Select dataset\. Current dataset:/ }),
@@ -697,6 +702,7 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
   await expect(page.locator('[data-atlas-status-slot]')).toContainText(
     'Atlas ready',
   );
@@ -910,6 +916,7 @@ test('explorer groups and explains maps before selection', async ({ page }) => {
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await page.getByRole('button', { name: /Select dataset/i }).click();
   const picker = page.getByRole('dialog', { name: 'Select dataset' });
@@ -1038,6 +1045,7 @@ test('explorer offers the full basemap and terrain gallery', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await page.locator('summary').filter({ hasText: /^Map$/ }).click();
   await page
@@ -1081,6 +1089,7 @@ test('left control sections expand and collapse with motion', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   const sheet = page
     .locator('details.atlas-control-sheet')
@@ -1109,6 +1118,7 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await page.locator('.atlas-downloads > summary').click();
   await expect(

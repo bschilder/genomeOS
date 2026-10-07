@@ -2,7 +2,11 @@ import { expect, test } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 import {
+  controlsSheet,
+  dockedStackInOrder,
   PHONE_PROFILES,
+  setSheetState,
+  sheetGeometry,
   skipUnlessProject,
   waitForAtlasReady,
 } from './atlas-mobile-helpers';
@@ -114,6 +118,204 @@ for (const phone of PHONE_PROFILES) {
       expect(
         Math.abs(shell.explorerBottom - shell.innerHeight),
       ).toBeLessThanOrEqual(0.5);
+    });
+
+    test('controls sheet cycles by tap and keyboard with named states', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const handle = sheet.locator('.atlas-sheet__handle');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      await expect(handle).toHaveAccessibleName('Explorer controls, peek');
+      await expect(handle).toHaveAttribute('aria-expanded', 'false');
+      const bodyId = await handle.getAttribute('aria-controls');
+      expect(bodyId).toBeTruthy();
+      await expect(page.locator(`[id="${bodyId}"]`)).toHaveClass(
+        /atlas-sheet__body/,
+      );
+
+      await handle.tap();
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+      await expect(handle).toHaveAccessibleName(
+        'Explorer controls, half height',
+      );
+      await expect(handle).toHaveAttribute('aria-expanded', 'true');
+
+      await handle.focus();
+      await page.keyboard.press('Enter');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'full');
+      await expect(handle).toHaveAccessibleName(
+        'Explorer controls, full height',
+      );
+      await expect(handle).toHaveAttribute('aria-expanded', 'true');
+      await expect(handle).toBeFocused();
+
+      await page.keyboard.press('Enter');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      await expect(handle).toHaveAttribute('aria-expanded', 'false');
+      await expect(handle).toBeFocused();
+      await page.keyboard.press('Space');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'half');
+
+      // Space straight after a touch tap advances exactly once: Chromium still
+      // dispatches a native click on Space keyup while the tapped button is
+      // :active, and onKeyUp cancels it (a second advance would land on 'half').
+      await handle.tap();
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'full');
+      await handle.focus();
+      await page.keyboard.press('Space');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+    });
+
+    test('peek keeps the globe open and the sheet body inert', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      await expect
+        .poll(async () => {
+          const geometry = await sheetGeometry(page);
+          return (
+            geometry.sheetHeight >= 56 &&
+            geometry.sheetHeight <= geometry.explorerHeight * 0.18 &&
+            Math.abs(
+              geometry.sheetTop +
+                geometry.sheetHeight -
+                geometry.explorerBottom,
+            ) <= 1
+          );
+        })
+        .toBe(true);
+      await expect(sheet.locator('.atlas-sheet__body')).toHaveAttribute(
+        'inert',
+        '',
+      );
+      const summary = sheet.locator('.atlas-sheet__summary');
+      await expect(summary).toHaveText('HbS (rs334) · Posterior estimate');
+      await expect(
+        summary.locator(
+          'a, button, input, select, textarea, details, [tabindex]',
+        ),
+      ).toHaveCount(0);
+
+      await sheet.locator('.atlas-sheet__handle').focus();
+      let leftSheet = false;
+      for (let press = 0; press < 3; press += 1) {
+        await page.keyboard.press('Tab');
+        const focus = await page.evaluate(() => ({
+          inBody: Boolean(
+            document.activeElement?.closest('.atlas-sheet__body'),
+          ),
+          inSheet: Boolean(
+            document.activeElement?.closest('aside.atlas-controls'),
+          ),
+        }));
+        expect(focus.inBody).toBe(false);
+        if (!focus.inSheet) leftSheet = true;
+      }
+      expect(leftSheet).toBe(true);
+    });
+
+    test('half and full scroll the sheet body instead of moving it off-screen', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const body = sheet.locator('.atlas-sheet__body');
+
+      await setSheetState(sheet, 'half');
+      await expect
+        .poll(async () => {
+          const geometry = await sheetGeometry(page);
+          return Math.abs(geometry.sheetHeight - geometry.explorerHeight / 2);
+        })
+        .toBeLessThanOrEqual(2);
+      await expect(body).not.toHaveAttribute('inert', '');
+      await expect(
+        sheet.locator('details.atlas-control-sheet').filter({
+          has: page.locator('summary', { hasText: /^Scientific layers$/ }),
+        }),
+      ).toHaveAttribute('open', '');
+
+      await setSheetState(sheet, 'full');
+      await expect
+        .poll(async () => {
+          const geometry = await sheetGeometry(page);
+          return (
+            geometry.sheetHeight > geometry.explorerHeight / 2 + 2 &&
+            geometry.sheetHeight <= geometry.explorerHeight * 0.88 + 1
+          );
+        })
+        .toBe(true);
+      const scroll = await body.evaluate((element) => ({
+        overflowY: getComputedStyle(element).overflowY,
+        overscroll: getComputedStyle(element).overscrollBehaviorY,
+      }));
+      expect(scroll).toEqual({ overflowY: 'auto', overscroll: 'contain' });
+      const keys = sheet.locator('.atlas-keyboard-help summary');
+      await keys.scrollIntoViewIfNeeded();
+      const [keysBox, bodyBox, geometry] = await Promise.all([
+        keys.boundingBox(),
+        body.boundingBox(),
+        sheetGeometry(page),
+      ]);
+      expect(keysBox!.y).toBeGreaterThanOrEqual(bodyBox!.y - 1);
+      expect(keysBox!.y + keysBox!.height).toBeLessThanOrEqual(
+        bodyBox!.y + bodyBox!.height + 1,
+      );
+      expect(bodyBox!.y + bodyBox!.height).toBeLessThanOrEqual(
+        geometry.explorerBottom + 1,
+      );
+    });
+
+    test('entering peek moves focus to the handle before the body goes inert', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      await setSheetState(sheet, 'full');
+      await sheet
+        .locator('summary', { hasText: /^Scientific layers$/ })
+        .focus();
+      await page.keyboard.press('Escape');
+      await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      await expect(sheet.locator('.atlas-sheet__handle')).toBeFocused();
+      await expect(sheet.locator('.atlas-sheet__body')).toHaveAttribute(
+        'inert',
+        '',
+      );
+    });
+
+    test('the legend and credits dock above the sheet in every state', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      for (const state of ['peek', 'half', 'full'] as const) {
+        await setSheetState(sheet, state);
+        await expect.poll(() => dockedStackInOrder(page)).toBe(true);
+      }
+    });
+
+    test('reduced motion snaps the sheet without animation', async ({
+      page,
+    }) => {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const duration = await controlsSheet(page).evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).transitionDuration),
+      );
+      expect(duration).toBeLessThan(0.001);
     });
   });
 }
