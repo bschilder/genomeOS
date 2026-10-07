@@ -983,9 +983,13 @@ test('each Escape closes only the innermost explorer layer', async ({
     .click();
   const catalog = page.getByRole('dialog', { name: 'Select dataset' });
   await expect(catalog).toBeVisible();
+  // The legend popover closes from inside the catalog without pulling focus out of it.
+  const catalogSearch = catalog.getByRole('searchbox', { name: 'Search maps' });
+  await expect(catalogSearch).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(legendInfo).not.toHaveAttribute('open', '');
   await expect(catalog).toBeVisible();
+  await expect(catalogSearch).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(catalog).toHaveCount(0);
   await expect(externalPanel).toBeVisible();

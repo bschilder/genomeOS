@@ -28,9 +28,17 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   useEscapeLayer(
     infoOpen,
     () => {
+      // Focus returns to the summary only from the legend itself or from <body>: an
+      // Escape pressed inside another layer (the catalog's search box) closes the
+      // popover without pulling focus out of that layer.
+      const focused = document.activeElement;
+      const returnFocus =
+        !focused ||
+        focused === document.body ||
+        Boolean(details.current?.contains(focused));
       if (details.current) details.current.open = false;
       setInfoOpen(false);
-      summary.current?.focus();
+      if (returnFocus) summary.current?.focus();
     },
     'popover',
   );
