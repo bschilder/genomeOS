@@ -5,7 +5,6 @@ import {
   externalInfoSchema,
   observationArtifactSchema,
   surfaceArtifactSchema,
-  type ArtifactIdentity,
   type ArtifactRef,
   type AtlasCatalog,
   type ObservationArtifact,
@@ -14,33 +13,7 @@ import {
 } from './contracts';
 import type { AtlasDataProvider } from './provider';
 import type { TransferProgressListener } from './progress';
-
-const IDENTITY_FIELDS = [
-  'artifact_format',
-  'data_version',
-  'entity_type',
-  'hf_dataset',
-  'hf_revision',
-  'id',
-  'measurement',
-  'model_version',
-  'registry_version',
-  'resolution',
-  'target_grid_source',
-  'target_grid_version',
-  'variant_id',
-] as const satisfies readonly (keyof ArtifactIdentity)[];
-
-function assertIdentity(ref: ArtifactRef, loaded: ArtifactIdentity): void {
-  for (const field of IDENTITY_FIELDS) {
-    if (loaded[field] !== ref[field]) {
-      throw new Error(
-        `Atlas artifact identity mismatch for ${field}: requested ${String(ref[field])}, ` +
-          `received ${String(loaded[field])}`,
-      );
-    }
-  }
-}
+import { assertIdentity } from './identity';
 
 export class StaticAtlasDataProvider implements AtlasDataProvider {
   static readonly defaultRequestTimeoutMs = 15_000;

@@ -7,10 +7,30 @@
 
 import { getResolution, splitLongToH3Index } from 'h3-js';
 
-import type { GridEntry } from '../contracts';
-import { fail, parseContainer, unshuffle } from './container';
+import type {
+  ArtifactIdentity,
+  ArtifactRef,
+  GridEntry,
+  Support,
+} from '../contracts';
+import { identityMessage, identityMismatch } from '../identity';
+import {
+  fail,
+  parseContainer,
+  unshuffle,
+  type GosaHeader,
+  type ParsedContainer,
+} from './container';
 import { sha256Hex } from './sha256';
-import type { DecodedGrid } from './types';
+import type { DecodedGrid, DecodedRender } from './types';
+
+/** Support codes 0–3 (fast-load design §B.3), mirroring SUPPORT_CODES in surface_codec.py. */
+export const SUPPORT_CODES = [
+  'observed',
+  'interpolated',
+  'prior_dominated',
+  'unknown',
+] as const satisfies readonly Support[];
 
 export {
   FORMAT_VERSION,
@@ -176,5 +196,149 @@ export function decodeGrid(
       n: header.n_cells,
       resolution: header.resolution,
     };
+  });
+}
+
+const PROBABILITY = [0, 1] as const;
+const NON_NEGATIVE = [0, Number.POSITIVE_INFINITY] as const;
+
+/** Check 20, rows ascending: a non-finite value, else a value outside [lower, upper], is a hard error. */
+function requireValues(
+  values: ArrayLike<number>,
+  column: string,
+  label: string,
+  lower: number,
+  upper: number,
+): void {
+  for (let row = 0; row < values.length; row += 1) {
+    const value = values[row];
+    if (!Number.isFinite(value)) {
+      fail('non_finite', `${label} ${column} row ${row} is ${value}`);
+    }
+    if (value < lower || value > upper) {
+      fail(
+        'value_range',
+        `${label} ${column} row ${row} is ${value}, outside [${lower}, ${upper}]`,
+      );
+    }
+  }
+}
+
+function sameDomains(
+  left: ArtifactIdentity['metric_domains'],
+  right: ArtifactIdentity['metric_domains'],
+): boolean {
+  return (
+    left.post_mean[0] === right.post_mean[0] &&
+    left.post_mean[1] === right.post_mean[1] &&
+    left.post_sd[0] === right.post_sd[0] &&
+    left.post_sd[1] === right.post_sd[1]
+  );
+}
+
+/** Render and detail headers always carry an identity; parseContainer has validated it (check 10). */
+function headerIdentity(
+  parsed: ParsedContainer,
+  label: string,
+): ArtifactIdentity {
+  if (parsed.artifact === null) {
+    throw new Error(`${label} parsed without an artifact identity`);
+  }
+  return parsed.artifact;
+}
+
+/** Context checks 23–26: the header identity must be exactly the catalog ref's, on the loaded grid. */
+function bindArtifact(
+  header: GosaHeader,
+  artifact: ArtifactIdentity,
+  ref: ArtifactRef,
+  grid: DecodedGrid,
+  label: string,
+): void {
+  if (header.n_cells !== ref.n_cells || header.n_cells !== grid.n) {
+    fail(
+      'n_cells',
+      `${label} has ${header.n_cells} cells; the catalog declares ${ref.n_cells} and the grid has ${grid.n}`,
+    );
+  }
+  if (
+    header.grid_sha256 !== ref.web.grid_sha256 ||
+    header.grid_sha256 !== grid.gridSha256
+  ) {
+    fail(
+      'grid_sha256',
+      `${label} is bound to grid ${header.grid_sha256}; the catalog names ${ref.web.grid_sha256} and the loaded grid is ${grid.gridSha256}`,
+    );
+  }
+  const mismatch = identityMismatch(ref, artifact);
+  if (mismatch) fail('identity', mismatch);
+  if (artifact.label !== ref.label) {
+    fail('identity', identityMessage('label', ref.label, artifact.label));
+  }
+  if (!sameDomains(artifact.metric_domains, ref.metric_domains)) {
+    fail(
+      'identity',
+      identityMessage(
+        'metric_domains',
+        JSON.stringify(ref.metric_domains),
+        JSON.stringify(artifact.metric_domains),
+      ),
+    );
+  }
+  if (header.resolution !== grid.resolution) {
+    fail(
+      'identity',
+      `${label} resolution ${header.resolution} differs from the loaded grid's ${grid.resolution}`,
+    );
+  }
+  if (header.source_surface_sha256 !== ref.surface_sha256) {
+    fail(
+      'source_sha256',
+      `${label} was encoded from surface ${header.source_surface_sha256}; the catalog surface is ${ref.surface_sha256}`,
+    );
+  }
+}
+
+export function decodeRender(
+  buf: ArrayBuffer,
+  expect: { grid: DecodedGrid; ref: ArtifactRef },
+  timing?: DecodeTiming,
+): DecodedRender {
+  const { grid, ref } = expect;
+  const label = `${ref.id} render tier`;
+  const bytes = new Uint8Array(buf);
+  timed(timing, 'verify', () => verifyContainer(bytes, ref.web.render, label));
+  return timed(timing, 'decode', () => {
+    const parsed = parseContainer(bytes, 'render');
+    const artifact = headerIdentity(parsed, label);
+    const [supportBytes, meanBytes, sdBytes] = parsed.columns;
+    const support = supportBytes.slice();
+    for (let row = 0; row < support.length; row += 1) {
+      if (support[row] >= SUPPORT_CODES.length) {
+        fail(
+          'support_code',
+          `${label} support row ${row} has code ${support[row]}; valid codes are 0–3`,
+        );
+      }
+    }
+    const post_mean = new Float32Array(unshuffle(meanBytes, 4));
+    const post_sd = new Float32Array(unshuffle(sdBytes, 4));
+    requireValues(post_mean, 'post_mean', label, ...PROBABILITY);
+    requireValues(post_sd, 'post_sd', label, ...NON_NEGATIVE);
+    bindArtifact(parsed.header, artifact, ref, grid, label);
+    // Check 27 (render half): an absent state and an explicit 0 both mean zero cells.
+    const histogram = [0, 0, 0, 0];
+    for (let row = 0; row < support.length; row += 1)
+      histogram[support[row]] += 1;
+    SUPPORT_CODES.forEach((state, code) => {
+      const declared = ref.support_counts[state] ?? 0;
+      if (histogram[code] !== declared) {
+        fail(
+          'cross_tier',
+          `${label} has ${histogram[code]} ${state} cells; the catalog declares ${declared}`,
+        );
+      }
+    });
+    return { artifact, post_mean, post_sd, support };
   });
 }
