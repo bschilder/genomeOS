@@ -22,7 +22,7 @@ import {
   type ParsedContainer,
 } from './container';
 import { sha256Hex } from './sha256';
-import type { DecodedGrid, DecodedRender } from './types';
+import type { DecodedDetail, DecodedGrid, DecodedRender } from './types';
 
 /** Support codes 0–3 (fast-load design §B.3), mirroring SUPPORT_CODES in surface_codec.py. */
 export const SUPPORT_CODES = [
@@ -340,5 +340,86 @@ export function decodeRender(
       }
     });
     return { artifact, post_mean, post_sd, support };
+  });
+}
+
+export function decodeDetail(
+  buf: ArrayBuffer,
+  expect: { grid: DecodedGrid; ref: ArtifactRef; render: DecodedRender },
+  timing?: DecodeTiming,
+): DecodedDetail {
+  const { grid, ref, render } = expect;
+  const label = `${ref.id} detail tier`;
+  const bytes = new Uint8Array(buf);
+  timed(timing, 'verify', () => verifyContainer(bytes, ref.web.detail, label));
+  return timed(timing, 'decode', () => {
+    const parsed = parseContainer(bytes, 'detail');
+    const artifact = headerIdentity(parsed, label);
+    const [
+      post_mean,
+      post_sd,
+      q025,
+      q975,
+      posterior_contraction,
+      dist_nearest_obs_km,
+    ] = parsed.columns.map((column) => new Float64Array(unshuffle(column, 8)));
+    requireValues(post_mean, 'post_mean', label, ...PROBABILITY);
+    requireValues(post_sd, 'post_sd', label, ...NON_NEGATIVE);
+    requireValues(q025, 'q025', label, ...PROBABILITY);
+    requireValues(q975, 'q975', label, ...PROBABILITY);
+    // posterior SD / prior SD: a ratio above one is legitimate (contracts.ts surfaceCellSchema).
+    requireValues(
+      posterior_contraction,
+      'posterior_contraction',
+      label,
+      ...NON_NEGATIVE,
+    );
+    requireValues(
+      dist_nearest_obs_km,
+      'dist_nearest_obs_km',
+      label,
+      ...NON_NEGATIVE,
+    );
+    for (let row = 0; row < post_mean.length; row += 1) {
+      if (q025[row] > post_mean[row] || post_mean[row] > q975[row]) {
+        fail(
+          'interval_order',
+          `${label} row ${row} breaks q025 ≤ post_mean ≤ q975 (${q025[row]}, ${post_mean[row]}, ${q975[row]})`,
+        );
+      }
+    }
+    bindArtifact(parsed.header, artifact, ref, grid, label);
+    if (
+      render.post_mean.length !== post_mean.length ||
+      render.post_sd.length !== post_sd.length
+    ) {
+      fail(
+        'cross_tier',
+        `${label} has ${post_mean.length} rows; its render tier has ${render.post_mean.length}`,
+      );
+    }
+    // Check 27 (detail half): float32 bits, so -0 and +0 differ exactly as surface_codec.py's struct.pack does.
+    for (let row = 0; row < post_mean.length; row += 1) {
+      if (!Object.is(Math.fround(post_mean[row]), render.post_mean[row])) {
+        fail(
+          'cross_tier',
+          `${label} post_mean row ${row} is ${Math.fround(post_mean[row])} in float32; the render tier holds ${render.post_mean[row]}`,
+        );
+      }
+      if (!Object.is(Math.fround(post_sd[row]), render.post_sd[row])) {
+        fail(
+          'cross_tier',
+          `${label} post_sd row ${row} is ${Math.fround(post_sd[row])} in float32; the render tier holds ${render.post_sd[row]}`,
+        );
+      }
+    }
+    return {
+      dist_nearest_obs_km,
+      post_mean,
+      post_sd,
+      posterior_contraction,
+      q025,
+      q975,
+    };
   });
 }
