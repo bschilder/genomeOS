@@ -6,10 +6,16 @@ on:
     paths:
       - "website/**"
       - ".github/workflows/pages.yml"
+      - "genomeos/publication/**"
+      - "scripts/encode_atlas_web.py"
+      - "pyproject.toml"
   pull_request:
     paths:
       - "website/**"
       - ".github/workflows/pages.yml"
+      - "genomeos/publication/**"
+      - "scripts/encode_atlas_web.py"
+      - "pyproject.toml"
   workflow_dispatch:
 
 permissions:
@@ -32,6 +38,18 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the Atlas web-object encoder
+        run: python -m pip install -c requirements.lock '.[read]'
+        working-directory: .
+      - name: Encode Atlas web objects
+        run: python scripts/encode_atlas_web.py
+        working-directory: .
+      - name: Refuse a catalog the encoder did not write
+        run: git diff --exit-code website/public/data/atlas/catalog.json
+        working-directory: .
       - name: Install exact dependencies
         run: npm ci
       - name: Check formatting
@@ -96,6 +114,15 @@ jobs:
           node-version: "24"
           cache: npm
           cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the Atlas web-object encoder
+        run: python -m pip install -c requirements.lock '.[read]'
+      - name: Encode Atlas web objects
+        run: python scripts/encode_atlas_web.py
+      - name: Refuse a catalog the encoder did not write
+        run: git diff --exit-code website/public/data/atlas/catalog.json
       - name: Install exact dependencies
         run: npm ci
         working-directory: website

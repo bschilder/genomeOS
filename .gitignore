@@ -80,6 +80,9 @@ website/dist/
 website/dist-fallback/
 website/test-results/
 website/playwright-report/
+# Generated GOSA web objects (scripts/encode_atlas_web.py); never committed in Part B.
+website/public/data/atlas/grids/
+website/public/data/atlas/surfaces/
 
 # PyBuilder
 .pybuilder/

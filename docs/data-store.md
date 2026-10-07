@@ -73,6 +73,23 @@ explicitly unavailable; the builder never manufactures them from a surface.
 `contract/atlas_catalog.schema.json` is the frozen review surface for this serving boundary. Run
 `python scripts/freeze_contract.py` after an intentional catalog-contract change.
 
+## Building the static web export
+
+The `/app/` explorer reads `website/public/data/atlas/`. `scripts/export_atlas_web.py` writes the
+canonical, citable JSON (surface, observations and manifest per artifact, plus `catalog.json`).
+`export_atlas_web.py` output is an intermediate; the site build fails until `encode_atlas_web.py`
+has run:
+
+```bash
+python scripts/encode_atlas_web.py   # default --in and --out: website/public/data/atlas
+```
+
+The encoder takes the first artifact's H3 sequence as the shared grid and refuses any surface
+whose cells differ, writes content-addressed GOSA objects under `grids/` and `surfaces/`, decodes
+every object it wrote and compares it with the JSON cell by cell, and only then adds `grids`, `web`
+and `observations_bytes` to `catalog.json`. It is byte-deterministic, so CI re-runs it and fails if
+the committed catalog differs. The objects are git-ignored; the JSON stays the citable download.
+
 ## Immutability is enforced, not just documented
 
 Artifacts are keyed `(variant_id, model_version, data_version)` and `publish()` **refuses to

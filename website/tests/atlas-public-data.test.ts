@@ -24,12 +24,34 @@ const POPULATED_ISLAND_CELLS = {
   Tenerife: '84344cdffffffff',
 } as const;
 
-function readPayload(filename: string): { digest: string; value: unknown } {
+function readObject(key: string): { bytes: number; digest: string } {
+  const bytes = readFileSync(`${dataDirectory}/${key}`);
+  return {
+    bytes: bytes.length,
+    digest: createHash('sha256').update(bytes).digest('hex'),
+  };
+}
+
+function readPayload(filename: string): {
+  bytes: number;
+  digest: string;
+  value: unknown;
+} {
   const bytes = readFileSync(`${dataDirectory}/${filename}`);
   return {
+    bytes: bytes.length,
     digest: createHash('sha256').update(bytes).digest('hex'),
     value: JSON.parse(bytes.toString()),
   };
+}
+
+/** SHA-256 of the little-endian u64 H3 column, as `encode_atlas_web.py` declares grids. */
+function gridSha256(h3Indices: readonly string[]): string {
+  const view = new DataView(new ArrayBuffer(h3Indices.length * 8));
+  h3Indices.forEach((h3Index, row) =>
+    view.setBigUint64(row * 8, BigInt(`0x${h3Index}`), true),
+  );
+  return createHash('sha256').update(new Uint8Array(view.buffer)).digest('hex');
 }
 
 describe('published Atlas data', () => {
@@ -51,6 +73,12 @@ describe('published Atlas data', () => {
     const catalog = atlasCatalogSchema.parse(readPayload('catalog.json').value);
 
     expect(catalog.artifacts).toHaveLength(30);
+    const [[sharedGridSha256, grid]] = Object.entries(catalog.grids);
+    expect(readObject(grid.url)).toEqual({
+      bytes: grid.bytes,
+      digest: grid.sha256,
+    });
+    expect(grid.resolution).toBe(4);
     for (const reference of catalog.artifacts) {
       const surfacePayload = readPayload(reference.surface_url);
       const surface = surfaceArtifactSchema.parse(surfacePayload.value);
@@ -69,6 +97,17 @@ describe('published Atlas data', () => {
         'Global_2000_2020/2020/0_Mosaicked',
       );
       expect(surface.cells, reference.id).toHaveLength(reference.n_cells);
+      expect(reference.web.grid_sha256, reference.id).toBe(sharedGridSha256);
+      expect(grid.n_cells, reference.id).toBe(reference.n_cells);
+      expect(
+        gridSha256(surface.cells.map((cell) => cell.h3_index)),
+        `${reference.id}: surface h3 order equals the shared grid`,
+      ).toBe(sharedGridSha256);
+      for (const object of [reference.web.render, reference.web.detail])
+        expect(readObject(object.url), object.url).toEqual({
+          bytes: object.bytes,
+          digest: object.sha256,
+        });
       const surfaceCells = new Set(surface.cells.map((cell) => cell.h3_index));
       for (const [island, h3Index] of Object.entries(POPULATED_ISLAND_CELLS))
         expect(surfaceCells.has(h3Index), `${reference.id}: ${island}`).toBe(
@@ -89,6 +128,9 @@ describe('published Atlas data', () => {
       expect(observations.observations, reference.id).toHaveLength(
         reference.n_observations,
       );
+      expect(observationPayload.bytes, reference.id).toBe(
+        reference.observations_bytes,
+      );
     }
-  }, 30_000);
+  }, 60_000);
 });

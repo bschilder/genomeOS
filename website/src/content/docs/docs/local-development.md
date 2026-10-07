@@ -29,6 +29,24 @@ python scripts/smoke.py
 pytest
 ```
 
+## Atlas web objects
+
+The `/app/` explorer loads binary GOSA objects (one shared H3 grid plus a render and a detail tier
+per artifact) that are generated, not committed. `export_atlas_web.py` output is an intermediate;
+the site build fails until `encode_atlas_web.py` has run. From the repository root, in the Python
+environment above (or after `python -m pip install -c requirements.lock '.[read]'`, which pins
+h3-py to the H3 core of the website's h3-js):
+
+```bash
+python scripts/encode_atlas_web.py
+```
+
+It writes `website/public/data/atlas/grids/` and `website/public/data/atlas/surfaces/` (both
+git-ignored), verifies every object against the canonical JSON, and rewrites
+`website/public/data/atlas/catalog.json` byte-for-byte as committed. Run it before `npm run dev`,
+`npm test`, `npm run test:e2e` and `npm run test:performance`, and again whenever the exported
+JSON changes; commit the catalog it writes. CI runs it and fails if the committed catalog differs.
+
 ## Website environment
 
 Use Node 24 and the committed npm lock:

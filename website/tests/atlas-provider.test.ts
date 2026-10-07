@@ -54,6 +54,7 @@ const ref: ArtifactRef = {
   n_cells: 1,
   n_observations: 0,
   observations_available: true,
+  observations_bytes: 1_074,
   observations_sha256: 'b'.repeat(64),
   observations_url: 'hbs-rs334.observations.json',
   registry_version: 'map-survey-coordinates-v1',
@@ -62,6 +63,19 @@ const ref: ArtifactRef = {
   surface_sha256: 'a'.repeat(64),
   surface_url: 'hbs-rs334.surface.json',
   variant_id: 'chr11-5227002-T-A',
+  web: {
+    detail: {
+      bytes: 1_680,
+      sha256: '2'.repeat(64),
+      url: 'surfaces/hbs-rs334/v1/map-2026-08/detail.2222222222222222.gosa',
+    },
+    grid_sha256: 'e'.repeat(64),
+    render: {
+      bytes: 1_032,
+      sha256: '1'.repeat(64),
+      url: 'surfaces/hbs-rs334/v1/map-2026-08/render.1111111111111111.gosa',
+    },
+  },
 };
 
 afterEach(() => {
