@@ -13,6 +13,7 @@ import { atlasCatalogSchema } from '../src/atlas/contracts';
  */
 const TREES = {
   golden: ['objects', 'observations', 'surface', 'downloads'],
+  e2e: ['objects', 'observations'],
 } as const satisfies Record<
   string,
   readonly ('objects' | 'observations' | 'surface' | 'downloads')[]
