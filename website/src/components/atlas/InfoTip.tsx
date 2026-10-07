@@ -3,6 +3,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+import { useEscapeLayer } from './useEscapeStack';
+
 interface InfoTipProps {
   children: React.ReactNode;
   label: string;
@@ -69,6 +71,14 @@ export function InfoTip({ children, label }: InfoTipProps) {
       document.removeEventListener('scroll', place, true);
     };
   }, [open]);
+  useEscapeLayer(
+    open,
+    () => {
+      setOpen(false);
+      setPinned(false);
+    },
+    'popover',
+  );
 
   const show = () => {
     setOpen(true);
@@ -91,13 +101,6 @@ export function InfoTip({ children, label }: InfoTipProps) {
       onMouseEnter={show}
       onMouseLeave={() => {
         if (!pinned) setOpen(false);
-      }}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape') return;
-        event.stopPropagation();
-        setOpen(false);
-        setPinned(false);
-        trigger.current?.focus();
       }}
     >
       <button

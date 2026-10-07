@@ -20,6 +20,7 @@ import type {
   DiscoveryGroup,
 } from '../../atlas/contracts';
 import { clampPickerTop, siteHeaderBottom } from './site-header';
+import { useEscapeLayer } from './useEscapeStack';
 
 interface MapCatalogPickerProps {
   catalog: AtlasCatalog;
@@ -143,18 +144,14 @@ export function MapCatalogPicker({
         return;
       close();
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close(true);
-    };
     window.addEventListener('resize', placePanel);
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('resize', placePanel);
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [close, open, placePanel]);
+  useEscapeLayer(open, () => close(true), 'dialog');
 
   const choose = (id: string) => {
     onSelect(id);

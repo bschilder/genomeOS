@@ -942,6 +942,57 @@ test('explorer groups and explains maps before selection', async ({ page }) => {
   await expect(page).toHaveURL(/entity=hla-b-58-01/);
 });
 
+test('each Escape closes only the innermost explorer layer', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'phone layering with the sheets is covered in atlas-mobile.spec.ts',
+  );
+  test.setTimeout(60_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  const legendInfo = page.locator('details.atlas-legend__info');
+  const legendSummary = legendInfo.locator('summary');
+  await legendSummary.click();
+  await expect(legendInfo).toHaveAttribute('open', '');
+  await page.keyboard.press('Escape');
+  await expect(legendInfo).not.toHaveAttribute('open', '');
+  await expect(legendSummary).toBeFocused();
+
+  await page.getByRole('button', { name: 'More info' }).click();
+  const externalPanel = page.getByRole('complementary', {
+    name: 'External variant information',
+  });
+  await expect(externalPanel).toBeVisible();
+  await page.getByRole('button', { name: 'About map selection' }).click();
+  await expect(
+    page.getByRole('tooltip').filter({ hasText: 'Choose a versioned' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(externalPanel).toBeVisible();
+
+  await legendSummary.click();
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+  await expect(catalog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(legendInfo).not.toHaveAttribute('open', '');
+  await expect(catalog).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(catalog).toHaveCount(0);
+  await expect(externalPanel).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(externalPanel).toHaveCount(0);
+});
+
 test('height exaggeration uses the available compact control width', async ({
   page,
 }, testInfo) => {

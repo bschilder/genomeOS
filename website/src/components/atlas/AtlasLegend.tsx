@@ -1,10 +1,11 @@
 /** Compact scientific legend and expandable explanation for Atlas design §11. */
 
-import type { CSSProperties } from 'react';
+import { useRef, useState, type CSSProperties } from 'react';
 
 import type { ArtifactRef } from '../../atlas/contracts';
 import type { ExplorerState } from '../../atlas/url-state';
 import { paletteStops } from '../../atlas/visual-encoding';
+import { useEscapeLayer } from './useEscapeStack';
 
 interface AtlasLegendProps {
   artifact: ArtifactRef;
@@ -16,6 +17,23 @@ function percent(value: number): string {
 }
 
 export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
+  const details = useRef<HTMLDetailsElement>(null);
+  const summary = useRef<HTMLElement>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  // The popover joins the stack from the summary's click, not from the async `toggle`
+  // event: click is a discrete React event, so the layer is registered before `open` is
+  // even set and an Escape pressed right after opening closes the popover, not the layer
+  // under it (§A.1.9: the popover is innermost). `onToggle` keeps the state in sync, and
+  // the close callback resets it because Chromium can merge two toggle events into one.
+  useEscapeLayer(
+    infoOpen,
+    () => {
+      if (details.current) details.current.open = false;
+      setInfoOpen(false);
+      summary.current?.focus();
+    },
+    'popover',
+  );
   const domain = artifact.metric_domains[state.metric];
   const isEstimate = state.metric === 'post_mean';
   const colors = paletteStops(state.surfacePalette);
@@ -43,8 +61,18 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
               ? 'Color + height'
               : 'Color'}
         </span>
-        <details className="atlas-legend__info">
-          <summary aria-label="Explain the legend">i</summary>
+        <details
+          className="atlas-legend__info"
+          ref={details}
+          onToggle={(event) => setInfoOpen(event.currentTarget.open)}
+        >
+          <summary
+            aria-label="Explain the legend"
+            ref={summary}
+            onClick={() => setInfoOpen(!details.current?.open)}
+          >
+            i
+          </summary>
           <div>
             <h2>{artifact.label}</h2>
             <p>
