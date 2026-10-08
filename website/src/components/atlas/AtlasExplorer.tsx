@@ -11,6 +11,8 @@ import type {
   Observation,
   SurfaceCell,
 } from '../../atlas/contracts';
+import { bootAtlas } from '../../atlas/boot';
+import { resolveElevationView } from '../../atlas/earth-style-catalog';
 import {
   artifactVersion,
   displayKey,
@@ -18,7 +20,6 @@ import {
   prefersReducedMotion,
   PUBLIC_SCENE_CAPABILITIES,
   REDUCED_MOTION_QUERY,
-  supportsWebGL,
 } from '../../atlas/explorer-runtime';
 import {
   observationColorEncoding,
@@ -33,13 +34,11 @@ import {
   aggregateTransferProgress,
   createTransferProgressTracker,
 } from '../../atlas/progress';
-import {
-  createAtlasScene,
-  resolveElevationView,
-  type AtlasSceneController,
-  type ContextStatus,
-  type SceneCapabilities,
-  type SceneProgressListener,
+import type {
+  AtlasSceneController,
+  ContextStatus,
+  SceneCapabilities,
+  SceneProgressListener,
 } from '../../atlas/scene/atlas-scene';
 import type { ContextWarning } from '../../atlas/scene/context-controller';
 import { StaticAtlasDataProvider } from '../../atlas/static-provider';
@@ -65,11 +64,15 @@ import { nextPaint, useAtlasActivity } from './useAtlasActivity';
 import { EscapeStackProvider } from './useEscapeStack';
 import { ExplorerPanelsProvider } from './useExplorerPanels';
 import { useObservationPlaces } from './useObservationPlaces';
+import { useAtlasSceneLifecycle } from './useAtlasSceneLifecycle';
 
 interface AtlasExplorerProps {
   cesiumToken?: string;
   dataBaseUrl: string;
 }
+
+// Island module evaluation (before React mounts) starts the data worker and the Cesium chunk.
+bootAtlas();
 
 export default function AtlasExplorer({
   cesiumToken = '',
@@ -88,7 +91,6 @@ export default function AtlasExplorer({
   const appliedDisplay = useRef<string | null>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [dataAttempt, setDataAttempt] = useState(0);
-  const [sceneGeneration, setSceneGeneration] = useState(0);
   const [catalog, setCatalog] = useState<AtlasCatalog | null>(null);
   const [state, setState] = useState<ExplorerState | null>(null);
   const [activeArtifact, setActiveArtifact] = useState<ArtifactRef | null>(
@@ -164,24 +166,9 @@ export default function AtlasExplorer({
     return () => media.removeEventListener('change', updatePreference);
   }, []);
 
-  useEffect(() => {
-    const element = sceneElement.current;
-    if (!element) return;
-    cameraApplied.current = false;
-    appliedDisplay.current = null;
-    setSceneFailure(null);
-    if (!supportsWebGL()) {
-      setSceneFailure('webgl');
-      return;
-    }
-    try {
-      const controller = createAtlasScene(element, {
-        cesiumToken,
-        naturalEarthUrl: `${dataBaseUrl}ne-50m-admin-0.geojson`,
-        reducedMotion,
-      });
-      scene.current = controller;
-      setSceneGeneration((value) => value + 1);
+  const sceneGeneration = useAtlasSceneLifecycle({
+    attempt: sceneAttempt,
+    bind: (controller) => {
       setCapabilities(controller.capabilities());
       const removePick = controller.onPick((pick) => {
         if (pick?.kind === 'surface') {
@@ -231,13 +218,20 @@ export default function AtlasExplorer({
         removeContext();
         removeWarnings();
         removeRenderError();
-        controller.destroy();
-        scene.current = null;
       };
-    } catch {
-      setSceneFailure('webgl');
-    }
-  }, [cesiumToken, dataBaseUrl, reducedMotion, sceneAttempt]);
+    },
+    cesiumToken,
+    element: sceneElement,
+    naturalEarthUrl: `${dataBaseUrl}ne-50m-admin-0.geojson`,
+    onReset: () => {
+      cameraApplied.current = false;
+      appliedDisplay.current = null;
+      setSceneFailure(null);
+    },
+    onUnavailable: () => setSceneFailure('webgl'),
+    reducedMotion,
+    scene,
+  });
 
   useEffect(() => {
     // A new scene (first load or "Retry globe") receives the whole current style at once; the
@@ -402,7 +396,7 @@ export default function AtlasExplorer({
     sceneFailure,
     dataAttempt,
     reducedMotion,
-    sceneAttempt,
+    sceneGeneration,
   ]);
 
   useEffect(() => {

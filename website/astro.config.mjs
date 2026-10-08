@@ -87,6 +87,8 @@ export default defineConfig({
     define: {
       CESIUM_BASE_URL: JSON.stringify(`${normalizedBase}cesium/`),
     },
+    // The Atlas data worker is a module worker sharing ES modules with the island (fast-load design §B.6.3).
+    worker: { format: 'es' },
     plugins: [
       viteStaticCopy({
         targets: ['Assets', 'ThirdParty', 'Widgets', 'Workers'].map((name) => ({

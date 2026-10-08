@@ -18,13 +18,20 @@ import {
   type Viewer,
 } from 'cesium';
 
-import { BASEMAP_OPTIONS, TERRAIN_OPTIONS } from '../earth-style-catalog';
+import {
+  availableBasemaps,
+  availableTerrains,
+  ION_UNAVAILABLE,
+} from '../earth-style-catalog';
 import type { BasemapId, TerrainId } from '../url-state';
 
-export interface SceneCapability {
-  available: boolean;
-  reason?: string;
-}
+// Cesium-free helpers moved for the lazy scene chunk (fast-load design §B.6.11); kept for callers.
+export {
+  availableBasemaps,
+  availableTerrains,
+  ionCapability,
+  type SceneCapability,
+} from '../earth-style-catalog';
 
 export interface ContextWarning {
   id: 'basemap' | 'terrain';
@@ -38,34 +45,6 @@ export interface ContextWarningClear {
 
 export type ContextWarningUpdate = ContextWarning | ContextWarningClear;
 export type ContextWarningListener = (warning: ContextWarningUpdate) => void;
-
-const ION_UNAVAILABLE = 'Cesium ion access is unavailable in this build.';
-
-export function ionCapability(token: string): SceneCapability {
-  return token.trim()
-    ? { available: true }
-    : { available: false, reason: ION_UNAVAILABLE };
-}
-
-export function availableBasemaps(token: string): Record<BasemapId, boolean> {
-  const ionAvailable = ionCapability(token).available;
-  return Object.fromEntries(
-    BASEMAP_OPTIONS.map(({ id, requiresIon }) => [
-      id,
-      !requiresIon || ionAvailable,
-    ]),
-  ) as Record<BasemapId, boolean>;
-}
-
-export function availableTerrains(token: string): Record<TerrainId, boolean> {
-  const ionAvailable = ionCapability(token).available;
-  return Object.fromEntries(
-    TERRAIN_OPTIONS.map(({ id, requiresIon }) => [
-      id,
-      !requiresIon || ionAvailable,
-    ]),
-  ) as Record<TerrainId, boolean>;
-}
 
 export interface BasemapAppearanceTarget {
   alpha: number;

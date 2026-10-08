@@ -1,10 +1,7 @@
 /** Small browser-runtime helpers for Atlas design §11. */
 
 import type { ArtifactRef } from './contracts';
-import {
-  availableBasemaps,
-  availableTerrains,
-} from './scene/context-controller';
+import { availableBasemaps, availableTerrains } from './earth-style-catalog';
 import type { SceneCapabilities } from './scene/types';
 import type { ExplorerState } from './url-state';
 

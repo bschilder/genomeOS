@@ -2,13 +2,11 @@
 
 import { Color, type Viewer } from 'cesium';
 
-import type {
-  CameraState,
-  ExplorerSceneMode,
-  LayerVisibility,
-} from '../url-state';
+import type { CameraState, LayerVisibility } from '../url-state';
 import type { ObservationPresentation } from './types';
 import { DEFAULT_OBSERVATION_SIZE_RANGE } from '../observation-encoding';
+
+export { resolveElevationView } from '../earth-style-catalog';
 
 export interface EarthOpacityTarget {
   depthTestAgainstTerrain: boolean;
@@ -65,13 +63,6 @@ export const HOME_CAMERA: CameraState = {
   lon: 20,
   pitch: -90,
 };
-
-export function resolveElevationView(
-  view: ExplorerSceneMode,
-  elevationEnabled: boolean,
-): ExplorerSceneMode {
-  return view === 'map' && elevationEnabled ? 'perspective' : view;
-}
 
 export function styleAtlasScene(viewer: Viewer): void {
   const scene = viewer.scene;
