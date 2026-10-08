@@ -1,9 +1,11 @@
 import {
   cellToBoundary,
+  cellToChildren,
   cellToLatLng,
   cellToVertexes,
   getPentagons,
   gridDisk,
+  latLngToCell,
   vertexToLatLng,
 } from 'h3-js';
 import { describe, expect, it } from 'vitest';
@@ -22,6 +24,9 @@ import { decodedGridFromH3, sortedU64 } from './helpers/atlas-geometry';
 const DISK = sortedU64(gridDisk('83754efffffffff', 1));
 const PENTAGON = getPentagons(3)[0];
 const CLASS_III_DISTORTED = '83006dfffffffff';
+/** At resolutions 3 and 4 every low lane is 0xffffffff, so only finer cells let the low lanes
+ * decide the search: the 343 res-7 descendants of one res-4 cell share two high lanes. */
+const RES7_CELLS = sortedU64(cellToChildren(latLngToCell(0, 0, 4), 7));
 
 describe('shared-grid topology on u32 lanes (fast-load §B.6.4)', () => {
   it('records centres and every corner with dense numeric vertex ids', () => {
@@ -43,17 +48,22 @@ describe('shared-grid topology on u32 lanes (fast-load §B.6.4)', () => {
       expect(corners).toHaveLength(vertexes.length);
       vertexes.forEach((vertex, corner) => {
         const id = corners[corner];
+        // First-seen order: a vertex not met in an earlier row or corner takes the next id.
         if (ids.has(vertex)) expect(id).toBe(ids.get(vertex));
-        else ids.set(vertex, id);
+        else {
+          expect(id).toBe(ids.size);
+          ids.set(vertex, id);
+        }
         expect([topology.vertexLat[id], topology.vertexLon[id]]).toEqual(
           vertexToLatLng(vertex),
         );
       });
     });
-    expect([...ids.values()].sort((a, b) => a - b)).toEqual(
-      Array.from({ length: ids.size }, (_, id) => id),
+    expect(topology.cornerIds).toHaveLength(
+      topology.cornerOffsets[DISK.length],
     );
     expect(topology.vertexLat).toHaveLength(ids.size);
+    expect(topology.vertexLon).toHaveLength(ids.size);
   });
 
   it('shares exactly two corner ids between edge-adjacent cells', () => {
@@ -94,6 +104,19 @@ describe('shared-grid topology on u32 lanes (fast-load §B.6.4)', () => {
     const grid = decodedGridFromH3(DISK);
     DISK.forEach((cell, row) => expect(gridRowOf(grid, cell)).toBe(row));
     expect(gridRowOf(grid, '83f293fffffffff')).toBeNull();
+  });
+
+  it('lets the low lanes decide the search, including misses between rows', () => {
+    // Every other res-7 cell is on the grid; each one left out falls between two grid rows.
+    const onGrid = RES7_CELLS.filter((_, index) => index % 2 === 0);
+    const offGrid = RES7_CELLS.filter((_, index) => index % 2 === 1);
+    const grid = decodedGridFromH3(onGrid);
+    // The case exercises what it claims: high lanes tie, low lanes vary, some exceed 2^31 - 1.
+    expect(new Set(grid.h3Hi).size).toBe(2);
+    expect(new Set(grid.h3Lo).size).toBeGreaterThan(grid.n / 2);
+    expect(grid.h3Lo.some((low) => low >= 2 ** 31)).toBe(true);
+    onGrid.forEach((cell, row) => expect(gridRowOf(grid, cell)).toBe(row));
+    for (const cell of offGrid) expect(gridRowOf(grid, cell)).toBeNull();
   });
 });
 
