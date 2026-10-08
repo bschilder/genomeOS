@@ -166,7 +166,7 @@ re-exported, `GeometryRequestType`, `GeometryResponse`, `LookAt`, `GridExpect`.
 
 | Entry | Kind | Written by | `detail` |
 | --- | --- | --- | --- |
-| `atlas:<AtlasMark>` | mark, first occurrence per page load, in the `scene.postRender` that satisfies it (with the `data-atlas-*` attribute) | scene marks (Tasks 58, 62 (B4.6, B4.10)) | none |
+| `atlas:<AtlasMark>` | mark, in the `scene.postRender` that satisfies it (with the `data-atlas-*` attribute): `context-ready` once per scene; the epoch marks (`observations-visible`, `surface-first-chunk`, `surface-visible`, `ready`) at most once per `setArtifact` (a new epoch drops the previous artifact's pending ones); `values-ready` and `edges-ready` again after each `clear()` at a commit. A page load can therefore hold several entries of one name; the cold-load harness reads the first (`firstMarkTime`) | scene marks (Tasks 58, 62 (B4.6, B4.10)) | none |
 | `atlas:worker:<step>` | measure, page-time `start`/`end` | `AtlasWorkerClient` on each `step-timing` (Task 32 (B2.9)) | `{ step, chunk, artifactKey }` |
 | `atlas:chunk-frame` | measure, `scene.preUpdate` → `scene.postRender` of the render after each batch add | `scheduleChunks` (Task 57 (B4.5)) | `{ artifactKey, chunks }` |
 | `atlas:chunk-add` | mark per added chunk | `ScientificLayers` (Task 62 (B4.10)) | `{ artifactKey, chunk }` |
