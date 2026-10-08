@@ -2789,6 +2789,16 @@ body:has(.atlas-explorer) .skip-link {
     background: #020c1d;
     backdrop-filter: none;
   }
+
+  /* The phone panel sheet paints the rail, not the inspector inside it, so it
+   * needs its own opaque surface (equal specificity, later in the file). */
+  .atlas-right-rail[data-sheet-state],
+  .atlas-explorer:has(.atlas-warning-banner)
+    .atlas-right-rail[data-sheet-state] {
+    border-color: var(--color-ion);
+    background: #020c1d;
+    backdrop-filter: none;
+  }
 }
 
 @media (pointer: coarse) {

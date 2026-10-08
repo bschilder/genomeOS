@@ -1275,6 +1275,44 @@ for (const phone of PHONE_PROFILES) {
       ]);
     });
 
+    if (phone.name === 'Pixel 7')
+      test('the panel sheet turns opaque under prefers-contrast: more', async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        await page.emulateMedia({ contrast: 'more', reducedMotion: 'reduce' });
+        await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+        await waitForAtlasReady(page);
+        await tapSelectNearCenter(page);
+        const rail = panelSheet(page);
+        await expect(rail).toHaveAttribute('data-sheet-state', 'half');
+        const surface = () =>
+          rail.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+              backdropFilter: style.backdropFilter,
+              backgroundColor: style.backgroundColor,
+              backgroundImage: style.backgroundImage,
+              borderTopColor: style.borderTopColor,
+            };
+          });
+        const opaque = {
+          backdropFilter: 'none',
+          backgroundColor: 'rgb(2, 12, 29)',
+          backgroundImage: 'none',
+          borderTopColor: 'rgb(112, 230, 255)',
+        };
+        expect(await surface()).toEqual(opaque);
+        // The warning-banner variant of the sheet rule is more specific.
+        await page.locator('.atlas-explorer').evaluate((explorer) => {
+          const banner = document.createElement('p');
+          banner.className = 'atlas-warning-banner';
+          banner.textContent = 'Notice: forced for the contrast check';
+          explorer.append(banner);
+        });
+        expect(await surface()).toEqual(opaque);
+      });
+
     test('the click of the globe tap that opened the panel sheet does not reach it', async ({
       page,
     }) => {
