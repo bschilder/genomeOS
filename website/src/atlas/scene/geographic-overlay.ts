@@ -21,16 +21,13 @@ import {
 } from 'cesium';
 
 import type { SurfaceArtifact, SurfaceCell } from '../contracts';
+import {
+  countryLabelText,
+  type CountryProperties,
+} from '../geometry/natural-earth';
 import { heightForCell, type Metric } from '../visual-encoding';
 
-interface CountryProperties {
-  ADMIN?: unknown;
-  LABEL_X?: unknown;
-  LABEL_Y?: unknown;
-  MIN_LABEL?: unknown;
-  NAME?: unknown;
-  NAME_LONG?: unknown;
-}
+export { countryLabelText } from '../geometry/natural-earth';
 
 interface BorderDefinition {
   coordinates: readonly [number, number][];
@@ -57,12 +54,6 @@ export function countryLabelHeight(
     Math.max(0, surfaceHeight) * Math.max(0, elevationFactor) +
     LABEL_CLEARANCE_METRES
   );
-}
-
-export function countryLabelText(properties: CountryProperties): string | null {
-  for (const value of [properties.NAME_LONG, properties.ADMIN, properties.NAME])
-    if (typeof value === 'string' && value.trim()) return value.trim();
-  return null;
 }
 
 export function countryLabelDistanceForScale(minLabel: number): number {
