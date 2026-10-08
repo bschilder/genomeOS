@@ -215,7 +215,9 @@ def test_fetch_range_retains_exact_failed_prefix(tmp_path, last, body, state, re
 
 def test_fetch_range_timeout_retains_prefix_and_never_retries(tmp_path, monkeypatch):
     wrapper, ledger = _wrapper(tmp_path, "sys.stdout.buffer.write(b'a');sys.stdout.flush();time.sleep(10)")
-    monkeypatch.setattr(window_fetch, "RANGE_TIMEOUT_SECONDS", 0.05)
+    # The deadline includes the wrapper's interpreter start-up, which must finish writing its byte
+    # first. 50 ms was missed under parallel test load (pytest-xdist, #411); 1 s still times out.
+    monkeypatch.setattr(window_fetch, "RANGE_TIMEOUT_SECONDS", 1.0)
     receipt = fetch_range(
         _public_object(),
         ByteRange(10, 12),
