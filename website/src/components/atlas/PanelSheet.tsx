@@ -3,7 +3,8 @@
  * (mobile sheets design 2026-10-07 §A.1.6). The external-panel portal slot is
  * always rendered here, so it is never moved or remounted. The sheet opens at
  * half; focus moves to Close when More info opens it and comes back to More
- * info or the globe on close, never to <body>. Crossing 52rem with a panel
+ * info (or to the controls handle when the restored controls sheet is at
+ * peek) or the globe on close, never to <body>. Crossing 52rem with a panel
  * open keeps focus on that panel when its focused control is hidden or
  * unmounted (Review Focus RF4).
  */
@@ -157,9 +158,16 @@ export function PanelSheet({ children, explorer }: PanelSheetProps) {
       Boolean(controls?.contains(active));
     if (!lost) return;
     if (open === null && prior === 'external') {
-      explorer
-        ?.querySelector<HTMLElement>('.atlas-external-info__button')
-        ?.focus();
+      // The controls' snap state is already in the DOM, but their body's
+      // inert lags one commit: at peek More info is about to go inert, so
+      // the controls handle takes focus instead (§A.1.5 'Entering peek').
+      const target =
+        controls?.getAttribute('data-sheet-state') === 'peek'
+          ? controls.querySelector<HTMLElement>('.atlas-sheet__handle')
+          : explorer?.querySelector<HTMLElement>(
+              '.atlas-external-info__button',
+            );
+      target?.focus();
       return;
     }
     focusCanvas(explorer);

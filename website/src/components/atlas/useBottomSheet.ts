@@ -148,6 +148,12 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
     if (enabled && stateRef.current === 'peek') releaseBodyFocus();
     setInertEnabled(enabled);
   }, [enabled, releaseBodyFocus]);
+  const bodyInert = enabled && inertEnabled && state === 'peek';
+  // Defence in depth: whatever path lands focus in the body during the
+  // one-commit inert lag, it leaves for the handle as the body goes inert.
+  useLayoutEffect(() => {
+    if (bodyInert) releaseBodyFocus();
+  }, [bodyInert, releaseBodyFocus]);
   const cycle = useCallback(
     () => setState(nextSheetState(stateRef.current)),
     [setState],
@@ -282,7 +288,7 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
   };
 
   return {
-    bodyInert: enabled && inertEnabled && state === 'peek',
+    bodyInert,
     cycle,
     handleProps,
     setState,

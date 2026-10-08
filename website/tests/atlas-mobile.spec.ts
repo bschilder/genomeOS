@@ -1288,6 +1288,65 @@ for (const phone of PHONE_PROFILES) {
       ]);
     });
 
+    for (const closeBy of ['Escape', 'Close'] as const) {
+      test(`closing More info by ${closeBy} after crossing into the phone layout focuses the controls handle`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        const phoneViewport = page.viewportSize();
+        if (phoneViewport === null)
+          throw new Error('the phone context has no viewport');
+        await page.setViewportSize({ height: 900, width: 1280 });
+        await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+        await waitForAtlasReady(page);
+        await page.getByRole('button', { name: 'More info' }).click();
+        const external = page.getByRole('complementary', {
+          name: 'External variant information',
+        });
+        await expect(external).toBeVisible();
+        const closeExternal = external.getByRole('button', {
+          name: 'Close external information',
+        });
+        await page.setViewportSize(phoneViewport);
+        await expect(closeExternal).toBeFocused();
+
+        // The controls sheet comes back at its initial peek, where More info
+        // sits in the soon-inert body: focus goes to the handle instead.
+        await recordFocusTrail(page);
+        if (closeBy === 'Escape') await page.keyboard.press('Escape');
+        else await closeExternal.tap();
+        await expect(external).toHaveCount(0);
+        await expect(controlsSheet(page)).toHaveAttribute(
+          'data-sheet-state',
+          'peek',
+        );
+        await expect(
+          controlsSheet(page).locator('.atlas-sheet__handle'),
+        ).toBeFocused();
+        expect(
+          await page.evaluate(
+            () =>
+              new Promise<boolean>((resolve) =>
+                requestAnimationFrame(() =>
+                  requestAnimationFrame(() => {
+                    const active = document.activeElement;
+                    resolve(
+                      active !== null &&
+                        active !== document.body &&
+                        active.closest('[inert]') === null,
+                    );
+                  }),
+                ),
+              ),
+          ),
+        ).toBe(true);
+        // The one focusout is the unmounting Close button's; there is no
+        // second stop at <body> from an inert More info.
+        expect(await focusTrail(page)).toEqual(['focus → none']);
+      });
+    }
+
     if (phone.name === 'Pixel 7')
       test('the panel sheet turns opaque under prefers-contrast: more', async ({
         page,
