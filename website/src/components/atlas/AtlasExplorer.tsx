@@ -43,6 +43,7 @@ import {
 } from '../../atlas/scene/atlas-scene';
 import type { ContextWarning } from '../../atlas/scene/context-controller';
 import { StaticAtlasDataProvider } from '../../atlas/static-provider';
+import { applySceneStyle, observationStyleFor } from '../../atlas/scene-style';
 import {
   parseExplorerState,
   serializeExplorerState,
@@ -87,6 +88,7 @@ export default function AtlasExplorer({
   const appliedDisplay = useRef<string | null>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [dataAttempt, setDataAttempt] = useState(0);
+  const [sceneGeneration, setSceneGeneration] = useState(0);
   const [catalog, setCatalog] = useState<AtlasCatalog | null>(null);
   const [state, setState] = useState<ExplorerState | null>(null);
   const [activeArtifact, setActiveArtifact] = useState<ArtifactRef | null>(
@@ -179,6 +181,7 @@ export default function AtlasExplorer({
         reducedMotion,
       });
       scene.current = controller;
+      setSceneGeneration((value) => value + 1);
       setCapabilities(controller.capabilities());
       const removePick = controller.onPick((pick) => {
         if (pick?.kind === 'surface') {
@@ -235,6 +238,12 @@ export default function AtlasExplorer({
       setSceneFailure('webgl');
     }
   }, [cesiumToken, dataBaseUrl, reducedMotion, sceneAttempt]);
+
+  useEffect(() => {
+    // A new scene (first load or "Retry globe") receives the whole current style at once; the
+    // per-field effects below then handle later changes (fast-load design §B.6.11).
+    if (scene.current && state) applySceneStyle(scene.current, state);
+  }, [sceneGeneration]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -454,17 +463,7 @@ export default function AtlasExplorer({
 
   useEffect(() => {
     if (!state) return;
-    const style = {
-      colorVariable: state.observationColor,
-      gradient: state.observationGradient,
-      opacity: state.observationOpacity,
-      samplingAreaColor: state.samplingAreaColor,
-      sizeRange: state.observationSizeRange,
-      samplingAreas: state.samplingAreas,
-      shape: state.observationShape,
-      sizeVariable: state.observationSize,
-      solidColor: state.observationSolidColor,
-    };
+    const style = observationStyleFor(state);
     if (!activeArtifact) {
       void scene.current?.setObservationStyle(style);
       return;

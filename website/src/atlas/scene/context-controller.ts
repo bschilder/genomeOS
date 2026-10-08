@@ -198,6 +198,9 @@ export class ContextController {
   readonly #publicImageryUrl: string;
   readonly #onWarning: ContextWarningListener;
   #activeLayer: ImageryLayer | null = null;
+  // The requested basemap and its load; a repeat request for the same id reuses it.
+  #basemapRequest: { basemap: BasemapId; result: Promise<boolean> } | null =
+    null;
   #basemapBrightness = 0.5;
   #basemapOpacity = 1;
   #basemapSequence = 0;
@@ -226,7 +229,21 @@ export class ContextController {
     };
   }
 
-  async setBasemap(basemap: BasemapId): Promise<boolean> {
+  setBasemap(basemap: BasemapId): Promise<boolean> {
+    if (this.#basemapRequest?.basemap === basemap) {
+      return this.#basemapRequest.result;
+    }
+    const result = this.#loadBasemap(basemap);
+    const request = { basemap, result };
+    this.#basemapRequest = request;
+    void result.then((applied) => {
+      if (!applied && this.#basemapRequest === request)
+        this.#basemapRequest = null;
+    });
+    return result;
+  }
+
+  async #loadBasemap(basemap: BasemapId): Promise<boolean> {
     const sequence = ++this.#basemapSequence;
     if (!availableBasemaps(this.#token)[basemap]) {
       this.#onWarning({
