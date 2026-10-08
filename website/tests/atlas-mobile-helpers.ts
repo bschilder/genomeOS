@@ -210,12 +210,29 @@ export function panelSheet(page: Page): Locator {
   return page.locator('.atlas-right-rail');
 }
 
-/** Taps near the globe centre (as the desktop picking test clicks) until an inspector opens. */
+/** True when the point hit-tests to the Cesium canvas, not to a sheet or other chrome. */
+async function canvasAt(page: Page, point: Point): Promise<boolean> {
+  return page.evaluate(
+    ({ x, y }) =>
+      document.elementFromPoint(x, y)?.matches('.atlas-scene canvas') ?? false,
+    point,
+  );
+}
+
+/**
+ * Taps near the globe centre (as the desktop picking test clicks) until an
+ * inspector opens. A slow pick can open the panel sheet at half after its wait
+ * timed out, so each retry first checks that no inspector is open and that its
+ * point is still bare canvas; otherwise it would tap the new sheet's handle.
+ */
 export async function tapSelectNearCenter(page: Page): Promise<void> {
   const inspector = page.locator('.atlas-inspector');
   const centre = await centreOf(page.locator('.atlas-scene canvas').first());
   for (const [dx, dy] of CENTRE_OFFSETS) {
-    await page.touchscreen.tap(centre.x + dx, centre.y + dy);
+    if (await inspector.isVisible()) return;
+    const point = { x: centre.x + dx, y: centre.y + dy };
+    if (!(await canvasAt(page, point))) continue;
+    await page.touchscreen.tap(point.x, point.y);
     const opened = await inspector
       .waitFor({ state: 'visible', timeout: 1_500 })
       .then(

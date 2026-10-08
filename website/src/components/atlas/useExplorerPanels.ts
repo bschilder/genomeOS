@@ -9,6 +9,7 @@ import {
   createElement,
   useContext,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -27,6 +28,7 @@ export type { PanelKind } from './panel-arbiter';
 
 interface ExplorerPanels {
   arbiter: PanelArbiter;
+  bodyIds: Readonly<Record<PanelKind, string>>;
   bodyInert: boolean;
   open: PanelKind | null;
   setBodyInert: (inert: boolean) => void;
@@ -40,6 +42,7 @@ export function ExplorerPanelsProvider({ children }: { children: ReactNode }) {
   mobile.current = isMobile;
   const [open, setOpen] = useState<PanelKind | null>(null);
   const [bodyInert, setBodyInert] = useState(false);
+  const idBase = useId();
   const [arbiter] = useState(() =>
     createPanelArbiter({
       exclusive: () => mobile.current,
@@ -50,8 +53,17 @@ export function ExplorerPanelsProvider({ children }: { children: ReactNode }) {
     if (isMobile) arbiter.enforce();
   }, [arbiter, isMobile]);
   const value = useMemo(
-    () => ({ arbiter, bodyInert, open, setBodyInert }),
-    [arbiter, bodyInert, open],
+    () => ({
+      arbiter,
+      bodyIds: {
+        external: `${idBase}external-body`,
+        inspector: `${idBase}inspector-body`,
+      },
+      bodyInert,
+      open,
+      setBodyInert,
+    }),
+    [arbiter, bodyInert, idBase, open],
   );
   return createElement(ExplorerPanelsContext.Provider, { value }, children);
 }
@@ -82,6 +94,11 @@ export function useExplorerPanel(
 
 export function useOpenPanel(): PanelKind | null {
   return usePanels().open;
+}
+
+/** The id of a panel's sheet body, which the panel sheet handle's aria-controls names. */
+export function usePanelBodyId(kind: PanelKind): string {
+  return usePanels().bodyIds[kind];
 }
 
 export function usePanelBodyInert(): boolean {

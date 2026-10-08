@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 import {
@@ -17,6 +17,83 @@ import {
   waitForAtlasReady,
 } from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
+
+/**
+ * The panel sheet's peek band (§A.1.5 via §A.1.6): ≤ 18% of the explorer and
+ * ≥ 56 px, glued to the explorer bottom, with the panel's h2 and Close inside.
+ */
+async function expectPanelPeekBand(page: Page, panel: Locator): Promise<void> {
+  await expect(panelSheet(page)).toHaveAttribute('data-sheet-state', 'peek');
+  await expect(async () => {
+    const geometry = await sheetGeometry(page, '.atlas-right-rail');
+    expect(geometry.sheetHeight).toBeGreaterThanOrEqual(56);
+    expect(geometry.sheetHeight).toBeLessThanOrEqual(
+      geometry.explorerHeight * 0.18,
+    );
+    expect(
+      Math.abs(
+        geometry.sheetTop + geometry.sheetHeight - geometry.explorerBottom,
+      ),
+    ).toBeLessThanOrEqual(1);
+    for (const part of [
+      panel.locator('h2'),
+      panel.locator('.atlas-inspector__close'),
+    ]) {
+      const box = (await part.boundingBox())!;
+      expect(box.y).toBeGreaterThanOrEqual(geometry.sheetTop);
+      expect(box.y + box.height).toBeLessThanOrEqual(
+        geometry.sheetTop + geometry.sheetHeight + 1,
+      );
+      // Shown whole: not squeezed shorter than its own content.
+      expect(
+        await part.evaluate(
+          (element) => element.scrollHeight - element.clientHeight,
+        ),
+      ).toBeLessThanOrEqual(1);
+    }
+  }).toPass({ timeout: 10_000 });
+}
+
+/** The rail handle names the open panel's body, not the rail that holds the handle. */
+async function expectHandleControls(page: Page, panel: Locator): Promise<void> {
+  const bodyId = await panelSheet(page)
+    .locator('.atlas-sheet__handle')
+    .getAttribute('aria-controls');
+  expect(bodyId).toBeTruthy();
+  await expect(panel.locator(`[id="${bodyId}"]`)).toHaveClass(
+    /atlas-panel-body/,
+  );
+}
+
+/**
+ * Records every focus move from now on. Chromium blurs a hidden or inert focus
+ * only at its next rendering update, so a move to <body> shows up here as a
+ * focusout with no related target even when the end state looks right.
+ */
+async function recordFocusTrail(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const trail: string[] = [];
+    Object.assign(window, { atlasFocusTrail: trail });
+    document.addEventListener(
+      'focusout',
+      (event) => {
+        const next = event.relatedTarget;
+        trail.push(
+          next instanceof Element
+            ? `focus → ${next.tagName.toLowerCase()}.${next.className}`
+            : 'focus → none',
+        );
+      },
+      true,
+    );
+  });
+}
+
+async function focusTrail(page: Page): Promise<unknown> {
+  return page.evaluate(
+    () => (window as unknown as { atlasFocusTrail: unknown }).atlasFocusTrail,
+  );
+}
 
 test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
 test.afterEach(async ({ page }) => {
@@ -857,8 +934,30 @@ for (const phone of PHONE_PROFILES) {
       await expect(rail.locator('.atlas-sheet__handle')).toHaveAccessibleName(
         'Selection details, half height',
       );
+      await expectHandleControls(page, inspector);
       await expect(controls).toBeHidden();
       await expect(controls).toHaveAttribute('inert', '');
+
+      // The body scrolls under a fixed peek row, so a scrolled inspector still
+      // peeks at its h2 and Close (a scrolled inspector box dropped to 53 px).
+      const body = inspector.locator('.atlas-panel-body');
+      await body.evaluate((element) => {
+        element.scrollTop = element.scrollHeight;
+      });
+      await expect
+        .poll(() => body.evaluate((element) => element.scrollTop))
+        .toBeGreaterThan(0);
+      expect(await inspector.evaluate((element) => element.scrollTop)).toBe(0);
+      await setSheetState(rail, 'peek');
+      await expect(body).toHaveAttribute('inert', '');
+      await expectPanelPeekBand(page, inspector);
+      // A long population label stays one line at peek.
+      await inspector.locator('h2').evaluate((heading) => {
+        heading.textContent =
+          'Colombia Sierra Nevada de Santa Marta Arsario pop 2';
+      });
+      await expectPanelPeekBand(page, inspector);
+      await setSheetState(rail, 'half');
       await expect(
         page.getByRole('heading', {
           level: 1,
@@ -918,6 +1017,7 @@ for (const phone of PHONE_PROFILES) {
       await expect(rail.locator('.atlas-sheet__handle')).toHaveAccessibleName(
         'External information, half height',
       );
+      await expectHandleControls(page, external);
 
       await close.click();
       await expect(external).toHaveCount(0);
@@ -932,19 +1032,10 @@ for (const phone of PHONE_PROFILES) {
         'inert',
         '',
       );
-      const [railBox, titleBox, closeBox] = await Promise.all([
-        rail.boundingBox(),
-        external
-          .getByRole('heading', { name: 'Variant information' })
-          .boundingBox(),
-        close.boundingBox(),
-      ]);
-      for (const box of [titleBox, closeBox]) {
-        expect(box!.y).toBeGreaterThanOrEqual(railBox!.y);
-        expect(box!.y + box!.height).toBeLessThanOrEqual(
-          railBox!.y + railBox!.height + 1,
-        );
-      }
+      await expect(
+        external.getByRole('heading', { name: 'Variant information' }),
+      ).toBeVisible();
+      await expectPanelPeekBand(page, external);
 
       await tapSelectNearCenter(page);
       await expect(page.locator('.atlas-inspector')).toBeVisible();
@@ -993,23 +1084,123 @@ for (const phone of PHONE_PROFILES) {
         'half',
       );
       await expect(controls).toBeHidden();
+      const closeInspector = page.getByRole('button', {
+        name: 'Close inspector',
+      });
 
+      // Leaving the phone layout unmounts the focused handle: focus stays on
+      // the inspector instead of falling to <body>.
+      await panelSheet(page).locator('.atlas-sheet__handle').focus();
       await page.setViewportSize({ height: 900, width: 1280 });
       await expect(controls).toBeVisible();
       await expect(controls).not.toHaveAttribute('data-sheet-state');
       await expect(controls).not.toHaveAttribute('inert');
       await expect(page.locator('.atlas-inspector')).toBeVisible();
+      await expect(closeInspector).toBeFocused();
 
+      // Entering it hides the focused desktop control: focus moves to the
+      // inspector's Close before the controls go hidden and inert.
+      const layers = controls.locator('summary', {
+        hasText: /^Scientific layers$/,
+      });
+      await layers.focus();
+      await recordFocusTrail(page);
       await page.setViewportSize(phoneViewport);
       await expect(panelSheet(page)).toHaveAttribute(
         'data-sheet-state',
         /^(peek|half|full)$/,
       );
+      await expect(controls).toBeHidden();
+      await expect(closeInspector).toBeFocused();
+      expect(await focusTrail(page)).toEqual([
+        'focus → button.atlas-inspector__close',
+      ]);
       expect(
         await page.evaluate(
           () => document.activeElement?.closest('[inert]') ?? null,
         ),
       ).toBeNull();
+
+      // Focus inside the open panel stays put both ways. The phone rules apply
+      // before React marks the rail as a sheet, so they must never hide a rail
+      // that holds a panel (that blurred its focus to <body> in some runs).
+      const rail = panelSheet(page);
+      expect(
+        await rail.evaluate((element) => {
+          const state = element.getAttribute('data-sheet-state')!;
+          element.removeAttribute('data-sheet-state');
+          const display = getComputedStyle(element).display;
+          element.setAttribute('data-sheet-state', state);
+          return display;
+        }),
+      ).not.toBe('none');
+      await page.setViewportSize({ height: 900, width: 1280 });
+      await expect(closeInspector).toBeFocused();
+      await recordFocusTrail(page);
+      await page.setViewportSize(phoneViewport);
+      await expect(rail).toHaveAttribute(
+        'data-sheet-state',
+        /^(peek|half|full)$/,
+      );
+      await expect(closeInspector).toBeFocused();
+      expect(await focusTrail(page)).toEqual([]);
+    });
+
+    test('crossing into the phone layout with More info open moves focus to its Close', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const phoneViewport = page.viewportSize();
+      if (phoneViewport === null)
+        throw new Error('the phone context has no viewport');
+      await page.setViewportSize({ height: 900, width: 1280 });
+      await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+      await waitForAtlasReady(page);
+      const moreInfo = page.getByRole('button', { name: 'More info' });
+      await moreInfo.click();
+      const external = page.getByRole('complementary', {
+        name: 'External variant information',
+      });
+      await expect(external).toBeVisible();
+      await expect(moreInfo).toBeFocused();
+      await recordFocusTrail(page);
+
+      const closeExternal = external.getByRole('button', {
+        name: 'Close external information',
+      });
+      await page.setViewportSize(phoneViewport);
+      await expect(panelSheet(page)).toHaveAttribute(
+        'data-sheet-state',
+        /^(peek|half|full)$/,
+      );
+      await expect(controlsSheet(page)).toBeHidden();
+      await expect(closeExternal).toBeFocused();
+      expect(await focusTrail(page)).toEqual([
+        'focus → button.atlas-inspector__close',
+      ]);
+
+      // On desktop both panels stay open. Focus on the earlier one, the
+      // inspector, which the phone layout then closes: focus goes to the
+      // latest panel's Close, not to <body> when the inspector unmounts.
+      await page.setViewportSize({ height: 900, width: 1280 });
+      await expect(closeExternal).toBeFocused();
+      await page
+        .getByRole('button', { name: 'Close external information' })
+        .click();
+      await tapSelectNearCenter(page);
+      const inspector = page.locator('.atlas-inspector');
+      await moreInfo.click();
+      await expect(external).toBeVisible();
+      await expect(inspector).toBeVisible();
+      await page.getByRole('button', { name: 'Close inspector' }).focus();
+      await recordFocusTrail(page);
+      await page.setViewportSize(phoneViewport);
+      await expect(inspector).toHaveCount(0);
+      await expect(closeExternal).toBeFocused();
+      expect(await focusTrail(page)).toEqual([
+        'focus → button.atlas-inspector__close',
+      ]);
     });
 
     test('the click of the globe tap that opened the panel sheet does not reach it', async ({

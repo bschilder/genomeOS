@@ -1743,7 +1743,8 @@ html.atlas-page .site-header--compact .site-header__inner {
   cursor: pointer;
 }
 
-/* Panel bodies add no box; they let the phone panel sheet go inert at peek (§A.1.6). */
+/* Panel bodies add no box on desktop. The phone panel sheet makes them inert at
+ * peek, and the inspector's body is its scroll container there (§A.1.6). */
 .atlas-panel-body {
   display: contents;
 }
@@ -2436,8 +2437,12 @@ body:has(.atlas-explorer) .skip-link {
     display: none;
   }
 
-  .atlas-right-rail,
-  .atlas-explorer:has(.atlas-warning-banner) .atlas-right-rail {
+  /* Only an empty rail is hidden. Crossing 52rem, these rules apply before
+   * React sets data-sheet-state, and hiding an open panel then would blur its
+   * focused control to <body> (Review Focus RF4). */
+  .atlas-right-rail:not(:has(.atlas-inspector, .atlas-external-details)),
+  .atlas-explorer:has(.atlas-warning-banner)
+    .atlas-right-rail:not(:has(.atlas-inspector, .atlas-external-details)) {
     display: none;
   }
 
@@ -2455,6 +2460,7 @@ body:has(.atlas-explorer) .skip-link {
       env(safe-area-inset-bottom) max(0.65rem, env(safe-area-inset-left));
     display: flex;
     flex-direction: column;
+    gap: 0;
     overflow: hidden;
     border: 1px solid rgb(112 230 255 / 25%);
     border-width: 1px 0 0;
@@ -2480,10 +2486,82 @@ body:has(.atlas-explorer) .skip-link {
     backdrop-filter: none;
   }
 
+  /* The inspector's body scrolls, not the inspector, so its peek row (kicker,
+   * h2 and Close) never scrolls out of the peek band (§A.1.6). */
   .atlas-right-rail[data-sheet-state] > .atlas-inspector {
-    padding: 0.2rem 0.3rem 1rem;
+    padding: 0 0.3rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    > .atlas-inspector
+    > :is(.atlas-kicker, h2) {
+    flex: none;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    > .atlas-inspector
+    > .atlas-inspector__close {
+    top: 0.1rem;
+    right: 0.3rem;
+  }
+
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector > .atlas-panel-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    padding-bottom: 1rem;
+    display: block;
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  /* The More info peek row is one dense h2 and Close line, like the inspector's. */
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header {
+    padding: 0 0.3rem 0.3rem;
+    gap: 0.5rem;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__icon {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header > div {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    .atlas-external-details__header
+    .atlas-kicker {
+    font-size: 0.8rem;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header h2 {
+    font-size: 1.24rem;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    h2 {
+    line-height: 1.2;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    .atlas-external-details__header
+    .atlas-inspector__close {
+    position: static;
+    flex: none;
+  }
+
+  /* A long population label stays one line at peek, so the band keeps to 18%. */
+  .atlas-right-rail[data-sheet-state='peek']
+    :is(.atlas-inspector, .atlas-external-details__header)
+    h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot]:empty {
@@ -2503,7 +2581,7 @@ body:has(.atlas-explorer) .skip-link {
   }
 
   .atlas-right-rail[data-sheet-state='peek']
-    :is(.atlas-inspector, .atlas-external-details__scroll) {
+    :is(.atlas-panel-body, .atlas-external-details__scroll) {
     overflow: hidden;
   }
 

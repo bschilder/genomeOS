@@ -8,7 +8,11 @@ import { downloadExternalInfo } from '../../atlas/external-info';
 import { AlphagenomeEvidence } from './AlphagenomeEvidence';
 import { GnomadEvidence } from './GnomadEvidence';
 import { useEscapeLayer } from './useEscapeStack';
-import { useExplorerPanel, usePanelBodyInert } from './useExplorerPanels';
+import {
+  useExplorerPanel,
+  usePanelBodyId,
+  usePanelBodyInert,
+} from './useExplorerPanels';
 
 type ExternalSource = 'gnomad' | 'dbsnp' | 'alphagenome';
 
@@ -121,6 +125,7 @@ function ExternalDetails({
   lookup: (source: ExternalSource) => void;
   source: ExternalSource;
 }) {
+  const bodyId = usePanelBodyId('external');
   const bodyInert = usePanelBodyInert();
   return (
     <aside
@@ -145,7 +150,12 @@ function ExternalDetails({
         </button>
       </header>
 
-      <div className="atlas-panel-body" data-sheet-body inert={bodyInert}>
+      <div
+        className="atlas-panel-body"
+        data-sheet-body
+        id={bodyId}
+        inert={bodyInert}
+      >
         <div
           className="atlas-external-tabs"
           role="group"
