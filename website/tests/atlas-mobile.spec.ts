@@ -456,6 +456,160 @@ for (const phone of PHONE_PROFILES) {
       ]);
     });
 
+    test('widening across 52rem carries focus to the dock counterpart', async ({
+      page,
+    }) => {
+      test.setTimeout(180_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const phoneViewport = page.viewportSize()!;
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const dockTrigger = sheet.locator('.atlas-map-catalog__trigger');
+      const cases = [
+        {
+          expected: dockTrigger,
+          focus: () => sheet.locator('.atlas-sheet__handle').focus(),
+          name: 'the controls handle',
+        },
+        {
+          expected: sheet
+            .locator('.atlas-field__title')
+            .getByRole('button', { name: 'About map selection' }),
+          focus: () =>
+            page
+              .locator('.atlas-sheet__handle-row')
+              .getByRole('button', { name: 'About map selection' })
+              .focus(),
+          name: 'the peek-row dataset InfoTip',
+        },
+        {
+          expected: dockTrigger,
+          focus: () =>
+            page.locator('.atlas-top-slot .atlas-map-catalog__trigger').focus(),
+          name: 'the top-slot dataset trigger',
+        },
+        {
+          expected: dockTrigger,
+          focus: async () => {
+            await page
+              .locator('.atlas-top-slot .atlas-map-catalog__trigger')
+              .click();
+            await expect(
+              page.getByRole('searchbox', { name: 'Search maps' }),
+            ).toBeFocused();
+          },
+          name: 'the open catalog',
+        },
+      ];
+      for (const wide of [
+        { height: phoneViewport.height, width: 1024 },
+        { height: 412, width: 915 },
+      ]) {
+        for (const { expected, focus, name } of cases) {
+          const label = `${name}, widened to ${wide.width}x${wide.height}`;
+          await page.setViewportSize(phoneViewport);
+          await expect(sheet, label).toHaveAttribute(
+            'data-sheet-state',
+            'peek',
+          );
+          await focus();
+          await recordFocusTrail(page);
+          await page.setViewportSize(wide);
+          await expect(sheet, label).not.toHaveAttribute('data-sheet-state');
+          await expect(expected, label).toBeFocused();
+          await expect(
+            page.getByRole('dialog', { name: 'Select dataset' }),
+            label,
+          ).toHaveCount(0);
+          expect(
+            await page.evaluate(() => {
+              const active = document.activeElement;
+              return (
+                active !== null &&
+                active !== document.body &&
+                active.closest('[inert], [hidden]') === null
+              );
+            }),
+            label,
+          ).toBe(true);
+          // The focused node unmounts, and Chromium reports that as one
+          // focusout with no related target; nothing else stops at <body>.
+          expect(await focusTrail(page), label).toEqual(['focus → none']);
+        }
+      }
+    });
+
+    test('narrowing across 52rem carries focus to the phone counterpart', async ({
+      page,
+    }) => {
+      test.setTimeout(180_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const phoneViewport = page.viewportSize()!;
+      const wide = { height: phoneViewport.height, width: 1024 };
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      const dockTrigger = sheet.locator('.atlas-map-catalog__trigger');
+      const handle = sheet.locator('.atlas-sheet__handle');
+      const cases = [
+        {
+          expected: handle,
+          focus: () => dockTrigger.focus(),
+          name: 'the dock dataset trigger',
+          trail: ['focus → button.atlas-sheet__handle'],
+        },
+        {
+          expected: handle,
+          focus: () =>
+            sheet
+              .locator('.atlas-field__title')
+              .getByRole('button', { name: 'About map selection' })
+              .focus(),
+          name: 'the dock dataset InfoTip',
+          trail: ['focus → button.atlas-sheet__handle'],
+        },
+        {
+          // The picker remounts in the top slot and its dialog closes; focus
+          // in the dialog returns to the new trigger.
+          expected: page.locator('.atlas-top-slot .atlas-map-catalog__trigger'),
+          focus: async () => {
+            await dockTrigger.click();
+            await expect(
+              page.getByRole('searchbox', { name: 'Search maps' }),
+            ).toBeFocused();
+          },
+          name: 'the open catalog',
+          trail: ['focus → none'],
+        },
+      ];
+      for (const { expected, focus, name, trail } of cases) {
+        await page.setViewportSize(wide);
+        await expect(sheet, name).not.toHaveAttribute('data-sheet-state');
+        await focus();
+        await recordFocusTrail(page);
+        await page.setViewportSize(phoneViewport);
+        await expect(sheet, name).toHaveAttribute('data-sheet-state', 'peek');
+        await expect(expected, name).toBeFocused();
+        await expect(
+          page.getByRole('dialog', { name: 'Select dataset' }),
+          name,
+        ).toHaveCount(0);
+        expect(
+          await page.evaluate(() => {
+            const active = document.activeElement;
+            return (
+              active !== null &&
+              active !== document.body &&
+              active.closest('[inert], [hidden]') === null
+            );
+          }),
+          name,
+        ).toBe(true);
+        expect(await focusTrail(page), name).toEqual(trail);
+      }
+    });
+
     test('the legend and credits dock above the sheet in every state', async ({
       page,
     }) => {

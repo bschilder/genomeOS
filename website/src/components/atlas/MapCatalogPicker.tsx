@@ -21,6 +21,7 @@ import type {
 } from '../../atlas/contracts';
 import { clampPickerTop, siteHeaderBottom } from './site-header';
 import { useEscapeLayer } from './useEscapeStack';
+import { useFocusCarry } from './useFocusCarry';
 
 interface MapCatalogPickerProps {
   catalog: AtlasCatalog;
@@ -152,6 +153,13 @@ export function MapCatalogPicker({
     };
   }, [close, open, placePanel]);
   useEscapeLayer(open, () => close(true), 'dialog');
+  // Crossing 52rem remounts the picker (top slot vs dock) and closes the
+  // dialog; focus in the trigger or the dialog returns to the new trigger.
+  useFocusCarry(
+    'catalog',
+    () => [triggerRef.current, panelRef.current],
+    () => triggerRef.current,
+  );
 
   const choose = (id: string) => {
     onSelect(id);

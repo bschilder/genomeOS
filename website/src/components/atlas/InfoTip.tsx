@@ -4,13 +4,16 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useEscapeLayer } from './useEscapeStack';
+import { useFocusCarry } from './useFocusCarry';
 
 interface InfoTipProps {
   children: React.ReactNode;
   label: string;
+  /** Keeps focus on this tip when a layout switch remounts it elsewhere. */
+  carryKey?: string;
 }
 
-export function InfoTip({ children, label }: InfoTipProps) {
+export function InfoTip({ carryKey, children, label }: InfoTipProps) {
   const id = useId();
   const container = useRef<HTMLSpanElement>(null);
   const content = useRef<HTMLSpanElement>(null);
@@ -18,6 +21,11 @@ export function InfoTip({ children, label }: InfoTipProps) {
   const [open, setOpen] = useState(false);
   const [pinned, setPinned] = useState(false);
   const [position, setPosition] = useState({ left: 12, top: 12, width: 288 });
+  useFocusCarry(
+    carryKey ?? null,
+    () => [trigger.current],
+    () => trigger.current,
+  );
 
   useEffect(() => {
     const closeFromOutside = (event: PointerEvent) => {

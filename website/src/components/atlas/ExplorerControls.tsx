@@ -152,7 +152,7 @@ export function ExplorerControls({
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const topSlotTarget = isMobile ? topSlot : null;
   const datasetTip = (
-    <InfoTip label="map selection">
+    <InfoTip carryKey="dataset-tip" label="map selection">
       Choose a versioned genetic variant, allele, gene, or phenotype map from
       the public genomeOS catalog.
     </InfoTip>
