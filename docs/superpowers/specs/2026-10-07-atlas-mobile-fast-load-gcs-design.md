@@ -146,8 +146,10 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
      in the popover heading; ramp `minmax(6rem, 1fr)` with numeric endpoints under its ends in a
      two-column sub-grid at 0.72rem; the scale container is `role="img"` with an `aria-label` built
      from the data (e.g. "Modeled frequency colour scale, 0.08% to 17.3%"); the info trigger is ≥
-     24 × 24 CSS px. The legend `<details>` gains Escape handling (close, focus the summary,
-     `stopPropagation()`), which it lacks today (interaction design §9.2).
+     24 × 24 CSS px. The legend `<details>` gains Escape handling (close; return focus to
+     the summary only when focus was inside the legend or on `<body>`; it is a `popover` layer of
+     the A.1.9 Escape stack, whose listener calls `preventDefault()` and `stopPropagation()`),
+     which it lacks today (interaction design §9.2).
    - **Credit block** — Cesium's `bottomContainer` stays inside `.atlas-scene` (Viewer.resize writes
      inline left/bottom/right, so placement rules keep `!important`); on mobile it and the data
      credit form one wrapping block (not limited to one line): the ion logo at its native size plus
@@ -191,7 +193,7 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
     `pointer: coarse`), so they override the dense rules but not the preference rules.
 13. **Desktop.** Desktop layout and behaviour are unchanged except for these listed deltas: the
     24 px target boxes (A.1.10), the legend Escape handling, the Escape stack, the header-height
-    flex layout (+1 px explorer height) and the empty top slot. Desktop axe, keyboard and existing
+    flex layout (−1 px explorer height) and the empty top slot. Desktop axe, keyboard and existing
     tests keep passing.
 
 ### A.2 Code organisation
