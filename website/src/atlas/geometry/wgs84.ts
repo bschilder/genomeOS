@@ -113,17 +113,32 @@ export interface BoundingSphere {
   radius: number;
 }
 
+/** Overwrites `target` in place, so a new extremum allocates nothing. */
+function assignVec3(target: Vec3, x: number, y: number, z: number): void {
+  target[0] = x;
+  target[1] = y;
+  target[2] = z;
+}
+
 /** `BoundingSphere.fromVertices` (Ritter plus naive box; the smaller wins),
- * taken over every xyz triple of every array in `sets`, in order. */
+ * taken over every xyz triple of every array in `sets`, in order.
+ *
+ * Throws when a set's length is not a multiple of 3: a partial triple is a
+ * malformed buffer, and dropping it would bound fewer vertices than the chunk
+ * draws. Empty sets are skipped; no vertices at all gives a zero sphere at the
+ * origin, as Cesium does for an empty array. */
 export function boundingSphereOf(
   sets: readonly ArrayLike<number>[],
 ): BoundingSphere {
   let first = -1;
-  for (let index = 0; index < sets.length; index += 1)
-    if (sets[index].length >= 3) {
-      first = index;
-      break;
-    }
+  for (let index = 0; index < sets.length; index += 1) {
+    const { length } = sets[index];
+    if (length % 3 !== 0)
+      throw new Error(
+        `boundingSphereOf: set ${index} holds ${length} values, not a whole number of xyz triples`,
+      );
+    if (first < 0 && length > 0) first = index;
+  }
   if (first < 0) return { center: [0, 0, 0], radius: 0 };
   const start = sets[first];
   const xMin: Vec3 = [start[0], start[1], start[2]];
@@ -133,16 +148,16 @@ export function boundingSphereOf(
   const yMax: Vec3 = [start[0], start[1], start[2]];
   const zMax: Vec3 = [start[0], start[1], start[2]];
   for (const positions of sets)
-    for (let i = 0; i + 2 < positions.length; i += 3) {
+    for (let i = 0; i < positions.length; i += 3) {
       const x = positions[i];
       const y = positions[i + 1];
       const z = positions[i + 2];
-      if (x < xMin[0]) xMin.splice(0, 3, x, y, z);
-      if (x > xMax[0]) xMax.splice(0, 3, x, y, z);
-      if (y < yMin[1]) yMin.splice(0, 3, x, y, z);
-      if (y > yMax[1]) yMax.splice(0, 3, x, y, z);
-      if (z < zMin[2]) zMin.splice(0, 3, x, y, z);
-      if (z > zMax[2]) zMax.splice(0, 3, x, y, z);
+      if (x < xMin[0]) assignVec3(xMin, x, y, z);
+      if (x > xMax[0]) assignVec3(xMax, x, y, z);
+      if (y < yMin[1]) assignVec3(yMin, x, y, z);
+      if (y > yMax[1]) assignVec3(yMax, x, y, z);
+      if (z < zMin[2]) assignVec3(zMin, x, y, z);
+      if (z > zMax[2]) assignVec3(zMax, x, y, z);
     }
   const span = (a: Vec3, b: Vec3): number =>
     (b[0] - a[0]) * (b[0] - a[0]) +
@@ -177,7 +192,7 @@ export function boundingSphereOf(
   ];
   let naiveRadius = 0;
   for (const positions of sets)
-    for (let i = 0; i + 2 < positions.length; i += 3) {
+    for (let i = 0; i < positions.length; i += 3) {
       const x = positions[i];
       const y = positions[i + 1];
       const z = positions[i + 2];
