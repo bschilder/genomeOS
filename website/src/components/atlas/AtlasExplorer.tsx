@@ -54,7 +54,7 @@ import {
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
 import { AtlasDataCredit } from './AtlasDataCredit';
 import { AtlasLegend } from './AtlasLegend';
-import { AtlasStatus, type SceneFailure } from './AtlasStatus';
+import { AtlasStatus } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
 import { ControlsLoading } from './ExplorerHeading';
 import { HoverPreview } from './HoverPreview';
@@ -65,6 +65,7 @@ import { EscapeStackProvider } from './useEscapeStack';
 import { ExplorerPanelsProvider } from './useExplorerPanels';
 import { useObservationPlaces } from './useObservationPlaces';
 import { useAtlasSceneLifecycle } from './useAtlasSceneLifecycle';
+import type { SceneFailure } from './useAtlasSceneLifecycle';
 
 interface AtlasExplorerProps {
   cesiumToken?: string;
@@ -228,7 +229,7 @@ export default function AtlasExplorer({
       appliedDisplay.current = null;
       setSceneFailure(null);
     },
-    onUnavailable: () => setSceneFailure('webgl'),
+    onUnavailable: setSceneFailure,
     reducedMotion,
     scene,
   });
@@ -731,8 +732,10 @@ export default function AtlasExplorer({
             error={error}
             sceneFailure={sceneFailure}
             onRetry={() => {
-              // A new scene reuses Cesium's shared workers and their failed imports; reload instead.
-              if (sceneFailure === 'render') window.location.reload();
+              // A new scene reuses Cesium's shared workers and their failed imports, and a failed
+              // scene chunk stays failed in this document; reload instead.
+              if (sceneFailure === 'render' || sceneFailure === 'download')
+                window.location.reload();
               else if (sceneFailure) setSceneAttempt((value) => value + 1);
               else setDataAttempt((value) => value + 1);
             }}

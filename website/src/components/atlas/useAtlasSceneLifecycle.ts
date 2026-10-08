@@ -6,6 +6,16 @@ import { loadAtlasSceneModule } from '../../atlas/boot';
 import { supportsWebGL } from '../../atlas/explorer-runtime';
 import type { AtlasSceneController } from '../../atlas/scene/types';
 
+/**
+ * Why the globe is unavailable (Cesium globe design §12). `webgl`: no WebGL, or Cesium failed to
+ * start. `download`: the scene chunk failed to load. Chromium keeps a failed dynamic import in the
+ * page's module map and rejects every later `import()` of that URL without a request, so only a
+ * page reload recovers. `render`: a frame threw and the scene's render loop stopped
+ * (`AtlasSceneController.onRenderError`); Cesium's document-wide geometry workers keep a failed
+ * import, so that too recovers only through a reload. This hook reports the first two.
+ */
+export type SceneFailure = 'webgl' | 'download' | 'render';
+
 export interface AtlasSceneLifecycleOptions {
   attempt: number;
   /** Subscribe to the new controller; returns the unsubscribe. */
@@ -15,7 +25,7 @@ export interface AtlasSceneLifecycleOptions {
   /** Null until the catalog names the borders source; the scene waits for it. */
   naturalEarthUrl: string | null;
   onReset: () => void;
-  onUnavailable: () => void;
+  onUnavailable: (failure: Exclude<SceneFailure, 'render'>) => void;
   reducedMotion: boolean;
   scene: RefObject<AtlasSceneController | null>;
 }
@@ -35,7 +45,7 @@ export function useAtlasSceneLifecycle(
     if (!container) return;
     onReset();
     if (!supportsWebGL()) {
-      onUnavailable();
+      onUnavailable('webgl');
       return;
     }
     if (!naturalEarthUrl) return;
@@ -58,12 +68,15 @@ export function useAtlasSceneLifecycle(
             if (scene.current === controller) scene.current = null;
           };
           setGeneration((value) => value + 1);
-        } catch {
-          onUnavailable();
+        } catch (error) {
+          console.error('The Atlas globe could not start.', error);
+          onUnavailable('webgl');
         }
       },
-      () => {
-        if (active) onUnavailable();
+      (error: unknown) => {
+        if (!active) return;
+        console.error('The Atlas globe scene could not be loaded.', error);
+        onUnavailable('download');
       },
     );
     return () => {

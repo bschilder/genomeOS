@@ -5,8 +5,12 @@ import { describe, expect, it } from 'vitest';
 
 const dist = path.resolve(import.meta.dirname, '../dist');
 const assets = path.join(dist, '_astro');
-// GLSL built-ins carry this prefix in every Cesium shader source string; minification keeps it.
-const CESIUM_MARKER = 'czm_';
+// Strings that survive minification in Cesium code. GLSL built-ins carry `czm_` in every shader
+// source. `DeveloperError` is the error class behind Cesium's argument checks, which its ES source
+// keeps, so every non-trivial Core value (Color, Cartesian3, Math, JulianDate, Event…) brings it
+// along even when tree-shaken away from the renderer. Only constant-only modules (`defined`,
+// `Frozen`, small enums) carry neither.
+const CESIUM_MARKERS = ['czm_', 'DeveloperError'];
 const STATIC_IMPORT =
   /(?:\bimport|\bexport)\s*(?:[^"'()]*?\bfrom\s*)?["'](\.\.?\/[^"']+\.js)["']/g;
 // The Vite 8 Oxc minifier writes string literals, dynamic-import specifiers included, as
@@ -19,6 +23,11 @@ function appHtml(): string {
 
 function code(file: string): string {
   return readFileSync(path.join(assets, file), 'utf8');
+}
+
+/** The Cesium markers present in a chunk's source. */
+function cesiumMarkers(source: string): string[] {
+  return CESIUM_MARKERS.filter((marker) => source.includes(marker));
 }
 
 function islandChunk(): string {
@@ -63,16 +72,17 @@ export function sceneChunk(): string {
 describe('Atlas client bundle', () => {
   it('keeps Cesium out of the explorer island and its static imports', () => {
     for (const file of staticGraph(islandChunk())) {
-      expect(code(file).includes(CESIUM_MARKER), file).toBe(false);
+      expect(cesiumMarkers(code(file)), file).toEqual([]);
     }
   });
 
   it('loads Cesium only through the lazy scene chunk', () => {
     const scene = sceneChunk();
     expect(existsSync(path.join(assets, scene))).toBe(true);
+    // Every marker must occur in the scene graph, or it could never catch Cesium in the island.
     expect(
-      staticGraph(scene).some((file) => code(file).includes(CESIUM_MARKER)),
-    ).toBe(true);
+      new Set(staticGraph(scene).flatMap((file) => cesiumMarkers(code(file)))),
+    ).toEqual(new Set(CESIUM_MARKERS));
   });
 
   it('bundles the data worker as a Cesium-free ES module referenced by the island', () => {
@@ -81,7 +91,7 @@ describe('Atlas client bundle', () => {
     );
     expect(worker).toBeDefined();
     const source = code(worker!);
-    expect(source.includes(CESIUM_MARKER)).toBe(false);
+    expect(cesiumMarkers(source)).toEqual([]);
     expect(source).toContain('load-grid');
     expect(source.trimStart().startsWith('(function')).toBe(false);
     expect(

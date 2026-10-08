@@ -16,7 +16,11 @@ export function atlasWorker(): AtlasWorkerClient {
   return worker;
 }
 
-/** The scene-chunk import shared by every caller; a failed import is retried on the next call. */
+/**
+ * The scene-chunk import shared by every caller. A failed import is cleared so the next call issues
+ * a new `import()`, but Chromium answers that from its module map without a request, so the
+ * explorer recovers from a failed download by reloading the page.
+ */
 export function loadAtlasSceneModule(): Promise<AtlasSceneModule> {
   if (!sceneModule) {
     const pending = import('./scene/atlas-scene');

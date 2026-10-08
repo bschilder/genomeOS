@@ -1602,6 +1602,37 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
   expect(rawPanelSeen).toBe(false);
 });
 
+test('Retry globe recovers from a failed scene-chunk download', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // Chromium caches a failed dynamic import in the module map, so only a reload fetches it again.
+  const sceneRequests: string[] = [];
+  await page.route(/\/_astro\/atlas-scene\.[^/]+\.js$/, async (route) => {
+    sceneRequests.push(route.request().url());
+    if (sceneRequests.length === 1) await route.abort('failed');
+    else await route.fallback();
+  });
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await page.goto('/app/?metric=post_sd');
+  await expect(page.getByText('The globe could not load')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.getByText('This globe needs WebGL')).toHaveCount(0);
+  expect(consoleErrors).toContainEqual(
+    expect.stringContaining('The Atlas globe scene could not be loaded.'),
+  );
+  await page.getByRole('button', { name: 'Retry globe' }).click();
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  expect(sceneRequests).toHaveLength(2);
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+});
+
 test('polygon map validates a selected model cell before loading Google Maps', async ({
   page,
 }) => {
