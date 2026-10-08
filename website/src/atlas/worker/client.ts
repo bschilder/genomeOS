@@ -200,7 +200,10 @@ export class AtlasWorkerClient {
     );
   }
 
-  /** The same stream from the worker's cached mesh with new colours (§B.6.13); anchors are null. */
+  /**
+   * Every chunk again in plan order with new colours (§B.6.13): the worker rebuilds each chunk from
+   * its cached topology, chunk plan and vertex means, not from a cached mesh; anchors are null.
+   */
   async recolour(
     req: RecolourBody,
     onChunk: (message: ChunkMessage) => void,

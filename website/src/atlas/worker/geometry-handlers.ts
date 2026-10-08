@@ -26,14 +26,11 @@ import { buildGridTopology, type GridTopology } from '../geometry/topology';
 import type { SurfaceGeometry } from '../url-state';
 import type { Metric, PaletteId } from '../visual-encoding';
 import type {
-  BuildChunksRequest,
-  BuildEdgesRequest,
   ChunkMessage,
-  ContextHeightsRequest,
+  GeometryRequestType,
   GeometryResponse,
   GeometryStepName,
-  ParseContextRequest,
-  RecolourRequest,
+  WorkerRequestOf,
 } from './protocol';
 
 export interface GeometryWorkerContext {
@@ -54,13 +51,11 @@ export interface PreparedGrid {
   plan: ChunkPlan;
 }
 
-export interface GeometryHandlers {
-  'build-chunks'(request: BuildChunksRequest): Promise<void>;
-  recolour(request: RecolourRequest): Promise<void>;
-  'build-edges'(request: BuildEdgesRequest): Promise<void>;
-  'parse-context'(request: ParseContextRequest): Promise<void>;
-  'context-heights'(request: ContextHeightsRequest): Promise<void>;
-}
+/** One handler per geometry request type. A mapped type, so indexing it with a generic request
+ * type K gives the handler for `WorkerRequestOf<K>` (the registry adapter in handlers.ts). */
+export type GeometryHandlers = {
+  [K in GeometryRequestType]: (request: WorkerRequestOf<K>) => Promise<void>;
+};
 
 /** Every distinct ArrayBuffer behind the typed arrays, each listed once. */
 export function transferablesOf(
@@ -318,6 +313,7 @@ export function createGeometryWorker(
           );
           await context.yieldToEventLoop();
         }
+        if (cancelled(request.id)) return;
         context.post(
           {
             artifactKey: request.artifactKey,

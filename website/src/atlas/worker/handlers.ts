@@ -59,9 +59,7 @@ function geometry<K extends GeometryRequestType>(type: K): RequestHandler<K> {
     const runtime = geometryRuntime(context);
     runtime.signals.set(context.id, context.signal);
     try {
-      const handler = runtime.worker.handlers[type] as unknown as (
-        message: typeof request,
-      ) => Promise<void>;
+      const handler = runtime.worker.handlers[type];
       await handler(request);
     } finally {
       runtime.signals.delete(context.id);

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { atlasCatalogSchema } from '../src/atlas/contracts';
 import { SUPPORT_CODES } from '../src/atlas/gosa/decode';
@@ -22,6 +22,7 @@ import { buildGridTopology } from '../src/atlas/geometry/topology';
 import type {
   ChunkMessage,
   GeometryResponse,
+  WorkerOutbound,
 } from '../src/atlas/worker/protocol';
 import {
   createGeometryWorker,
@@ -46,7 +47,9 @@ interface Posted {
   transfer: Transferable[];
 }
 
-function harness(cancelAfterChunks = Number.POSITIVE_INFINITY) {
+/** `cancelWhen` sees every message posted so far; the handlers ask before each chunk and before
+ * the final `chunks-done` or `edges-done`. */
+function harness(cancelWhen: (posted: Posted[]) => boolean = () => false) {
   const [fixture] = surfaceFixturesIn(PARITY_DIR);
   const render: DecodedRender = {
     artifact: fixture.artifact,
@@ -61,9 +64,7 @@ function harness(cancelAfterChunks = Number.POSITIVE_INFINITY) {
   const context: GeometryWorkerContext = {
     grid: (sha) => (sha === fixture.grid.gridSha256 ? fixture.grid : undefined),
     gridFor: (key) => (key === ARTIFACT_KEY ? fixture.grid : undefined),
-    isCancelled: () =>
-      posted.filter(({ message }) => message.type === 'chunk').length >=
-      cancelAfterChunks,
+    isCancelled: () => cancelWhen(posted),
     now: () => (clock += 1),
     post: (message, transfer) => posted.push({ message, transfer }),
     render: (key) => (key === ARTIFACT_KEY ? render : undefined),
@@ -89,6 +90,21 @@ function request(gridSha256: string) {
     observationPoints: Float64Array.from([36.8, 54.1, 0, 0]),
     palette: 'plasma' as const,
     type: 'build-chunks' as const,
+  };
+}
+
+function edgesRequest(gridSha256: string) {
+  return {
+    artifactKey: ARTIFACT_KEY,
+    edgeColor: { mode: 'matched' as const },
+    factor: 0,
+    geometry: 'triangles' as const,
+    gridSha256,
+    id: 11,
+    lookAt: LOOK_AT,
+    metric: 'post_mean' as const,
+    palette: 'rainbow' as const,
+    type: 'build-edges' as const,
   };
 }
 
@@ -162,13 +178,32 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
   });
 
   it('stops at a cancelled request without finishing', async () => {
-    const { fixture, posted, worker } = harness(2);
+    const { fixture, posted, worker } = harness(
+      (sent) => ofType(sent, 'chunk').length >= 2,
+    );
     await worker.handlers['build-chunks'](request(fixture.grid.gridSha256));
     expect(ofType(posted, 'chunk')).toHaveLength(2);
     expect(ofType(posted, 'chunks-done')).toHaveLength(0);
     expect(posted.at(-1)!.message).toMatchObject({
       code: 'cancelled',
       id: 7,
+      type: 'error',
+    });
+
+    // A cancel that lands after the last edge chunk still ends in `cancelled`, not `edges-done`.
+    const total = planChunks(fixture.grid, buildGridTopology(fixture.grid))
+      .chunks.length;
+    const edges = harness(
+      (sent) => ofType(sent, 'edges-chunk').length >= total,
+    );
+    await edges.worker.handlers['build-edges'](
+      edgesRequest(fixture.grid.gridSha256),
+    );
+    expect(ofType(edges.posted, 'edges-chunk')).toHaveLength(total);
+    expect(ofType(edges.posted, 'edges-done')).toHaveLength(0);
+    expect(edges.posted.at(-1)!.message).toMatchObject({
+      code: 'cancelled',
+      id: 11,
       type: 'error',
     });
   });
@@ -214,18 +249,7 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
 
   it('sends exact edge capacities with every edge chunk', async () => {
     const { fixture, posted, render, worker } = harness();
-    await worker.handlers['build-edges']({
-      artifactKey: ARTIFACT_KEY,
-      edgeColor: { mode: 'matched' },
-      factor: 0,
-      geometry: 'triangles',
-      gridSha256: fixture.grid.gridSha256,
-      id: 11,
-      lookAt: LOOK_AT,
-      metric: 'post_mean',
-      palette: 'rainbow',
-      type: 'build-edges',
-    });
+    await worker.handlers['build-edges'](edgesRequest(fixture.grid.gridSha256));
     const topology = buildGridTopology(fixture.grid);
     const plan = planChunks(fixture.grid, topology);
     const expected = edgeCapacity(
@@ -325,14 +349,28 @@ describe('geometry worker handlers (fast-load §B.6.3, §B.6.5)', () => {
 });
 
 describe('worker yield (fast-load §B.6.9)', () => {
-  it('resolves each yield after already-queued microtasks, in order', async () => {
-    const yieldToEventLoop = messageChannelYield();
-    const order: string[] = [];
-    const first = yieldToEventLoop().then(() => order.push('first'));
-    const second = yieldToEventLoop().then(() => order.push('second'));
-    await Promise.resolve().then(() => order.push('microtask'));
-    await Promise.all([first, second]);
-    expect(order).toEqual(['microtask', 'first', 'second']);
+  it('resolves each yield after already-queued microtasks, in order, without a timer', async () => {
+    // Every timer is faked, so a setTimeout(0) or setImmediate yield schedules a timer that never
+    // fires; a microtask yield resolves before the 100-step microtask chain below has finished.
+    vi.useFakeTimers();
+    try {
+      const yieldToEventLoop = messageChannelYield();
+      const order: string[] = [];
+      const first = yieldToEventLoop().then(() => order.push('first'));
+      const second = yieldToEventLoop().then(() => order.push('second'));
+      expect(vi.getTimerCount()).toBe(0);
+      let chain = Promise.resolve();
+      for (let step = 0; step < 100; step += 1)
+        chain = chain.then(() => undefined);
+      await Promise.all([
+        chain.then(() => order.push('microtask')),
+        first,
+        second,
+      ]);
+      expect(order).toEqual(['microtask', 'first', 'second']);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -416,7 +454,24 @@ describe('AtlasWorkerClient geometry requests through the dispatcher (fast-load 
     );
     const { entry, gridSha256 } = onlyGrid(catalog);
     const refs = catalog.artifacts.slice(0, 9);
-    const client = new AtlasWorkerClient(new InProcessWorker().asWorker());
+    // Everything the worker posts, including what the client drops after an abort.
+    const worker = new InProcessWorker();
+    const outbound: WorkerOutbound[] = [];
+    let cancelledId: number | undefined;
+    let settleCancelled!: () => void;
+    const cancelledSettled = new Promise<void>((resolve) => {
+      settleCancelled = resolve;
+    });
+    worker.addEventListener('message', (event) => {
+      const message = (event as MessageEvent<WorkerOutbound>).data;
+      outbound.push(message);
+      if (
+        message.id === cancelledId &&
+        (message.type === 'error' || message.type === 'chunks-done')
+      )
+        settleCancelled();
+    });
+    const client = new AtlasWorkerClient(worker.asWorker());
     await client.loadGrid(toBuffer(fixtureBytes(e2e, entry.url)), {
       entry,
       gridSha256,
@@ -426,20 +481,37 @@ describe('AtlasWorkerClient geometry requests through the dispatcher (fast-load 
         toBuffer(fixtureBytes(e2e, artifact.web.render.url)),
         artifact,
       );
+    const body = {
+      artifactKey: artifactKeyFor(refs[0]),
+      geometry: 'triangles' as const,
+      gridSha256,
+      lookAt: { lat: 0, lon: 0 },
+      metric: 'post_mean' as const,
+      observationPoints: null,
+      palette: 'viridis' as const,
+    };
     const built: ChunkMessage[] = [];
-    await client.buildChunks(
-      {
-        artifactKey: artifactKeyFor(refs[0]),
-        geometry: 'triangles',
-        gridSha256,
-        lookAt: { lat: 0, lon: 0 },
-        metric: 'post_mean',
-        observationPoints: null,
-        palette: 'viridis',
-      },
-      (message) => built.push(message),
-    );
+    await client.buildChunks(body, (message) => built.push(message));
     expect(built.length).toBeGreaterThan(0);
+
+    // A superseded request is cancelled by id (§B.6.3): aborting on the first chunk stops the
+    // worker at its next yield, through the adapter's per-request AbortSignal.
+    const controller = new AbortController();
+    const superseded = client.buildChunks(
+      body,
+      (message) => {
+        cancelledId = message.id;
+        controller.abort();
+      },
+      controller.signal,
+    );
+    await expect(superseded).rejects.toMatchObject({ name: 'AbortError' });
+    await cancelledSettled;
+    const forCancelled = outbound.filter(({ id }) => id === cancelledId);
+    expect(forCancelled.filter(({ type }) => type === 'chunk')).toHaveLength(1);
+    expect(
+      forCancelled.filter(({ type }) => type !== 'step-timing').at(-1),
+    ).toMatchObject({ code: 'cancelled', id: cancelledId, type: 'error' });
     client.terminate();
   });
 });
