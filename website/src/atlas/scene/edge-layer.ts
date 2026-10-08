@@ -5,6 +5,11 @@
  * BufferPolylineCollection is allocated, and rings are added in
  * frame-budgeted slices. Elevation moves each vertex linearly from its base
  * position (factor 0) towards its position at exaggeration 1.
+ *
+ * Calls may land between slices. `reset()` and a new `build` cancel any
+ * slicing in progress; the renderer for the latest view is built and shown;
+ * an elevation change raises the rings already added, and later rings are
+ * added at the height the renderer is drawn at.
  */
 
 import {
@@ -68,6 +73,20 @@ interface RingRef {
   ring: number;
 }
 
+/** A Color material shared by every projected line of one colour. A Polyline destroys its material when
+ * its collection is destroyed, so a shared instance would be destroyed once per line and the second
+ * call would throw. A Color material holds no textures or sub-materials, so destroying it releases
+ * nothing; this one ignores destroy and is left to the garbage collector. One material per line is
+ * not an option: 61k Color materials cost about 200 MB of heap. */
+class SharedColorMaterial extends Material {
+  constructor(color: Color) {
+    super({ fabric: { type: 'Color' } });
+    this.uniforms.color = color;
+  }
+
+  override destroy(): void {}
+}
+
 function ringsOf(buffers: EdgeChunkBuffers): RingRef[] {
   return Array.from(
     { length: Math.max(0, buffers.ringOffsets.length - 1) },
@@ -95,10 +114,16 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
   let buffer: BufferPolylineCollection | null = null;
   let projected: PolylineCollection | null = null;
   let projectedLines: Polyline[] = [];
+  // The factor each renderer's rings are drawn at. Rings added in later slices use it, so a renderer
+  // never mixes heights; `raise` moves it to `factor`.
+  let bufferFactor = 0;
+  let projectedFactor = 0;
   let built = false;
   let mode: ExplorerSceneMode = 'globe';
   let factor = 0;
   let generation = 0;
+  // Aborted by every clear(), which cancels the slicing of whichever build or view switch is running.
+  let lifetime = new AbortController();
   let lastElevationUpdate = Number.NEGATIVE_INFINITY;
   let scratch = new Float64Array(0);
 
@@ -131,20 +156,22 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
     const key = keyOf(color);
     let material = lineMaterials.get(key);
     if (!material) {
-      material = Material.fromType('Color', { color });
+      material = new SharedColorMaterial(color);
       lineMaterials.set(key, material);
     }
     return material;
   };
-  const positionsOf = ({ buffers, ring }: RingRef): Float64Array => {
+  const positionsOf = (
+    { buffers, ring }: RingRef,
+    at: number,
+  ): Float64Array => {
     const start = buffers.ringOffsets[ring] * 3;
     const end = buffers.ringOffsets[ring + 1] * 3;
-    if (factor === 0) return buffers.basePositions.subarray(start, end);
+    if (at === 0) return buffers.basePositions.subarray(start, end);
     if (scratch.length < end - start) scratch = new Float64Array(end - start);
     for (let index = start; index < end; index += 1) {
       const base = buffers.basePositions[index];
-      scratch[index - start] =
-        base + (buffers.positions[index] - base) * factor;
+      scratch[index - start] = base + (buffers.positions[index] - base) * at;
     }
     return scratch.subarray(0, end - start);
   };
@@ -154,6 +181,7 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
     signal,
   });
   const addBuffer = async (signal: AbortSignal): Promise<void> => {
+    const list = rings;
     const target = new BufferPolylineCollection({
       allowPicking: false,
       positionDatatype: ComponentDatatype.DOUBLE,
@@ -162,15 +190,16 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
     });
     collection.add(target);
     buffer = target;
+    bufferFactor = factor;
     const polyline = new BufferPolyline();
     await runSliced(
-      rings.length,
+      list.length,
       (index) => {
-        const ring = rings[index];
+        const ring = list[index];
         target.add(
           {
             material: bufferMaterial(colorOf(ring)),
-            positions: positionsOf(ring),
+            positions: positionsOf(ring, bufferFactor),
           },
           polyline,
         );
@@ -179,18 +208,21 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
     );
   };
   const addProjected = async (signal: AbortSignal): Promise<void> => {
+    const list = rings;
     const target = new PolylineCollection();
+    const lines: Polyline[] = [];
     collection.add(target);
     projected = target;
-    projectedLines = [];
+    projectedLines = lines;
+    projectedFactor = factor;
     await runSliced(
-      rings.length,
+      list.length,
       (index) => {
-        const ring = rings[index];
-        projectedLines.push(
+        const ring = list[index];
+        lines.push(
           target.add({
             material: lineMaterial(colorOf(ring)),
-            positions: cartesiansOf(positionsOf(ring)),
+            positions: cartesiansOf(positionsOf(ring, projectedFactor)),
             width: EDGE_WIDTH_PIXELS,
           }),
         );
@@ -198,25 +230,52 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
       sliceOptions(signal),
     );
   };
+  /** Moves every ring drawn so far, in both renderers, to `factor`. */
+  const raise = () => {
+    if (buffer) {
+      const polyline = new BufferPolyline();
+      for (let index = 0; index < buffer.primitiveCount; index += 1) {
+        buffer.get(index, polyline);
+        polyline.setPositions(positionsOf(rings[index], factor));
+      }
+      bufferFactor = factor;
+    }
+    if (projected) {
+      projectedLines.forEach((line, index) => {
+        line.positions = cartesiansOf(positionsOf(rings[index], factor));
+      });
+      projectedFactor = factor;
+    }
+  };
   const showRenderer = (renderer: EdgeRenderer) => {
     if (buffer) buffer.show = renderer === 'buffer';
     if (projected) projected.show = renderer === 'projected';
   };
-  const ensureRenderer = async (
-    renderer: EdgeRenderer,
-    signal: AbortSignal,
-  ): Promise<void> => {
-    if (renderer === 'buffer' && !buffer) await addBuffer(signal);
-    if (renderer === 'projected' && !projected) await addProjected(signal);
-    showRenderer(renderer);
+  // Re-reads `mode` after every await: a view switch that lands while a renderer is being built is
+  // honoured when that build ends, and the last switch decides which renderer is shown.
+  const ensureRenderer = async (signal: AbortSignal): Promise<void> => {
+    for (;;) {
+      if (signal.aborted) throw abortError();
+      const renderer = edgeRendererForMode(mode);
+      if (renderer === 'buffer' && !buffer) await addBuffer(signal);
+      else if (renderer === 'projected' && !projected)
+        await addProjected(signal);
+      else {
+        showRenderer(renderer);
+        return;
+      }
+    }
   };
   const clear = () => {
-    collection.removeAll();
+    lifetime.abort();
+    lifetime = new AbortController();
     buffer = null;
     projected = null;
     projectedLines = [];
     rings = [];
     built = false;
+    collection.removeAll();
+    lineMaterials.clear();
   };
 
   return {
@@ -230,7 +289,9 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
       factor = Math.max(0, nextFactor);
       const controller = new AbortController();
       const abort = () => controller.abort();
+      const owner = lifetime.signal;
       signal?.addEventListener('abort', abort, { once: true });
+      owner.addEventListener('abort', abort, { once: true });
       if (signal?.aborted) controller.abort();
       try {
         const received: EdgeChunkBuffers[] = [];
@@ -255,7 +316,7 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
             `Cell outline capacity mismatch: declared ${declared.rings} rings and ${declared.vertices} vertices, received ${rings.length} and ${vertices}`,
           );
         capacity = declared;
-        await ensureRenderer(edgeRendererForMode(mode), controller.signal);
+        await ensureRenderer(controller.signal);
         if (current !== generation) throw abortError();
         built = true;
         options.requestRender();
@@ -264,6 +325,7 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
         throw error;
       } finally {
         signal?.removeEventListener('abort', abort);
+        owner.removeEventListener('abort', abort);
       }
     },
     isBuilt: () => built,
@@ -271,17 +333,23 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
     async setMode(next) {
       mode = next;
       if (!built) return;
-      await ensureRenderer(
-        edgeRendererForMode(next),
-        new AbortController().signal,
-      );
+      const { signal } = lifetime;
+      try {
+        await ensureRenderer(signal);
+      } catch (error) {
+        // reset() discarded these outlines; the next build is told its mode.
+        if (signal.aborted && (error as Error | null)?.name === 'AbortError')
+          return;
+        throw error;
+      }
       options.requestRender();
     },
     setElevationFactor(next, force = false) {
       const safe = Math.max(0, next);
       if (safe === factor && !force) return;
       factor = safe;
-      if (!built) return;
+      // Nothing drawn yet: the build adds its first rings at `factor`.
+      if (!buffer && !projected) return;
       const time = now();
       if (
         !force &&
@@ -290,16 +358,7 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
       )
         return;
       lastElevationUpdate = time;
-      if (buffer) {
-        const polyline = new BufferPolyline();
-        for (let index = 0; index < rings.length; index += 1) {
-          buffer.get(index, polyline);
-          polyline.setPositions(positionsOf(rings[index]));
-        }
-      }
-      projectedLines.forEach((line, index) => {
-        line.positions = cartesiansOf(positionsOf(rings[index]));
-      });
+      raise();
       options.requestRender();
     },
     reset() {

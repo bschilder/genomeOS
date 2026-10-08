@@ -12,6 +12,7 @@ import type { EdgeChunkBuffers } from '../src/atlas/geometry/edge-buffers';
 import {
   createEdgeLayer,
   EDGE_ALPHA,
+  type EdgeLayer,
   type EdgeSource,
 } from '../src/atlas/scene/edge-layer';
 import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
@@ -251,5 +252,222 @@ describe('deferred cell outlines', () => {
       ),
     ).rejects.toMatchObject({ name: 'AbortError' });
     expect(layer.collection.length).toBe(0);
+  });
+});
+
+/** One ring per slice, so any build of two or more rings yields between rings; `atNextYield` makes a call
+ * land at the next yield, while rings are still being added. */
+function interleaved() {
+  let pending: (() => void) | null = null;
+  return {
+    atNextYield(action: () => void) {
+      pending = action;
+    },
+    slice: {
+      sliceMs: 0,
+      yieldFn: async () => {
+        const action = pending;
+        pending = null;
+        action?.();
+      },
+    },
+  };
+}
+
+function projectedPositions(
+  collection: PolylineCollection,
+  index: number,
+): number[] {
+  return collection
+    .get(index)
+    .positions.flatMap((position: Cartesian3) => [
+      position.x,
+      position.y,
+      position.z,
+    ]);
+}
+
+function outlinePositions(layer: EdgeLayer, index: number): number[] {
+  const renderer = layer.collection.get(0) as
+    BufferPolylineCollection | PolylineCollection;
+  return renderer instanceof BufferPolylineCollection
+    ? ringPositions(renderer, index)
+    : projectedPositions(renderer, index);
+}
+
+function expectRingsAt(
+  layer: EdgeLayer,
+  rings: readonly Ring[],
+  height: number,
+): void {
+  rings.forEach((ring, index) => {
+    const expected = ecef(ring, height);
+    const positions = outlinePositions(layer, index);
+    expect(positions).toHaveLength(expected.length);
+    positions.forEach((value, component) =>
+      expect(value).toBeCloseTo(expected[component], 3),
+    );
+  });
+}
+
+describe('cell outlines built across several slices', () => {
+  const RINGS: readonly Ring[] = [SQUARE, TRIANGLE, SQUARE];
+
+  it('releases projected outlines that share a material on reset, and builds again', async () => {
+    stubCesiumBrowserImageTypes();
+    const layer = createEdgeLayer({
+      requestRender: vi.fn(),
+      slice: interleaved().slice,
+    });
+    // Every ring takes the fixed colour, so all projected lines use one material.
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+    await layer.setMode('map');
+    const projected = layer.collection.get(1) as PolylineCollection;
+    expect(projected.length).toBe(3);
+    const material = projected.get(0).material;
+    expect(material.type).toBe('Color');
+    expect(material.uniforms.color).toEqual(Color.WHITE.withAlpha(EDGE_ALPHA));
+    expect(projected.get(2).material).toBe(material);
+
+    expect(() => layer.reset()).not.toThrow();
+    expect(layer.collection.length).toBe(0);
+    expect(layer.isBuilt()).toBe(false);
+
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'map', 0);
+    expect(layer.isBuilt()).toBe(true);
+    expect(layer.collection.length).toBe(1);
+    expect((layer.collection.get(0) as PolylineCollection).length).toBe(3);
+    expect(() => layer.reset()).not.toThrow();
+    expect(layer.collection.length).toBe(0);
+  });
+
+  it.each(['globe', 'map'] as const)(
+    'raises every %s ring when the elevation changes while rings are added',
+    async (mode) => {
+      stubCesiumBrowserImageTypes();
+      const { atNextYield, slice } = interleaved();
+      const layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+      atNextYield(() => layer.setElevationFactor(2, true));
+
+      await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', mode, 0);
+
+      expectRingsAt(layer, RINGS, EDGE_CLEARANCE + 2_000);
+    },
+  );
+
+  it('keeps one height when a throttled elevation change lands while rings are added', async () => {
+    const { atNextYield, slice } = interleaved();
+    const layer = createEdgeLayer({
+      now: () => 0,
+      requestRender: vi.fn(),
+      slice,
+    });
+    atNextYield(() => {
+      layer.setElevationFactor(1);
+      // Within the 50 ms throttle: recorded, not yet drawn.
+      layer.setElevationFactor(2);
+    });
+
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+    expectRingsAt(layer, RINGS, EDGE_CLEARANCE + 1_000);
+
+    layer.setElevationFactor(2, true);
+    expectRingsAt(layer, RINGS, EDGE_CLEARANCE + 2_000);
+  });
+
+  it('shows projected outlines when the view switches to map while the build adds rings', async () => {
+    stubCesiumBrowserImageTypes();
+    const { atNextYield, slice } = interleaved();
+    const layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+    atNextYield(() => void layer.setMode('map'));
+
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+
+    const buffer = layer.collection.get(0) as BufferPolylineCollection;
+    const projected = layer.collection.get(1) as PolylineCollection;
+    expect(projected).toBeInstanceOf(PolylineCollection);
+    expect(projected.length).toBe(3);
+    expect(buffer.show).toBe(false);
+    expect(projected.show).toBe(true);
+  });
+
+  it('shows the renderer of the last view when two switches overlap', async () => {
+    stubCesiumBrowserImageTypes();
+    const { atNextYield, slice } = interleaved();
+    const layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+    let back: Promise<void> | undefined;
+    atNextYield(() => {
+      back = layer.setMode('globe');
+    });
+
+    await layer.setMode('map');
+    await back;
+
+    expect(back).toBeDefined();
+    const buffer = layer.collection.get(0) as BufferPolylineCollection;
+    const projected = layer.collection.get(1) as PolylineCollection;
+    expect(projected.length).toBe(3);
+    expect(buffer.show).toBe(true);
+    expect(projected.show).toBe(false);
+  });
+
+  it('reset cancels a projected build that a view switch started', async () => {
+    stubCesiumBrowserImageTypes();
+    const { atNextYield, slice } = interleaved();
+    const layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+    atNextYield(() => layer.reset());
+
+    await expect(layer.setMode('map')).resolves.toBeUndefined();
+
+    expect(layer.collection.length).toBe(0);
+    expect(layer.isBuilt()).toBe(false);
+    expect(layer.ringCount()).toBe(0);
+  });
+
+  it('reset abandons a build that is adding rings, and a later build succeeds', async () => {
+    const { atNextYield, slice } = interleaved();
+    const layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+    atNextYield(() => layer.reset());
+
+    await expect(
+      layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(layer.collection.length).toBe(0);
+    expect(layer.isBuilt()).toBe(false);
+
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+    expect(layer.isBuilt()).toBe(true);
+    expect(layer.collection.length).toBe(1);
+    expect(
+      (layer.collection.get(0) as BufferPolylineCollection).primitiveCount,
+    ).toBe(3);
+  });
+
+  it('a new build supersedes one that is adding rings', async () => {
+    const { atNextYield, slice } = interleaved();
+    const layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+    let second: Promise<void> | undefined;
+    atNextYield(() => {
+      second = layer.build(
+        sourceOf([edgeBuffers(0, [TRIANGLE])]),
+        '#ffffff',
+        'globe',
+        0,
+      );
+    });
+
+    await expect(
+      layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0),
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    await second;
+
+    expect(layer.isBuilt()).toBe(true);
+    expect(layer.ringCount()).toBe(1);
+    expect(layer.collection.length).toBe(1);
+    const buffer = layer.collection.get(0) as BufferPolylineCollection;
+    expect(buffer.primitiveCount).toBe(1);
+    expectRingsAt(layer, [TRIANGLE], EDGE_CLEARANCE);
   });
 });
