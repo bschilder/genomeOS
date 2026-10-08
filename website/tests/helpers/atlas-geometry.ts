@@ -66,9 +66,19 @@ export function decodedGridFromH3(h3: readonly string[]): DecodedGrid {
 }
 
 export function surfaceFixture(path: string): SurfaceFixture {
-  const parsed = surfaceArtifactSchema.parse(
+  return surfaceFixtureFrom(
+    path.split('/').at(-1)!,
     JSON.parse(readFileSync(path, 'utf8')),
   );
+}
+
+/** A fixture from canonical surface JSON held in memory (a synthetic grid), parsed against the
+ * same schema as the files. Its cells must be listed in ascending u64 order. */
+export function surfaceFixtureFrom(
+  name: string,
+  json: unknown,
+): SurfaceFixture {
+  const parsed = surfaceArtifactSchema.parse(json);
   const cells = parsed.cells;
   const froundCells = cells.map((cell) => ({
     ...cell,
@@ -80,7 +90,7 @@ export function surfaceFixture(path: string): SurfaceFixture {
     cells,
     froundCells,
     grid: decodedGridFromH3(cells.map((cell) => cell.h3_index)),
-    name: path.split('/').at(-1)!,
+    name,
     post_mean: Float32Array.from(cells, (cell) => cell.post_mean),
     post_sd: Float32Array.from(cells, (cell) => cell.post_sd),
     support: Uint8Array.from(cells, (cell) =>

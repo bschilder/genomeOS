@@ -4,8 +4,10 @@ import {
   type BufferPolylineCollection,
   type PrimitiveCollection,
 } from 'cesium';
+import { gridDisk } from 'h3-js';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ArtifactIdentity, SurfaceCell } from '../src/atlas/contracts';
 import { planChunks } from '../src/atlas/geometry/chunks';
 import {
   brighterEdgeBytes,
@@ -16,6 +18,7 @@ import {
 import { h3PolygonParts } from '../src/atlas/geometry/polygon-parts';
 import type { MeshInput } from '../src/atlas/geometry/surface-buffers';
 import { buildGridTopology } from '../src/atlas/geometry/topology';
+import { SUPPORT_CODES } from '../src/atlas/gosa/decode';
 import {
   brighterEdgeColor,
   buildSurfaceLayer,
@@ -27,6 +30,8 @@ import { colorAtPosition, type Metric } from '../src/atlas/visual-encoding';
 import {
   GOLDEN_DIR,
   PARITY_DIR,
+  sortedU64,
+  surfaceFixtureFrom,
   surfaceFixturesIn,
   type SurfaceFixture,
 } from './helpers/atlas-geometry';
@@ -154,14 +159,63 @@ function newRings(
   return rings;
 }
 
-const FIXTURES = [
+/** The res-4 (production resolution) cells holding each pole. */
+const POLE_CELLS = ['8403263ffffffff', '84f2939ffffffff'];
+/** The cells of their gridDisk rings that h3PolygonParts splits into fans:
+ * each pole-enclosing cell and, at each pole, the neighbour whose boundary
+ * crosses ±180° above 89°. No cell of the golden or parity fixtures splits. */
+const POLE_SPLIT_CELLS = [
+  '8403263ffffffff',
+  '8403267ffffffff',
+  '84f2903ffffffff',
+  '84f2939ffffffff',
+];
+
+/** Both poles' gridDisk(·, 1) under `artifact`'s identity and domains: the
+ * only fixture whose rings take the multi-part path. Values sweep each domain
+ * in different orders, and split cells stay supported while every support
+ * occurs among the rest, so smooth corner heights differ from cell heights and
+ * the vertex means skip masked neighbours. */
+function polarFixture(artifact: ArtifactIdentity): SurfaceFixture {
+  const h3 = sortedU64(POLE_CELLS.flatMap((cell) => gridDisk(cell, 1)));
+  const sweep = ([low, high]: readonly [number, number], step: number) =>
+    low + ((high - low) * step) / (h3.length - 1);
+  const cells: SurfaceCell[] = h3.map((h3_index, row) => {
+    const postMean = sweep(
+      artifact.metric_domains.post_mean,
+      (row * 5) % h3.length,
+    );
+    return {
+      dist_nearest_obs_km: 50,
+      h3_index,
+      post_mean: postMean,
+      post_sd: sweep(artifact.metric_domains.post_sd, (row * 3) % h3.length),
+      posterior_contraction: 0.5,
+      q025: postMean,
+      q975: postMean,
+      support: POLE_SPLIT_CELLS.includes(h3_index)
+        ? SUPPORT_CODES[row % 2]
+        : SUPPORT_CODES[row % 4],
+    };
+  });
+  return surfaceFixtureFrom('res-4 poles (synthetic)', {
+    artifact,
+    cells,
+    schema_version: 1,
+  });
+}
+
+const FILE_FIXTURES = [
   ...surfaceFixturesIn(GOLDEN_DIR),
   ...surfaceFixturesIn(PARITY_DIR),
 ];
+const POLAR = polarFixture(FILE_FIXTURES.at(-1)!.artifact);
+const FIXTURES = [...FILE_FIXTURES, POLAR];
 const CASES = [
   ['triangles', MATCHED, 0, 1e-6],
   ['triangles', FIXED, 5, 0.1],
   ['honmoon', MATCHED, 2.5, 0.1],
+  ['honmoon-fill', MATCHED, 5, 0.1],
   ['hexagons', MATCHED, 5, 1e-6],
   ['extruded', FIXED, 0, 1e-6],
 ] as const;
@@ -236,6 +290,18 @@ describe('edge rings match the legacy edgeDefinitionsForCell (fast-load §B.6.9)
       );
     },
   );
+
+  it('splits supported pole cells in the polar fixture, so the multi-part path runs', () => {
+    expect(
+      POLAR.cells
+        .filter(
+          (cell) =>
+            (cell.support === 'observed' || cell.support === 'interpolated') &&
+            h3PolygonParts(cell.h3_index).length > 1,
+        )
+        .map((cell) => cell.h3_index),
+    ).toEqual(POLE_SPLIT_CELLS);
+  });
 
   it('brightens matched colours exactly like brighterEdgeColor', () => {
     for (let t = 0; t <= 1; t += 0.01) {
