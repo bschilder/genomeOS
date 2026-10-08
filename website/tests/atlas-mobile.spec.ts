@@ -1432,6 +1432,53 @@ for (const phone of PHONE_PROFILES) {
       });
     }
 
+    test('the Stadia credit lightbox closes from its own close button', async ({
+      page,
+    }) => {
+      await page.route('https://tiles.stadiamaps.com/**', (route) =>
+        route.abort(),
+      );
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/?basemap=stadia-smooth');
+      await waitForAtlasReady(page);
+      const expand = page.locator('.atlas-scene .cesium-credit-expand-link');
+      await expect(expand).toBeVisible();
+      // The link wraps, so its bounding-box centre can fall on the canvas: tap
+      // the centre of its last line instead.
+      const line = await expand.evaluate((element) => {
+        const rects = Array.from(element.getClientRects()).filter(
+          (rect) => rect.width >= 1 && rect.height >= 1,
+        );
+        const last = rects.at(-1)!;
+        return { x: last.left + last.width / 2, y: last.top + last.height / 2 };
+      });
+      await page.touchscreen.tap(line.x, line.y);
+      const overlay = page.locator(
+        '.atlas-scene .cesium-credit-lightbox-overlay',
+      );
+      await expect(overlay).toHaveCSS('display', 'block');
+      const close = page.locator('.atlas-scene .cesium-credit-lightbox-close');
+      await expect
+        .poll(() =>
+          close.evaluate((element) => {
+            const rect = element.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+            );
+            return hit !== null && element.contains(hit);
+          }),
+        )
+        .toBe(true);
+      const cross = await centreOf(close);
+      await page.touchscreen.tap(cross.x, cross.y);
+      await expect(overlay).toHaveCSS('display', 'none');
+      await expect(
+        page.locator('.atlas-top-slot .atlas-map-catalog__trigger'),
+      ).not.toHaveAttribute('aria-expanded', 'true');
+      await expect(page.locator('.atlas-scene')).toHaveCSS('z-index', '0');
+    });
+
     for (const panel of ['inspector', 'More info'] as const) {
       test(`the globe stays reachable with the ${panel} sheet at peek`, async ({
         page,

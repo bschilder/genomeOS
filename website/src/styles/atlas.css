@@ -69,6 +69,18 @@ html.atlas-page .site-header--compact .site-header__inner {
   outline-offset: -4px;
 }
 
+/* Cesium's credit lightbox opens inside .atlas-scene, a z-index 0 stacking
+ * context under the z-index 4 chrome, so the top slot, sheets and rail would
+ * cover its close button. Lift the scene above them while it is open (keyed
+ * on Cesium's own aria-expanded); .atlas-explorer isolates, so this stays
+ * under the site header and the fixed pickers. */
+.atlas-explorer:has(
+    .atlas-scene .cesium-credit-expand-link[aria-expanded='true']
+  )
+  .atlas-scene {
+  z-index: 5;
+}
+
 .atlas-controls,
 .atlas-top-slot,
 .atlas-legend,
