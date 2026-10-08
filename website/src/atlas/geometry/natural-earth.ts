@@ -5,6 +5,18 @@
  * one ring per polygon outer boundary (holes are not drawn), closed by
  * repeating its first coordinate; one label per distinct country text at
  * LABEL_X/LABEL_Y, first occurrence wins. Context only, never science.
+ *
+ * Schema violations are hard errors (AGENTS): every feature, geometry,
+ * polygon, ring (holes included) and position is checked against RFC 7946,
+ * and anything malformed throws a `TypeError` naming the feature, never a
+ * silent skip. Only two shapes are valid and draw no ring: a `null`
+ * geometry (an unlocated feature, still labelled, as Cesium made it an
+ * entity) and an empty polygon (RFC 7946 §3.1; Cesium's `createPolygon`
+ * made no entity, so no label). Geometries other than Polygon and
+ * MultiPolygon are refused: the borders file has none and the buffers
+ * cannot carry them. Label properties stay optional, as the overlay read
+ * them: no text or no finite LABEL_X/LABEL_Y means no label, and a
+ * non-numeric MIN_LABEL means 7.
  */
 
 import { gridDisk, latLngToCell } from 'h3-js';
@@ -43,32 +55,74 @@ export function countryLabelText(properties: CountryProperties): string | null {
   return null;
 }
 
-function isPosition(value: unknown): value is [number, number, ...number[]] {
+type Position = [number, number, ...number[]];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isPosition(value: unknown): value is Position {
   return (
     Array.isArray(value) &&
     value.length >= 2 &&
-    Number.isFinite(value[0]) &&
-    Number.isFinite(value[1])
+    value.every((coordinate) => Number.isFinite(coordinate))
   );
 }
 
-function polygonsOf(geometry: unknown): unknown[][][] {
-  if (!geometry || typeof geometry !== 'object') return [];
-  const { type, coordinates } = geometry as {
-    type?: unknown;
-    coordinates?: unknown;
-  };
-  if (type === 'Polygon') return [coordinates as unknown[][]];
-  if (type === 'MultiPolygon') return coordinates as unknown[][][];
-  return [];
+/** An RFC 7946 §3.1.6 linear ring: four or more positions, first equal to last. */
+function linearRing(ring: unknown, where: string): Position[] {
+  if (!Array.isArray(ring)) throw new TypeError(`${where} is not an array`);
+  if (!ring.every(isPosition))
+    throw new TypeError(`${where} has a non-numeric position`);
+  if (ring.length < 4)
+    throw new TypeError(`${where} has fewer than four positions`);
+  const first = ring[0];
+  const last = ring[ring.length - 1];
+  if (
+    first.length !== last.length ||
+    first.some((coordinate, axis) => coordinate !== last[axis])
+  )
+    throw new TypeError(`${where} is not closed`);
+  return ring;
+}
+
+function polygonRings(polygon: unknown, where: string): Position[][] {
+  if (!Array.isArray(polygon))
+    throw new TypeError(`${where} coordinates are not an array`);
+  return polygon.map((ring, index) =>
+    linearRing(ring, `${where} ring ${index}`),
+  );
+}
+
+/** The feature's polygons, or `null` for an unlocated (`geometry: null`) feature. */
+function featurePolygons(
+  geometry: unknown,
+  where: string,
+): Position[][][] | null {
+  if (geometry === null) return null;
+  if (!isRecord(geometry))
+    throw new TypeError(`${where} geometry must be a GeoJSON geometry or null`);
+  const { type, coordinates } = geometry;
+  if (type === 'Polygon')
+    return [polygonRings(coordinates, `${where} Polygon`)];
+  if (type === 'MultiPolygon') {
+    if (!Array.isArray(coordinates))
+      throw new TypeError(`${where} MultiPolygon coordinates are not an array`);
+    return coordinates.map((polygon, index) =>
+      polygonRings(polygon, `${where} MultiPolygon polygon ${index}`),
+    );
+  }
+  throw new TypeError(
+    `${where} has unsupported geometry type ${JSON.stringify(type)}; ` +
+      'Natural Earth borders are Polygon or MultiPolygon',
+  );
 }
 
 export function parseNaturalEarth(json: unknown): NaturalEarthBuffers {
   if (
-    !json ||
-    typeof json !== 'object' ||
-    (json as { type?: unknown }).type !== 'FeatureCollection' ||
-    !Array.isArray((json as { features?: unknown }).features)
+    !isRecord(json) ||
+    json.type !== 'FeatureCollection' ||
+    !Array.isArray(json.features)
   )
     throw new TypeError(
       'Natural Earth data must be a GeoJSON FeatureCollection',
@@ -77,43 +131,50 @@ export function parseNaturalEarth(json: unknown): NaturalEarthBuffers {
   const lonLat: number[] = [];
   const labels: NaturalEarthLabel[] = [];
   const labelled = new Set<string>();
-  for (const feature of (json as { features: unknown[] }).features) {
-    const { geometry, properties } = (feature ?? {}) as {
-      geometry?: unknown;
-      properties?: CountryProperties | null;
-    };
-    for (const polygon of polygonsOf(geometry)) {
-      if (!Array.isArray(polygon) || polygon.length === 0) continue;
+  json.features.forEach((feature: unknown, index) => {
+    const where = `Natural Earth feature ${index}`;
+    if (!isRecord(feature) || feature.type !== 'Feature')
+      throw new TypeError(`${where} is not a GeoJSON Feature`);
+    const { properties } = feature;
+    if (
+      properties !== undefined &&
+      properties !== null &&
+      !isRecord(properties)
+    )
+      throw new TypeError(`${where} properties must be an object or null`);
+    const polygons = featurePolygons(feature.geometry, where);
+    // Cesium made one entity per non-empty polygon, or one for a null
+    // geometry, and the overlay offered each entity's text as a label.
+    let hasEntity = polygons === null;
+    for (const polygon of polygons ?? []) {
+      if (polygon.length === 0) continue;
       const outer = polygon[0];
-      if (!Array.isArray(outer) || outer.length === 0) continue;
-      if (!outer.every(isPosition))
-        throw new TypeError('Natural Earth ring has a non-numeric position');
-      if (outer.length > 1) {
-        for (const [lon, lat] of [...outer, outer[0]]) lonLat.push(lon, lat);
-        ringOffsets.push(lonLat.length / 2);
-      }
-      const text = properties ? countryLabelText(properties) : null;
-      const lon = properties?.LABEL_X;
-      const lat = properties?.LABEL_Y;
-      if (
-        !text ||
-        labelled.has(text) ||
-        typeof lon !== 'number' ||
-        !Number.isFinite(lon) ||
-        typeof lat !== 'number' ||
-        !Number.isFinite(lat)
-      )
-        continue;
-      labelled.add(text);
-      labels.push({
-        lat,
-        lon,
-        minLabel:
-          typeof properties?.MIN_LABEL === 'number' ? properties.MIN_LABEL : 7,
-        text,
-      });
+      for (const [lon, lat] of [...outer, outer[0]]) lonLat.push(lon, lat);
+      ringOffsets.push(lonLat.length / 2);
+      hasEntity = true;
     }
-  }
+    if (!hasEntity || !properties) return;
+    const country = properties as CountryProperties;
+    const text = countryLabelText(country);
+    const lon = country.LABEL_X;
+    const lat = country.LABEL_Y;
+    if (
+      !text ||
+      labelled.has(text) ||
+      typeof lon !== 'number' ||
+      !Number.isFinite(lon) ||
+      typeof lat !== 'number' ||
+      !Number.isFinite(lat)
+    )
+      return;
+    labelled.add(text);
+    labels.push({
+      lat,
+      lon,
+      minLabel: typeof country.MIN_LABEL === 'number' ? country.MIN_LABEL : 7,
+      text,
+    });
+  });
   return {
     labels,
     lonLat: Float64Array.from(lonLat),
