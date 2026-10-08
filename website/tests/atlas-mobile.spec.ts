@@ -1478,6 +1478,57 @@ for (const phone of PHONE_PROFILES) {
   });
 }
 
+/*
+ * Phones narrower than 360 CSS px (§A.1.1 matrix, extended to 320 and 344):
+ * with initial-scale=1 a page wider than the screen scrolls sideways instead
+ * of zooming out to fit. /docs/ is left out: its Starlight header is 358 px
+ * wide, which predates this branch and is out of its scope.
+ */
+for (const viewport of [
+  { height: 640, width: 320 },
+  { height: 882, width: 344 },
+] as const) {
+  test.describe(`${viewport.width}x${viewport.height} narrow phone`, () => {
+    test.use({
+      deviceScaleFactor: 3,
+      hasTouch: true,
+      isMobile: true,
+      viewport,
+    });
+    test.beforeEach(({}, testInfo) =>
+      skipUnlessProject(testInfo, 'mobile-chromium'),
+    );
+
+    for (const route of topLevelRoutes.filter((path) => path !== '/docs/')) {
+      test(`${route} fits the narrow phone without zooming out`, async ({
+        page,
+      }) => {
+        await page.goto(route);
+        if (route === '/app/') await waitForAtlasReady(page);
+        const fit = await page.evaluate(() => ({
+          clientHeight: document.documentElement.clientHeight,
+          clientWidth: document.documentElement.clientWidth,
+          explorerBottom:
+            document.querySelector('.atlas-explorer')?.getBoundingClientRect()
+              .bottom ?? null,
+          innerHeight: window.innerHeight,
+          scale: window.visualViewport?.scale ?? 1,
+          scrollHeight: document.documentElement.scrollHeight,
+          scrollWidth: document.documentElement.scrollWidth,
+        }));
+        expect(fit.scrollWidth).toBeLessThanOrEqual(fit.clientWidth);
+        expect(fit.scale).toBe(1);
+        if (route === '/app/') {
+          expect(fit.scrollHeight).toBeLessThanOrEqual(fit.clientHeight);
+          expect(
+            Math.abs(fit.explorerBottom! - fit.innerHeight),
+          ).toBeLessThanOrEqual(0.5);
+        }
+      });
+    }
+  });
+}
+
 for (const profile of [
   { name: 'Pixel 7', project: 'mobile-chromium', use: {} },
   {
