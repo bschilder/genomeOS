@@ -48,14 +48,43 @@ jobs:
         run: npm run build:fallback
       - name: Check fallback links
         run: npm run check:links -- dist-fallback /genomeOS/
+
+  # Browser and accessibility contracts, split by test across four runners that start alongside
+  # validate. One worker per shard: software WebGL saturates a 4-vCPU runner (#411).
+  e2e:
+    name: e2e (shard ${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install exact dependencies
+        run: npm ci
       - name: Install browser runtime
         run: npx playwright install --with-deps chromium
       - name: Run browser and accessibility contracts
-        run: npm run test:e2e
+        run: npm run test:e2e -- --fully-parallel --shard=${{ matrix.shard }}/4
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-shard-${{ matrix.shard }}
+          path: website/test-results
+          retention-days: 7
 
   build:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: validate
+    needs: [validate, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
