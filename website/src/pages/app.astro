@@ -2,8 +2,9 @@
 import AtlasExplorer from '../components/atlas/AtlasExplorer';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { INLINE_CATALOG_ID } from '../atlas/inline-catalog';
+import { preloadScriptSource } from '../atlas/preload-script';
 import { loadPageCatalog } from '../lib/catalog-build';
-import { assertDataBase } from '../lib/data-url';
+import { assertDataBase, dataOrigin } from '../lib/data-url';
 import { sitePath } from '../lib/paths';
 
 // fast-load design §B.4: site data always same-origin; Part C substitutes the artifact base
@@ -14,6 +15,7 @@ assertDataBase(siteDataBase);
 assertDataBase(artifactDataBase);
 // fast-load design §B.6.1: the same strict schema the client uses; a violation fails the build.
 const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
+const preconnect = dataOrigin(artifactDataBase);
 ---
 
 <SiteLayout
@@ -23,6 +25,11 @@ const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
   viewportFit="cover"
 >
   <Fragment slot="head">
+    {
+      preconnect && (
+        <link rel="preconnect" href={preconnect} crossorigin="anonymous" />
+      )
+    }
     <script
       type="application/json"
       id={INLINE_CATALOG_ID}
@@ -30,6 +37,7 @@ const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
       is:inline
       set:html={catalogJson}
     />
+    <script is:inline set:html={preloadScriptSource()} />
   </Fragment>
   <AtlasExplorer
     client:load

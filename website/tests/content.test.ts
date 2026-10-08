@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { atlasCatalogSchema } from '../src/atlas/contracts';
+import { preloadScriptSource } from '../src/atlas/preload-script';
 
 const dist = path.resolve(import.meta.dirname, '../dist');
 // Only the inline catalog element; its assumptions deliberately mention the P0 registry.
@@ -139,5 +140,14 @@ describe('public site content', () => {
   it('does not expose unexplained internal project codes on introduction pages', () => {
     expect(home).not.toMatch(/\bP[0-9]+\b/);
     expect(project).not.toMatch(/\bP[0-9]+\b/);
+  });
+
+  it('preloads the selected artifact from an inline head script after the catalog', () => {
+    const head = preview.slice(0, preview.indexOf('</head>'));
+    const catalogAt = head.search(INLINE_CATALOG);
+    const scriptAt = head.indexOf(preloadScriptSource());
+    expect(catalogAt).toBeGreaterThan(-1);
+    expect(scriptAt).toBeGreaterThan(catalogAt);
+    expect(head).not.toContain('rel="preconnect"');
   });
 });
