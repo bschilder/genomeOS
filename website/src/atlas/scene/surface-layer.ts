@@ -42,6 +42,7 @@ import {
   paletteBinsForCells,
   partitionSurfaceCells,
 } from './support-material';
+import type { ScientificPrimitiveGroup } from './types';
 import { h3PolygonParts } from '../geometry/polygon-parts';
 
 export { h3BoundaryDegrees, h3PolygonParts } from '../geometry/polygon-parts';
@@ -74,19 +75,7 @@ export function edgeColorForSurface(
   return mode === 'matched' ? brighterEdgeColor(surfaceColor) : fixedColor;
 }
 
-export interface ScientificPrimitiveGroup {
-  collection: PrimitiveCollection;
-  primitives: Primitive[];
-  isReady(): boolean;
-  readyCount(): number;
-  totalCount(): number;
-  setOpacity(opacity: number): void;
-  setSurfaceOpacity(opacity: number): void;
-  setCellEdges(visible: boolean): Promise<void>;
-  setElevationFactor(factor: number, force?: boolean): void;
-  setSceneMode(mode: ExplorerSceneMode): Promise<void>;
-  setVisibility(surface: boolean, support: boolean): void;
-}
+export type { ScientificPrimitiveGroup } from './types';
 
 type OpacityMaterial = {
   applySurfaceOpacity: boolean;

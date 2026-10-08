@@ -1,5 +1,7 @@
 /** Shared Cesium scene contracts for Atlas design §11. */
 
+import type { Primitive, PrimitiveCollection } from 'cesium';
+
 import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
 import type {
   ObservationColorVariable,
@@ -25,6 +27,26 @@ export type AtlasPick = SurfacePick | ObservationPick;
 export interface AtlasHover {
   pick: AtlasPick;
   screenPosition: { x: number; y: number };
+}
+
+export type SurfaceChunkPick = {
+  kind: 'surface-chunk';
+  artifactKey: string;
+  chunk: number;
+};
+
+export interface ScientificPrimitiveGroup {
+  collection: PrimitiveCollection;
+  primitives: Primitive[];
+  isReady(): boolean;
+  readyCount(): number;
+  totalCount(): number;
+  setOpacity(opacity: number): void;
+  setSurfaceOpacity(opacity: number): void;
+  setCellEdges(visible: boolean): Promise<void>;
+  setElevationFactor(factor: number, force?: boolean): void;
+  setSceneMode(mode: ExplorerSceneMode): Promise<void>;
+  setVisibility(surface: boolean, support: boolean): void;
 }
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
 

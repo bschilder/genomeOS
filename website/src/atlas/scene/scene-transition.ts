@@ -1,12 +1,50 @@
-/** Render-ready synchronization and visual swaps for Atlas design §11. */
+/** Render-ready synchronization and visual swaps for Atlas design §11 (spec 2026-10-07 §B.6.8). */
 
-import { Viewer } from 'cesium';
+import type { Scene } from 'cesium';
 
-import type { ObservationPrimitiveGroup } from './observation-layer';
-import type { ScientificPrimitiveGroup } from './surface-layer';
+export interface SceneHost {
+  scene: Pick<Scene, 'postRender' | 'primitives' | 'requestRender'>;
+}
 
-export type FadeableGroup =
-  ScientificPrimitiveGroup | ObservationPrimitiveGroup;
+export interface FadeableGroup {
+  collection: { show: boolean };
+  isReady(): boolean;
+  readyCount(): number;
+  totalCount?(): number;
+  setOpacity(opacity: number): void;
+}
+
+/** One fadeable unit for a surface and its observations, so a swap is atomic. */
+export function fadeTogether(
+  ...groups: (FadeableGroup | null | undefined)[]
+): FadeableGroup | null {
+  const members = groups.filter(
+    (group): group is FadeableGroup => group !== null && group !== undefined,
+  );
+  if (members.length === 0) return null;
+  return {
+    collection: {
+      get show() {
+        return members.some((member) => member.collection.show);
+      },
+      set show(value: boolean) {
+        for (const member of members) member.collection.show = value;
+      },
+    },
+    isReady: () => members.every((member) => member.isReady()),
+    readyCount: () =>
+      members.reduce((total, member) => total + member.readyCount(), 0),
+    setOpacity(opacity: number) {
+      for (const member of members) member.setOpacity(opacity);
+    },
+    totalCount: () =>
+      members.reduce(
+        (total, member) =>
+          total + (member.totalCount?.() ?? member.readyCount()),
+        0,
+      ),
+  };
+}
 
 const HEATMAP_TRANSITION_MS = 720;
 const HEATMAP_SWAP_MS = 300;
@@ -21,7 +59,7 @@ export function transitionProgress(
 }
 
 export function waitForReady(
-  viewer: Viewer,
+  viewer: SceneHost,
   group: FadeableGroup,
   onProgress?: (progress: number) => void,
 ): Promise<void> {
@@ -67,7 +105,7 @@ export function waitForReady(
 }
 
 export function animateSwap(
-  viewer: Viewer,
+  viewer: SceneHost,
   incoming: FadeableGroup,
   outgoing: FadeableGroup | null,
   reducedMotion: boolean,
@@ -107,7 +145,7 @@ export function animateSwap(
 }
 
 export function animateValue(
-  viewer: Viewer,
+  viewer: { scene: { requestRender(): void } },
   from: number,
   to: number,
   reducedMotion: boolean,
