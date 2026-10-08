@@ -1,9 +1,12 @@
 /** Frame-budgeted overlay construction for Atlas design §11 (spec 2026-10-07 §B.6.9).
  *
- * Cell outlines and Natural Earth borders are added in slices of at most
- * `sliceMs` of main-thread work. Each slice ends with a render request and a
- * MessageChannel yield, which browsers do not clamp the way they clamp nested
- * `setTimeout(0)` calls.
+ * Cell outlines and Natural Earth borders are added in slices sized to
+ * `sliceMs` of main-thread work. A slice always runs at least one item and
+ * starts no new item once `sliceMs` has elapsed, so it can overrun the budget
+ * by the item in progress. After each slice `runSliced` calls the caller's
+ * `onSlice`, where overlay callers request a render, and, if items remain,
+ * yields through a MessageChannel, which browsers do not clamp the way they
+ * clamp nested `setTimeout(0)` calls.
  */
 
 import type { ExplorerSceneMode } from '../url-state';
@@ -15,6 +18,7 @@ export const OVERLAY_SLICE_MS = 8;
 export interface SliceOptions {
   sliceMs?: number;
   signal?: AbortSignal;
+  /** Runs after every slice, before the yield; overlay callers call `scene.requestRender()` here. */
   onSlice?: () => void;
   now?: () => number;
   yieldFn?: () => Promise<void>;
