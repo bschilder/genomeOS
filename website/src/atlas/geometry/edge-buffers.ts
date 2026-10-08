@@ -21,7 +21,7 @@ import { heightFor } from '../visual-encoding';
 import { geodeticToEcef, normalizeInto } from './wgs84';
 
 export const EDGE_CLEARANCE_METRES = 1_050;
-const EDGE_ALPHA = 0.92;
+export const EDGE_ALPHA = 0.92;
 const MATCHED_EDGE_LIGHTEN = 0.46;
 
 export type EdgeColorSpec =
