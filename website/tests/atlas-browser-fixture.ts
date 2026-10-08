@@ -127,6 +127,35 @@ export async function installAtlasBrowserFixture(
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
   );
+  // Transitional (fast-load design §B.6.1): the catalog is inlined into /app/, so its counts are
+  // rewritten in the document. The e2e fixture rewrite replaces this with ATLAS_CATALOG_PATH.
+  await page.route(
+    (url) => url.pathname.endsWith('/app/'),
+    async (route) => {
+      if (route.request().resourceType() !== 'document') {
+        await route.continue();
+        return;
+      }
+      const response = await route.fetch();
+      const html = await response.text();
+      const body = html.replace(
+        /(<script\b[^>]*\bid="atlas-catalog"[^>]*>)([\s\S]*?)(<\/script>)/,
+        (_match, open: string, json: string, close: string) => {
+          const payload = JSON.parse(json) as BrowserCatalog;
+          const artifacts = payload.artifacts.map((artifact) => ({
+            ...artifact,
+            n_cells: Math.min(artifact.n_cells, surfaceBudget),
+            n_observations: Math.min(
+              artifact.n_observations,
+              observationBudget,
+            ),
+          }));
+          return `${open}${JSON.stringify({ ...payload, artifacts }).replace(/</g, '\\u003c')}${close}`;
+        },
+      );
+      await route.fulfill({ body, response });
+    },
+  );
   await page.route('**/data/atlas/catalog.json', async (route) => {
     const response = await route.fetch();
     const payload = (await response.json()) as BrowserCatalog;

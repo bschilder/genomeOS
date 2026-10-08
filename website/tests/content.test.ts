@@ -3,7 +3,12 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { atlasCatalogSchema } from '../src/atlas/contracts';
+
 const dist = path.resolve(import.meta.dirname, '../dist');
+// Only the inline catalog element; its assumptions deliberately mention the P0 registry.
+const INLINE_CATALOG =
+  /<script\b[^>]*\bid="atlas-catalog"[^>]*>([\s\S]*?)<\/script>/;
 
 function page(route: string): string {
   const filename = path.join(dist, route, 'index.html');
@@ -104,8 +109,31 @@ describe('public site content', () => {
     expect(preview).not.toContain(
       'https://genomeos-api-357876699511.us-east1.run.app/preview',
     );
-    expect(preview).not.toMatch(/\bP[0-9]+\b/);
+    expect(preview.replace(INLINE_CATALOG, '')).not.toMatch(/\bP[0-9]+\b/);
     expect(preview).toContain('Explore human genetic variation');
+  });
+
+  it('inlines the validated public catalog without markup characters', () => {
+    const match = preview.match(INLINE_CATALOG);
+    expect(match).not.toBeNull();
+    const text = match![1];
+    expect(text).not.toContain('<');
+    const inline = JSON.parse(text) as unknown;
+    expect(() => atlasCatalogSchema.parse(inline)).not.toThrow();
+    expect(inline).toEqual(
+      JSON.parse(
+        readFileSync(
+          path.resolve(
+            import.meta.dirname,
+            '../public/data/atlas/catalog.json',
+          ),
+          'utf8',
+        ),
+      ),
+    );
+    expect(preview.slice(0, preview.indexOf('</head>'))).toMatch(
+      INLINE_CATALOG,
+    );
   });
 
   it('does not expose unexplained internal project codes on introduction pages', () => {

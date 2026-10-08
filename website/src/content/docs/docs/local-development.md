@@ -78,3 +78,8 @@ neither variable; it splits the suite across four runners with `--shard` instead
 
 The custom-domain build assumes `/`; the fallback build assumes `/genomeOS`. Both must work so a
 domain transition cannot hide broken internal paths.
+
+The `/app/` page inlines the Atlas catalog at build time from `public/data/atlas/catalog.json`.
+Set `ATLAS_CATALOG_PATH` (relative to `website/`) to build against another catalog, for example
+`ATLAS_CATALOG_PATH=tests/fixtures/atlas/e2e/catalog.json npm run build`. The build fails if that
+catalog does not pass the strict browser schema.
