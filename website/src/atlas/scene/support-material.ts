@@ -5,10 +5,13 @@ import { Cartesian2, Color, Material } from 'cesium';
 import type { Support, SurfaceCell } from '../contracts';
 import {
   colorForCell,
+  quantizeMetric,
   type Metric,
   type MetricDomain,
   type PaletteId,
 } from '../visual-encoding';
+
+export { quantizeMetric } from '../visual-encoding';
 
 export interface SurfaceBin {
   bin: number;
@@ -19,21 +22,6 @@ export interface SurfaceBin {
 export interface SurfacePartitions {
   surface: SurfaceBin[];
   support: Record<'unknown' | 'prior_dominated', SurfaceCell[]>;
-}
-
-export function quantizeMetric(
-  value: number,
-  [lower, upper]: MetricDomain,
-  bins = 32,
-): number {
-  if (bins < 2 || !Number.isInteger(bins))
-    throw new Error('bins must be an integer >= 2');
-  if (lower === upper) return 0;
-  const normalized = Math.min(
-    1,
-    Math.max(0, (value - lower) / (upper - lower)),
-  );
-  return Math.min(bins - 1, Math.floor(normalized * bins));
 }
 
 export function partitionSurfaceCells(
