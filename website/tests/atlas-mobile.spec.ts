@@ -1198,6 +1198,9 @@ for (const phone of PHONE_PROFILES) {
     test('a one-finger drag at the centre turns the globe', async ({
       page,
     }) => {
+      // A full load plus a touch drag that renders each frame through software
+      // WebGL on CI runners; the same budget as the other globe-touching tests.
+      test.setTimeout(120_000);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       await page.goto('/app/');
       await waitForAtlasReady(page);
