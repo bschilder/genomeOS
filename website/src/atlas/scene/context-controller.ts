@@ -201,6 +201,9 @@ export class ContextController {
   // The requested basemap and its load; a repeat request for the same id reuses it.
   #basemapRequest: { basemap: BasemapId; result: Promise<boolean> } | null =
     null;
+  // The request whose layer is on the globe; a failed request falls back to it.
+  #basemapApplied: { basemap: BasemapId; result: Promise<boolean> } | null =
+    null;
   #basemapBrightness = 0.5;
   #basemapOpacity = 1;
   #basemapSequence = 0;
@@ -237,8 +240,9 @@ export class ContextController {
     const request = { basemap, result };
     this.#basemapRequest = request;
     void result.then((applied) => {
-      if (!applied && this.#basemapRequest === request)
-        this.#basemapRequest = null;
+      if (applied) this.#basemapApplied = request;
+      else if (this.#basemapRequest === request)
+        this.#basemapRequest = this.#basemapApplied;
     });
     return result;
   }

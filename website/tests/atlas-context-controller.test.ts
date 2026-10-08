@@ -40,6 +40,18 @@ describe('ContextController.setBasemap', () => {
     expect(viewer.imageryLayers.remove).toHaveBeenCalledTimes(2);
   });
 
+  it('keeps the active basemap a no-op after a failed switch away from it', async () => {
+    const { controller, viewer } = controllerFor();
+    const active = controller.setBasemap('dark-streets');
+    await expect(active).resolves.toBe(true);
+    await expect(controller.setBasemap('aerial')).resolves.toBe(false);
+    const again = controller.setBasemap('dark-streets');
+    await expect(again).resolves.toBe(true);
+    expect(viewer.imageryLayers.add).toHaveBeenCalledTimes(1);
+    expect(viewer.imageryLayers.remove).not.toHaveBeenCalled();
+    expect(again).toBe(active);
+  });
+
   it('retries a basemap whose previous request failed', async () => {
     const { controller, warnings } = controllerFor();
     await expect(controller.setBasemap('aerial')).resolves.toBe(false);
