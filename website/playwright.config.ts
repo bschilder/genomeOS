@@ -15,9 +15,19 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4322',
     trace: 'on-first-retry',
   },
+  // A describe tagged with one project's name is filtered out of the other at
+  // collection time. A runtime skip would still occupy a slot under --shard.
   projects: [
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+    {
+      name: 'desktop-chromium',
+      grepInvert: /@mobile-chromium\b/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium',
+      grepInvert: /@desktop-chromium\b/,
+      use: { ...devices['Pixel 7'] },
+    },
   ],
   webServer: {
     command: 'npm run serve:test',
