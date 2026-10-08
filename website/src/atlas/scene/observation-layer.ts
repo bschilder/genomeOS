@@ -1,6 +1,5 @@
 /** Measured-observation symbols and source-supported footprints for Atlas design §11. */
 
-import { latLngToCell } from 'h3-js';
 import * as Cesium from 'cesium';
 import {
   BillboardCollection,
@@ -13,12 +12,7 @@ import {
   VerticalOrigin,
 } from 'cesium';
 
-import type {
-  Observation,
-  ObservationArtifact,
-  SurfaceArtifact,
-  SurfaceCell,
-} from '../contracts';
+import type { Observation, ObservationArtifact } from '../contracts';
 import {
   observationColor,
   observationDomains,
@@ -29,26 +23,34 @@ import {
   type ObservationSizeRange,
   type ObservationSizeVariable,
 } from '../observation-encoding';
-import type { SurfaceGeometry } from '../url-state';
-import { heightForCell, type Metric } from '../visual-encoding';
+import type { Metric } from '../visual-encoding';
+import type { ObservationAnchorBuffers } from '../worker/protocol';
 import {
+  anchorsFromBuffers,
   litStudImage,
-  observationSurfaceAnchor,
-  observationSurfaceContext,
   observationSurfacePlacement,
   sphereSurfacePlacement,
   STUD_ASPECT_RATIO,
   type ObservationSurfaceAnchor,
+  type ObservationSurfaceHeights,
 } from './observation-symbols';
+import { surfaceHeightAt, type SurfaceHeightSource } from './surface-heights';
 
-export type ObservationPick = { kind: 'observation'; sourceRecordId: string };
+export type { ObservationSurfaceHeights } from './observation-symbols';
+
+export type ObservationPick = {
+  kind: 'observation';
+  artifactKey: string;
+  sourceRecordId: string;
+};
 
 export interface ObservationLayerOptions {
+  artifactKey: string;
   colorVariable: ObservationColorVariable;
   elevation: boolean;
   exaggeration: number;
   gradient: readonly [string, string, string];
-  metric: Metric;
+  heights: ObservationSurfaceHeights | null;
   opacity: number;
   samplingAreaColor: string;
   sizeRange: ObservationSizeRange;
@@ -56,16 +58,17 @@ export interface ObservationLayerOptions {
   shape: ObservationShape;
   sizeVariable: ObservationSizeVariable;
   solidColor: string;
-  surface: SurfaceArtifact;
-  surfaceGeometry: SurfaceGeometry;
 }
 
 export interface ObservationPrimitiveGroup {
+  readonly artifactKey: string;
   collection: PrimitiveCollection;
   isReady(): boolean;
+  opacity(): number;
   readyCount(): number;
   totalCount(): number;
   setElevationFactor(factor: number, force?: boolean): void;
+  setSurfaceHeights(heights: ObservationSurfaceHeights | null): void;
   setEarthOpacity(opacity: number): void;
   setOpacity(opacity: number): void;
   setSamplingAreaColor(color: string): void;
@@ -117,6 +120,7 @@ const PIN_ASPECT_RATIO = 1.45;
 const RaycastSpherePrimitive = (
   Cesium as unknown as { EllipsoidPrimitive: SpherePrimitiveConstructor }
 ).EllipsoidPrimitive;
+const FLAT_ANCHOR: ObservationSurfaceAnchor = { height: 0, triangle: null };
 const LIT_PIN_IMAGE = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(`
   <svg xmlns="http://www.w3.org/2000/svg" width="96" height="128" viewBox="0 0 96 128">
     <defs>
@@ -171,42 +175,31 @@ function litPinImage(): HTMLCanvasElement | string {
   return canvas;
 }
 
-export function observationPickId(sourceRecordId: string): ObservationPick {
-  return { kind: 'observation', sourceRecordId };
+export function observationPickId(
+  sourceRecordId: string,
+  artifactKey: string,
+): ObservationPick {
+  return { artifactKey, kind: 'observation', sourceRecordId };
+}
+
+export function observationHeightsFromBuffers(
+  buffers: ObservationAnchorBuffers,
+  observations: readonly Observation[],
+  source: SurfaceHeightSource,
+  metric: Metric,
+): ObservationSurfaceHeights {
+  return {
+    anchors: anchorsFromBuffers(buffers, observations.length),
+    ringBaseHeights: observations.map((observation) =>
+      surfaceHeightAt(observation, source, metric, true, 1),
+    ),
+  };
 }
 
 function samplingAreaMaterial(cssColor: string): Material {
   return Material.fromType('Color', {
     color: Color.fromCssColorString(cssColor).withAlpha(0.9),
   });
-}
-
-function surfaceCellMap(surface: SurfaceArtifact): Map<string, SurfaceCell> {
-  return new Map(surface.cells.map((cell) => [cell.h3_index, cell]));
-}
-
-export function surfaceHeightAt(
-  point: GeographicPoint,
-  surface: SurfaceArtifact,
-  metric: Metric,
-  elevation: boolean,
-  exaggeration: number,
-  cells = surfaceCellMap(surface),
-): number {
-  if (!elevation) return 0;
-  const h3Index = latLngToCell(
-    point.lat,
-    point.lon,
-    surface.artifact.resolution,
-  );
-  const cell = cells.get(h3Index);
-  if (!cell) return 0;
-  return heightForCell(
-    cell,
-    surface.artifact.metric_domains[metric],
-    exaggeration,
-    metric,
-  );
 }
 
 export function samplingRingSamples(
@@ -268,12 +261,7 @@ function encodings(
       : options.colorVariable === 'ac'
         ? domains.ac
         : ([0, 1] as const);
-  const context = observationSurfaceContext(
-    options.surface,
-    options.metric,
-    options.surfaceGeometry,
-  );
-  return artifact.observations.map((observation) => {
+  return artifact.observations.map((observation, index) => {
     const sizePosition = observationSize(
       observation,
       options.sizeVariable,
@@ -281,13 +269,7 @@ function encodings(
       sizeDomain,
     );
     return {
-      anchor: observationSurfaceAnchor(
-        observation,
-        options.surface,
-        options.metric,
-        options.surfaceGeometry,
-        context,
-      ),
+      anchor: options.heights?.anchors[index] ?? FLAT_ANCHOR,
       color: observationColor(
         observation,
         options.colorVariable,
@@ -313,9 +295,6 @@ export function buildObservationLayer(
   const hemispheres = new BillboardCollection();
   const spheres = new PrimitiveCollection();
   const symbols = encodings(artifact, options);
-  const cells = surfaceCellMap(options.surface);
-  const baseHeightAt = (point: GeographicPoint) =>
-    surfaceHeightAt(point, options.surface, options.metric, true, 1, cells);
   let elevationFactor = options.elevation ? options.exaggeration : 0;
   let lastElevationUpdate = Number.NEGATIVE_INFINITY;
   let fadeOpacity = 1;
@@ -324,14 +303,17 @@ export function buildObservationLayer(
   const uploadColor = new Color();
   const ringSamples: RingSample[][] = [];
   const ringBaseColors: Color[] = [];
-  for (const observation of artifact.observations) {
+  for (const [index, observation] of artifact.observations.entries()) {
     const material = samplingAreaMaterial(options.samplingAreaColor);
     const color = material.uniforms.color as Color;
     ringBaseColors.push(color.clone());
-    const samples = samplingRingSamples(observation, baseHeightAt);
+    const samples = samplingRingSamples(
+      observation,
+      () => options.heights?.ringBaseHeights[index] ?? 0,
+    );
     ringSamples.push(samples);
     rings.add({
-      id: observationPickId(observation.source_record_id),
+      id: observationPickId(observation.source_record_id, options.artifactKey),
       loop: true,
       material,
       positions: ringPositions(samples, elevationFactor),
@@ -358,7 +340,10 @@ export function buildObservationLayer(
         disableDepthTestDistance: 0,
         eyeOffset: placement.eyeOffset,
         height: size * STUD_ASPECT_RATIO,
-        id: observationPickId(observation.source_record_id),
+        id: observationPickId(
+          observation.source_record_id,
+          options.artifactKey,
+        ),
         image: hemisphereImage,
         position: placement.position,
         sizeInMeters: false,
@@ -388,7 +373,10 @@ export function buildObservationLayer(
       points.add({
         color: cesiumColor,
         disableDepthTestDistance: 0,
-        id: observationPickId(observation.source_record_id),
+        id: observationPickId(
+          observation.source_record_id,
+          options.artifactKey,
+        ),
         outlineColor,
         outlineWidth: 2,
         pixelSize: size,
@@ -401,7 +389,10 @@ export function buildObservationLayer(
         color: cesiumColor,
         disableDepthTestDistance: 0,
         eyeOffset: placement.eyeOffset,
-        id: observationPickId(observation.source_record_id),
+        id: observationPickId(
+          observation.source_record_id,
+          options.artifactKey,
+        ),
         height: size * PIN_ASPECT_RATIO,
         image: pinImage!,
         position: placement.position,
@@ -427,7 +418,10 @@ export function buildObservationLayer(
       spheres.add(
         new RaycastSpherePrimitive({
           center: sphere.center,
-          id: observationPickId(observation.source_record_id),
+          id: observationPickId(
+            observation.source_record_id,
+            options.artifactKey,
+          ),
           material: Material.fromType('Color', { color: cesiumColor }),
           radii: sphere.radii,
         }),
@@ -437,9 +431,39 @@ export function buildObservationLayer(
   collection.add(spheres);
 
   const symbolCollections = [hemispheres, points, pins, spheres];
+  const placeAll = () => {
+    for (let index = 0; index < rings.length; index += 1)
+      rings.get(index).positions = ringPositions(
+        ringSamples[index],
+        elevationFactor,
+      );
+    for (let index = 0; index < symbols.length; index += 1) {
+      const symbol = symbols[index];
+      const placement = observationSurfacePlacement(
+        symbol.anchor,
+        symbol.observation,
+        elevationFactor,
+      );
+      if (options.shape === 'circle')
+        points.get(index).position = placement.position;
+      else if (options.shape === 'pin') {
+        pins.get(index).position = placement.position;
+        pins.get(index).alignedAxis = placement.normal;
+      } else if (options.shape === 'hemisphere') {
+        hemispheres.get(index).position = placement.position;
+      } else {
+        spheres.get(index).center = sphereSurfacePlacement(
+          placement,
+          symbol.size,
+        ).center;
+      }
+    }
+  };
   return {
+    artifactKey: options.artifactKey,
     collection,
     isReady: () => true,
+    opacity: () => fadeOpacity,
     readyCount: () => 0,
     totalCount: () => 0,
     setElevationFactor(factor: number, force = false) {
@@ -449,32 +473,16 @@ export function buildObservationLayer(
       if (!force && safeFactor !== 0 && now - lastElevationUpdate < 50) return;
       elevationFactor = safeFactor;
       lastElevationUpdate = now;
-      for (let index = 0; index < rings.length; index += 1)
-        rings.get(index).positions = ringPositions(
-          ringSamples[index],
-          elevationFactor,
-        );
-      for (let index = 0; index < symbols.length; index += 1) {
-        const symbol = symbols[index];
-        const placement = observationSurfacePlacement(
-          symbol.anchor,
-          symbol.observation,
-          elevationFactor,
-        );
-        if (options.shape === 'circle')
-          points.get(index).position = placement.position;
-        else if (options.shape === 'pin') {
-          pins.get(index).position = placement.position;
-          pins.get(index).alignedAxis = placement.normal;
-        } else if (options.shape === 'hemisphere') {
-          hemispheres.get(index).position = placement.position;
-        } else {
-          spheres.get(index).center = sphereSurfacePlacement(
-            placement,
-            symbol.size,
-          ).center;
-        }
+      placeAll();
+    },
+    setSurfaceHeights(heights: ObservationSurfaceHeights | null) {
+      for (let index = 0; index < symbols.length; index += 1)
+        symbols[index].anchor = heights?.anchors[index] ?? FLAT_ANCHOR;
+      for (let index = 0; index < ringSamples.length; index += 1) {
+        const baseHeight = heights?.ringBaseHeights[index] ?? 0;
+        for (const sample of ringSamples[index]) sample.baseHeight = baseHeight;
       }
+      placeAll();
     },
     setOpacity(opacity: number) {
       fadeOpacity = opacity;

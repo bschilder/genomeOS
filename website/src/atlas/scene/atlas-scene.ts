@@ -26,6 +26,7 @@ import {
   buildObservationLayer,
   type ObservationPrimitiveGroup,
 } from './observation-layer';
+import { legacyObservationHeights } from './observation-symbols';
 import { bindAtlasPicking } from './picking';
 import { RenderLoop } from './render-loop';
 import {
@@ -41,6 +42,7 @@ import {
   type ScientificPrimitiveGroup,
 } from './surface-layer';
 import { animateSwap, animateValue, waitForReady } from './scene-transition';
+import { legacyHeightSource } from './surface-heights';
 import type {
   AtlasPick,
   AtlasHover,
@@ -351,11 +353,17 @@ class CesiumAtlasScene implements AtlasSceneController {
       incomingObservations = this.#observationCache.get(observationKey) ?? null;
       if (!incomingObservations) {
         incomingObservations = buildObservationLayer(observations, {
+          artifactKey: artifactIdentity,
           colorVariable: this.#observationStyle.colorVariable,
           elevation: this.#targetElevationFactor() > 0,
           exaggeration: this.#targetElevationFactor(),
           gradient: this.#observationStyle.gradient,
-          metric: this.#metric,
+          heights: legacyObservationHeights(
+            observations.observations,
+            surface,
+            this.#metric,
+            this.#surfaceGeometry,
+          ),
           opacity: this.#observationStyle.opacity,
           samplingAreaColor: this.#observationStyle.samplingAreaColor,
           sizeRange: this.#observationStyle.sizeRange,
@@ -363,8 +371,6 @@ class CesiumAtlasScene implements AtlasSceneController {
           shape: this.#observationStyle.shape,
           sizeVariable: this.#observationStyle.sizeVariable,
           solidColor: this.#observationStyle.solidColor,
-          surface,
-          surfaceGeometry: this.#surfaceGeometry,
         });
         this.#observationCache.set(observationKey, incomingObservations);
         this.#viewer.scene.primitives.add(incomingObservations.collection);
@@ -437,7 +443,7 @@ class CesiumAtlasScene implements AtlasSceneController {
       });
     }
     this.#highlightLayer.setArtifacts(
-      surface,
+      legacyHeightSource(surface),
       observations,
       this.#metric,
       this.#targetElevationFactor() > 0,

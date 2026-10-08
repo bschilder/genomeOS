@@ -165,11 +165,12 @@ function buildObservationLayerForTest(shape: ObservationShape = 'circle') {
     ],
   } as ObservationArtifact;
   return buildObservationLayer(observations, {
+    artifactKey: 'fixture:v1:map-2026-08',
     colorVariable: 'solid',
     elevation: false,
     exaggeration: 1,
     gradient: ['#24144b', '#ad8bff', '#f4c86a'],
-    metric: 'post_mean',
+    heights: null,
     opacity: 0.95,
     samplingAreaColor: '#9af9e2',
     sizeRange: [12, 32],
@@ -177,8 +178,6 @@ function buildObservationLayerForTest(shape: ObservationShape = 'circle') {
     shape,
     sizeVariable: 'fixed',
     solidColor: '#f4fbff',
-    surface,
-    surfaceGeometry: 'triangles',
   });
 }
 
@@ -624,7 +623,10 @@ describe('Cesium scene policy', () => {
       h3Index: baseCell.h3_index,
       kind: 'surface',
     });
-    expect(observationPickId('map-surveys:1')).toEqual({
+    expect(
+      observationPickId('map-surveys:1', 'fixture:v1:map-2026-08'),
+    ).toEqual({
+      artifactKey: 'fixture:v1:map-2026-08',
       kind: 'observation',
       sourceRecordId: 'map-surveys:1',
     });
@@ -776,7 +778,9 @@ describe('Cesium scene policy', () => {
         sphere.center,
       ).height;
 
-      expect(sphere.id).toEqual(observationPickId('map-surveys:1'));
+      expect(sphere.id).toEqual(
+        observationPickId('map-surveys:1', 'fixture:v1:map-2026-08'),
+      );
       expect(sphere.radii.x).toBe(sphere.radii.y);
       expect(sphere.radii.y).toBe(sphere.radii.z);
       expect(centerHeight - sphere.radii.z - ringHeight).toBeGreaterThanOrEqual(
@@ -1263,7 +1267,9 @@ describe('Cesium scene policy', () => {
 
   it('prefers a measured point when it overlaps a modeled cell', () => {
     const surface = { id: surfacePickId(baseCell) };
-    const observation = { id: observationPickId('map-surveys:1') };
+    const observation = {
+      id: observationPickId('map-surveys:1', 'fixture:v1:map-2026-08'),
+    };
     expect(preferredAtlasPick([surface, observation])).toEqual(observation.id);
     expect(preferredAtlasPick([surface])).toEqual(surface.id);
     expect(preferredAtlasPick([{ id: 'context' }])).toBeNull();
@@ -1347,7 +1353,7 @@ describe('Cesium scene policy', () => {
     expect(sameAtlasHover(first, moved)).toBe(true);
     expect(
       sameAtlasHover(first, {
-        pick: observationPickId('map-surveys:1'),
+        pick: observationPickId('map-surveys:1', 'fixture:v1:map-2026-08'),
         screenPosition: moved.screenPosition,
       }),
     ).toBe(false);

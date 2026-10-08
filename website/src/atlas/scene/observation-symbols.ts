@@ -7,11 +7,17 @@
 import { latLngToCell } from 'h3-js';
 import { Cartesian3, Ellipsoid } from 'cesium';
 
-import type { SurfaceArtifact, SurfaceCell } from '../contracts';
+import type {
+  Observation,
+  SurfaceArtifact as SurfaceArtifactJson,
+  SurfaceCell,
+} from '../contracts';
 import type { SurfaceGeometry } from '../url-state';
 import { heightForCell, type Metric } from '../visual-encoding';
+import type { ObservationAnchorBuffers } from '../worker/protocol';
+import { SURFACE_CLEARANCE_METRES } from './surface-appearance';
+import { legacyHeightSource, surfaceHeightAt } from './surface-heights';
 import {
-  SURFACE_CLEARANCE_METRES,
   surfaceMeshForCell,
   surfaceVertexHeights,
   type SurfaceCellMesh,
@@ -23,10 +29,20 @@ export interface GeographicPoint {
   lon: number;
 }
 
+export interface AnchorVertex {
+  height: number;
+  lat: number;
+  lon: number;
+}
+
 export interface ObservationSurfaceAnchor {
   height: number;
-  triangle:
-    readonly [SurfaceMeshVertex, SurfaceMeshVertex, SurfaceMeshVertex] | null;
+  triangle: readonly [AnchorVertex, AnchorVertex, AnchorVertex] | null;
+}
+
+export interface ObservationSurfaceHeights {
+  anchors: readonly ObservationSurfaceAnchor[];
+  ringBaseHeights: readonly number[];
 }
 
 export interface ObservationSurfacePlacement {
@@ -160,7 +176,7 @@ function triangleAtPoint(
 }
 
 export function observationSurfaceContext(
-  surface: SurfaceArtifact,
+  surface: SurfaceArtifactJson,
   metric: Metric,
   geometry: SurfaceGeometry = 'triangles',
 ): ObservationSurfaceContext {
@@ -178,7 +194,7 @@ export function observationSurfaceContext(
 
 export function observationSurfaceAnchor(
   point: GeographicPoint,
-  surface: SurfaceArtifact,
+  surface: SurfaceArtifactJson,
   metric: Metric,
   geometry: SurfaceGeometry,
   context = observationSurfaceContext(surface, metric, geometry),
@@ -207,7 +223,7 @@ export function observationSurfaceAnchor(
   };
 }
 
-function raisedVertex(vertex: SurfaceMeshVertex, factor: number): Cartesian3 {
+function raisedVertex(vertex: AnchorVertex, factor: number): Cartesian3 {
   return Cartesian3.fromDegrees(
     vertex.lon,
     vertex.lat,
@@ -329,4 +345,48 @@ export function litStudImage(): HTMLCanvasElement | string {
   context.ellipse(64, 84, 55, 10, 0, 0, Math.PI * 2);
   context.stroke();
   return canvas;
+}
+
+/** Worker anchors (spec §B.6.5): never computed from the detail tier. */
+export function anchorsFromBuffers(
+  buffers: ObservationAnchorBuffers,
+  count: number,
+): ObservationSurfaceAnchor[] {
+  if (
+    buffers.heights.length !== count ||
+    buffers.triangles.length !== count * 9
+  )
+    throw new Error(
+      `Observation anchors do not match the ${count} observations of this artifact`,
+    );
+  return Array.from({ length: count }, (_, index) => {
+    const offset = index * 9;
+    const triangle = Number.isNaN(buffers.triangles[offset])
+      ? null
+      : ([0, 1, 2].map((vertex) => ({
+          height: buffers.triangles[offset + vertex * 3 + 2],
+          lat: buffers.triangles[offset + vertex * 3],
+          lon: buffers.triangles[offset + vertex * 3 + 1],
+        })) as [AnchorVertex, AnchorVertex, AnchorVertex]);
+    return { height: buffers.heights[index], triangle };
+  });
+}
+
+/** Interim main-thread anchors for the legacy builder; removed with it in B4.16. */
+export function legacyObservationHeights(
+  observations: readonly Observation[],
+  surface: SurfaceArtifactJson,
+  metric: Metric,
+  geometry: SurfaceGeometry,
+): ObservationSurfaceHeights {
+  const context = observationSurfaceContext(surface, metric, geometry);
+  const source = legacyHeightSource(surface);
+  return {
+    anchors: observations.map((observation) =>
+      observationSurfaceAnchor(observation, surface, metric, geometry, context),
+    ),
+    ringBaseHeights: observations.map((observation) =>
+      surfaceHeightAt(observation, source, metric, true, 1),
+    ),
+  };
 }
