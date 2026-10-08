@@ -1065,6 +1065,43 @@ test('information triggers keep 24 px targets on every screen', async ({
   }
 });
 
+test('the legend info summary takes pointers across its whole 24 px box', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'the desktop data credit sits under the legend at this size',
+  );
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  // The summary is round, so sample the corners of its inscribed square (2 px
+  // inside them) and the bottom of the circle, where the credit used to sit.
+  const corners = await page
+    .locator('.atlas-legend__info summary')
+    .evaluate((summary) => {
+      const rect = summary.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const reach = Math.min(rect.width, rect.height) / 2 / Math.SQRT2 - 2;
+      return [
+        [x - reach, y - reach],
+        [x + reach, y - reach],
+        [x - reach, y + reach],
+        [x + reach, y + reach],
+        [x, rect.bottom - 2],
+      ].map(([px, py]) => {
+        const hit = document.elementFromPoint(px!, py!);
+        return hit !== null && summary.contains(hit)
+          ? 'summary'
+          : `${hit?.tagName.toLowerCase()}.${hit?.className}`;
+      });
+    });
+  expect(corners).toEqual(Array(5).fill('summary'));
+});
+
 test('height exaggeration uses the available compact control width', async ({
   page,
 }, testInfo) => {

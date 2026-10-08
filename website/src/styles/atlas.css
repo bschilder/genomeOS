@@ -1878,11 +1878,17 @@ html.atlas-page .site-header--compact .site-header__inner {
   line-height: 1.42;
 }
 
+/* Only the link takes pointers, so the credit's box never covers the legend
+ * info summary's 24 px target above it (§A.1.10), as on phones. */
 .atlas-data-credit {
   right: 1rem;
   bottom: 0.35rem;
   padding: 0.25rem 0.45rem;
   font-size: 1rem;
+  pointer-events: none;
+}
+
+.atlas-data-credit a {
   pointer-events: auto;
 }
 
