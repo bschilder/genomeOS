@@ -21,6 +21,7 @@ import {
 } from 'cesium';
 
 import type { SurfaceCell } from '../contracts';
+import { SURFACE_CLEARANCE_METRES } from '../geometry/surface-buffers';
 import type { SurfaceGeometry } from '../url-state';
 import {
   colorAtPosition,
@@ -134,7 +135,7 @@ function isSupported(cell: SurfaceCell): boolean {
   return cell.support === 'observed' || cell.support === 'interpolated';
 }
 
-export const SURFACE_CLEARANCE_METRES = 650;
+export { SURFACE_CLEARANCE_METRES };
 const CPU_EXTRUSION_EPSILON_METRES = 1;
 
 export function honmoonModeForGeometry(geometry: SurfaceGeometry): number {
