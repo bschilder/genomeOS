@@ -622,11 +622,16 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
      colours, not the same tessellation. Pole-enclosing cells keep today's fan split.
    - **Chunks**: seed groups by H3 resolution-0 base cell (a base cell straddling ±180° is split by
      the sign of each cell centre's longitude); greedily merge a group into an adjacent group
-     (`gridDisk(base, 1)` adjacency, same side of ±180°), iterating base cells in index order, until
-     ≥ 2,048 cells (a group with no eligible neighbour may stay smaller); cells whose own boundary
-     crosses ±180° go into one dedicated seam chunk per side. Index arrays are `Uint32Array` when a
-     chunk exceeds 65,535 vertices, else `Uint16Array`. Bounding spheres are computed in the worker
-     from each chunk's positions (including the maximum elevated height).
+     (`gridDisk(base, 1)` adjacency, same side of ±180°, within the merge cap), iterating base cells
+     in index order, until ≥ 2,048 cells (a group with no eligible neighbour may stay smaller). The
+     merge cap `CHUNK_MAX_RADIUS_METRES` = 1,800 km bounds the merged group-bound radius over cell
+     centres: the largest distance from the merged groups' cell-weighted centroid to a member
+     group's centroid plus that group's own radius (its centroid to its farthest cell centre), all
+     on ground-level cell centres. It is a merge condition, chosen so that chunks meet B.8's
+     2,500 km bound, not the chunk bounding sphere B.8 tests. Cells whose own boundary crosses ±180°
+     go into one dedicated seam chunk per side and hemisphere (at most four). Index arrays are
+     `Uint32Array` when a chunk exceeds 65,535 vertices, else `Uint16Array`. Bounding spheres are
+     computed in the worker from each chunk's positions (including the maximum elevated height).
    - One `GeometryInstance` per chunk, in its own `Primitive`, built synchronously from the transferred
      arrays; a chunk is never added without its masked cells.
    - Observation anchor heights (smooth modes need the per-vertex mean heights) are returned with
@@ -720,8 +725,10 @@ error and retry flows; the WebGL failure path; and every scientific value shown.
   the 2,000-cell subset; colour sweep (≥ 100k `t` points plus every stop ± 1e-9, all seven palettes,
   bytes equal `colorAtPosition`); chunk rule (every supported and masked cell exactly once; each
   chunk's support buffers cover exactly its masked cells; bounding radius ≤ 2,500 km; at most two
-  chunks per artifact fail the `splitLongitude` early-out; max index fits its index type, checked in
-  `extruded` on the full HbS grid shape); pick resolver (flat, elevated smooth near edges at
+  chunks per artifact fail the `splitLongitude` early-out, counting the default layer's surface
+  primitives (seam chunks included) of each of the 30 artifacts; support primitives may fail it and
+  are not counted, and seam chunks are budgeted as costly (B.6.7); max index fits its index type,
+  checked in `extruded` on the full HbS grid shape); pick resolver (flat, elevated smooth near edges at
   exaggeration 5, extruded walls → taller cell); `resolveDataUrl`/`dataHref` (bases `/data/atlas/`,
   `/genomeOS/data/atlas/`, absolute with slash; absolute without slash throws; rejected keys; preload
   href resolves to the fetch URL); provider stall timeout, abort, retry; progress with declared bytes
