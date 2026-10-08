@@ -6,7 +6,15 @@ import type { DecodedDetail, DecodedGrid, DecodedRender } from '../gosa/types';
 import { artifactKeyFor } from '../surface-columns';
 import {
   TERMINAL_RESPONSES,
+  type BuildChunksBody,
+  type BuildEdgesBody,
+  type ChunkMessage,
+  type ContextHeights,
+  type ContextHeightsBody,
+  type EdgesChunkMessage,
   type GridExpect,
+  type NaturalEarthBuffers,
+  type RecolourBody,
   type StepName,
   type StepTimingMessage,
   type WorkerErrorCode,
@@ -174,6 +182,90 @@ export class AtlasWorkerClient {
       signal,
     );
     return detail;
+  }
+
+  /** Surface + support chunks in camera order (fast-load design §B.6.5); resolves at `chunks-done`. */
+  async buildChunks(
+    req: BuildChunksBody,
+    onChunk: (message: ChunkMessage) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.#request<'chunks-done'>(
+      (id) => ({ ...req, id, type: 'build-chunks' }),
+      [],
+      signal,
+      (message) => {
+        if (message.type === 'chunk') onChunk(message);
+      },
+    );
+  }
+
+  /** The same stream from the worker's cached mesh with new colours (§B.6.13); anchors are null. */
+  async recolour(
+    req: RecolourBody,
+    onChunk: (message: ChunkMessage) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const { artifactKey, geometry, gridSha256, metric, palette } = req;
+    await this.#request<'chunks-done'>(
+      (id) => ({
+        artifactKey,
+        geometry,
+        gridSha256,
+        id,
+        metric,
+        palette,
+        type: 'recolour',
+      }),
+      [],
+      signal,
+      (message) => {
+        if (message.type === 'chunk') onChunk(message);
+      },
+    );
+  }
+
+  /** Cell-outline ring buffers with the exact capacity on every message (§B.6.9). */
+  async buildEdges(
+    req: BuildEdgesBody,
+    onChunk: (message: EdgesChunkMessage) => void,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    await this.#request<'edges-done'>(
+      (id) => ({ ...req, id, type: 'build-edges' }),
+      [],
+      signal,
+      (message) => {
+        if (message.type === 'edges-chunk') onChunk(message);
+      },
+    );
+  }
+
+  /** Parses the Natural Earth GeoJSON in the worker; `json` is transferred. */
+  async parseContext(
+    json: ArrayBuffer,
+    signal?: AbortSignal,
+  ): Promise<NaturalEarthBuffers> {
+    const { buffers } = await this.#request<'context-ready'>(
+      (id) => ({ id, json, type: 'parse-context' }),
+      [json],
+      signal,
+    );
+    return buffers;
+  }
+
+  /** Border and label heights at exaggeration 1 over the displayed render tier (§B.6.9). */
+  async contextHeights(
+    req: ContextHeightsBody,
+    signal?: AbortSignal,
+  ): Promise<ContextHeights> {
+    const { borderHeights, labelHeights } =
+      await this.#request<'context-heights-ready'>(
+        (id) => ({ ...req, id, type: 'context-heights' }),
+        [],
+        signal,
+      );
+    return { borderHeights, labelHeights };
   }
 
   onStepTiming(listener: (timing: StepTiming) => void): () => void {
