@@ -53,6 +53,17 @@ interface ByteRequest {
   signal?: AbortSignal;
 }
 
+/** The session's one transfer of a grid, shared by every surface that uses it (§B.6.13). */
+interface SharedGrid {
+  /** Grid listeners of the callers still waiting; they never throw (see `getSurface`). */
+  readonly listeners: Set<TransferProgressListener>;
+  /** The transfer so far, so a caller that joins mid-flight counts the bytes still to come. */
+  latest: TransferProgress;
+  readonly promise: Promise<DecodedGrid>;
+  /** True once the grid is decoded: a later caller has no grid bytes to wait for. */
+  resolved: boolean;
+}
+
 function abortReason(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException('Aborted', 'AbortError');
 }
@@ -96,12 +107,18 @@ async function readBody(
   const reader = response.body.getReader();
   const chunks: Uint8Array[] = [];
   let loadedBytes = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    loadedBytes += value.byteLength;
-    onChunk(loadedBytes);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      loadedBytes += value.byteLength;
+      onChunk(loadedBytes);
+    }
+  } catch (error) {
+    // A failed read or a throwing listener releases the body rather than leaving it downloading.
+    void reader.cancel(error).catch(() => undefined);
+    throw error;
   }
   const bytes = new Uint8Array(loadedBytes);
   let offset = 0;
@@ -123,7 +140,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   readonly #worker: AtlasWorkerClient;
   #catalog: AtlasCatalog | null = null;
   readonly #external = new Map<string, ExternalInfo>();
-  readonly #grids = new Map<string, Promise<DecodedGrid>>();
+  readonly #grids = new Map<string, SharedGrid>();
   readonly #legacySurfaces = new Map<string, SurfaceJsonArtifact>();
   readonly #observations = new Map<string, ObservationArtifact>();
   readonly #surfaces = new Map<string, SurfaceArtifact>();
@@ -154,12 +171,16 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     return resolveDataUrl(key, this.#siteDataBase, this.#documentBase());
   }
 
-  /** One fetch with a stall timeout that restarts on headers and on every body chunk. */
+  /**
+   * One fetch with a stall timeout that restarts on headers and on every body chunk. Every failure
+   * (HTTP status, stall, abort, a throwing progress listener) cancels the request and its body.
+   */
   async #fetchBytes(
     url: string,
     label: string,
     request: ByteRequest,
   ): Promise<ArrayBuffer> {
+    if (request.signal?.aborted) throw abortReason(request.signal);
     const controller = new AbortController();
     let stalled = false;
     let timer: ReturnType<typeof globalThis.setTimeout> | undefined;
@@ -171,12 +192,11 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
       }, this.#stallMs);
     };
     const forwardAbort = () => controller.abort(request.signal?.reason);
-    if (request.signal?.aborted) forwardAbort();
-    else
-      request.signal?.addEventListener('abort', forwardAbort, { once: true });
+    request.signal?.addEventListener('abort', forwardAbort, { once: true });
     arm();
+    let response: Response | undefined;
     try {
-      const response = await fetch(url, {
+      response = await fetch(url, {
         credentials: 'same-origin',
         mode: 'cors',
         signal: controller.signal,
@@ -197,6 +217,11 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
       markLastByte(request.mark);
       return buffer;
     } catch (error) {
+      // An unread error body or a half-read one must not keep downloading without a stall timer.
+      if (response?.body && !response.body.locked) {
+        void response.body.cancel(error).catch(() => undefined);
+      }
+      controller.abort(error);
       if (stalled) {
         throw new Error(
           `Atlas request stalled: no data for ${this.#stallMs} ms: ${label}`,
@@ -245,25 +270,47 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     return this.#siteUrl(contextSourceKey(catalog, id));
   }
 
-  /** The shared grid: fetched once per session, independent of any one caller's abort. */
-  #grid(
-    gridSha256: string,
-    entry: GridEntry,
-    progress?: TransferProgressListener,
-  ): Promise<DecodedGrid> {
+  /**
+   * The shared grid: fetched once per session, independent of any one caller's abort. Its progress
+   * goes to every caller subscribed while it is in flight; a failure is forgotten so a retry
+   * refetches it.
+   */
+  #grid(gridSha256: string, entry: GridEntry): SharedGrid {
     const cached = this.#grids.get(gridSha256);
     if (cached) return cached;
-    const pending = this.#fetchBytes(this.#artifactUrl(entry.url), entry.url, {
-      declaredBytes: entry.bytes,
-      mark: `atlas:last-byte:grid:${gridSha256}`,
-      progress,
-    }).then((buffer) => this.#worker.loadGrid(buffer, { entry, gridSha256 }));
-    this.#grids.set(gridSha256, pending);
-    pending.catch(() => {
-      if (this.#grids.get(gridSha256) === pending)
-        this.#grids.delete(gridSha256);
-    });
-    return pending;
+    // The callbacks below run only after the fetch is under way, by which time `shared` exists.
+    const shared: SharedGrid = {
+      latest: { loadedBytes: 0, totalBytes: entry.bytes },
+      listeners: new Set(),
+      promise: this.#fetchBytes(this.#artifactUrl(entry.url), entry.url, {
+        declaredBytes: entry.bytes,
+        mark: `atlas:last-byte:grid:${gridSha256}`,
+        progress: (transfer) => {
+          shared.latest = transfer;
+          for (const listener of shared.listeners) listener(transfer);
+        },
+      })
+        .then((buffer) => this.#worker.loadGrid(buffer, { entry, gridSha256 }))
+        .then(
+          (grid) => {
+            shared.resolved = true;
+            shared.listeners.clear();
+            return grid;
+          },
+          (error: unknown) => {
+            // Forgotten before any caller sees the rejection, so its retry starts a new fetch.
+            shared.listeners.clear();
+            if (this.#grids.get(gridSha256) === shared)
+              this.#grids.delete(gridSha256);
+            throw error;
+          },
+        ),
+      resolved: false,
+    };
+    // Every caller observes a rejection through `abortable`; this only marks it handled.
+    shared.promise.catch(() => undefined);
+    this.#grids.set(gridSha256, shared);
+    return shared;
   }
 
   async getSurface(
@@ -277,6 +324,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
       progress?.({ loadedBytes: 1, totalBytes: 1 });
       return cached;
     }
+    if (signal?.aborted) throw abortReason(signal);
     const catalog = this.#parsedCatalog();
     const gridSha256 = ref.web.grid_sha256;
     const entry = catalog.grids[gridSha256];
@@ -285,35 +333,41 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
         `Atlas grid ${gridSha256} for ${ref.id} is not declared in the catalog`,
       );
     }
-    const parts = new Map<'grid' | 'render', TransferProgress>();
-    const track = (
-      part: 'grid' | 'render',
-      totalBytes: number,
-    ): TransferProgressListener => {
-      parts.set(part, { loadedBytes: 0, totalBytes });
-      return (transfer) => {
-        parts.set(part, transfer);
-        progress?.(combineTransfers([...parts.values()]));
-      };
-    };
-    const gridProgress = this.#grids.has(gridSha256)
-      ? undefined
-      : track('grid', entry.bytes);
-    const renderProgress = track('render', ref.web.render.bytes);
     const local = new AbortController();
+    // This call's transfer: its render tier, plus the shared grid while that is still in flight.
+    let reporting = true;
+    const parts = new Map<'grid' | 'render', TransferProgress>();
+    const report = (part: 'grid' | 'render', transfer: TransferProgress) => {
+      if (!reporting) return;
+      parts.set(part, transfer);
+      progress?.(combineTransfers([...parts.values()]));
+    };
+    const shared = this.#grid(gridSha256, entry);
+    // The grid is shared, so this caller's listener error fails this call, never the grid.
+    const onGrid: TransferProgressListener = (transfer) => {
+      try {
+        report('grid', transfer);
+      } catch (error) {
+        local.abort(error);
+      }
+    };
+    if (!shared.resolved) {
+      parts.set('grid', shared.latest);
+      shared.listeners.add(onGrid);
+    }
+    parts.set('render', { loadedBytes: 0, totalBytes: ref.web.render.bytes });
     const forward = () => local.abort(signal?.reason);
-    if (signal?.aborted) forward();
-    else signal?.addEventListener('abort', forward, { once: true });
+    signal?.addEventListener('abort', forward, { once: true });
     try {
       const [grid, buffer] = await Promise.all([
-        abortable(this.#grid(gridSha256, entry, gridProgress), local.signal),
+        abortable(shared.promise, local.signal),
         this.#fetchBytes(
           this.#artifactUrl(ref.web.render.url),
           ref.web.render.url,
           {
             declaredBytes: ref.web.render.bytes,
             mark: `atlas:last-byte:render:${key}`,
-            progress: renderProgress,
+            progress: (transfer) => report('render', transfer),
             signal: local.signal,
           },
         ),
@@ -333,6 +387,9 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
       local.abort();
       throw error;
     } finally {
+      // Once this call settles its listener hears nothing more, though the grid may continue.
+      reporting = false;
+      shared.listeners.delete(onGrid);
       signal?.removeEventListener('abort', forward);
     }
   }

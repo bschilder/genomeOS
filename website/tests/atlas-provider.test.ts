@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { ZodError } from 'zod';
 
 import type { ArtifactRef } from '../src/atlas/contracts';
 import {
@@ -27,14 +28,21 @@ import {
 import { InProcessWorker } from './support/in-process-worker';
 
 const ORIGIN = 'http://test.invalid';
-const BASE = '/genomeOS/data/atlas/';
+// Tiers come from a cross-origin bucket (the Part C deployment) and site data from the page's own
+// origin, so a request resolved against the wrong base reaches no fixture and fails its test.
+const ARTIFACT_BASE = 'https://atlas-bucket.test.invalid/atlas/web/';
+const SITE_BASE = '/genomeOS/data/atlas/';
+const SITE_ROOT = `${ORIGIN}${SITE_BASE}`;
 const DOCUMENT = `${ORIGIN}/genomeOS/app/`;
 const catalog = goldenCatalog();
-const { entry } = onlyGrid(catalog);
+const { entry, gridSha256 } = onlyGrid(catalog);
 const ref = catalog.artifacts[0];
+// A second artifact on the same shared grid.
+const sibling = catalog.artifacts[1];
 const formatTwo = catalog.artifacts.find(
   (artifact) => artifact.artifact_format >= 2,
 )!;
+const STALL_MESSAGE = 'Atlas request stall timeout must be positive and finite';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -45,32 +53,52 @@ function createProvider(
   options: { inlineCatalog?: unknown; stallMs?: number } = {},
 ) {
   return new StaticAtlasDataProvider({
-    artifactDataBase: BASE,
+    artifactDataBase: ARTIFACT_BASE,
     documentBase: () => DOCUMENT,
     inlineCatalog:
       'inlineCatalog' in options ? options.inlineCatalog : goldenCatalogRaw(),
     requestStallMs: options.stallMs,
-    siteDataBase: BASE,
+    siteDataBase: SITE_BASE,
     worker: new AtlasWorkerClient(new InProcessWorker().asWorker()),
   });
 }
 
-function keyOf(url: unknown): string {
-  const parsed = new URL(String(url));
-  expect(parsed.origin).toBe(ORIGIN);
-  expect(parsed.pathname.startsWith(BASE)).toBe(true);
-  return parsed.pathname.slice(BASE.length);
-}
-
-function goldenFetch(overrides: Record<string, () => Response> = {}) {
+/**
+ * Golden objects are served from the artifact base only; `overrides` replaces artifact-base keys
+ * and `site` serves site-base keys, which have no default. Any other URL rejects the fetch.
+ */
+function goldenFetch(
+  overrides: Record<string, () => Response> = {},
+  site: Record<string, () => Response> = {},
+) {
   const fetchMock = vi.fn(
     async (url: string | URL | Request, _init?: RequestInit) => {
-      const key = keyOf(url);
-      return overrides[key]?.() ?? new Response(goldenBytes(key));
+      const href = String(url);
+      if (href.startsWith(ARTIFACT_BASE)) {
+        const key = href.slice(ARTIFACT_BASE.length);
+        return overrides[key]?.() ?? new Response(goldenBytes(key));
+      }
+      const respond = href.startsWith(SITE_ROOT)
+        ? site[href.slice(SITE_ROOT.length)]
+        : undefined;
+      if (!respond) throw new Error(`No fixture is served at ${href}`);
+      return respond();
     },
   );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
+}
+
+function requestedUrls(fetchMock: ReturnType<typeof goldenFetch>): string[] {
+  return fetchMock.mock.calls.map(([url]) => String(url)).sort();
+}
+
+function lastByteMarks(): string[] {
+  return performance
+    .getEntriesByType('mark')
+    .map(({ name }) => name)
+    .filter((name) => name.startsWith('atlas:last-byte:'))
+    .sort();
 }
 
 function callsTo(
@@ -133,14 +161,66 @@ function observationsFixture(count: number) {
   return { body, observed, payload };
 }
 
+/** A body the test feeds chunk by chunk; `cancel` records the provider releasing it. */
 function controlledStream() {
   let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const cancel = vi.fn();
   const stream = new ReadableStream<Uint8Array>({
+    cancel,
     start: (value) => {
       controller = value;
     },
   });
-  return { controller, stream };
+  return { cancel, controller, stream };
+}
+
+/** A reviewed gnomAD resource and the cached record it names; external caches live on the site base. */
+function gnomadFixture() {
+  const resource = {
+    cache_sha256: 'd'.repeat(64),
+    cache_url: 'external/gnomad/chr11-5227002-t-a.json',
+    commercial_use: {
+      finding: 'not_checked' as const,
+      restricted_fields: [],
+    },
+    dataset: 'gnomad_r4',
+    normalized_variant_id: ref.variant_id,
+    source: 'gnomad' as const,
+  };
+  const cached = {
+    query: { dataset: 'gnomad_r4', normalized_variant_id: ref.variant_id },
+    record: {
+      alt: 'A',
+      canonical_consequence: null,
+      chrom: '11',
+      clinvar: null,
+      exome: null,
+      genetic_ancestry_group_frequencies: [],
+      genome: null,
+      genomic_constraint: null,
+      joint: { ac: 4, af: 0.04, an: 100 },
+      pos: 5227002,
+      ref: 'T',
+      rsids: ['rs334'],
+      source_url: 'https://gnomad.broadinstitute.org/variant/11-5227002-T-A',
+    },
+    retrieved_at: '2026-09-07T00:00:00Z',
+    schema_version: 2,
+    source: 'gnomad',
+    source_release: 'gnomad_r4',
+  };
+  const body = new TextEncoder().encode(JSON.stringify(cached));
+  const eligible = { ...ref, external_resources: [resource] } as ArtifactRef;
+  return { body, eligible, resource };
+}
+
+/** Golden fetches with the shared grid fed by the test, and the grid's golden bytes to feed. */
+function heldGridFetch() {
+  const grid = controlledStream();
+  const fetchMock = goldenFetch({
+    [entry.url]: () => new Response(grid.stream),
+  });
+  return { bytes: goldenBytes(entry.url), fetchMock, grid };
 }
 
 describe('StaticAtlasDataProvider catalog', () => {
@@ -156,23 +236,31 @@ describe('StaticAtlasDataProvider catalog', () => {
   });
 
   it('reports a page without a usable inline catalog', async () => {
-    await expect(
-      createProvider({ inlineCatalog: undefined }).getCatalog(),
-    ).rejects.toThrow(
-      'The Atlas catalog is missing from this page or is not valid JSON.',
+    for (const inlineCatalog of [undefined, null]) {
+      await expect(
+        createProvider({ inlineCatalog }).getCatalog(),
+      ).rejects.toThrow(
+        'The Atlas catalog is missing from this page or is not valid JSON.',
+      );
+    }
+    const invalid = await createProvider({ inlineCatalog: {} })
+      .getCatalog()
+      .catch((error: unknown) => error);
+    expect(invalid).toBeInstanceOf(ZodError);
+    expect((invalid as ZodError).issues).toContainEqual(
+      expect.objectContaining({ path: ['artifacts'] }),
     );
-    await expect(
-      createProvider({ inlineCatalog: {} }).getCatalog(),
-    ).rejects.toThrow();
   });
 
   it('resolves catalog context sources against the site data base', async () => {
     const provider = createProvider();
+    const keyOf = (id: string) =>
+      catalog.context_sources.find((source) => source.id === id)!.url;
     expect(provider.contextSourceUrl(catalog, NATURAL_EARTH_BORDERS)).toBe(
-      `${ORIGIN}${BASE}${catalog.context_sources.find(({ id }) => id === NATURAL_EARTH_BORDERS)!.url}`,
+      `${SITE_ROOT}${keyOf(NATURAL_EARTH_BORDERS)}`,
     );
-    expect(provider.contextSourceUrl(catalog, NATURAL_EARTH_PLACES)).toMatch(
-      /^http:\/\/test\.invalid\//,
+    expect(provider.contextSourceUrl(catalog, NATURAL_EARTH_PLACES)).toBe(
+      `${SITE_ROOT}${keyOf(NATURAL_EARTH_PLACES)}`,
     );
     expect(() => provider.contextSourceUrl(catalog, 'missing-source')).toThrow(
       'The Atlas catalog declares no context source "missing-source"',
@@ -187,19 +275,27 @@ describe('StaticAtlasDataProvider catalog', () => {
           artifactDataBase:
             'https://storage.googleapis.com/example-bucket/atlas/web',
           inlineCatalog: goldenCatalogRaw(),
-          siteDataBase: BASE,
+          siteDataBase: SITE_BASE,
           worker,
         }),
     ).toThrow('Atlas data base must end in "/"');
     expect(
       () =>
         new StaticAtlasDataProvider({
-          artifactDataBase: BASE,
+          artifactDataBase: ARTIFACT_BASE,
           inlineCatalog: goldenCatalogRaw(),
           siteDataBase: 'data/atlas/',
           worker,
         }),
     ).toThrow(/root-relative or an absolute https URL/);
+  });
+
+  it('defaults to a 15 s stall timeout and refuses one that is not positive and finite', () => {
+    expect(StaticAtlasDataProvider.defaultRequestStallMs).toBe(15_000);
+    expect(() => createProvider({ stallMs: 1 })).not.toThrow();
+    for (const stallMs of [0, -25, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => createProvider({ stallMs })).toThrow(STALL_MESSAGE);
+    }
   });
 });
 
@@ -215,14 +311,51 @@ describe('StaticAtlasDataProvider surface tiers', () => {
     await expect(provider.getSurface(ref)).resolves.toBe(surface);
     expect(callsTo(fetchMock, entry.url)).toBe(1);
     expect(callsTo(fetchMock, ref.web.render.url)).toBe(1);
-    expect(fetchMock).toHaveBeenCalledWith(
-      `${ORIGIN}${BASE}${ref.web.render.url}`,
-      expect.objectContaining({
-        credentials: 'same-origin',
-        mode: 'cors',
-        signal: expect.any(AbortSignal),
-      }),
+    for (const key of [entry.url, ref.web.render.url]) {
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${ARTIFACT_BASE}${key}`,
+        expect.objectContaining({
+          credentials: 'same-origin',
+          mode: 'cors',
+          signal: expect.any(AbortSignal),
+        }),
+      );
+    }
+  });
+
+  it('routes tiers and observations to the artifact base and external caches to the site base', async () => {
+    const { body, observed } = observationsFixture(2);
+    const gnomad = gnomadFixture();
+    const fetchMock = goldenFetch(
+      { [observed.observations_url!]: () => new Response(body) },
+      { [gnomad.resource.cache_url]: () => new Response(gnomad.body) },
     );
+    const provider = createProvider();
+    await provider.getSurfaceDetail(ref);
+    await provider.getObservations(observed);
+    await provider.getExternalInfo(gnomad.eligible, 'gnomad');
+    expect(requestedUrls(fetchMock)).toEqual(
+      [
+        `${ARTIFACT_BASE}${entry.url}`,
+        `${ARTIFACT_BASE}${ref.web.render.url}`,
+        `${ARTIFACT_BASE}${ref.web.detail.url}`,
+        `${ARTIFACT_BASE}${observed.observations_url}`,
+        `${SITE_ROOT}${gnomad.resource.cache_url}`,
+      ].sort(),
+    );
+  });
+
+  it('refuses a surface whose grid the catalog does not declare, before any request', async () => {
+    const fetchMock = goldenFetch();
+    const undeclared = 'f'.repeat(64);
+    const orphan = {
+      ...ref,
+      web: { ...ref.web, grid_sha256: undeclared },
+    } as ArtifactRef;
+    await expect(createProvider().getSurface(orphan)).rejects.toThrow(
+      `Atlas grid ${undeclared} for ${ref.id} is not declared in the catalog`,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('fetches the shared grid once for every artifact', async () => {
@@ -235,6 +368,94 @@ describe('StaticAtlasDataProvider surface tiers', () => {
     for (const artifact of catalog.artifacts) {
       expect(callsTo(fetchMock, artifact.web.render.url)).toBe(1);
     }
+  });
+
+  it('counts the in-flight shared grid for a caller that joins it', async () => {
+    const { bytes, fetchMock, grid } = heldGridFetch();
+    const provider = createProvider();
+    const half = Math.ceil(bytes.byteLength / 2);
+    const first = provider.getSurface(ref, undefined, () => undefined);
+    grid.controller.enqueue(bytes.subarray(0, half));
+    await vi.waitFor(() => expect(callsTo(fetchMock, entry.url)).toBe(1));
+    const seen: TransferProgress[] = [];
+    const joined = provider.getSurface(sibling, undefined, (progress) =>
+      seen.push(progress),
+    );
+    const declared = entry.bytes + sibling.web.render.bytes;
+    await vi.waitFor(() =>
+      expect(seen.at(-1)).toEqual({
+        loadedBytes: half + sibling.web.render.bytes,
+        totalBytes: declared,
+      }),
+    );
+    expect(aggregateTransferProgress([seen.at(-1)!])).toBeLessThan(1);
+    grid.controller.enqueue(bytes.subarray(half));
+    grid.controller.close();
+    await Promise.all([first, joined]);
+    expect(seen.every(({ totalBytes }) => totalBytes === declared)).toBe(true);
+    expect(seen.at(-1)).toEqual({
+      loadedBytes: declared,
+      totalBytes: declared,
+    });
+    expect(callsTo(fetchMock, entry.url)).toBe(1);
+  });
+
+  it('stops reporting to a caller once it aborts, while the shared grid finishes for a retry', async () => {
+    const { bytes, fetchMock, grid } = heldGridFetch();
+    const provider = createProvider();
+    const third = Math.ceil(bytes.byteLength / 3);
+    const controller = new AbortController();
+    const abandoned = vi.fn();
+    const request = provider.getSurface(ref, controller.signal, abandoned);
+    grid.controller.enqueue(bytes.subarray(0, third));
+    await vi.waitFor(() =>
+      expect(abandoned).toHaveBeenLastCalledWith({
+        loadedBytes: third + ref.web.render.bytes,
+        totalBytes: entry.bytes + ref.web.render.bytes,
+      }),
+    );
+    controller.abort();
+    await expect(request).rejects.toMatchObject({ name: 'AbortError' });
+    const reported = abandoned.mock.calls.length;
+    const retried = vi.fn();
+    const retry = provider.getSurface(ref, undefined, retried);
+    grid.controller.enqueue(bytes.subarray(third));
+    grid.controller.close();
+    await expect(retry).resolves.toMatchObject({
+      artifactKey: artifactKeyFor(ref),
+    });
+    expect(abandoned).toHaveBeenCalledTimes(reported);
+    expect(retried).toHaveBeenLastCalledWith({
+      loadedBytes: entry.bytes + ref.web.render.bytes,
+      totalBytes: entry.bytes + ref.web.render.bytes,
+    });
+    expect(callsTo(fetchMock, entry.url)).toBe(1);
+  });
+
+  it("fails only the caller whose progress listener throws, not the grid's other callers", async () => {
+    const { bytes, fetchMock, grid } = heldGridFetch();
+    const provider = createProvider();
+    const failure = new Error('progress listener failed');
+    let armed = false;
+    const throwing = vi.fn(() => {
+      if (armed) throw failure;
+    });
+    const failing = provider.getSurface(ref, undefined, throwing);
+    const joined = provider.getSurface(sibling, undefined, () => undefined);
+    await vi.waitFor(() =>
+      expect(throwing).toHaveBeenLastCalledWith({
+        loadedBytes: ref.web.render.bytes,
+        totalBytes: entry.bytes + ref.web.render.bytes,
+      }),
+    );
+    armed = true;
+    grid.controller.enqueue(bytes);
+    grid.controller.close();
+    await expect(failing).rejects.toBe(failure);
+    await expect(joined).resolves.toMatchObject({
+      artifactKey: artifactKeyFor(sibling),
+    });
+    expect(callsTo(fetchMock, entry.url)).toBe(1);
   });
 
   it('passes caller cancellation to its render fetch but keeps the shared grid fetch', async () => {
@@ -511,53 +732,26 @@ describe('StaticAtlasDataProvider transfer rules', () => {
   });
 
   it('reports indeterminate progress when no size is declared', async () => {
-    const resource = {
-      cache_sha256: 'd'.repeat(64),
-      cache_url: 'external/gnomad/chr11-5227002-t-a.json',
-      commercial_use: {
-        finding: 'not_checked' as const,
-        restricted_fields: [],
-      },
-      dataset: 'gnomad_r4',
-      normalized_variant_id: ref.variant_id,
-      source: 'gnomad' as const,
-    };
-    const cached = {
-      query: { dataset: 'gnomad_r4', normalized_variant_id: ref.variant_id },
-      record: {
-        alt: 'A',
-        canonical_consequence: null,
-        chrom: '11',
-        clinvar: null,
-        exome: null,
-        genetic_ancestry_group_frequencies: [],
-        genome: null,
-        genomic_constraint: null,
-        joint: { ac: 4, af: 0.04, an: 100 },
-        pos: 5227002,
-        ref: 'T',
-        rsids: ['rs334'],
-        source_url: 'https://gnomad.broadinstitute.org/variant/11-5227002-T-A',
-      },
-      retrieved_at: '2026-09-07T00:00:00Z',
-      schema_version: 2,
-      source: 'gnomad',
-      source_release: 'gnomad_r4',
-    };
-    const fetchMock = goldenFetch({
-      [resource.cache_url]: () => new Response(JSON.stringify(cached)),
-    });
+    const { body, eligible, resource } = gnomadFixture();
+    const fetchMock = goldenFetch(
+      {},
+      { [resource.cache_url]: () => new Response(body) },
+    );
     const provider = createProvider();
     const progress = vi.fn();
-    const eligible = { ...ref, external_resources: [resource] } as ArtifactRef;
     await expect(
       provider.getExternalInfo(eligible, 'gnomad', undefined, progress),
     ).resolves.toMatchObject({
       source: 'gnomad',
     });
-    expect(
-      progress.mock.calls.every(([value]) => value.totalBytes === null),
-    ).toBe(true);
+    expect(progress).toHaveBeenCalledWith({ loadedBytes: 0, totalBytes: null });
+    expect(progress).toHaveBeenLastCalledWith({
+      loadedBytes: body.byteLength,
+      totalBytes: null,
+    });
+    for (const [value] of progress.mock.calls) {
+      expect(value).toMatchObject({ totalBytes: null });
+    }
     await expect(
       provider.getExternalInfo(
         { ...ref, external_resources: [] } as ArtifactRef,
@@ -565,6 +759,87 @@ describe('StaticAtlasDataProvider transfer rules', () => {
       ),
     ).rejects.toThrow(/no reviewed identifier/);
     expect(callsTo(fetchMock, resource.cache_url)).toBe(1);
+  });
+
+  it('cancels a request that fails with an HTTP error instead of leaving its body downloading', async () => {
+    const { observed } = observationsFixture(1);
+    const { cancel, stream } = controlledStream();
+    let init: RequestInit | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string | URL | Request, requestInit?: RequestInit) => {
+        init = requestInit;
+        return new Response(stream, { status: 503 });
+      }),
+    );
+    await expect(createProvider().getObservations(observed)).rejects.toThrow(
+      'Atlas request failed with HTTP 503: fixture.observations.json',
+    );
+    expect(init?.signal?.aborted).toBe(true);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a request whose progress listener throws, rejecting with its error', async () => {
+    const { body, observed } = observationsFixture(4);
+    const { cancel, controller, stream } = controlledStream();
+    let init: RequestInit | undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string | URL | Request, requestInit?: RequestInit) => {
+        init = requestInit;
+        return new Response(stream);
+      }),
+    );
+    const failure = new Error('progress listener failed');
+    const request = createProvider().getObservations(
+      observed,
+      undefined,
+      ({ loadedBytes }) => {
+        if (loadedBytes > 0) throw failure;
+      },
+    );
+    controller.enqueue(body.subarray(0, 10));
+    await expect(request).rejects.toBe(failure);
+    expect(init?.signal?.aborted).toBe(true);
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
+  it('makes no request for a caller that has already aborted', async () => {
+    const fetchMock = goldenFetch();
+    const { observed } = observationsFixture(1);
+    const controller = new AbortController();
+    controller.abort();
+    const provider = createProvider();
+    await expect(
+      provider.getObservations(observed, controller.signal),
+    ).rejects.toBe(controller.signal.reason);
+    await expect(provider.getSurface(ref, controller.signal)).rejects.toBe(
+      controller.signal.reason,
+    );
+    expect(controller.signal.reason).toMatchObject({ name: 'AbortError' });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('marks the last byte of every tier it receives and of no failed request', async () => {
+    performance.clearMarks();
+    const { body, observed } = observationsFixture(2);
+    goldenFetch({
+      [observed.observations_url!]: () => new Response(body),
+      [sibling.web.render.url]: () => new Response('busy', { status: 503 }),
+    });
+    const provider = createProvider();
+    await provider.getSurfaceDetail(ref);
+    await provider.getObservations(observed);
+    await expect(provider.getSurface(sibling)).rejects.toThrow(/HTTP 503/);
+    const key = artifactKeyFor(ref);
+    expect(lastByteMarks()).toEqual(
+      [
+        `atlas:last-byte:detail:${key}`,
+        `atlas:last-byte:grid:${gridSha256}`,
+        `atlas:last-byte:observations:${key}`,
+        `atlas:last-byte:render:${key}`,
+      ].sort(),
+    );
   });
 });
 
