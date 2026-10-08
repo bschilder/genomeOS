@@ -5,13 +5,15 @@
  * from a translucent depth pick otherwise, scoped to this call because
  * `pickTranslucentDepth` is scene-wide and also drives camera pivots. The
  * incoming group of an unfinished swap is hidden for that one pass so depth
- * always comes from the displayed surface.
+ * always comes from the displayed surface. The pass also queries under a
+ * cache key of its own, so its translucent hit never becomes a camera pivot
+ * (§B.7).
  */
 
 import {
+  Cartesian2,
   Ellipsoid,
   Math as CesiumMath,
-  type Cartesian2,
   type Cartesian3,
   type Scene,
 } from 'cesium';
@@ -41,6 +43,23 @@ type DepthPickScene = Pick<
   'camera' | 'pickPosition' | 'pickTranslucentDepth'
 >;
 
+/**
+ * The pointer's own coordinates (so the same drawing-buffer pixel) under a
+ * cache key no other caller produces. Cesium caches `pickPosition` results by
+ * `windowPosition.toString()` alone, whatever `pickTranslucentDepth` was,
+ * until the next `Scene.render` (@cesium/engine 26.3.0, Picking.js
+ * `pickPositionWorldCoordinates`). The next tick's camera controller picks
+ * its zoom and rotate pivots at the same pointer position before that render,
+ * so a shared key would hand it the translucent surface point; restoring the
+ * flag alone does not undo a cached result.
+ */
+function translucentPickPosition(position: Cartesian2): Cartesian2 {
+  const query = Cartesian2.clone(position);
+  const key = `atlas-translucent-depth ${position.toString()}`;
+  query.toString = () => key;
+  return query;
+}
+
 export function pickDepthPosition(
   scene: Pick<Scene, 'pickPosition' | 'pickTranslucentDepth'>,
   position: Cartesian2,
@@ -51,7 +70,7 @@ export function pickDepthPosition(
   for (const collection of hidden) collection.show = false;
   scene.pickTranslucentDepth = true;
   try {
-    return scene.pickPosition(position) ?? undefined;
+    return scene.pickPosition(translucentPickPosition(position)) ?? undefined;
   } finally {
     scene.pickTranslucentDepth = previous;
     hidden.forEach((collection, index) => {

@@ -83,9 +83,11 @@ describe('keyed pick arbitration', () => {
     };
     expect(sameAtlasPick(first, { ...first })).toBe(true);
     expect(sameAtlasPick(first, { ...first, artifactKey: OTHER })).toBe(false);
-    expect(
-      sameAtlasPick(first, { ...first, h3Index: '83754bfffffffff', row: 1 }),
-    ).toBe(false);
+    // Row and cell each on their own, so neither clause hides behind the other.
+    expect(sameAtlasPick(first, { ...first, row: 1 })).toBe(false);
+    expect(sameAtlasPick(first, { ...first, h3Index: '83754bfffffffff' })).toBe(
+      false,
+    );
     expect(
       sameAtlasPick(
         observationPickId('map-surveys:1', KEY),
@@ -148,6 +150,118 @@ describe('surface-chunk cell resolution', () => {
     expect(scene.pickTranslucentDepth).toBe(false);
     expect(incoming.show).toBe(true);
     expect(scene.camera.pickEllipsoid).not.toHaveBeenCalled();
+  });
+
+  it('keeps the translucent hit out of the camera pivot cache entry for the pointer', () => {
+    // Cesium (@cesium/engine 26.3.0, Picking.js `pickPositionWorldCoordinates`)
+    // caches `pickPosition` results by `windowPosition.toString()` alone,
+    // whatever `pickTranslucentDepth` was, until the next `Scene.render`. The
+    // next tick's camera controller picks its zoom pivot at the same pointer
+    // position before that render.
+    const surfaceTop = Cartesian3.fromDegrees(LON, LAT, 40_650);
+    const globe = Cartesian3.fromDegrees(LON, LAT);
+    const cache = new Map<string, Cartesian3>();
+    const passes: boolean[] = [];
+    const queried: Cartesian2[] = [];
+    const scene = {
+      camera: { pickEllipsoid: vi.fn() },
+      pickPosition: vi.fn((position: Cartesian2) => {
+        queried.push(position);
+        const key = position.toString();
+        let hit = cache.get(key);
+        if (!hit) {
+          passes.push(scene.pickTranslucentDepth);
+          hit = scene.pickTranslucentDepth ? surfaceTop : globe;
+          cache.set(key, hit);
+        }
+        return Cartesian3.clone(hit);
+      }),
+      pickTranslucentDepth: false,
+    };
+    const resolve = createSurfacePickResolver(scene as never, context(2));
+    const hover = () =>
+      resolve([{ id: surfaceChunkPickId(KEY, 0) }], WINDOW.clone());
+
+    // Hover frame, after Cesium's tick: the translucent depth pick.
+    expect(hover()).toMatchObject({ artifactKey: KEY, h3Index: CELL });
+    // Next tick, before render: the controller's pivot is the globe point.
+    expect(scene.pickPosition(WINDOW.clone())).toEqual(globe);
+    expect(passes).toEqual([true, false]);
+    // The depth pick reads the pointer's own pixel under a key of its own.
+    expect(Cartesian2.equals(queried[0], WINDOW)).toBe(true);
+    expect(queried[0].toString()).not.toBe(WINDOW.toString());
+
+    // Render clears the cache. An opaque pivot entry cached at the pointer
+    // never answers a translucent pick either.
+    cache.clear();
+    passes.length = 0;
+    scene.pickPosition(WINDOW.clone());
+    hover();
+    expect(passes).toEqual([false, true]);
+    expect(scene.pickTranslucentDepth).toBe(false);
+  });
+
+  it("misses the depth pick's entry in Cesium's own cache at the raw pointer", async () => {
+    // Cesium's private Picking is exported at runtime but untyped. Running its
+    // real cache lookup pins the keying the depth pick relies on.
+    const { Picking } = (await import('cesium')) as unknown as {
+      Picking: {
+        prototype: {
+          pickPositionWorldCoordinates(
+            this: object,
+            scene: object,
+            position: Cartesian2,
+          ): Cartesian3 | undefined;
+        };
+      };
+    };
+    const surfaceTop = Cartesian3.fromDegrees(LON, LAT, 40_650);
+    const queried: Cartesian2[] = [];
+    const resolve = createSurfacePickResolver(
+      {
+        camera: { pickEllipsoid: vi.fn() },
+        pickPosition: (position: Cartesian2) => {
+          queried.push(position);
+          return surfaceTop;
+        },
+        pickTranslucentDepth: false,
+      } as never,
+      context(2),
+    );
+    resolve([{ id: surfaceChunkPickId(KEY, 0) }], WINDOW.clone());
+
+    // The hover's translucent hit as Cesium stores it, and just enough scene
+    // for an opaque depth read that finds no depth.
+    const picking = {
+      _pickPositionCache: { [queried[0].toString()]: surfaceTop },
+      _pickPositionCacheDirty: false,
+    };
+    const scene = {
+      camera: { frustum: { clone: () => ({}), fov: 1 } },
+      canvas: { clientHeight: 480, clientWidth: 640 },
+      context: {
+        depthTexture: true,
+        uniformState: { update() {}, updateFrustum() {} },
+      },
+      defaultView: { frustumCommandsList: [] },
+      drawingBufferHeight: 480,
+      drawingBufferWidth: 640,
+      frameState: {},
+      pickTranslucentDepth: false,
+      updateEnvironment() {},
+      updateFrameState() {},
+      useDepthPicking: true,
+    };
+    const pickAt = (position: Cartesian2) =>
+      Picking.prototype.pickPositionWorldCoordinates.call(
+        picking,
+        scene,
+        position,
+      );
+
+    expect(pickAt(queried[0])).toEqual(surfaceTop);
+    // The camera controller's pivot pick at the pointer reads depth afresh.
+    expect(pickAt(WINDOW.clone())).toBeUndefined();
   });
 
   it('restores translucent depth even when the depth pick throws', () => {
