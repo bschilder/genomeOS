@@ -51,13 +51,16 @@ jobs:
 
   # Browser and accessibility contracts, split by test across four runners that start alongside
   # validate. One worker per shard: software WebGL saturates a 4-vCPU runner (#411).
+  # This job builds the site itself, so its steps before "Install browser runtime" must stay
+  # identical to validate's steps before "Check formatting" (website/tests/pages-workflow.test.ts).
   e2e:
-    name: e2e (shard ${{ matrix.shard }}/4)
+    name: e2e (shard ${{ matrix.shard }}/${{ matrix.total }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
+        total: [4]
     defaults:
       run:
         working-directory: website
@@ -73,7 +76,7 @@ jobs:
       - name: Install browser runtime
         run: npx playwright install --with-deps chromium
       - name: Run browser and accessibility contracts
-        run: npm run test:e2e -- --fully-parallel --shard=${{ matrix.shard }}/4
+        run: npm run test:e2e -- --fully-parallel --shard=${{ matrix.shard }}/${{ matrix.total }}
       - name: Upload Playwright traces
         if: failure()
         uses: actions/upload-artifact@v4

@@ -86,8 +86,8 @@ ruling R19 is decided (option (a)), so Task 43 (B3.4) Step 0 does not stop.
 - Fetches use `mode: 'cors'`, `credentials: 'same-origin'`; preloads are `<link rel="preload" as="fetch" crossorigin="anonymous">`; the stall timeout is 15 s without a new body chunk in every production build (only `build:e2e` sets `PUBLIC_ATLAS_REQUEST_STALL_MS=120000`, and any other build refuses it, Task 67 (B5.1)); progress totals come only from catalog-declared decoded sizes.
 - Worker: one module worker `new Worker(new URL('./atlas-data.worker.ts', import.meta.url), { type: 'module' })`, Vite `worker.format: 'es'`, no dynamic `import()` inside it, SHA-256 by `@noble/hashes` (pinned exact).
 - Chunks: seeded by H3 resolution-0 base cell, merged to ≥ 2,048 cells; `Uint32Array` indices above 65,535 vertices; bounding radius ≤ 2,500 km; clearance `SURFACE_CLEARANCE_METRES` 650 m; reveal batches ~8 ms over baseline on desktop and ~50 ms at 4× CPU; cell outlines width 2 with `allowPicking: false`; the sky box is hidden until `data-atlas-ready`.
-- Local serving: `website/serve.json` sets `Content-Type: application/octet-stream` for `**/*.gosa`; `serve:test` = `serve dist -c ../serve.json -l tcp://127.0.0.1:4322 --no-clipboard`.
-- Part B delivery: `website/public/data/atlas/grids/` and `…/surfaces/` are git-ignored; `pages.yml` `validate` and `build` install `.` with the `read` extra (`-c requirements.lock`), run `python scripts/encode_atlas_web.py`, then `git diff --exit-code website/public/data/atlas/catalog.json`; `paths` filters gain `genomeos/publication/**`, `scripts/encode_atlas_web.py`, `pyproject.toml`.
+- Local serving: `website/serve.json` sets `Content-Type: application/octet-stream` for `**/*.gosa`; `serve:test` = `serve dist -c ../serve.json -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard`, the one definition of the test server, which both Playwright configs start with `PLAYWRIGHT_PORT` set (#411).
+- Part B delivery: `website/public/data/atlas/grids/` and `…/surfaces/` are git-ignored; `pages.yml` `validate`, every `e2e` shard (it builds the site, #411) and `build` install `.` with the `read` extra (`-c requirements.lock`), run `python scripts/encode_atlas_web.py`, then `git diff --exit-code website/public/data/atlas/catalog.json`; `paths` filters gain `genomeos/publication/**`, `scripts/encode_atlas_web.py`, `pyproject.toml`.
 - Bucket objects: `Cache-Control: public, max-age=31536000, immutable`; gzip by `gzip.compress(data, compresslevel=9, mtime=0)` (never `--gzip-local*`); uploads with `--if-generation-match=0`, `--content-encoding=gzip`, `--content-type` `application/octet-stream` (`.gosa`) or `application/json`, `--custom-metadata=sha256=<decoded hex>,decoded-bytes=<n>` (served as `x-goog-meta-sha256`, `x-goog-meta-decoded-bytes`); never overwritten, never deleted.
 - Bucket layout under `atlas/web/`: `grids/h3-r{res}.{container sha256[:16]}.gosa`; `surfaces/{id}/{model_version}/{data_version}/{render|detail}.{sha256[:16]}.gosa`; `downloads/{id}/{model_version}/{data_version}/{id}.{surface|observations|manifest}.{sha256[:16]}.json` with `Content-Disposition: attachment; filename="{id}.{kind}.json"`.
 - CORS: `GET`, `HEAD` from `https://genome-os.org`, `http://genome-os.org`, `https://www.genome-os.org`, `https://bschilder.github.io`, and `http://localhost` / `http://127.0.0.1` on ports 4321, 4322 and 4323; response headers `Content-Length`, `Content-Type`, `Content-Encoding`, `ETag`; `maxAgeSeconds` 3600.
@@ -9104,7 +9104,7 @@ git diff --cached --name-only    # must not list any .gosa
 commit carries both, so no commit on the branch has tests that need objects CI does not build)
 **Files:**
 - Modify `.github/workflows/pages.yml` (path filters lines 6–12; `validate` steps after line 34;
-  `build` steps after line 66)
+  the same steps in `e2e`, before its `npm ci`; `build` steps after line 66)
 - Modify `website/src/content/docs/docs/local-development.md` (new section before
   `## Website environment`)
 - Modify `docs/data-store.md` (new section before `## Immutability is enforced, not just documented`)
@@ -9112,6 +9112,14 @@ commit carries both, so no commit on the branch has tests that need objects CI d
 
 **Interfaces:** Consumes the CLI `python scripts/encode_atlas_web.py` (defaults). Part C removes
 the encode step and diff guard again (§C.3) and adds its own gate; it must update this wiring test.
+
+**Rebase onto #411 (sharded `e2e` job).** The browser contracts no longer end `validate`: they run in
+a four-shard `e2e` job, and every shard runs `npm run test:e2e`, which builds the site. So the
+Python, install, encode and catalog-guard steps go into `e2e` too, verbatim as in `validate` and
+before `npm ci`. Git merges a branch that added them to `validate` and `build` only without a
+conflict, and all four shards then fail at the build. `website/tests/pages-workflow.test.ts` (#411)
+fails until `e2e`'s steps before "Install browser runtime" equal `validate`'s steps before "Check
+formatting"; this task's wiring test checks the `e2e` job on its own.
 
 **Spec:** §B.5 Part B delivery (`validate` and `build` set up Python, install `.` with the `read`
 extra, encode before `npm test` / `npm run build`, then `git diff --exit-code
@@ -9131,11 +9139,15 @@ const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 const read = (relative: string) =>
   readFileSync(path.join(repositoryRoot, relative), 'utf8');
 const pagesWorkflow = read('.github/workflows/pages.yml');
-const [validateJob, buildJob] = pagesWorkflow
-  .split('\n  build:\n')
-  .map((part, index) =>
-    index === 0 ? part.split('\n  validate:\n')[1] : part,
-  );
+
+/** One job's text, from its key up to the next job's key. */
+function job(name: string): string {
+  const start = pagesWorkflow.indexOf(`\n  ${name}:\n`);
+  expect(start, `job ${name}`).toBeGreaterThan(-1);
+  const rest = pagesWorkflow.slice(start + 1);
+  const next = rest.search(/\n {2}[a-z][\w-]*:\n/);
+  return next < 0 ? rest : rest.slice(0, next);
+}
 
 const INSTALL = "run: python -m pip install -c requirements.lock '.[read]'";
 const ENCODE = 'run: python scripts/encode_atlas_web.py';
@@ -9146,12 +9158,22 @@ describe('Atlas web-object encoding in the Pages workflow (fast-load spec §B.5)
   it('encodes and guards the committed catalog before validate tests and builds', () => {
     // `-c requirements.lock` pins h3-py to the lock's h3==4.5.0, the same H3 core as h3-js 4.5.0
     // (spec §B.3: both decoders pinned to the same H3 core).
+    const validateJob = job('validate');
     for (const step of [INSTALL, ENCODE, GUARD]) expect(validateJob).toContain(step);
     expect(validateJob.indexOf(ENCODE)).toBeLessThan(
       validateJob.indexOf(GUARD),
     );
     expect(validateJob.indexOf(GUARD)).toBeLessThan(
       validateJob.indexOf('run: npm test'),
+    );
+  });
+
+  it('encodes and guards the catalog before every browser shard builds the site', () => {
+    // Since #411 each `e2e` shard runs `npm run test:e2e`, which builds the site.
+    const e2eJob = job('e2e');
+    for (const step of [INSTALL, ENCODE, GUARD]) expect(e2eJob).toContain(step);
+    expect(e2eJob.indexOf(GUARD)).toBeLessThan(
+      e2eJob.indexOf('run: npm run test:e2e'),
     );
   });
 
@@ -9168,6 +9190,7 @@ describe('Atlas web-object encoding in the Pages workflow (fast-load spec §B.5)
   });
 
   it('encodes before the production build', () => {
+    const buildJob = job('build');
     expect(buildJob).toContain(INSTALL);
     expect(buildJob).toContain(ENCODE);
     expect(buildJob).toContain(GUARD);
@@ -9203,7 +9226,7 @@ describe('Atlas web-object encoding in the Pages workflow (fast-load spec §B.5)
 });
 ```
 
-- [ ] **Step 2: Run; expect four of the five tests to fail** (the fourth fails on the docs sentence even though B1.5 already added the `.gitignore` lines; the h3 pin test already passes: `requirements.lock` has `h3==4.5.0` and `website/package.json` pins `h3-js` 4.5.0):
+- [ ] **Step 2: Run; expect five of the six tests to fail** (the last fails on the docs sentence even though B1.5 already added the `.gitignore` lines; the h3 pin test already passes: `requirements.lock` has `h3==4.5.0` and `website/package.json` pins `h3-js` 4.5.0):
 
 ```bash
 cd $W && npx vitest run tests/atlas-web-encode-ci.test.ts
@@ -9283,14 +9306,58 @@ jobs:
         run: npm run build:fallback
       - name: Check fallback links
         run: npm run check:links -- dist-fallback /genomeOS/
+
+  # Browser and accessibility contracts, split by test across four runners that start alongside
+  # validate. One worker per shard: software WebGL saturates a 4-vCPU runner (#411).
+  # This job builds the site itself, so its steps before "Install browser runtime" must stay
+  # identical to validate's steps before "Check formatting" (website/tests/pages-workflow.test.ts).
+  e2e:
+    name: e2e (shard ${{ matrix.shard }}/${{ matrix.total }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        total: [4]
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the Atlas web-object encoder
+        run: python -m pip install -c requirements.lock '.[read]'
+        working-directory: .
+      - name: Encode Atlas web objects
+        run: python scripts/encode_atlas_web.py
+        working-directory: .
+      - name: Refuse a catalog the encoder did not write
+        run: git diff --exit-code website/public/data/atlas/catalog.json
+        working-directory: .
+      - name: Install exact dependencies
+        run: npm ci
       - name: Install browser runtime
         run: npx playwright install --with-deps chromium
       - name: Run browser and accessibility contracts
-        run: npm run test:e2e
+        run: npm run test:e2e -- --fully-parallel --shard=${{ matrix.shard }}/${{ matrix.total }}
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-shard-${{ matrix.shard }}
+          path: website/test-results
+          retention-days: 7
 
   build:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: validate
+    needs: [validate, e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -9395,7 +9462,7 @@ node -e "const y=require('yaml');const d=y.parse(require('fs').readFileSync('../
 
 ```bash
 cd $W
-npx vitest run tests/atlas-web-encode-ci.test.ts tests/google-maps-config.test.ts tests/docs.test.ts
+npx vitest run tests/atlas-web-encode-ci.test.ts tests/pages-workflow.test.ts tests/google-maps-config.test.ts tests/docs.test.ts
 npm run format:check && npm run check
 ```
 
@@ -32731,9 +32798,12 @@ production build keeps §B.2's 15 s (`defaultRequestStallMs`, still pinned by Ta
 tests, as is the header-stall behaviour). Releasing on a timer instead would only move the race to the
 loading-state checks.
 
-Why no `pages.yml` edit: the validate job already runs `npm run test:e2e`, which now carries the
-variable, so the e2e catalog cannot drift between local and CI runs. The Playwright `webServer` only
-serves `dist/` (`npm run serve:test`); B5.3's fixture guard fails loudly if `dist/` is not an e2e build.
+Why no `pages.yml` edit: every shard of the `e2e` job already runs `npm run test:e2e` (#411 moved the
+browser steps out of `validate` into that four-shard job), and the script now carries the variable,
+so the e2e catalog cannot drift between local and CI runs. Each shard builds the site, so it also needs
+Task 20 (B1.6)'s encoder steps; `website/tests/pages-workflow.test.ts` and Task 20's wiring test check
+that. The Playwright `webServer` only serves `dist/` (`npm run serve:test`); B5.3's fixture guard fails
+loudly if `dist/` is not an e2e build.
 `tests/setup/build.ts` pins the **production** catalog so an `ATLAS_CATALOG_PATH` exported in a shell
 for e2e work can never leak into the vitest build (content/link/island tests read that `dist/`).
 
@@ -33027,7 +33097,7 @@ EOF
 - Test: `website/tests/atlas-serve-config.test.ts` (create)
 
 **Interfaces:**
-- Produces: `serve:test = serve dist -c ../serve.json -l tcp://127.0.0.1:4322 --no-clipboard`; `.gosa` served as gzip-compressed `application/octet-stream`.
+- Produces: `serve:test = serve dist -c ../serve.json -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard`; `.gosa` served as gzip-compressed `application/octet-stream`.
 
 **Spec:** fast-load design §B.9, §B.3 (transport compression), §B.1 (Transport).
 
@@ -33035,6 +33105,12 @@ Verified on serve 14.2.6 / compression 1.8.1: `serve` resolves `-c` with `path.r
 so `-c ../serve.json` from `dist` reads `website/serve.json`; without the rule a `.gosa` is sent with no
 `Content-Type` and no `Content-Encoding`, with it as `application/octet-stream` + `Content-Encoding: gzip`.
 Keeping the file outside `public/` keeps it out of the Pages artifact.
+
+Since #411 `serve:test` is the one definition of the test server: `playwright.config.ts` and
+`playwright.performance.config.ts` both run `npm run serve:test` with
+`env: { PLAYWRIGHT_PORT: String(port) }`, so `-c ../serve.json` reaches the e2e and performance
+suites alike. If this task lands before the branch is rebased onto #411, the rebase conflicts on
+this line; keep both changes (`-c ../serve.json` and `${PLAYWRIGHT_PORT:-4322}`).
 
 - [ ] **Step 1: Write the failing test** — create `website/tests/atlas-serve-config.test.ts`:
 
@@ -33144,7 +33220,7 @@ describe('local .gosa serving', () => {
       ) as { scripts: Record<string, string> }
     ).scripts;
     expect(scripts['serve:test']).toBe(
-      'serve dist -c ../serve.json -l tcp://127.0.0.1:4322 --no-clipboard',
+      'serve dist -c ../serve.json -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard',
     );
     expect(existsSync(path.join(websiteRoot, 'public', 'serve.json'))).toBe(
       false,
@@ -33179,11 +33255,11 @@ Create `website/serve.json`:
 }
 ```
 
-`website/package.json` — before: `"serve:test": "serve dist -l tcp://127.0.0.1:4322 --no-clipboard",`
+`website/package.json` — before: `"serve:test": "serve dist -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard",`
 after:
 
 ```json
-    "serve:test": "serve dist -c ../serve.json -l tcp://127.0.0.1:4322 --no-clipboard",
+    "serve:test": "serve dist -c ../serve.json -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard",
 ```
 
 - [ ] **Step 4: Run tests, expected pass**
@@ -43781,8 +43857,10 @@ which sets `ATLAS_CATALOG_PATH`; the base is added only here, so the capture scr
 
 ```ts
   webServer: {
+    // package.json `serve:test` is the one definition of the test server; it reads the port.
     command: 'npm run serve:test',
-    url: 'http://127.0.0.1:4322/',
+    env: { PLAYWRIGHT_PORT: String(port) },
+    url: `${baseURL}/`,
     reuseExistingServer: false,
     timeout: 30_000,
   },
@@ -43793,8 +43871,10 @@ with:
 ```ts
   webServer: [
     {
+      // package.json `serve:test` is the one definition of the test server; it reads the port.
       command: 'npm run serve:test',
-      url: 'http://127.0.0.1:4322/',
+      env: { PLAYWRIGHT_PORT: String(port) },
+      url: `${baseURL}/`,
       reuseExistingServer: false,
       timeout: 30_000,
     },
@@ -43808,6 +43888,12 @@ with:
     },
   ],
 ```
+
+`PLAYWRIGHT_PORT` (#411) moves only the site server. The data server stays on 4323, the bucket CORS
+policy that `serve-atlas-data.mjs` applies allows site origins on ports 4321–4323 only, and this task's
+specs pin `SITE_ORIGIN` to 4322, so the cross-origin specs pass only on the default port. To keep the
+override working, derive `SITE_ORIGIN` from the project's `baseURL` and have the local data server
+accept that origin; otherwise document that these specs need the default port.
 
 `website/tests/atlas-browser-fixture.ts` (Task 70 (B5.3)'s version): the e2e build of `test:e2e` bakes the
 absolute `http://127.0.0.1:4323/` artifact base, and the second `webServer` serves the tree there, so
@@ -44057,8 +44143,10 @@ and replace the `webServer` object (same text as in C9's "before") with:
 ```ts
   webServer: [
     {
+      // package.json `serve:test` is the one definition of the test server; it reads the port.
       command: 'npm run serve:test',
-      url: 'http://127.0.0.1:4322/',
+      env: { PLAYWRIGHT_PORT: String(port) },
+      url: `${baseURL}/`,
       reuseExistingServer: false,
       timeout: 30_000,
     },
@@ -44109,7 +44197,8 @@ EOF
 
 **Branch:** `feat/atlas-gcs-web-data`   **Depends on:** Task 91 (C6), Task 92 (C7), Task 94 (C9), Task 20 (B1.6)
 **Files:**
-- Modify: `.github/workflows/pages.yml` (whole file, below; Task 20 (B1.6)'s version is the one replaced)
+- Modify: `.github/workflows/pages.yml` (whole file, below; Task 20 (B1.6)'s version is the one replaced;
+  it keeps #411's four-shard `e2e` job, prepared exactly as `validate` is, so with `setup-python`)
 - Modify: `website/tests/atlas-data-base-config.test.ts` (new `describe('pages workflow')`)
 - Modify: `website/tests/atlas-web-encode-ci.test.ts` (whole file: Task 20 (B1.6)'s CI assertions go)
 
@@ -44253,14 +44342,49 @@ jobs:
         run: npm run build:fallback
       - name: Check fallback links
         run: npm run check:links -- dist-fallback /genomeOS/
+
+  # Browser and accessibility contracts, split by test across four runners that start alongside
+  # validate. One worker per shard: software WebGL saturates a 4-vCPU runner (#411).
+  # This job builds the site itself, so its steps before "Install browser runtime" must stay
+  # identical to validate's steps before "Check formatting" (website/tests/pages-workflow.test.ts).
+  e2e:
+    name: e2e (shard ${{ matrix.shard }}/${{ matrix.total }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+        total: [4]
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install exact dependencies
+        run: npm ci
       - name: Install browser runtime
         run: npx playwright install --with-deps chromium
       - name: Run browser and accessibility contracts
-        run: npm run test:e2e
+        run: npm run test:e2e -- --fully-parallel --shard=${{ matrix.shard }}/${{ matrix.total }}
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-test-results-shard-${{ matrix.shard }}
+          path: website/test-results
+          retention-days: 7
 
   build:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    needs: validate
+    needs: [validate, e2e]
     runs-on: ubuntu-latest
     env:
       PUBLIC_ATLAS_DATA_BASE_URL: ${{ vars.ATLAS_DATA_BASE_URL }}
@@ -44387,7 +44511,7 @@ premature-merge guard (§C.4.3).
 - [ ] Step 4: Run tests; expected pass.
 
 ```bash
-cd "$REPO/website" && npx vitest run tests/atlas-data-base-config.test.ts tests/google-maps-config.test.ts tests/atlas-web-encode-ci.test.ts
+cd "$REPO/website" && npx vitest run tests/atlas-data-base-config.test.ts tests/google-maps-config.test.ts tests/atlas-web-encode-ci.test.ts tests/pages-workflow.test.ts
 cd "$REPO/website" && node -e "const y=require('yaml');const w=y.parse(require('fs').readFileSync('../.github/workflows/pages.yml','utf8'));console.log(Object.keys(w.jobs).join(','), w.jobs.build.env.PUBLIC_ATLAS_DATA_BASE_URL)"
 cd "$REPO/website" && npm run format:check
 ```
@@ -45415,7 +45539,7 @@ ownership changes of the Plan rulings applied.
 | §B.5 idempotent, byte-deterministic | 17 (B1.3) (tests), 19 (B1.5) (second run, no diff) |
 | §B.5 pipeline-docs sentence; `export_atlas_web.py` not grown | 20 (B1.6) (docs); 17 (B1.3) (exporter untouched except tests) |
 | §B.5 `grids/` and `surfaces/` git-ignored | 19 (B1.5) |
-| §B.5 `pages.yml` validate + build: Python, `.[read]` (with `-c requirements.lock`), encode, catalog diff guard; `paths` filters | 20 (B1.6) |
+| §B.5 `pages.yml` validate + e2e (#411) + build: Python, `.[read]` (with `-c requirements.lock`), encode, catalog diff guard; `paths` filters | 20 (B1.6) |
 | §B.3 h3-js and h3-py pinned to the same H3 core | 20 (B1.6) (`-c requirements.lock` in CI; lock `h3==` equals `website/package.json` `h3-js`, kept by 96 (C11)) |
 | §B.5 `local-development.md` prerequisite for `npm run dev`, `npm test`, performance specs | 20 (B1.6) |
 | §B.5 committed res-3 fixture tree with every listed property, regenerate script, golden `.gosa`, digests, hard-coded support bytes | 18 (B1.4) |
