@@ -7,6 +7,12 @@ import type { ArtifactRef, ExternalInfo } from '../../atlas/contracts';
 import { downloadExternalInfo } from '../../atlas/external-info';
 import { AlphagenomeEvidence } from './AlphagenomeEvidence';
 import { GnomadEvidence } from './GnomadEvidence';
+import { useEscapeLayer } from './useEscapeStack';
+import {
+  useExplorerPanel,
+  usePanelBodyId,
+  usePanelBodyInert,
+} from './useExplorerPanels';
 
 type ExternalSource = 'gnomad' | 'dbsnp' | 'alphagenome';
 
@@ -119,12 +125,14 @@ function ExternalDetails({
   lookup: (source: ExternalSource) => void;
   source: ExternalSource;
 }) {
+  const bodyId = usePanelBodyId('external');
+  const bodyInert = usePanelBodyInert();
   return (
     <aside
       className="atlas-external-details"
       aria-label="External variant information"
     >
-      <header className="atlas-external-details__header">
+      <header className="atlas-external-details__header" data-sheet-peek>
         <span className="atlas-external-details__icon">
           <SourceIcon />
         </span>
@@ -143,69 +151,79 @@ function ExternalDetails({
       </header>
 
       <div
-        className="atlas-external-tabs"
-        role="group"
-        aria-label="External data source"
+        className="atlas-panel-body"
+        data-sheet-body
+        id={bodyId}
+        inert={bodyInert}
       >
-        {artifact.external_resources.map((resource) => (
-          <button
-            type="button"
-            key={resource.source}
-            aria-pressed={source === resource.source}
-            onClick={() => lookup(resource.source)}
-          >
-            {sourceLabel(resource.source)}
-          </button>
-        ))}
-      </div>
+        <div
+          className="atlas-external-tabs"
+          role="group"
+          aria-label="External data source"
+        >
+          {artifact.external_resources.map((resource) => (
+            <button
+              type="button"
+              key={resource.source}
+              aria-pressed={source === resource.source}
+              onClick={() => lookup(resource.source)}
+            >
+              {sourceLabel(resource.source)}
+            </button>
+          ))}
+        </div>
 
-      <div className="atlas-external-details__scroll">
-        {loading && (
-          <p className="atlas-external-loading" role="status">
-            Loading {sourceLabel(source)} information…
-          </p>
-        )}
-        {error && (
-          <p className="atlas-external-error" role="alert">
-            {error}
-          </p>
-        )}
-        {info?.source === 'gnomad' && <GnomadEvidence info={info} />}
-        {info?.source === 'dbsnp' && <DbsnpRecord info={info} />}
-        {info?.source === 'alphagenome' && <AlphagenomeEvidence info={info} />}
+        <div className="atlas-external-details__scroll">
+          {loading && (
+            <p className="atlas-external-loading" role="status">
+              Loading {sourceLabel(source)} information…
+            </p>
+          )}
+          {error && (
+            <p className="atlas-external-error" role="alert">
+              {error}
+            </p>
+          )}
+          {info?.source === 'gnomad' && <GnomadEvidence info={info} />}
+          {info?.source === 'dbsnp' && <DbsnpRecord info={info} />}
+          {info?.source === 'alphagenome' && (
+            <AlphagenomeEvidence info={info} />
+          )}
+
+          {info && (
+            <section className="atlas-external-provenance">
+              <h3>Data provenance</h3>
+              <dl className="atlas-external-fields">
+                <Field label="Source release" value={info.source_release} />
+                <Field
+                  label="Retrieved from API"
+                  value={new Date(info.retrieved_at).toLocaleString(undefined, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                  })}
+                />
+                <Field
+                  label="Cache schema"
+                  value={`Version ${info.schema_version}`}
+                />
+              </dl>
+              <p>
+                This reviewed response is cached so the Atlas remains
+                reproducible and does not change silently when an external API
+                changes.
+              </p>
+            </section>
+          )}
+        </div>
 
         {info && (
-          <section className="atlas-external-provenance">
-            <h3>Data provenance</h3>
-            <dl className="atlas-external-fields">
-              <Field label="Source release" value={info.source_release} />
-              <Field
-                label="Retrieved from API"
-                value={new Date(info.retrieved_at).toLocaleString(undefined, {
-                  dateStyle: 'medium',
-                  timeStyle: 'short',
-                })}
-              />
-              <Field
-                label="Cache schema"
-                value={`Version ${info.schema_version}`}
-              />
-            </dl>
-            <p>
-              This reviewed response is cached so the Atlas remains reproducible
-              and does not change silently when an external API changes.
-            </p>
-          </section>
+          <footer className="atlas-external-actions">
+            <button type="button" onClick={() => downloadExternalInfo(info)}>
+              Download displayed data
+            </button>
+          </footer>
         )}
       </div>
-
-      {info && (
-        <footer className="atlas-external-actions">
-          <button type="button" onClick={() => downloadExternalInfo(info)}>
-            Download displayed data
-          </button>
-        </footer>
-      )}
     </aside>
   );
 }
@@ -242,14 +260,8 @@ export function ExternalInfoPanel({ artifact, load }: ExternalInfoPanelProps) {
     setOpen(false);
   };
 
-  useEffect(() => {
-    if (!open) return;
-    const dismiss = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    window.addEventListener('keydown', dismiss);
-    return () => window.removeEventListener('keydown', dismiss);
-  }, [open]);
+  useEscapeLayer(open, close, 'external');
+  useExplorerPanel('external', open, close);
 
   const lookup = (next: ExternalSource) => {
     activeRequest.current?.abort();

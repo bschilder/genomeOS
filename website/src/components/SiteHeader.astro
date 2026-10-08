@@ -63,7 +63,24 @@ const isCurrent = (href: string) =>
       }
       <div class="desktop-nav"><GitHubLink /></div>
       <details class="mobile-nav">
-        <summary>Menu</summary>
+        <summary>
+          {
+            isAtlasPage ? (
+              <>
+                <span class="mobile-nav__label">Menu</span>
+                <svg
+                  class="mobile-nav__icon"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </>
+            ) : (
+              'Menu'
+            )
+          }
+        </summary>
         <nav aria-label="Mobile navigation">
           <ul>
             {

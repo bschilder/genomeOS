@@ -584,7 +584,6 @@
   .final-invitation__inner,
   .callout,
   .source-section__inner,
-  .contribution-detail__grid,
   .working-group,
   .working-group--compact {
     grid-template-columns: 1fr;
@@ -638,6 +637,15 @@
   .contribution-detail article {
     min-height: auto;
     border-right: 0;
+  }
+  /* minmax(0, 1fr), not 1fr: the status definitions' min-content would
+   * otherwise widen a 360 px page to 364 px. */
+  .contribution-detail__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .status-definitions div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.15rem;
   }
   .resource-links__grid a:nth-child(2n) {
     border-right: 0;

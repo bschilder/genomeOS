@@ -24,7 +24,6 @@ html {
 
 body {
   margin: 0;
-  min-width: 20rem;
   background:
     linear-gradient(180deg, rgb(7 24 49 / 32%) 0, transparent 38rem),
     var(--color-void);

@@ -1,12 +1,18 @@
 /* Explanatory map catalog for Atlas design §11. */
 
+/* The trigger's height, on :root so the phone top slot (mobile sheets design
+   2026-10-07 §A.1.4) can reserve the same height in atlas.css. */
+:root {
+  --atlas-map-catalog-trigger-min-height: 3.25rem;
+}
+
 .atlas-map-catalog,
 .atlas-map-catalog__trigger {
   width: 100%;
 }
 
 .atlas-map-catalog__trigger {
-  min-height: 3.25rem;
+  min-height: var(--atlas-map-catalog-trigger-min-height);
   padding: 0.48rem 0.65rem;
   display: flex;
   align-items: center;

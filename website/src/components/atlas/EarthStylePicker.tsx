@@ -21,6 +21,8 @@ import {
 } from '../../atlas/earth-style-catalog';
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
 import { InfoTip } from './InfoTip';
+import { clampPickerTop, siteHeaderBottom } from './site-header';
+import { useEscapeLayer } from './useEscapeStack';
 
 interface EarthStylePickerProps {
   basemap: BasemapId;
@@ -98,7 +100,7 @@ export function EarthStylePicker({
       : Math.max(gutter, rect.left - width - gutter);
     setPosition({
       left,
-      top: Math.max(76, Math.min(rect.top, 96)),
+      top: clampPickerTop(rect.top, siteHeaderBottom(), 10),
       width,
     });
   }, []);
@@ -121,20 +123,16 @@ export function EarthStylePicker({
         return;
       close();
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close(true);
-    };
     window.addEventListener('resize', placePanel);
     window.addEventListener('scroll', placePanel, true);
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('resize', placePanel);
       window.removeEventListener('scroll', placePanel, true);
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [close, open, placePanel]);
+  useEscapeLayer(open, () => close(true), 'dialog');
 
   useEffect(
     () => () => {

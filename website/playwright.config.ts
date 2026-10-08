@@ -5,7 +5,7 @@ process.env.NO_UPDATE_NOTIFIER = '1';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: 'site.spec.ts',
+  testMatch: ['site.spec.ts', 'atlas-mobile.spec.ts'],
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),

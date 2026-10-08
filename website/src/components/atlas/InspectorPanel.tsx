@@ -10,6 +10,12 @@ import type {
 import type { ObservationColorEncoding } from '../../atlas/observation-encoding';
 import type { ObservationPlaceContext } from '../../atlas/place-context';
 import { sitePath } from '../../lib/paths';
+import { useEscapeLayer } from './useEscapeStack';
+import {
+  useExplorerPanel,
+  usePanelBodyId,
+  usePanelBodyInert,
+} from './useExplorerPanels';
 
 export type InspectorSelection =
   | { kind: 'surface'; value: SurfaceCell }
@@ -67,6 +73,10 @@ export function InspectorPanel({
   selection,
   onClose,
 }: InspectorPanelProps) {
+  useEscapeLayer(true, onClose, 'inspector');
+  useExplorerPanel('inspector', true, onClose);
+  const bodyId = usePanelBodyId('inspector');
+  const bodyInert = usePanelBodyInert();
   if (selection.kind === 'surface') {
     const cell = selection.value;
     const [centroidLat, centroidLon] = cellToLatLng(cell.h3_index);
@@ -74,6 +84,7 @@ export function InspectorPanel({
       <aside className="atlas-inspector" aria-label="Selected map cell">
         <button
           className="atlas-inspector__close"
+          data-sheet-peek
           type="button"
           onClick={onClose}
           aria-label="Close inspector"
@@ -81,78 +92,85 @@ export function InspectorPanel({
           ×
         </button>
         <p className="atlas-kicker">Modeled estimate</p>
-        <h2>Inferred map cell</h2>
-        <dl>
-          <div>
-            <dt>Posterior estimate</dt>
-            <dd>{percent(cell.post_mean)}</dd>
-          </div>
-          <div>
-            <dt>95% credible interval</dt>
-            <dd>
-              {percent(cell.q025)}–{percent(cell.q975)}
-            </dd>
-          </div>
-          <div>
-            <dt>Uncertainty</dt>
-            <dd>{percent(cell.post_sd)}</dd>
-          </div>
-          <div>
-            <dt>Evidence support</dt>
-            <dd>{evidenceSupportLabel(cell.support)}</dd>
-          </div>
-          <div>
-            <dt>Nearest measurement</dt>
-            <dd>{Math.round(cell.dist_nearest_obs_km)} km</dd>
-          </div>
-          <div>
-            <dt>Cell ID</dt>
-            <dd>{cell.h3_index}</dd>
-          </div>
-          <div>
-            <dt>Google Maps</dt>
-            <dd>
-              <details className="atlas-map-options">
-                <summary
-                  aria-label="Choose how to open this cell in Google Maps"
-                  className="atlas-map-options__trigger"
-                  role="button"
-                >
-                  <GoogleMapsIcon />
-                  <span className="atlas-centroid-link__coordinates">
-                    <span>{centroidLon.toFixed(4)}° lon</span>
-                    <span>{centroidLat.toFixed(4)}° lat</span>
-                  </span>
-                </summary>
-                <div className="atlas-map-options__menu">
-                  <a
-                    href={googleMapsUrl(centroidLat, centroidLon)}
-                    target="_blank"
-                    rel="noopener noreferrer"
+        <h2 data-sheet-peek>Inferred map cell</h2>
+        <div
+          className="atlas-panel-body"
+          data-sheet-body
+          id={bodyId}
+          inert={bodyInert}
+        >
+          <dl>
+            <div>
+              <dt>Posterior estimate</dt>
+              <dd>{percent(cell.post_mean)}</dd>
+            </div>
+            <div>
+              <dt>95% credible interval</dt>
+              <dd>
+                {percent(cell.q025)}–{percent(cell.q975)}
+              </dd>
+            </div>
+            <div>
+              <dt>Uncertainty</dt>
+              <dd>{percent(cell.post_sd)}</dd>
+            </div>
+            <div>
+              <dt>Evidence support</dt>
+              <dd>{evidenceSupportLabel(cell.support)}</dd>
+            </div>
+            <div>
+              <dt>Nearest measurement</dt>
+              <dd>{Math.round(cell.dist_nearest_obs_km)} km</dd>
+            </div>
+            <div>
+              <dt>Cell ID</dt>
+              <dd>{cell.h3_index}</dd>
+            </div>
+            <div>
+              <dt>Google Maps</dt>
+              <dd>
+                <details className="atlas-map-options">
+                  <summary
+                    aria-label="Choose how to open this cell in Google Maps"
+                    className="atlas-map-options__trigger"
+                    role="button"
                   >
-                    <strong>Centroid</strong>
+                    <GoogleMapsIcon />
                     <span className="atlas-centroid-link__coordinates">
                       <span>{centroidLon.toFixed(4)}° lon</span>
                       <span>{centroidLat.toFixed(4)}° lat</span>
                     </span>
-                  </a>
-                  <a
-                    href={googleMapsPolygonUrl(cell.h3_index)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <strong>Polygon</strong>
-                    <span>Draw the full modeled cell boundary</span>
-                  </a>
-                </div>
-              </details>
-            </dd>
-          </div>
-        </dl>
-        <p className="atlas-inspector__meta">
-          Model {artifact.model_version}; data {artifact.data_version}; registry{' '}
-          {artifact.registry_version}.
-        </p>
+                  </summary>
+                  <div className="atlas-map-options__menu">
+                    <a
+                      href={googleMapsUrl(centroidLat, centroidLon)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <strong>Centroid</strong>
+                      <span className="atlas-centroid-link__coordinates">
+                        <span>{centroidLon.toFixed(4)}° lon</span>
+                        <span>{centroidLat.toFixed(4)}° lat</span>
+                      </span>
+                    </a>
+                    <a
+                      href={googleMapsPolygonUrl(cell.h3_index)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <strong>Polygon</strong>
+                      <span>Draw the full modeled cell boundary</span>
+                    </a>
+                  </div>
+                </details>
+              </dd>
+            </div>
+          </dl>
+          <p className="atlas-inspector__meta">
+            Model {artifact.model_version}; data {artifact.data_version};
+            registry {artifact.registry_version}.
+          </p>
+        </div>
       </aside>
     );
   }
@@ -169,6 +187,7 @@ export function InspectorPanel({
     <aside className="atlas-inspector" aria-label="Selected observation">
       <button
         className="atlas-inspector__close"
+        data-sheet-peek
         type="button"
         onClick={onClose}
         aria-label="Close inspector"
@@ -176,62 +195,69 @@ export function InspectorPanel({
         ×
       </button>
       <p className="atlas-kicker">Measured observation</p>
-      <h2>{observation.population_label}</h2>
-      {placeContext && (
-        <p
-          className="atlas-inspector__place"
-          title={`Nearby mapped place · ${placeContext.revision}`}
-        >
-          <span>Nearby place</span>
-          <strong>
-            {placeContext.name}
-            {placeContext.region ? ` · ${placeContext.region}` : ''}
-          </strong>
-        </p>
-      )}
-      {colorEncoding?.label && (
-        <div className="atlas-observation-color-key">
-          <span
-            className="atlas-observation-color-key__swatch"
-            data-observation-color={colorEncoding.color}
-            style={{ backgroundColor: colorEncoding.color }}
-          />
-          <span>{colorEncoding.label}</span>
-          <strong>{encodedValue}</strong>
-        </div>
-      )}
-      <dl>
-        <div>
-          <dt>Observed frequency</dt>
-          <dd>{percent(observation.ac / observation.an)}</dd>
-        </div>
-        <div>
-          <dt>Allele count</dt>
-          <dd>
-            {observation.ac} / {observation.an}
-          </dd>
-        </div>
-        <div>
-          <dt>Sampling radius</dt>
-          <dd>{observation.radius_km.toFixed(1)} km</dd>
-        </div>
-        <div>
-          <dt>Sampling design</dt>
-          <dd>{observation.sampling_design.replaceAll('_', ' ')}</dd>
-        </div>
-        <div>
-          <dt>Assay</dt>
-          <dd>{observation.assay}</dd>
-        </div>
-        <div>
-          <dt>Source location</dt>
-          <dd>{observation.source_locator}</dd>
-        </div>
-      </dl>
-      <p className="atlas-inspector__citation">{observation.citation_text}</p>
-      <a href={observation.source_url} target="_blank" rel="noreferrer">
-        View source data
-      </a>
+      <h2 data-sheet-peek>{observation.population_label}</h2>
+      <div
+        className="atlas-panel-body"
+        data-sheet-body
+        id={bodyId}
+        inert={bodyInert}
+      >
+        {placeContext && (
+          <p
+            className="atlas-inspector__place"
+            title={`Nearby mapped place · ${placeContext.revision}`}
+          >
+            <span>Nearby place</span>
+            <strong>
+              {placeContext.name}
+              {placeContext.region ? ` · ${placeContext.region}` : ''}
+            </strong>
+          </p>
+        )}
+        {colorEncoding?.label && (
+          <div className="atlas-observation-color-key">
+            <span
+              className="atlas-observation-color-key__swatch"
+              data-observation-color={colorEncoding.color}
+              style={{ backgroundColor: colorEncoding.color }}
+            />
+            <span>{colorEncoding.label}</span>
+            <strong>{encodedValue}</strong>
+          </div>
+        )}
+        <dl>
+          <div>
+            <dt>Observed frequency</dt>
+            <dd>{percent(observation.ac / observation.an)}</dd>
+          </div>
+          <div>
+            <dt>Allele count</dt>
+            <dd>
+              {observation.ac} / {observation.an}
+            </dd>
+          </div>
+          <div>
+            <dt>Sampling radius</dt>
+            <dd>{observation.radius_km.toFixed(1)} km</dd>
+          </div>
+          <div>
+            <dt>Sampling design</dt>
+            <dd>{observation.sampling_design.replaceAll('_', ' ')}</dd>
+          </div>
+          <div>
+            <dt>Assay</dt>
+            <dd>{observation.assay}</dd>
+          </div>
+          <div>
+            <dt>Source location</dt>
+            <dd>{observation.source_locator}</dd>
+          </div>
+        </dl>
+        <p className="atlas-inspector__citation">{observation.citation_text}</p>
+        <a href={observation.source_url} target="_blank" rel="noreferrer">
+          View source data
+        </a>
+      </div>
     </aside>
   );
 }

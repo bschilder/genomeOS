@@ -3,6 +3,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
+import { expandExplorerSheet } from './atlas-mobile-helpers';
+import { topLevelRoutes } from './site-routes';
 
 test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
 test.afterEach(async ({ page }) => {
@@ -15,15 +17,6 @@ async function chooseAtlasMap(page: Page, id: string): Promise<void> {
     .click();
   await page.locator(`[role="option"][data-map-id="${id}"]`).click();
 }
-
-const topLevelRoutes = [
-  '/',
-  '/project/',
-  '/working-groups/',
-  '/contribute/',
-  '/app/',
-  '/docs/',
-];
 
 const brandAuditRoutes = [
   ...topLevelRoutes,
@@ -41,6 +34,10 @@ for (const route of topLevelRoutes) {
     page,
   }) => {
     await page.goto(route);
+    if (route === '/app/')
+      await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+        timeout: 45_000,
+      });
     await expect(page.locator('h1')).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })
@@ -115,6 +112,94 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   await expect(
     header.getByRole('link', { name: 'Launch Atlas', exact: true }),
   ).toBeVisible();
+});
+
+test('Atlas fills the viewport below the header without page scroll', async ({
+  page,
+}) => {
+  // Reduced motion turns off the header's min-height transition, so the
+  // compact-class check below reads the settled height, not the first frame.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const shell = await page.evaluate(() => {
+    const root = document.documentElement;
+    const explorer = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect();
+    const header = document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect();
+    return {
+      clientHeight: root.clientHeight,
+      explorerBottom: explorer.bottom,
+      explorerTop: explorer.top,
+      headerBottom: header.bottom,
+      innerHeight: window.innerHeight,
+      overscroll: getComputedStyle(root).overscrollBehaviorY,
+      scrollHeight: root.scrollHeight,
+    };
+  });
+  expect(shell.scrollHeight).toBeLessThanOrEqual(shell.clientHeight);
+  expect(
+    Math.abs(shell.explorerBottom - shell.innerHeight),
+  ).toBeLessThanOrEqual(0.5);
+  expect(Math.abs(shell.explorerTop - shell.headerBottom)).toBeLessThanOrEqual(
+    0.5,
+  );
+  expect(shell.overscroll).toBe('none');
+
+  const header = page.locator('[data-site-header]');
+  const before = await header.boundingBox();
+  await header.evaluate((element) =>
+    element.classList.add('site-header--compact'),
+  );
+  const after = await header.boundingBox();
+  expect(after!.height).toBeCloseTo(before!.height, 1);
+
+  await page.goto('/');
+  expect(
+    await page.evaluate(
+      () => getComputedStyle(document.documentElement).overscrollBehaviorY,
+    ),
+  ).toBe('auto');
+});
+
+test('Atlas pickers open a gutter below the site header', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'phone pickers are full-screen by CSS');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const headerBottom = await page
+    .locator('[data-site-header]')
+    .evaluate((element) => element.getBoundingClientRect().bottom);
+
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  const catalog = await page
+    .getByRole('dialog', { name: 'Select dataset' })
+    .boundingBox();
+  expect(catalog!.y - headerBottom).toBeGreaterThanOrEqual(7.5);
+  expect(catalog!.y - headerBottom).toBeLessThanOrEqual(18.5);
+  await page.keyboard.press('Escape');
+
+  await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+  await page
+    .getByRole('button', { name: 'Choose basemap and terrain' })
+    .click();
+  const earth = await page
+    .getByRole('dialog', { name: 'Basemap and terrain' })
+    .boundingBox();
+  expect(earth!.y - headerBottom).toBeGreaterThanOrEqual(7.5);
+  expect(earth!.y - headerBottom).toBeLessThanOrEqual(10.5);
 });
 
 test('Atlas status shows progress while a replacement dataset stays pending', async ({
@@ -400,12 +485,14 @@ test('application cards reveal on scroll and respond to hover', async ({
 
 test('explorer changes entity, metric, context, and elevation', async ({
   page,
+  isMobile,
 }) => {
   test.setTimeout(90_000);
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   const layers = page.getByRole('group', { name: 'Layers' });
   await expect(
@@ -444,15 +531,20 @@ test('explorer changes entity, metric, context, and elevation', async ({
   ).toHaveText(
     'Visualize measured and predicted allele frequencies across the world',
   );
-  const controlType = await controls.evaluate((element) => ({
-    field: Number.parseFloat(
-      getComputedStyle(element.querySelector('.atlas-field')!).fontSize,
-    ),
-    section: Number.parseFloat(
-      getComputedStyle(element.querySelector('.atlas-control-sheet > summary')!)
-        .fontSize,
-    ),
-  }));
+  const controlType = await page.evaluate((phone) => {
+    const field = document.querySelector(
+      phone
+        ? '.atlas-top-slot .atlas-field--entity'
+        : '.atlas-controls .atlas-field--entity',
+    );
+    const section = document.querySelector(
+      '.atlas-controls .atlas-control-sheet > summary',
+    );
+    return {
+      field: Number.parseFloat(getComputedStyle(field!).fontSize),
+      section: Number.parseFloat(getComputedStyle(section!).fontSize),
+    };
+  }, isMobile);
   expect(controlType.field).toBeCloseTo(13.25, 1);
   expect(controlType.section).toBeCloseTo(14.4, 1);
   await chooseAtlasMap(page, 'g6pd-deficiency');
@@ -489,6 +581,27 @@ test('explorer changes entity, metric, context, and elevation', async ({
   await expect(page).toHaveURL(/metric=post_sd/);
 });
 
+test('desktop keeps the selector in the dock and the top slot empty', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, 'the top selector slot is filled only on phones');
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-top-slot')).toBeEmpty();
+  await expect(
+    page
+      .getByRole('complementary', { name: 'Explorer controls' })
+      .getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+  ).toBeVisible();
+  await expect(page.locator('.atlas-controls__intro h1')).toHaveCount(1);
+  await expect(
+    page.locator('aside.atlas-controls[data-sheet-state]'),
+  ).toHaveCount(0);
+});
+
 test('explorer switches among globe, map, and perspective views', async ({
   page,
 }) => {
@@ -498,6 +611,7 @@ test('explorer switches among globe, map, and perspective views', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 30_000,
   });
+  await expandExplorerSheet(page);
   await page.locator('summary').filter({ hasText: /^Map$/ }).click();
   await page
     .locator('summary')
@@ -544,6 +658,7 @@ test('explorer restores a complete shareable URL', async ({ page }) => {
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await expect(
     page.getByRole('button', { name: /Select dataset\. Current dataset:/ }),
@@ -617,6 +732,7 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
   await expect(page.locator('[data-atlas-status-slot]')).toContainText(
     'Atlas ready',
   );
@@ -862,6 +978,130 @@ test('explorer groups and explains maps before selection', async ({ page }) => {
   await expect(page).toHaveURL(/entity=hla-b-58-01/);
 });
 
+test('each Escape closes only the innermost explorer layer', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'phone layering with the sheets is covered in atlas-mobile.spec.ts',
+  );
+  test.setTimeout(60_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+
+  const legendInfo = page.locator('details.atlas-legend__info');
+  const legendSummary = legendInfo.locator('summary');
+  await legendSummary.click();
+  await expect(legendInfo).toHaveAttribute('open', '');
+  await page.keyboard.press('Escape');
+  await expect(legendInfo).not.toHaveAttribute('open', '');
+  await expect(legendSummary).toBeFocused();
+
+  await page.getByRole('button', { name: 'More info' }).click();
+  const externalPanel = page.getByRole('complementary', {
+    name: 'External variant information',
+  });
+  await expect(externalPanel).toBeVisible();
+  await page.getByRole('button', { name: 'About map selection' }).click();
+  await expect(
+    page.getByRole('tooltip').filter({ hasText: 'Choose a versioned' }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('tooltip')).toHaveCount(0);
+  await expect(externalPanel).toBeVisible();
+
+  await legendSummary.click();
+  await page
+    .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+    .click();
+  const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+  await expect(catalog).toBeVisible();
+  // The legend popover closes from inside the catalog without pulling focus out of it.
+  const catalogSearch = catalog.getByRole('searchbox', { name: 'Search maps' });
+  await expect(catalogSearch).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(legendInfo).not.toHaveAttribute('open', '');
+  await expect(catalog).toBeVisible();
+  await expect(catalogSearch).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(catalog).toHaveCount(0);
+  await expect(externalPanel).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(externalPanel).toHaveCount(0);
+});
+
+test('information triggers keep 24 px targets on every screen', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const targets = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        '.atlas-info-tip__trigger, .atlas-legend__info summary',
+      ),
+    ]
+      .map((element) => ({
+        label: element.getAttribute('aria-label') ?? '',
+        rect: element.getBoundingClientRect(),
+      }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      .map(({ label, rect }) => ({
+        height: rect.height,
+        label,
+        width: rect.width,
+      })),
+  );
+  expect(targets.length).toBeGreaterThan(5);
+  expect(targets.map(({ label }) => label)).toContain('About displayed metric');
+  for (const target of targets) {
+    expect(target.width, target.label).toBeGreaterThanOrEqual(24);
+    expect(target.height, target.label).toBeGreaterThanOrEqual(24);
+  }
+});
+
+test('the legend info summary takes pointers across its whole 24 px box', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'the desktop data credit sits under the legend at this size',
+  );
+  await page.setViewportSize({ height: 900, width: 1440 });
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  // The summary is round, so sample the corners of its inscribed square (2 px
+  // inside them) and the bottom of the circle, where the credit used to sit.
+  const corners = await page
+    .locator('.atlas-legend__info summary')
+    .evaluate((summary) => {
+      const rect = summary.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+      const reach = Math.min(rect.width, rect.height) / 2 / Math.SQRT2 - 2;
+      return [
+        [x - reach, y - reach],
+        [x + reach, y - reach],
+        [x - reach, y + reach],
+        [x + reach, y + reach],
+        [x, rect.bottom - 2],
+      ].map(([px, py]) => {
+        const hit = document.elementFromPoint(px!, py!);
+        return hit !== null && summary.contains(hit)
+          ? 'summary'
+          : `${hit?.tagName.toLowerCase()}.${hit?.className}`;
+      });
+    });
+  expect(corners).toEqual(Array(5).fill('summary'));
+});
+
 test('height exaggeration uses the available compact control width', async ({
   page,
 }, testInfo) => {
@@ -903,6 +1143,7 @@ test('explorer offers the full basemap and terrain gallery', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await page.locator('summary').filter({ hasText: /^Map$/ }).click();
   await page
@@ -946,6 +1187,7 @@ test('left control sections expand and collapse with motion', async ({
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   const sheet = page
     .locator('details.atlas-control-sheet')
@@ -974,6 +1216,7 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  await expandExplorerSheet(page);
 
   await page.locator('.atlas-downloads > summary').click();
   await expect(

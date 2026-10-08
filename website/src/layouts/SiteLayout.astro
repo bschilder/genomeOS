@@ -10,13 +10,22 @@ interface Props {
   title: string;
   description: string;
   imageAlt?: string;
+  viewportFit?: 'cover';
+  htmlClass?: string;
 }
 
 const {
   title,
   description,
   imageAlt = 'genomeOS, a worldwide atlas of human genetic variation',
+  viewportFit,
+  htmlClass,
 } = Astro.props;
+const viewport = [
+  'width=device-width',
+  'initial-scale=1',
+  ...(viewportFit ? [`viewport-fit=${viewportFit}`] : []),
+].join(', ');
 const fullTitle = title === 'genomeOS' ? title : `${title} | genomeOS`;
 const canonical = new URL(Astro.url.pathname, Astro.site ?? Astro.url.origin);
 const socialImage = new URL(
@@ -26,10 +35,10 @@ const socialImage = new URL(
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="en" class={htmlClass}>
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content={viewport} />
     <meta name="generator" content={Astro.generator} />
     <title>{fullTitle}</title>
     <meta name="description" content={description} />

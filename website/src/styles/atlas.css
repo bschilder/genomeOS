@@ -1,7 +1,29 @@
+/* The Atlas page is one 100svh column: header, then the explorer (mobile sheets design §A.1.2). */
+html.atlas-page {
+  overscroll-behavior-y: none;
+}
+
+html.atlas-page body {
+  height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+html.atlas-page #main-content {
+  min-height: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+html.atlas-page .site-header--compact .site-header__inner {
+  min-height: 4.75rem;
+}
+
 .atlas-explorer {
   position: relative;
-  min-height: calc(100svh - 4.75rem);
-  height: calc(100svh - 4.75rem);
+  min-height: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   isolation: isolate;
   background:
@@ -47,7 +69,20 @@
   outline-offset: -4px;
 }
 
+/* Cesium's credit lightbox opens inside .atlas-scene, a z-index 0 stacking
+ * context under the z-index 4 chrome, so the top slot, sheets and rail would
+ * cover its close button. Lift the scene above them while it is open (keyed
+ * on Cesium's own aria-expanded); .atlas-explorer isolates, so this stays
+ * under the site header and the fixed pickers. */
+.atlas-explorer:has(
+    .atlas-scene .cesium-credit-expand-link[aria-expanded='true']
+  )
+  .atlas-scene {
+  z-index: 5;
+}
+
 .atlas-controls,
+.atlas-top-slot,
 .atlas-legend,
 .atlas-right-rail,
 .atlas-hover-preview,
@@ -197,6 +232,11 @@
   overflow: auto;
   scrollbar-width: thin;
   pointer-events: auto;
+}
+
+/* Desktop lays the sheet body out as part of the dock (mobile sheets design §A.1.13). */
+.atlas-sheet__body {
+  display: contents;
 }
 
 .atlas-controls__intro {
@@ -855,19 +895,34 @@
   display: inline-flex;
 }
 
+/*
+ * The 1.1rem glyph keeps its look inside a 24 px target box on every screen:
+ * a transparent border pads the box, the ring is an inset shadow on the
+ * padding edge (WCAG 2.2 SC 2.5.8; mobile sheets design §A.1.10). Once
+ * 1.1rem passes 24 px (root font size above about 21.8 px), the box grows
+ * with the glyph and the border stays at zero, so the ring keeps scaling.
+ */
 .atlas-info-tip__trigger,
 .atlas-legend__info summary {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: max(24px, 1.1rem);
+  height: max(24px, 1.1rem);
   padding: 0;
   display: grid;
   place-items: center;
-  border: 1px solid rgb(112 230 255 / 42%);
+  border: max(0px, calc((24px - 1.1rem) / 2)) solid transparent;
   border-radius: 50%;
-  background: rgb(5 22 45 / 92%);
+  background: rgb(5 22 45 / 92%) padding-box;
+  box-shadow: inset 0 0 0 1px rgb(112 230 255 / 42%);
   color: var(--color-ion);
   font: 750 0.7rem/1 var(--font-body);
   cursor: help;
+}
+
+.atlas-info-tip__trigger:focus-visible,
+.atlas-legend__info summary:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgb(112 230 255 / 42%),
+    var(--focus-ring);
 }
 
 .atlas-info-tip__content {
@@ -1715,6 +1770,12 @@
   cursor: pointer;
 }
 
+/* Panel bodies add no box on desktop. The phone panel sheet makes them inert at
+ * peek, and the inspector's body is its scroll container there (§A.1.6). */
+.atlas-panel-body {
+  display: contents;
+}
+
 .atlas-inspector h2 {
   margin: 0 2.5rem 0 0;
   font-family: var(--font-display);
@@ -1829,12 +1890,24 @@
   line-height: 1.42;
 }
 
+/* Only the link takes pointers, so the credit's box never covers the legend
+ * info summary's 24 px target above it (§A.1.10), as on phones. */
 .atlas-data-credit {
   right: 1rem;
   bottom: 0.35rem;
   padding: 0.25rem 0.45rem;
   font-size: 1rem;
+  pointer-events: none;
+}
+
+.atlas-data-credit a {
   pointer-events: auto;
+}
+
+.atlas-data-credit__short,
+.atlas-legend__label-short,
+.atlas-legend__heading-metric {
+  display: none;
 }
 
 .atlas-failure {
@@ -1875,6 +1948,26 @@
 
 body:has(.atlas-explorer) .site-footer {
   display: none;
+}
+
+.mobile-nav__icon {
+  display: none;
+}
+
+/*
+ * /app/ draws under the safe areas (viewport-fit=cover, mobile sheets design
+ * §A.1.1), at every width a landscape phone reaches. The header background
+ * still runs edge to edge; its padding tops the page gutter up to each side
+ * inset, so the wordmark and Menu start at max(gutter, inset), like the
+ * explorer's max(0.65rem, env(…)) rules. Zero insets leave it unchanged.
+ */
+body:has(.atlas-explorer) .site-header {
+  padding-inline: max(0px, env(safe-area-inset-left) - var(--space-page))
+    max(0px, env(safe-area-inset-right) - var(--space-page));
+}
+
+body:has(.atlas-explorer) .skip-link {
+  left: max(0.75rem, env(safe-area-inset-left));
 }
 
 @media (min-width: 75.01rem) {
@@ -1948,42 +2041,14 @@ body:has(.atlas-explorer) .site-footer {
     gap: 0.5rem;
   }
 
-  .atlas-navbar-status-slot {
-    width: min(9rem, 40vw);
-    min-width: 0;
-    flex: 0 1 9rem;
-  }
-
   .atlas-navbar-status-slot .atlas-status {
     width: 100%;
     min-width: 0;
     max-width: 12rem;
   }
 
-  .atlas-status__copy small {
-    display: none;
-  }
-
   .atlas-status__meter {
     width: 100%;
-  }
-
-  .atlas-explorer {
-    min-height: calc(100svh - 4.75rem);
-    height: calc(100svh - 4.75rem);
-  }
-
-  .atlas-controls {
-    right: max(0.65rem, env(safe-area-inset-right));
-    bottom: auto;
-    left: max(0.65rem, env(safe-area-inset-left));
-    width: auto;
-    max-height: 52%;
-    padding: 0.85rem;
-  }
-
-  .atlas-explorer:has(.atlas-warning-banner) .atlas-controls {
-    top: 3.8rem;
   }
 
   .atlas-warning-banner {
@@ -1991,23 +2056,6 @@ body:has(.atlas-explorer) .site-footer {
     right: 0.65rem;
     left: 0.65rem;
     font-size: 1rem;
-  }
-
-  .atlas-controls__intro {
-    padding-bottom: 0.65rem;
-  }
-
-  .atlas-controls h1 {
-    max-width: 17ch;
-    font-size: 1.55rem;
-  }
-
-  .atlas-controls__intro > p:last-child {
-    display: none;
-  }
-
-  .atlas-field--entity {
-    margin-block: 0.65rem;
   }
 
   .atlas-control-sheet__body {
@@ -2021,59 +2069,12 @@ body:has(.atlas-explorer) .site-footer {
     grid-column: 1 / -1;
   }
 
-  .atlas-status-stack {
-    top: auto;
-    right: 0.65rem;
-    bottom: 10.8rem;
-    left: 0.65rem;
-  }
-
   .atlas-explorer > .atlas-status {
     display: none;
   }
 
-  .atlas-view-notice {
-    top: auto;
-    right: 0.65rem;
-    bottom: 10.8rem;
-    left: 0.65rem;
-    transform: none;
-  }
-
-  .atlas-legend {
-    right: 0.65rem;
-    bottom: max(0.65rem, env(safe-area-inset-bottom));
-    left: 0.65rem;
-    width: auto;
-    min-width: 0;
-    padding: 0.75rem;
-  }
-
-  .atlas-legend__compact {
-    grid-template-columns: auto 1fr auto;
-  }
-
   .atlas-legend__mode {
     display: none;
-  }
-
-  .atlas-inspector {
-    width: 100%;
-    max-height: none;
-  }
-
-  .atlas-right-rail,
-  .atlas-explorer:has(.atlas-warning-banner) .atlas-right-rail {
-    top: auto;
-    right: 0.65rem;
-    bottom: 0.65rem;
-    left: 0.65rem;
-    width: auto;
-    max-height: 58%;
-  }
-
-  .atlas-external-details {
-    max-height: 52svh;
   }
 
   .atlas-external-frequency-grid {
@@ -2089,17 +2090,6 @@ body:has(.atlas-explorer) .site-footer {
     bottom: calc(100% + 0.55rem);
     left: auto;
     width: auto;
-  }
-
-  .atlas-data-credit {
-    display: none;
-  }
-
-  .atlas-scene .cesium-viewer-bottom {
-    right: 0.65rem;
-    bottom: 9.1rem !important;
-    left: 0.65rem !important;
-    max-width: none;
   }
 }
 
@@ -2129,19 +2119,21 @@ body:has(.atlas-explorer) .site-footer {
   font-size: 0.8rem;
 }
 
-.atlas-controls .atlas-field {
+:is(.atlas-controls, .atlas-top-slot) .atlas-field {
   font-size: 0.736rem;
 }
 
-.atlas-controls .atlas-map-catalog__trigger small {
+:is(.atlas-controls, .atlas-top-slot) .atlas-map-catalog__trigger small {
   font-size: 0.544rem;
 }
 
-.atlas-controls .atlas-map-catalog__trigger strong {
+:is(.atlas-controls, .atlas-top-slot) .atlas-map-catalog__trigger strong {
   font-size: 0.72rem;
 }
 
-.atlas-controls .atlas-map-catalog__trigger > span:last-child {
+:is(.atlas-controls, .atlas-top-slot)
+  .atlas-map-catalog__trigger
+  > span:last-child {
   font-size: 0.96rem;
 }
 
@@ -2187,7 +2179,7 @@ body:has(.atlas-explorer) .site-footer {
   font-size: 0.8rem;
 }
 
-.atlas-controls .atlas-info-tip__trigger {
+:is(.atlas-controls, .atlas-top-slot) .atlas-info-tip__trigger {
   font-size: 0.56rem;
 }
 
@@ -2248,6 +2240,618 @@ body:has(.atlas-explorer) .site-footer {
   font-size: 0.688rem;
 }
 
+/* Mobile sheets and header (mobile sheets design 2026-10-07 §A.1). These
+ * rules sit after the dense rules so they win over them, and before the
+ * preference blocks so reduced motion, high contrast and coarse pointers
+ * still win over them (§A.1.12). */
+@media (max-width: 52rem) {
+  body:has(.atlas-explorer) .wordmark {
+    font-size: 1rem;
+    letter-spacing: 0.08em;
+  }
+
+  body:has(.atlas-explorer) .site-header__actions {
+    min-width: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+
+  body:has(.atlas-explorer) .mobile-nav summary {
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+  }
+
+  body:has(.atlas-explorer) .mobile-nav summary::after {
+    content: none;
+  }
+
+  /* The .visually-hidden utility (global.css), scoped to this breakpoint. */
+  body:has(.atlas-explorer) .mobile-nav__label,
+  .atlas-status__copy small,
+  .atlas-legend__label-full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  body:has(.atlas-explorer) .mobile-nav__icon {
+    width: 1.35rem;
+    height: 1.35rem;
+    display: block;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-width: 1.8;
+  }
+
+  .atlas-navbar-status-slot {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
+  .atlas-explorer {
+    --atlas-sheet-offset: 4.5rem;
+    --atlas-sheet-rest: 4.5rem;
+    --atlas-top-slot-top: 0.65rem;
+    /* The slot shows only the catalog trigger, whose height map-catalog.css owns. */
+    --atlas-top-slot-height: var(--atlas-map-catalog-trigger-min-height);
+  }
+
+  .atlas-explorer:has(> .atlas-warning-banner) {
+    --atlas-top-slot-top: 3.55rem;
+  }
+
+  .atlas-controls[data-sheet-state],
+  .atlas-controls--loading {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: var(--atlas-sheet-offset);
+    max-height: none;
+    padding: 0 max(0.65rem, env(safe-area-inset-right))
+      env(safe-area-inset-bottom) max(0.65rem, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-width: 1px 0 0;
+    border-radius: 0.8rem 0.8rem 0 0;
+    transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-controls--loading {
+    justify-content: center;
+    gap: 0.15rem;
+  }
+
+  .atlas-controls--loading > p:last-child {
+    margin: 0;
+  }
+
+  .atlas-sheet__peek {
+    flex: none;
+    display: grid;
+  }
+
+  .atlas-sheet__handle-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .atlas-sheet__handle {
+    min-height: 44px;
+    flex: 1 1 auto;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 0.5rem;
+    background: transparent;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .atlas-sheet__handle::before {
+    width: 2.4rem;
+    height: 0.28rem;
+    border-radius: 999px;
+    background: rgb(112 230 255 / 55%);
+    content: '';
+  }
+
+  .atlas-sheet__summary {
+    margin: 0;
+    overflow: hidden;
+    color: #dce8f6;
+    font-size: 0.8rem;
+    font-weight: 650;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .atlas-sheet__body {
+    min-height: 0;
+    flex: 1 1 auto;
+    padding-block: 0.5rem 0.65rem;
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
+  .atlas-controls[data-sheet-state='peek'] .atlas-sheet__body {
+    overflow: hidden;
+  }
+
+  .atlas-status-stack,
+  .atlas-view-notice {
+    top: calc(
+      var(--atlas-top-slot-top) + var(--atlas-top-slot-height) + 0.45rem
+    );
+    right: max(0.65rem, env(safe-area-inset-right));
+    bottom: auto;
+    left: max(0.65rem, env(safe-area-inset-left));
+    max-width: none;
+    transform: none;
+  }
+
+  .atlas-scene .cesium-viewer-bottom {
+    right: max(0.65rem, env(safe-area-inset-right)) !important;
+    bottom: calc(
+      var(--atlas-sheet-rest) + var(--atlas-data-credit-height, 0px)
+    ) !important;
+    left: max(0.65rem, env(safe-area-inset-left)) !important;
+    max-width: none;
+    transition:
+      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-top-slot {
+    top: var(--atlas-top-slot-top);
+    right: max(0.65rem, env(safe-area-inset-right));
+    left: max(0.65rem, env(safe-area-inset-left));
+  }
+
+  .atlas-top-slot .atlas-field--entity {
+    margin: 0;
+  }
+
+  .atlas-sheet__body > .atlas-controls__intro {
+    display: none;
+  }
+
+  .atlas-explorer[data-sheet-dragging]
+    :is(.atlas-controls, .atlas-right-rail, .atlas-legend, .atlas-data-credit),
+  .atlas-explorer[data-sheet-dragging] .atlas-scene .cesium-viewer-bottom {
+    transition: none;
+  }
+
+  /*
+   * Docked strips stay at --atlas-sheet-rest and follow the drag on the
+   * compositor. On release their bottom and translate ease together over the
+   * sheet's 220 ms height curve, so they glide on from the finger instead of
+   * jumping back to the old rest. The translate property leaves each strip's
+   * own transform alone.
+   */
+  .atlas-explorer[data-sheet-dragging] :is(.atlas-legend, .atlas-data-credit),
+  .atlas-explorer[data-sheet-dragging] .atlas-scene .cesium-viewer-bottom {
+    translate: 0 calc(var(--atlas-sheet-rest) - var(--atlas-sheet-offset));
+  }
+
+  .atlas-controls[hidden] {
+    display: none;
+  }
+
+  /* Only an empty rail is hidden. Crossing 52rem, these rules apply before
+   * React sets data-sheet-state, and hiding an open panel then would blur its
+   * focused control to <body> (Review Focus RF4). */
+  .atlas-right-rail:not(:has(.atlas-inspector, .atlas-external-details)),
+  .atlas-explorer:has(.atlas-warning-banner)
+    .atlas-right-rail:not(:has(.atlas-inspector, .atlas-external-details)) {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state],
+  .atlas-explorer:has(.atlas-warning-banner)
+    .atlas-right-rail[data-sheet-state] {
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    height: var(--atlas-sheet-offset);
+    max-height: none;
+    padding: 0 max(0.65rem, env(safe-area-inset-right))
+      env(safe-area-inset-bottom) max(0.65rem, env(safe-area-inset-left));
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid rgb(112 230 255 / 25%);
+    border-width: 1px 0 0;
+    border-radius: 0.8rem 0.8rem 0 0;
+    background: linear-gradient(145deg, rgb(8 29 57 / 93%), rgb(3 13 30 / 88%));
+    box-shadow: 0 -0.75rem 2.5rem rgb(0 0 0 / 34%);
+    pointer-events: auto;
+    backdrop-filter: blur(20px) saturate(125%);
+    transition: height 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector,
+  .atlas-right-rail[data-sheet-state] .atlas-external-details {
+    width: 100%;
+    min-height: 0;
+    max-height: none;
+    flex: 1 1 auto;
+    justify-self: stretch;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  /* The inspector's body scrolls, not the inspector, so its peek row (h2 and
+   * Close) never scrolls out of the peek band (§A.1.6). */
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector {
+    position: static;
+    padding: 0 0.3rem;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    > .atlas-inspector
+    > :is(.atlas-kicker, h2) {
+    flex: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector > h2 {
+    margin-right: 0;
+  }
+
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector > .atlas-panel-body {
+    min-height: 0;
+    flex: 1 1 auto;
+    padding-bottom: 1rem;
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* The More info peek row is one dense h2 line, like the inspector's. */
+  .atlas-right-rail[data-sheet-state] .atlas-external-details {
+    position: static;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header {
+    padding: 0 0.3rem 0.3rem;
+    gap: 0.5rem;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__icon {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header > div {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    .atlas-external-details__header
+    .atlas-kicker {
+    font-size: 0.8rem;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header h2 {
+    font-size: 1.24rem;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    h2 {
+    line-height: 1.2;
+  }
+
+  /*
+   * A panel peeks at its handle row and one h2 line, as the controls sheet
+   * peeks at its summary, so the docked legend and credits above it stay
+   * clear of the globe's centre (§A.1.3). Close sits at the end of the handle
+   * row (the panels are static here, so the rail places it), the grabber stays
+   * centred between equal insets, and the kicker and the More info header's
+   * rule show from half up.
+   */
+  .atlas-right-rail[data-sheet-state] > .atlas-sheet__handle-row {
+    padding-inline: 2.6rem;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    > .atlas-inspector__close {
+    position: absolute;
+    top: calc((44px - 2.3rem) / 2);
+    right: calc(max(0.65rem, env(safe-area-inset-right)) + 0.3rem);
+  }
+
+  .atlas-right-rail[data-sheet-state='peek']
+    :is(.atlas-inspector, .atlas-external-details__header)
+    .atlas-kicker {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state='peek'] .atlas-external-details__header {
+    padding-bottom: 0;
+    border-bottom-width: 0;
+  }
+
+  /* A long population label stays one line at peek, so the band keeps to 18%. */
+  .atlas-right-rail[data-sheet-state='peek']
+    :is(.atlas-inspector, .atlas-external-details__header)
+    h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot]:empty {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot],
+  .atlas-right-rail[data-sheet-state] > [data-atlas-external-slot] > div {
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__scroll {
+    overscroll-behavior: contain;
+  }
+
+  .atlas-right-rail[data-sheet-state='peek']
+    :is(.atlas-panel-body, .atlas-external-details__scroll) {
+    overflow: hidden;
+  }
+
+  /*
+   * Legend strip (§A.1.7), docked above the credit block and inside the side
+   * safe areas. Only its info disclosure takes touches, so the strip never
+   * shrinks the reachable globe (§A.1.3).
+   */
+  .atlas-legend {
+    right: max(0.65rem, env(safe-area-inset-right));
+    bottom: calc(var(--atlas-sheet-rest) + var(--atlas-credit-height, 3.5rem));
+    left: max(0.65rem, env(safe-area-inset-left));
+    width: auto;
+    min-width: 0;
+    padding: 0.35rem 0.6rem;
+    pointer-events: none;
+    transition:
+      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-legend__info {
+    pointer-events: auto;
+  }
+
+  /*
+   * The popover stays inside the explorer wherever the strip docks: AtlasLegend
+   * writes the side with room (below, across an open sheet, when the strip rides
+   * high) and that room, and the popover scrolls within it. While open, the
+   * strip paints over the sheets and the rail.
+   */
+  .atlas-legend__info > div {
+    max-height: var(--atlas-legend-room, 50svh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .atlas-legend__info[data-placement='below'] > div {
+    top: calc(100% + 0.7rem);
+    bottom: auto;
+  }
+
+  .atlas-legend:has(> .atlas-legend__compact > .atlas-legend__info[open]) {
+    z-index: 5;
+  }
+
+  .atlas-legend__compact {
+    grid-template-columns: auto minmax(6rem, 1fr) auto;
+    gap: 0.6rem;
+  }
+
+  .atlas-legend__compact > strong {
+    font-size: 0.8rem;
+  }
+
+  .atlas-legend__label-short {
+    display: inline;
+  }
+
+  .atlas-legend__heading-metric {
+    margin-top: 0.15rem;
+    display: block;
+    color: var(--color-muted);
+    font-family: var(--font-body);
+    font-size: 0.8rem;
+    font-weight: 650;
+  }
+
+  .atlas-color-scale {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      'ramp ramp'
+      'low high';
+    gap: 0.15rem 0;
+    font-size: 0.72rem;
+    line-height: 1.2;
+  }
+
+  .atlas-color-scale > i {
+    grid-area: ramp;
+  }
+
+  .atlas-color-scale > span:first-child {
+    grid-area: low;
+    justify-self: start;
+  }
+
+  .atlas-color-scale > span:last-child {
+    grid-area: high;
+    justify-self: end;
+  }
+
+  /*
+   * One wrapping credit block (§A.1.7): Cesium's credits, then the data
+   * credit, directly above the sheet. Only links and the logo take touches.
+   * The ion logo keeps its native size and the credit lines wrap beside it at
+   * the 10 px credit size, so the docked stack stays clear of the globe's
+   * centre over a peeking sheet and a bottom inset (§A.1.3).
+   */
+  .atlas-scene .cesium-viewer-bottom {
+    padding: 0.15rem 0.45rem 0;
+    display: flow-root;
+    border-radius: 0.45rem 0.45rem 0 0;
+    background: rgb(3 15 33 / 88%);
+    font-size: 10px;
+    line-height: 16px;
+    pointer-events: none;
+  }
+
+  .atlas-scene .cesium-viewer-bottom .cesium-credit-logoContainer {
+    margin-right: 0.3rem;
+    float: left;
+  }
+
+  .atlas-scene .cesium-viewer-bottom .cesium-credit-logoContainer img {
+    display: block;
+  }
+
+  .atlas-scene .cesium-viewer-bottom a {
+    pointer-events: auto;
+  }
+
+  /* Under the explorer vignette, like the Cesium credits it continues, so the
+   * block has one tone across the seam (.atlas-scene is its own stacking
+   * context below the vignette). */
+  .atlas-data-credit {
+    z-index: 0;
+    right: max(0.65rem, env(safe-area-inset-right));
+    bottom: var(--atlas-sheet-rest);
+    left: max(0.65rem, env(safe-area-inset-left));
+    padding: 0 0.45rem 0.1rem;
+    display: block;
+    border: 0;
+    border-radius: 0 0 0.45rem 0.45rem;
+    box-shadow: none;
+    font-size: 10px;
+    line-height: 16px;
+    text-align: right;
+    pointer-events: none;
+    transition:
+      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .atlas-data-credit a {
+    pointer-events: auto;
+  }
+
+  .atlas-data-credit__long {
+    display: none;
+  }
+
+  .atlas-data-credit__short {
+    display: inline;
+  }
+
+  /* end of mobile sheet rules */
+}
+
+/* Short explorers (landscape phones and zoomed desktops under 34rem tall)
+ * keep only the handle row at peek (mobile sheets design Part A, §A.1.5–7). */
+@media (max-width: 52rem) and (max-height: 34rem) {
+  .atlas-sheet__summary {
+    display: none;
+  }
+
+  /* The docked strips stay with a peeking sheet only: above peek they hide
+   * (links and all) instead of riding up over the short globe, and the
+   * full-height cap ignores them. */
+  .atlas-explorer:has(
+      :is(
+          .atlas-controls:not([hidden]),
+          .atlas-right-rail
+        )[data-sheet-state]:not([data-sheet-state='peek'])
+    )
+    :is(.atlas-legend, .atlas-data-credit, .atlas-scene .cesium-viewer-bottom) {
+    visibility: hidden;
+  }
+
+  /* At peek the legend strip gives way when it would reach the top chrome. */
+  .atlas-explorer[data-legend-collapsed] .atlas-legend {
+    visibility: hidden;
+  }
+
+  /* A full sheet that needs the top chrome's room covers it; the covered
+   * controls leave the tab order. The visually hidden h1 stays. */
+  .atlas-explorer[data-sheet-covers-top]
+    :is(
+      .atlas-warning-banner,
+      .atlas-top-slot > :not(h1),
+      .atlas-status-stack,
+      .atlas-view-notice
+    ) {
+    visibility: hidden;
+  }
+
+  /* A panel peeks at its handle row alone: the h2 sits on one line at the
+   * start of the row (touches pass through to the handle) and the kicker and
+   * the More info header's rule are hidden in every state. */
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    .atlas-kicker {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header {
+    padding: 0;
+    border-bottom-width: 0;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    h2 {
+    position: absolute;
+    top: 1px;
+    left: calc(max(0.65rem, env(safe-area-inset-left)) + 0.3rem);
+    max-width: calc(50% - 1.6rem - max(0.65rem, env(safe-area-inset-left)));
+    margin: 0;
+    overflow: hidden;
+    font-size: 1.1rem;
+    line-height: 44px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .atlas-explorer *,
   .atlas-explorer *::before,
@@ -2281,6 +2885,16 @@ body:has(.atlas-explorer) .site-footer {
   .atlas-inspector,
   .atlas-hover-preview,
   .atlas-failure {
+    border-color: var(--color-ion);
+    background: #020c1d;
+    backdrop-filter: none;
+  }
+
+  /* The phone panel sheet paints the rail, not the inspector inside it, so it
+   * needs its own opaque surface (equal specificity, later in the file). */
+  .atlas-right-rail[data-sheet-state],
+  .atlas-explorer:has(.atlas-warning-banner)
+    .atlas-right-rail[data-sheet-state] {
     border-color: var(--color-ion);
     background: #020c1d;
     backdrop-filter: none;

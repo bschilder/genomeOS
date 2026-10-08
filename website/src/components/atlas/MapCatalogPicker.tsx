@@ -19,6 +19,9 @@ import type {
   AtlasCatalog,
   DiscoveryGroup,
 } from '../../atlas/contracts';
+import { clampPickerTop, siteHeaderBottom } from './site-header';
+import { useEscapeLayer } from './useEscapeStack';
+import { useFocusCarry } from './useFocusCarry';
 
 interface MapCatalogPickerProps {
   catalog: AtlasCatalog;
@@ -117,7 +120,7 @@ export function MapCatalogPicker({
       left: roomOnRight
         ? rect.right + gutter
         : Math.max(gutter, window.innerWidth - width - gutter),
-      top: Math.max(76, Math.min(rect.top, 104)),
+      top: clampPickerTop(rect.top, siteHeaderBottom(), 18),
       width,
     });
   }, []);
@@ -142,18 +145,21 @@ export function MapCatalogPicker({
         return;
       close();
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close(true);
-    };
     window.addEventListener('resize', placePanel);
     document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
     return () => {
       window.removeEventListener('resize', placePanel);
       document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
     };
   }, [close, open, placePanel]);
+  useEscapeLayer(open, () => close(true), 'dialog');
+  // Crossing 52rem remounts the picker (top slot vs dock) and closes the
+  // dialog; focus in the trigger or the dialog returns to the new trigger.
+  useFocusCarry(
+    'catalog',
+    () => [triggerRef.current, panelRef.current],
+    () => triggerRef.current,
+  );
 
   const choose = (id: string) => {
     onSelect(id);

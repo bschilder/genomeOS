@@ -4,6 +4,7 @@ export default defineConfig({
   test: {
     exclude: [
       'tests/site.spec.ts',
+      'tests/atlas-mobile.spec.ts',
       'tests/atlas-performance.spec.ts',
       '**/node_modules/**',
       '**/.git/**',
