@@ -90,6 +90,7 @@ import * as atlasScene from '../src/atlas/scene/atlas-scene';
 import { styleAtlasScene } from '../src/atlas/scene/scene-policy';
 import * as scenePolicy from '../src/atlas/scene/scene-policy';
 import { heightForCell } from '../src/atlas/visual-encoding';
+import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
 
 const baseCell: SurfaceCell = {
   dist_nearest_obs_km: 25,
@@ -130,43 +131,6 @@ describe('Earth opacity', () => {
     expect(globe.depthTestAgainstTerrain).toBe(true);
   });
 });
-
-function stubCesiumBrowserImageTypes(): void {
-  class BrowserImageType {}
-  class CanvasImageType extends BrowserImageType {
-    height = 0;
-    width = 0;
-    getContext() {
-      return {
-        arc: vi.fn(),
-        beginPath: vi.fn(),
-        bezierCurveTo: vi.fn(),
-        closePath: vi.fn(),
-        createRadialGradient: () => ({ addColorStop: vi.fn() }),
-        ellipse: vi.fn(),
-        fill: vi.fn(),
-        fillStyle: '',
-        lineWidth: 0,
-        moveTo: vi.fn(),
-        stroke: vi.fn(),
-        strokeStyle: '',
-      };
-    }
-  }
-  vi.stubGlobal('HTMLCanvasElement', CanvasImageType);
-  for (const browserType of [
-    'HTMLImageElement',
-    'ImageBitmap',
-    'OffscreenCanvas',
-  ])
-    vi.stubGlobal(browserType, BrowserImageType);
-  vi.stubGlobal('document', {
-    createElement: (name: string) => {
-      if (name !== 'canvas') throw new Error(`Unexpected element: ${name}`);
-      return new CanvasImageType();
-    },
-  });
-}
 
 function buildObservationLayerForTest(shape: ObservationShape = 'circle') {
   const surface = {
