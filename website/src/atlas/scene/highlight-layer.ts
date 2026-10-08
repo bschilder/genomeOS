@@ -193,6 +193,14 @@ export class HighlightLayer {
       this.#hide(entry);
       return;
     }
+    if (
+      pick.artifactKey !== undefined &&
+      this.#surface.artifactKey !== null &&
+      pick.artifactKey !== this.#surface.artifactKey
+    ) {
+      this.#hide(entry);
+      return;
+    }
     if (pick.kind === 'surface') {
       const height = this.#surface.cellHeight(pick.h3Index, this.#metric);
       if (height === null) {

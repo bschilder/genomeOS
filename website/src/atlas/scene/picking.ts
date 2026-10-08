@@ -7,7 +7,7 @@ import {
   type Scene,
 } from 'cesium';
 
-import type { AtlasHover, AtlasPick } from './types';
+import type { AtlasHover, AtlasPick, AtlasPickId } from './types';
 
 export interface FrameThrottle<T> {
   queue(value: T): void;
@@ -125,17 +125,36 @@ export function createFrameThrottle<T>(
   };
 }
 
-function isAtlasPick(value: unknown): value is AtlasPick {
+export type PickResolver = (
+  picks: readonly unknown[],
+  position: Cartesian2,
+) => AtlasPick | null;
+
+function pickIdOf(picked: unknown): AtlasPickId | null {
+  const value =
+    typeof picked === 'object' && picked !== null && 'id' in picked
+      ? picked.id
+      : null;
   if (typeof value !== 'object' || value === null || !('kind' in value))
-    return false;
-  return value.kind === 'surface' || value.kind === 'observation';
+    return null;
+  return value.kind === 'surface' ||
+    value.kind === 'surface-chunk' ||
+    value.kind === 'observation'
+    ? (value as AtlasPickId)
+    : null;
 }
 
 export function sameAtlasPick(first: AtlasPick, second: AtlasPick): boolean {
   if (first.kind === 'surface')
-    return second.kind === 'surface' && first.h3Index === second.h3Index;
+    return (
+      second.kind === 'surface' &&
+      first.artifactKey === second.artifactKey &&
+      first.row === second.row &&
+      first.h3Index === second.h3Index
+    );
   return (
     second.kind === 'observation' &&
+    first.artifactKey === second.artifactKey &&
     first.sourceRecordId === second.sourceRecordId
   );
 }
@@ -144,28 +163,40 @@ export function sameAtlasHover(first: AtlasHover, second: AtlasHover): boolean {
   return sameAtlasPick(first.pick, second.pick);
 }
 
+/**
+ * Observations win over surface cells. With a displayed artifact key (the
+ * chunk pipeline), picks of any other artifact are dropped before choosing,
+ * so an incoming group shown at opacity 0 during a swap can never answer for
+ * the displayed one (spec 2026-10-07 §B.6.6).
+ */
 export function preferredAtlasPick(
   picks: readonly unknown[],
-): AtlasPick | null {
-  const atlasPicks = picks.flatMap((picked) => {
-    const value =
-      typeof picked === 'object' && picked !== null && 'id' in picked
-        ? picked.id
-        : null;
-    return isAtlasPick(value) ? [value] : [];
+  displayedKey?: string | null,
+): AtlasPickId | null {
+  const candidates = picks.flatMap((picked): AtlasPickId[] => {
+    const id = pickIdOf(picked);
+    if (!id) return [];
+    if (displayedKey === undefined)
+      return id.kind === 'surface-chunk' ? [] : [id];
+    return id.kind !== 'surface' && id.artifactKey === displayedKey ? [id] : [];
   });
   return (
-    atlasPicks.find(({ kind }) => kind === 'observation') ??
-    atlasPicks[0] ??
+    candidates.find(({ kind }) => kind === 'observation') ??
+    candidates[0] ??
     null
   );
 }
+
+export const legacyPickResolver: PickResolver = (picks) => {
+  const pick = preferredAtlasPick(picks);
+  return pick && pick.kind !== 'surface-chunk' ? pick : null;
+};
 
 export function atlasHoverForPicks(
   picks: readonly unknown[],
   position: Cartesian2,
 ): AtlasHover | null {
-  const pick = preferredAtlasPick(picks);
+  const pick = legacyPickResolver(picks, position);
   return pick
     ? { pick, screenPosition: { x: position.x, y: position.y } }
     : null;
@@ -175,11 +206,12 @@ export function bindAtlasPicking(
   scene: Scene,
   onSelect: (pick: AtlasPick | null) => void,
   onHover: (hover: AtlasHover | null) => void,
+  resolve: PickResolver = legacyPickResolver,
 ): () => void {
   const handler = new ScreenSpaceEventHandler(scene.canvas);
   handler.setInputAction(
     (event: ScreenSpaceEventHandler.PositionedEvent) =>
-      onSelect(preferredAtlasPick(scene.drillPick(event.position, 12))),
+      onSelect(resolve(scene.drillPick(event.position, 12), event.position)),
     ScreenSpaceEventType.LEFT_CLICK,
   );
   const stableHover = createStableHover(onHover, sameAtlasHover);
@@ -188,8 +220,9 @@ export function bindAtlasPicking(
     stableHover.update(null);
   });
   const hoverFrame = createFrameThrottle((position: Cartesian2) => {
+    const pick = resolve(scene.drillPick(position, 12), position);
     stableHover.update(
-      atlasHoverForPicks(scene.drillPick(position, 12), position),
+      pick ? { pick, screenPosition: { x: position.x, y: position.y } } : null,
     );
   });
   handler.setInputAction(

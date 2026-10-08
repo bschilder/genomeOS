@@ -21,9 +21,24 @@ import type {
 } from '../url-state';
 import type { ContextWarning } from './context-controller';
 import type { ObservationPick } from './observation-layer';
-import type { SurfacePick } from './surface-layer';
 
-export type AtlasPick = SurfacePick | ObservationPick;
+/** A resolved surface pick: the cell row of the artifact whose chunk was picked. */
+export type SurfacePick = {
+  kind: 'surface';
+  artifactKey: string;
+  row: number;
+  h3Index: string;
+};
+/** Pick ids of the main-thread builder; removed when the scene switches (B4.15). */
+export type LegacySurfacePick = {
+  kind: 'surface';
+  h3Index: string;
+  artifactKey?: undefined;
+  row?: undefined;
+};
+export type AtlasPick = SurfacePick | LegacySurfacePick | ObservationPick;
+export type AtlasPickId =
+  SurfaceChunkPick | LegacySurfacePick | ObservationPick;
 export interface AtlasHover {
   pick: AtlasPick;
   screenPosition: { x: number; y: number };
