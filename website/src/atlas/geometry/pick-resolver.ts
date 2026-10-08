@@ -38,6 +38,11 @@ export interface SurfacePickInput {
  * The grid row under a surface or support pick, or `null` off the grid.
  * `heights(row)` is the row's render height at exaggeration 1 (`heightFor`
  * over the render tier; 0 for masked rows); only `extruded` reads it.
+ *
+ * `extruded`: the projected row wins while the hit altitude is within its top
+ * (plus slack). Otherwise the hit is a wall, and the nearest `gridDisk(cell, 1)`
+ * neighbour (by centre, ties to the lower row) whose top reaches the altitude
+ * wins; with none, the projected row stands (`null` off the grid).
  */
 export function resolveSurfaceRow(
   input: SurfacePickInput,
@@ -83,8 +88,9 @@ export function resolveSurfaceRow(
       centre[2] - hit[2],
     );
     if (
+      best === null ||
       distance < bestDistance ||
-      (distance === bestDistance && candidate < best!)
+      (distance === bestDistance && candidate < best)
     ) {
       best = candidate;
       bestDistance = distance;
