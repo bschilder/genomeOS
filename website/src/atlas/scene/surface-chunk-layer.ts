@@ -28,7 +28,9 @@ import type {
   SupportChunkBuffers,
 } from '../geometry/support-buffers';
 import type { SurfaceChunkBuffers } from '../geometry/surface-buffers';
+import { needsLongitudeSplit } from '../geometry/wgs84';
 import type { SurfaceGeometry } from '../url-state';
+import { hexFromBytes } from '../visual-encoding';
 import { createEdgeLayer, type EdgeLayer } from './edge-layer';
 import { materialForSupport } from './support-material';
 import {
@@ -155,16 +157,6 @@ function flatCellGeometry(buffers: FlatCellBuffers): Geometry {
   });
 }
 
-function cssColor([red, green, blue]: readonly [
-  number,
-  number,
-  number,
-]): string {
-  return `#${[red, green, blue]
-    .map((channel) => channel.toString(16).padStart(2, '0'))
-    .join('')}`;
-}
-
 export function createSurfaceChunkGroup(
   options: SurfaceChunkGroupOptions,
 ): SurfaceChunkGroup {
@@ -181,6 +173,7 @@ export function createSurfaceChunkGroup(
   const chunks: ChunkPrimitives[] = [];
   const opacityMaterials: OpacityMaterial[] = [];
   const appearances: ElevatedSurfaceAppearance[] = [];
+  const reboundedSurfaces: Primitive[] = [];
   let fadeOpacity = 1;
   let surfaceOpacity = options.surfaceOpacity;
   let edgesVisible = options.cellEdges;
@@ -226,17 +219,25 @@ export function createSurfaceChunkGroup(
       usesVertexColorGamma(options.geometry),
     );
     appearances.push(appearance);
+    // The viewer is not scene3DOnly, so Primitive runs splitLongitude on every
+    // chunk. Past its early exit, Cesium replaces the worker sphere (which
+    // covers the fully raised cells) with one over the unraised positions, so
+    // culling against it would drop raised cells near the limb or the frustum
+    // edge. Those chunks are drawn unculled while the surface is raised.
+    const rebounded = needsLongitudeSplit(buffers.boundingSphere);
     const primitive = new Primitive({
       appearance,
       // Custom vertex attributes cannot use Cesium's stock geometry workers;
       // the data worker already built every array.
       asynchronous: false,
+      cull: !(rebounded && elevationFactor > 0),
       geometryInstances: new GeometryInstance({
         geometry: surfaceGeometry(buffers),
         id: surfaceChunkPickId(options.artifactKey, chunk),
       }),
       show: surfaceVisible,
     });
+    if (rebounded) reboundedSurfaces.push(primitive);
     surfaceCollection.add(primitive);
     surfacePrimitives.push(primitive);
     primitives.push(primitive);
@@ -277,6 +278,10 @@ export function createSurfaceChunkGroup(
     primitives,
     addChunk(surface, support) {
       const chunk = surface.chunk;
+      if (support.chunk !== chunk)
+        throw new Error(
+          `surface chunk ${chunk} cannot take the mask of chunk ${support.chunk}`,
+        );
       const entry: ChunkPrimitives = {
         support: [],
         surface: addSurface(surface, chunk),
@@ -292,7 +297,7 @@ export function createSurfaceChunkGroup(
       for (const bin of support.priorDominated) {
         const primitive = addSupport(
           bin.buffers,
-          materialForSupport('prior_dominated', cssColor(bin.color)),
+          materialForSupport('prior_dominated', hexFromBytes(bin.color)),
           chunk,
         );
         if (primitive) entry.support.push(primitive);
@@ -329,6 +334,8 @@ export function createSurfaceChunkGroup(
         elevationFactor = safeFactor;
         for (const appearance of appearances)
           appearance.uniforms.u_elevationFactor = safeFactor;
+        for (const primitive of reboundedSurfaces)
+          primitive.cull = safeFactor === 0;
       }
       edges.setElevationFactor(safeFactor, force);
     },

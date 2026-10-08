@@ -16,11 +16,13 @@ const TRIANGLE: readonly (readonly [number, number])[] = [
   [0.2, 0],
   [0, 0.2],
 ];
+/** West edge of the seam triangle: it stays east of ±180°, as a seam chunk does. */
+const SEAM_WEST_LONGITUDE = 179.7;
 
-function ecef(height = CLEARANCE_METRES): Float64Array {
+function ecef(height = CLEARANCE_METRES, west = 0): Float64Array {
   return Float64Array.from(
     TRIANGLE.flatMap(([lon, lat]) => {
-      const position = Cartesian3.fromDegrees(lon, lat, height);
+      const position = Cartesian3.fromDegrees(west + lon, lat, height);
       return [position.x, position.y, position.z];
     }),
   );
@@ -41,19 +43,23 @@ function radial(positions: Float64Array): Float32Array {
   return normals;
 }
 
-function sphere(): { center: [number, number, number]; radius: number } {
-  const center = Cartesian3.fromDegrees(0.066, 0.066, CLEARANCE_METRES);
+function sphere(west = 0): {
+  center: [number, number, number];
+  radius: number;
+} {
+  const center = Cartesian3.fromDegrees(west + 0.066, 0.066, CLEARANCE_METRES);
   return { center: [center.x, center.y, center.z], radius: 30_000 };
 }
 
 export function triangleSurfaceBuffers(
   chunk: number,
   colors = Float32Array.of(1, 0, 0, 0, 1, 0, 0, 0, 1),
+  west = 0,
 ): SurfaceChunkBuffers {
-  const positions = ecef();
+  const positions = ecef(CLEARANCE_METRES, west);
   const normals = radial(positions);
   return {
-    boundingSphere: sphere(),
+    boundingSphere: sphere(west),
     chunk,
     colors,
     elevationNormals: normals.slice(),
@@ -63,6 +69,11 @@ export function triangleSurfaceBuffers(
     positions,
     values: Float32Array.of(0, 0.5, 1),
   };
+}
+
+/** A chunk beside ±180° whose sphere misses Cesium's `splitLongitude` early exit. */
+export function seamSurfaceBuffers(chunk: number): SurfaceChunkBuffers {
+  return triangleSurfaceBuffers(chunk, undefined, SEAM_WEST_LONGITUDE);
 }
 
 export function triangleCellBuffers(): FlatCellBuffers {

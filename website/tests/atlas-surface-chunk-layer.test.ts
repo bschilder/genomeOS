@@ -1,27 +1,37 @@
 import {
+  Cartesian3,
   Color,
   GeometryInstance,
+  GeometryPipeline,
+  type Material,
   Primitive,
   PrimitiveCollection,
 } from 'cesium';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  MAX_ELEVATION_FACTOR,
+  type SurfaceChunkBuffers,
+} from '../src/atlas/geometry/surface-buffers';
+import { needsLongitudeSplit } from '../src/atlas/geometry/wgs84';
 import { animateSwap, fadeTogether } from '../src/atlas/scene/scene-transition';
 import {
   createSurfaceChunkGroup,
   surfaceChunkPickId,
 } from '../src/atlas/scene/surface-chunk-layer';
 import type { ElevatedSurfaceAppearance } from '../src/atlas/scene/surface-appearance';
+import type { SurfaceGeometry } from '../src/atlas/url-state';
 import {
   emptySupport,
   maskedSupport,
+  seamSurfaceBuffers,
   triangleSurfaceBuffers,
 } from './helpers/chunk-buffers';
 import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
 
 const KEY = 'hbs-rs334:v3:map-2026-08';
 
-function group(geometry: 'triangles' | 'hexagons' = 'triangles') {
+function group(geometry: SurfaceGeometry = 'triangles') {
   stubCesiumBrowserImageTypes();
   return createSurfaceChunkGroup({
     artifactKey: KEY,
@@ -36,6 +46,59 @@ function group(geometry: 'triangles' | 'hexagons' = 'triangles') {
 function markReady(primitives: readonly Primitive[]): void {
   for (const primitive of primitives)
     (primitive as unknown as { _ready: boolean })._ready = true;
+}
+
+type ChunkGroup = ReturnType<typeof group>;
+
+/** Child `index` of the surface (0) or support (1) collection. */
+function childAt(
+  layer: ChunkGroup,
+  layerIndex: 0 | 1,
+  index: number,
+): Primitive {
+  return (layer.collection.get(layerIndex) as PrimitiveCollection).get(
+    index,
+  ) as Primitive;
+}
+
+function childrenOf(layer: ChunkGroup, layerIndex: 0 | 1): Primitive[] {
+  const children = layer.collection.get(layerIndex) as PrimitiveCollection;
+  return Array.from(
+    { length: children.length },
+    (_, index) => children.get(index) as Primitive,
+  );
+}
+
+function alphaOf(material: Material, key: string): number {
+  return (material.uniforms[key] as Color).alpha;
+}
+
+function fakeGroup(opacity: number) {
+  return {
+    collection: { show: true },
+    isReady: () => true,
+    opacity,
+    readyCount: () => 1,
+    setOpacity(value: number) {
+      this.opacity = value;
+    },
+    totalCount: () => 1,
+  };
+}
+
+/** Every vertex lifted along its elevation normal at the top exaggeration. */
+function raisedVertices(buffers: SurfaceChunkBuffers): Cartesian3[] {
+  return Array.from({ length: buffers.heights.length }, (_, vertex) => {
+    const lift = buffers.heights[vertex] * MAX_ELEVATION_FACTOR;
+    return new Cartesian3(
+      buffers.positions[vertex * 3] +
+        buffers.elevationNormals[vertex * 3] * lift,
+      buffers.positions[vertex * 3 + 1] +
+        buffers.elevationNormals[vertex * 3 + 1] * lift,
+      buffers.positions[vertex * 3 + 2] +
+        buffers.elevationNormals[vertex * 3 + 2] * lift,
+    );
+  });
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -228,5 +291,172 @@ describe('surface chunk group', () => {
       false,
     ]);
     expect(fadeTogether(null, null)).toBeNull();
+  });
+
+  it('removes every member of an outgoing unit when the swap does not retain it', async () => {
+    const [incoming, surfaceOut, pointsOut] = [0, 1, 1].map(fakeGroup);
+    const remove = vi.fn(() => true);
+    const viewer = {
+      scene: { postRender: {}, primitives: { remove }, requestRender: vi.fn() },
+    };
+    const outgoing = fadeTogether(fadeTogether(surfaceOut), pointsOut);
+
+    await animateSwap(viewer as never, incoming, outgoing, true);
+
+    expect(outgoing?.members).toEqual([surfaceOut, pointsOut]);
+    expect(remove.mock.calls).toEqual([
+      [surfaceOut.collection],
+      [pointsOut.collection],
+    ]);
+  });
+
+  it('starts a chunk added mid-fade at the current fade', () => {
+    const layer = group();
+    layer.setOpacity(0.25);
+    layer.addChunk(triangleSurfaceBuffers(0), maskedSupport(0));
+    const surface = childAt(layer, 0, 0).appearance.material;
+    const hatch = childAt(layer, 1, 0).appearance.material;
+    const dots = childAt(layer, 1, 1).appearance.material;
+
+    expect(alphaOf(surface, 'color')).toBeCloseTo(0.9 * 0.25 * 0.5);
+    expect(alphaOf(hatch, 'color')).toBeCloseTo(0.72 * 0.25 * 0.5);
+    expect(hatch.uniforms.cellAlpha).toBeCloseTo(0.24 * 0.25);
+    expect(alphaOf(dots, 'darkColor')).toBeCloseTo(0.46 * 0.25 * 0.5);
+    expect(alphaOf(dots, 'lightColor')).toBeCloseTo(0.82 * 0.25 * 0.5);
+  });
+
+  it('counts a chunk ready only once its surface and every mask primitive are', () => {
+    const layer = group();
+    layer.addChunk(triangleSurfaceBuffers(0), maskedSupport(0));
+    layer.addChunk(
+      { ...triangleSurfaceBuffers(1), indices: new Uint16Array(0) },
+      maskedSupport(1),
+    );
+
+    markReady([childAt(layer, 0, 0)]);
+    expect(layer.readyChunkCount()).toBe(0);
+    markReady([childAt(layer, 1, 0)]);
+    expect(layer.readyChunkCount()).toBe(0);
+    markReady([childAt(layer, 1, 1)]);
+    expect(layer.readyChunkCount()).toBe(1);
+    // A chunk with no supported cells is ready once its mask is.
+    markReady([childAt(layer, 1, 2), childAt(layer, 1, 3)]);
+    expect(layer.readyChunkCount()).toBe(2);
+  });
+
+  it('builds a chunk added after an elevation change at the current factor', () => {
+    const layer = group();
+    layer.setElevationFactor(2.5);
+    layer.addChunk(triangleSurfaceBuffers(0), emptySupport(0));
+
+    expect(
+      (childAt(layer, 0, 0).appearance as ElevatedSurfaceAppearance).uniforms
+        .u_elevationFactor,
+    ).toBe(2.5);
+  });
+
+  it('hides the mask per primitive, including chunks added while it is hidden', () => {
+    const layer = group();
+    layer.addChunk(triangleSurfaceBuffers(0), maskedSupport(0));
+    layer.setVisibility(true, false);
+    layer.addChunk(triangleSurfaceBuffers(1), maskedSupport(1));
+
+    expect((layer.collection.get(1) as PrimitiveCollection).show).toBe(true);
+    expect(childrenOf(layer, 1).map((primitive) => primitive.show)).toEqual([
+      false,
+      false,
+      false,
+      false,
+    ]);
+    expect(childrenOf(layer, 0).map((primitive) => primitive.show)).toEqual([
+      true,
+      true,
+    ]);
+    expect(layer.edges.collection.show).toBe(true);
+
+    layer.setVisibility(true, true);
+    expect(childrenOf(layer, 1).map((primitive) => primitive.show)).toEqual([
+      true,
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it('gamma-corrects and closes extruded chunks', () => {
+    const layer = group('extruded');
+    layer.addChunk(triangleSurfaceBuffers(0), emptySupport(0));
+    const appearance = childAt(layer, 0, 0)
+      .appearance as ElevatedSurfaceAppearance;
+
+    expect(appearance.uniforms.u_vertexColorGamma).toBe(1);
+    expect(appearance.closed).toBe(true);
+  });
+
+  it('refuses a mask from another chunk before adding anything', () => {
+    const layer = group();
+
+    expect(() =>
+      layer.addChunk(triangleSurfaceBuffers(3), maskedSupport(4)),
+    ).toThrow('surface chunk 3 cannot take the mask of chunk 4');
+    expect(layer.chunkCount()).toBe(0);
+    expect(layer.totalCount()).toBe(0);
+  });
+
+  it('keeps raised chunks that Cesium re-bounds at the antimeridian out of culling', () => {
+    expect(needsLongitudeSplit(triangleSurfaceBuffers(0).boundingSphere)).toBe(
+      false,
+    );
+    expect(needsLongitudeSplit(seamSurfaceBuffers(1).boundingSphere)).toBe(
+      true,
+    );
+    const layer = group();
+    layer.addChunk(triangleSurfaceBuffers(0), emptySupport(0));
+    layer.addChunk(seamSurfaceBuffers(1), maskedSupport(1));
+    const culled = () =>
+      childrenOf(layer, 0).map((primitive) => primitive.cull);
+
+    // At rest Cesium's replacement sphere still bounds every drawn vertex.
+    expect(culled()).toEqual([true, true]);
+    layer.setElevationFactor(3);
+    expect(culled()).toEqual([true, false]);
+    layer.addChunk(seamSurfaceBuffers(2), emptySupport(2));
+    expect(culled()).toEqual([true, false, false]);
+    // Masks are never raised, so they keep culling.
+    expect(childrenOf(layer, 1).map((primitive) => primitive.cull)).toEqual([
+      true,
+      true,
+    ]);
+    layer.setElevationFactor(0);
+    expect(culled()).toEqual([true, true, true]);
+  });
+
+  it('loses the raised extent only where Cesium splits at the antimeridian', () => {
+    // scene3DOnly is false, so Primitive runs splitLongitude on every chunk;
+    // past its early exit it re-bounds the geometry over the unraised positions.
+    const splitLongitude = (
+      GeometryPipeline as unknown as {
+        splitLongitude(instance: GeometryInstance): GeometryInstance;
+      }
+    ).splitLongitude;
+    for (const [buffers, splits] of [
+      [triangleSurfaceBuffers(0), false],
+      [seamSurfaceBuffers(1), true],
+    ] as const) {
+      const layer = group();
+      layer.addChunk(buffers, emptySupport(buffers.chunk));
+      const instance = childAt(layer, 0, 0)
+        .geometryInstances as GeometryInstance;
+      splitLongitude(instance);
+      const sphere = instance.geometry.boundingSphere!;
+
+      expect(
+        raisedVertices(buffers).every(
+          (vertex) =>
+            Cartesian3.distance(vertex, sphere.center) <= sphere.radius,
+        ),
+        `chunk ${buffers.chunk}`,
+      ).toBe(!splits);
+    }
   });
 });

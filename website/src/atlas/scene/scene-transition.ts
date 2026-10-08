@@ -8,21 +8,28 @@ export interface SceneHost {
 
 export interface FadeableGroup {
   collection: { show: boolean };
+  /** The groups a `fadeTogether` unit stands for; a single group has none. */
+  members?: readonly FadeableGroup[];
   isReady(): boolean;
   readyCount(): number;
   totalCount?(): number;
   setOpacity(opacity: number): void;
 }
 
-/** One fadeable unit for a surface and its observations, so a swap is atomic. */
+/** One fadeable unit for a surface and its observations, so a swap is atomic.
+ *
+ * Its `collection` is a view over the members' collections and is never in
+ * the scene, so `animateSwap` removes each member's collection instead.
+ */
 export function fadeTogether(
   ...groups: (FadeableGroup | null | undefined)[]
 ): FadeableGroup | null {
-  const members = groups.filter(
-    (group): group is FadeableGroup => group !== null && group !== undefined,
+  const members = groups.flatMap((group) =>
+    group ? (group.members ?? [group]) : [],
   );
   if (members.length === 0) return null;
   return {
+    members,
     collection: {
       get show() {
         return members.some((member) => member.collection.show);
@@ -117,7 +124,9 @@ export function animateSwap(
     if (retainOutgoing) {
       outgoing.setOpacity(0);
       outgoing.collection.show = false;
-    } else viewer.scene.primitives.remove(outgoing.collection);
+    } else
+      for (const group of outgoing.members ?? [outgoing])
+        viewer.scene.primitives.remove(group.collection);
   };
   if (reducedMotion) {
     incoming.setOpacity(1);

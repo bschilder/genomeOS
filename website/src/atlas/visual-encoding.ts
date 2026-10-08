@@ -70,7 +70,8 @@ function linearFromHex(hex: string): LinearRgb {
   return [toLinear(red), toLinear(green), toLinear(blue)];
 }
 
-function hexFromBytes([red, green, blue]: readonly [
+/** `#rrggbb` for 8-bit sRGB channels. */
+export function hexFromBytes([red, green, blue]: readonly [
   number,
   number,
   number,
