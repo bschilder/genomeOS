@@ -34,6 +34,10 @@ for (const route of topLevelRoutes) {
     page,
   }) => {
     await page.goto(route);
+    if (route === '/app/')
+      await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+        timeout: 45_000,
+      });
     await expect(page.locator('h1')).toHaveCount(1);
 
     const results = await new AxeBuilder({ page })
@@ -1027,6 +1031,38 @@ test('each Escape closes only the innermost explorer layer', async ({
   await expect(externalPanel).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(externalPanel).toHaveCount(0);
+});
+
+test('information triggers keep 24 px targets on every screen', async ({
+  page,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const targets = await page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        '.atlas-info-tip__trigger, .atlas-legend__info summary',
+      ),
+    ]
+      .map((element) => ({
+        label: element.getAttribute('aria-label') ?? '',
+        rect: element.getBoundingClientRect(),
+      }))
+      .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+      .map(({ label, rect }) => ({
+        height: rect.height,
+        label,
+        width: rect.width,
+      })),
+  );
+  expect(targets.length).toBeGreaterThan(5);
+  expect(targets.map(({ label }) => label)).toContain('About displayed metric');
+  for (const target of targets) {
+    expect(target.width, target.label).toBeGreaterThanOrEqual(24);
+    expect(target.height, target.label).toBeGreaterThanOrEqual(24);
+  }
 });
 
 test('height exaggeration uses the available compact control width', async ({

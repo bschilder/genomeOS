@@ -1,3 +1,4 @@
+import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
@@ -1385,6 +1386,59 @@ for (const phone of PHONE_PROFILES) {
         }
       });
     }
+  });
+}
+
+for (const profile of [
+  { name: 'Pixel 7', project: 'mobile-chromium', use: {} },
+  {
+    name: 'plain 390x844',
+    project: 'desktop-chromium',
+    use: { viewport: { height: 844, width: 390 } },
+  },
+] as const) {
+  test.describe(`${profile.name} accessibility`, () => {
+    test.use(profile.use);
+    test.beforeEach(({}, testInfo) =>
+      skipUnlessProject(testInfo, profile.project),
+    );
+
+    test('explorer sheets pass axe at peek, half and full', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      for (const state of ['peek', 'half', 'full'] as const) {
+        await setSheetState(sheet, state);
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
+          .analyze();
+        const blocking = results.violations
+          .filter(({ impact }) =>
+            ['serious', 'critical'].includes(impact ?? ''),
+          )
+          .map(({ id, nodes }) => ({
+            id,
+            targets: nodes.map(({ target }) => target.join(' ')),
+          }));
+        expect(blocking, `axe at ${state}`).toEqual([]);
+      }
+      const handleBox = await sheet
+        .locator('.atlas-sheet__handle')
+        .boundingBox();
+      expect(handleBox!.height).toBeGreaterThanOrEqual(44);
+      for (const summary of await sheet
+        .locator('.atlas-control-sheet > summary')
+        .all()) {
+        if (!(await summary.isVisible())) continue;
+        expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(
+          44,
+        );
+      }
+    });
   });
 }
 

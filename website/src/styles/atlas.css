@@ -883,19 +883,32 @@ html.atlas-page .site-header--compact .site-header__inner {
   display: inline-flex;
 }
 
+/*
+ * The 1.1rem glyph keeps its look inside a 24 px target box on every screen:
+ * a transparent border pads the box, the ring is an inset shadow on the
+ * padding edge (WCAG 2.2 SC 2.5.8; mobile sheets design §A.1.10).
+ */
 .atlas-info-tip__trigger,
 .atlas-legend__info summary {
-  width: 1.1rem;
-  height: 1.1rem;
+  width: 24px;
+  height: 24px;
   padding: 0;
   display: grid;
   place-items: center;
-  border: 1px solid rgb(112 230 255 / 42%);
+  border: calc((24px - 1.1rem) / 2) solid transparent;
   border-radius: 50%;
-  background: rgb(5 22 45 / 92%);
+  background: rgb(5 22 45 / 92%) padding-box;
+  box-shadow: inset 0 0 0 1px rgb(112 230 255 / 42%);
   color: var(--color-ion);
   font: 750 0.7rem/1 var(--font-body);
   cursor: help;
+}
+
+.atlas-info-tip__trigger:focus-visible,
+.atlas-legend__info summary:focus-visible {
+  box-shadow:
+    inset 0 0 0 1px rgb(112 230 255 / 42%),
+    var(--focus-ring);
 }
 
 .atlas-info-tip__content {
