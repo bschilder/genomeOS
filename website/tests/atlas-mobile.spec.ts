@@ -708,6 +708,57 @@ for (const phone of PHONE_PROFILES) {
       await expect(handle).toHaveAttribute('data-cancels', '0');
     });
 
+    if (phone.name === 'Pixel 7')
+      test('a quick swipe that nearly reaches a snap settles there, not back at half', async ({
+        page,
+      }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto('/app/');
+        await waitForAtlasReady(page);
+        const sheet = controlsSheet(page);
+        const handle = sheet.locator('.atlas-sheet__handle');
+        // The sheet's height once it rests at the snap the handle just set.
+        const restingHeight = async () => {
+          const rest = () =>
+            page
+              .locator('.atlas-explorer')
+              .evaluate((element) =>
+                Number.parseFloat(
+                  element.style.getPropertyValue('--atlas-sheet-rest'),
+                ),
+              );
+          await expect
+            .poll(async () =>
+              Math.abs(
+                (await sheetGeometry(page)).sheetHeight - (await rest()),
+              ),
+            )
+            .toBeLessThanOrEqual(1);
+          return (await sheetGeometry(page)).sheetHeight;
+        };
+        await setSheetState(sheet, 'full');
+        const full = await restingHeight();
+        await setSheetState(sheet, 'peek');
+        const peek = await restingHeight();
+
+        // Up from peek to about full − 30 px in 8 quick moves: a flick that
+        // has already passed half settles at full.
+        const atPeek = await centreOf(handle);
+        await touchDrag(page, atPeek, {
+          x: atPeek.x,
+          y: atPeek.y - (full - 30 - peek),
+        });
+        await expect(sheet).toHaveAttribute('data-sheet-state', 'full');
+
+        // Down from full to about peek + 30 px: it settles at peek.
+        const atFull = await centreOf(handle);
+        await touchDrag(page, atFull, {
+          x: atFull.x,
+          y: atFull.y + (full - (peek + 30)),
+        });
+        await expect(sheet).toHaveAttribute('data-sheet-state', 'peek');
+      });
+
     test('a mouse drag moves one step and the next click and Enter still cycle', async ({
       page,
     }) => {

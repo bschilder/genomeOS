@@ -11,6 +11,8 @@ export const DRAG_SLOP_PX = 8;
 export const FLICK_PX_PER_MS = 0.5;
 export const PROJECTION_MS = 120;
 export const TOP_CHROME_GAP_PX = 8;
+/** Sub-pixel slack for a flick released on a snap (§A.1.5). */
+export const SNAP_TOLERANCE_PX = 1;
 const FULL_FRACTION = 0.88;
 const HALF_FRACTION = 0.5;
 const VELOCITY_WINDOW_MS = 100;
@@ -73,19 +75,34 @@ export function nearestSheetState(
   return best;
 }
 
+/**
+ * Where a released drag settles. A flick faster than FLICK_PX_PER_MS goes to
+ * the next state at or beyond the release height in its direction, so a fast
+ * swipe that already reached a snap is never sent back past it; a release on
+ * or within SNAP_TOLERANCE_PX of a snap stays there. Slower releases project
+ * PROJECTION_MS ahead and take the nearest state.
+ */
 export function releaseSheetState(input: {
-  from: SheetState;
   height: number;
   velocity: number;
   snaps: SheetSnaps;
 }): SheetState {
-  if (Math.abs(input.velocity) > FLICK_PX_PER_MS)
-    return stepSheetState(input.from, input.velocity > 0 ? 1 : -1);
-  const projected = clampSheetHeight(
-    input.height + input.velocity * PROJECTION_MS,
-    input.snaps,
-  );
-  return nearestSheetState(projected, input.snaps);
+  const { height, snaps, velocity } = input;
+  if (Math.abs(velocity) > FLICK_PX_PER_MS) {
+    if (velocity > 0)
+      return (
+        (['half', 'full'] as const).find(
+          (state) => snaps[state] >= height - SNAP_TOLERANCE_PX,
+        ) ?? 'full'
+      );
+    return (
+      (['half', 'peek'] as const).find(
+        (state) => snaps[state] <= height + SNAP_TOLERANCE_PX,
+      ) ?? 'peek'
+    );
+  }
+  const projected = clampSheetHeight(height + velocity * PROJECTION_MS, snaps);
+  return nearestSheetState(projected, snaps);
 }
 
 export function sheetStateLabel(state: SheetState): string {

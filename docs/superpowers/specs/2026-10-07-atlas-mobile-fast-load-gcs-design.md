@@ -112,7 +112,8 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
    - **Drag**: only the handle starts a drag; it has `touch-action: none` and calls
      `setPointerCapture` on pointerdown. Movement ≥ 8 CSS px from pointerdown is a drag, less is a
      tap. On release project `y + v × 120 ms` and snap to the nearest state; a flick faster than
-     0.5 px/ms moves exactly one state in its direction; travel is clamped between peek and full, no
+     0.5 px/ms settles at the next state at or beyond the release height in its direction (a
+     release within 1 px of a snap stays there); travel is clamped between peek and full, no
      rubber band. `pointercancel`/`lostpointercapture` without `pointerup` restores the pre-drag
      state. A drag that ends on pointerup sets a suppress flag; the handle's click listener calls
      `preventDefault()` and clears it when set; the flag also clears on the next task

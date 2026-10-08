@@ -1,8 +1,9 @@
 /**
  * Bottom-sheet state machine for the Atlas phone layout (mobile sheets design
  * 2026-10-07 §A.1.5): peek, half and full snaps, tap and keyboard cycling,
- * handle-only pointer drags (8 px slop, 120 ms projection, one-state flicks,
- * click suppression after a drag), inert peek bodies, Escape back to peek,
+ * handle-only pointer drags (8 px slop, 120 ms projection, flicks that
+ * settle at the next state at or beyond the release height, click
+ * suppression after a drag), inert peek bodies, Escape back to peek,
  * and the --atlas-sheet-offset / --atlas-sheet-rest docking variables on the
  * explorer element — written once per animation frame while dragging, with
  * no React re-render.
@@ -271,7 +272,6 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
         suppressClick.current = false;
       }, 0);
       const next = releaseSheetState({
-        from: session.from,
         height: session.height,
         snaps: current,
         velocity: session.velocity.velocity(event.timeStamp),

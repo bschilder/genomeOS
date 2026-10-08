@@ -82,45 +82,61 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     expect(sheetStateLabel('full')).toBe('full height');
   });
 
-  it('moves exactly one state for a flick, from the pre-drag state', () => {
+  it('settles a flick at the next state at or beyond the release height', () => {
+    // A fast swipe that already reached (or passed) a snap is not sent back.
     expect(
-      releaseSheetState({
-        from: 'peek',
-        height: 560,
-        snaps: SNAPS,
-        velocity: 0.8,
-      }),
-    ).toBe('half');
-    expect(
-      releaseSheetState({
-        from: 'full',
-        height: 100,
-        snaps: SNAPS,
-        velocity: -0.6,
-      }),
-    ).toBe('half');
-    expect(
-      releaseSheetState({
-        from: 'full',
-        height: 589,
-        snaps: SNAPS,
-        velocity: 2,
-      }),
+      releaseSheetState({ height: 560, snaps: SNAPS, velocity: 0.8 }),
     ).toBe('full');
     expect(
-      releaseSheetState({
-        from: 'peek',
-        height: 78,
-        snaps: SNAPS,
-        velocity: -2,
-      }),
+      releaseSheetState({ height: 100, snaps: SNAPS, velocity: -0.6 }),
     ).toBe('peek');
+    expect(releaseSheetState({ height: 589, snaps: SNAPS, velocity: 2 })).toBe(
+      'full',
+    );
+    expect(releaseSheetState({ height: 78, snaps: SNAPS, velocity: -2 })).toBe(
+      'peek',
+    );
+    // From peek, an up flick released on or within 1 px of half (379) stays
+    // there, so a sub-pixel miss (376.25 vs 377) no longer decides the result.
+    expect(
+      releaseSheetState({ height: 377, snaps: SNAPS, velocity: 0.8 }),
+    ).toBe('half');
+    expect(
+      releaseSheetState({ height: 377.4, snaps: SNAPS, velocity: 0.8 }),
+    ).toBe('half');
+    expect(
+      releaseSheetState({ height: 378.4, snaps: SNAPS, velocity: 0.8 }),
+    ).toBe('half');
+    expect(
+      releaseSheetState({ height: 380.5, snaps: SNAPS, velocity: 0.8 }),
+    ).toBe('full');
+    // A drag from half that reversed below its start, then flicked up,
+    // settles at half, not one step past the pre-drag state.
+    expect(
+      releaseSheetState({ height: 250, snaps: SNAPS, velocity: 0.9 }),
+    ).toBe('half');
+    expect(
+      releaseSheetState({ height: 480, snaps: SNAPS, velocity: -0.9 }),
+    ).toBe('half');
+  });
+
+  it('equals one step from the pre-drag state while the drag has not passed a snap', () => {
+    const cases = [
+      { from: 'peek', height: 200, velocity: 0.8 },
+      { from: 'half', height: 450, velocity: 0.8 },
+      { from: 'full', height: 500, velocity: -0.8 },
+      { from: 'half', height: 300, velocity: -0.8 },
+    ] as const;
+    for (const { from, height, velocity } of cases) {
+      expect(releaseSheetState({ height, snaps: SNAPS, velocity })).toBe(
+        stepSheetState(from, velocity > 0 ? 1 : -1),
+      );
+    }
   });
 
   it('projects a slow release 120 ms ahead and snaps to the nearest state', () => {
     expect(
       releaseSheetState({
-        from: 'peek',
         height: 300,
         snaps: SNAPS,
         velocity: 0.1,
@@ -128,7 +144,6 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     ).toBe('half');
     expect(
       releaseSheetState({
-        from: 'half',
         height: 200,
         snaps: SNAPS,
         velocity: -0.4,
@@ -136,7 +151,6 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     ).toBe('peek');
     expect(
       releaseSheetState({
-        from: 'half',
         height: 470,
         snaps: SNAPS,
         velocity: 0.4,
@@ -144,7 +158,6 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     ).toBe('full');
     expect(
       releaseSheetState({
-        from: 'half',
         height: 430,
         snaps: SNAPS,
         velocity: 0,
@@ -186,7 +199,6 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     expect(nudge.velocity(1040)).toBe(0);
     expect(
       releaseSheetState({
-        from: 'half',
         height: 419,
         snaps: SNAPS,
         velocity: nudge.velocity(1040),
