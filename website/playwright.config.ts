@@ -18,6 +18,9 @@ export default defineConfig({
   workers: playwrightWorkers(),
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  // CI renders the Cesium globe through software WebGL, where a full /app/ load
+  // alone can take ~30 s; locally the default 30 s budget still applies.
+  timeout: process.env.CI ? 90_000 : 30_000,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL,
