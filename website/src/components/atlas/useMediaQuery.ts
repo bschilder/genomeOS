@@ -7,6 +7,8 @@
 import { useMemo, useSyncExternalStore } from 'react';
 
 export const MOBILE_QUERY = '(max-width: 52rem)';
+/** A short explorer: landscape phones and zoomed desktops (§A.1.5, §A.1.7). */
+export const SHORT_QUERY = '(max-width: 52rem) and (max-height: 34rem)';
 
 type MatchMedia = (query: string) => MediaQueryList;
 

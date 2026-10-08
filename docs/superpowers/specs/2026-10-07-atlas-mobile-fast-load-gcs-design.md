@@ -105,7 +105,14 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
      topChromeBottom − 8 px − dockedHeight)`, where `topChromeBottom` is the largest
      `getBoundingClientRect().bottom` (relative to the explorer) of the warning banner, top selector,
      status stack and view notice, recomputed by ResizeObserver/MutationObserver, and `dockedHeight`
-     is the legend strip plus credit block (A.1.7).
+     is the legend strip plus credit block (A.1.7). On a short explorer (`(max-width: 52rem) and
+     (max-height: 34rem)`: landscape phones and zoomed desktops) `dockedHeight` is 0, because the
+     strips do not dock above an open sheet there (A.1.7). When that cap still leaves less than
+     96 px between peek and full, full is `floor(0.88 × explorerHeight)`. While the resting sheet
+     rises above `explorerHeight − topChromeBottom − 8 px`, the explorer carries
+     `data-sheet-covers-top`, and the warning banner, the top selector, the status stack and the
+     view notice are `visibility: hidden`. That takes them out of the tab order and the
+     accessibility tree, except the always-present `<h1>`. They return when the sheet drops back.
    - At half and full the sheet body is a scroll container whose height is the visible sheet height
      (`overscroll-behavior: contain`); it never translates a taller panel off-screen, so every
      focusable control can scroll into view.
@@ -130,7 +137,10 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
    handle `<button>` and the same snap/drag rules. Its peek row is the panel's `<h2>` on one line,
    with the Close button at the end of the handle row above it (the panel's kicker shows from
    `half` up), so a panel peeks about as low as the controls sheet and A.1.3 holds with it at
-   `peek`; it opens at `half`. The inspector and the external panel are mutually exclusive on mobile:
+   `peek`; it opens at `half`. On a short explorer the panel peeks at its handle row alone. The
+   `<h2>` sits on one line at the start of that row, and pointer events pass through it to the
+   handle. The kicker and the More info header's rule are hidden in every state. The inspector and
+   the external panel are mutually exclusive on mobile:
    whichever opened most recently is shown and opening one closes the other (closing the inspector
    clears the scene selection; closing the external panel aborts its request). While either is
    open the controls sheet has `inert` and `hidden`. Focus: opening from "More info" moves focus to
@@ -141,6 +151,16 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
 7. **Legend and attribution docking.** The legend strip and the credit block are positioned with
    `bottom: var(--atlas-sheet-offset)` (compositor `transform` during drag) so they always sit
    directly above the active sheet's top edge; the full-height cap (A.1.5) leaves room for them.
+   A short explorer (A.1.5) is the exception. There the strips sit above the sheet only at peek.
+   While a sheet is above peek they are `visibility: hidden`, Cesium's ion logo and map credits
+   included. This is an accepted temporary covering, as by any open sheet. At peek the legend strip
+   is also hidden (`data-legend-collapsed`) when `dockedHeight + peek` exceeds
+   `explorerHeight − topChromeBottom − 8 px`. The credit block clears the top chrome at peek only
+   while `explorerHeight ≥ topChromeBottom + credit block + peek`. That is about 172 px, or 224 px
+   with the warning banner. Shorter explorers, such as 1280×1024 at 400% zoom, are below the
+   supported height (follow-up #407). On phones the legend popover stays inside the explorer. It
+   opens above the strip when it fits whole there, and otherwise on the side with more room, which
+   is below and across an open sheet. It scrolls within that room, and a tap outside closes it.
    - **Legend strip** — one row `[metric label | ramp | info trigger]`: the visible label is a short
      form at 0.8rem ("Frequency" / "Uncertainty") with the full label as `.visually-hidden` text and
      in the popover heading; ramp `minmax(6rem, 1fr)` with numeric endpoints under its ends in a

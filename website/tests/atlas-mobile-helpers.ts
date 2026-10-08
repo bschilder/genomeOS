@@ -66,6 +66,26 @@ export async function setSheetState(
   await expect(sheet).toHaveAttribute('data-sheet-state', state);
 }
 
+/**
+ * setSheetState by touch taps on the handle. Tests that pick on the globe use
+ * it: Cesium reacts to where Playwright leaves the emulated mouse of a handle
+ * click (over the globe once the sheet drops back), which a phone does not
+ * have.
+ */
+export async function tapSheetState(
+  sheet: Locator,
+  state: SheetStateName,
+): Promise<void> {
+  const handle = sheet.locator('.atlas-sheet__handle');
+  for (let tap = 0; tap < 3; tap += 1) {
+    const current = await sheet.getAttribute('data-sheet-state');
+    if (current === state) return;
+    await handle.tap();
+    await expect(sheet).not.toHaveAttribute('data-sheet-state', current ?? '');
+  }
+  await expect(sheet).toHaveAttribute('data-sheet-state', state);
+}
+
 /** Opens the phone controls sheet fully; a no-op for the always-open desktop dock. */
 export async function expandExplorerSheet(page: Page): Promise<void> {
   const sheet = page.locator('aside.atlas-controls[data-sheet-state]');
@@ -374,52 +394,56 @@ export async function uncoveredCredits(page: Page): Promise<string[]> {
   });
 }
 
-/** Whether the active sheet clears the top chrome by 8 px and which docked strips overlap it. */
+/**
+ * Whether the active sheet clears the top chrome by 8 px and which docked
+ * strips overlap it. Only shown parts count: a short explorer hides the top
+ * chrome under a full sheet and the strips above peek (visibility: hidden).
+ */
 export async function topChromeClearance(
   page: Page,
 ): Promise<{ gap: boolean; intersections: string[] }> {
   return page.evaluate(() => {
-    const rectOf = (selector: string) => {
-      const element = document.querySelector(selector);
-      if (!element) return null;
+    const shown = (element: Element) => {
       const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0 ? rect : null;
+      return rect.width > 0 &&
+        rect.height > 0 &&
+        getComputedStyle(element).visibility !== 'hidden'
+        ? rect
+        : null;
     };
+    const rectsOf = (selector: string) =>
+      Array.from(document.querySelectorAll(selector))
+        .map(shown)
+        .filter((rect): rect is DOMRect => rect !== null);
     const explorerTop = document
       .querySelector('.atlas-explorer')!
       .getBoundingClientRect().top;
-    const chrome = [
-      '.atlas-warning-banner',
-      '.atlas-top-slot',
-      '.atlas-status-stack',
-      '.atlas-view-notice',
-    ]
-      .map(rectOf)
-      .filter((rect): rect is DOMRect => rect !== null);
+    const chrome = rectsOf(
+      '.atlas-warning-banner, .atlas-top-slot > :not(h1), .atlas-status-stack, .atlas-view-notice',
+    );
     const chromeBottom = Math.max(
       0,
       ...chrome.map((rect) => rect.bottom - explorerTop),
     );
     const sheet =
-      rectOf('aside.atlas-controls:not([hidden])') ??
-      rectOf('.atlas-right-rail[data-sheet-state]');
+      rectsOf('aside.atlas-controls:not([hidden])')[0] ??
+      rectsOf('.atlas-right-rail[data-sheet-state]')[0] ??
+      null;
     const intersections = [
       '.atlas-legend',
       '.atlas-scene .cesium-viewer-bottom',
       '.atlas-data-credit',
-    ].filter((selector) => {
-      const rect = rectOf(selector);
-      return (
-        rect !== null &&
+    ].filter((selector) =>
+      rectsOf(selector).some((rect) =>
         chrome.some(
           (other) =>
             rect.left < other.right &&
             rect.right > other.left &&
             rect.top < other.bottom &&
             rect.bottom > other.top,
-        )
-      );
-    });
+        ),
+      ),
+    );
     return {
       gap: sheet !== null && sheet.top - explorerTop >= chromeBottom + 8 - 0.5,
       intersections,

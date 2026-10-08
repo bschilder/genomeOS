@@ -63,10 +63,15 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   useLayoutEffect(() => {
     const element = details.current;
     if (!isMobile || !infoOpen || !element) return;
-    const place = () => placeLegendPopover(element);
-    place();
     const legend = element.closest('.atlas-legend');
     const explorer = element.closest('.atlas-explorer');
+    // A short explorer hides the strip above peek; its popover goes with it.
+    const place = () => {
+      if (legend && getComputedStyle(legend).visibility === 'hidden')
+        closeInfo(false);
+      else placeLegendPopover(element);
+    };
+    place();
     const resize = new ResizeObserver(place);
     for (const node of [
       explorer,
@@ -79,7 +84,7 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
       resize.disconnect();
       legend?.removeEventListener('transitionend', place);
     };
-  }, [infoOpen, isMobile]);
+  }, [closeInfo, infoOpen, isMobile]);
   useEffect(() => {
     if (!isMobile || !infoOpen) return;
     const dismiss = (event: PointerEvent) => {

@@ -4,6 +4,7 @@ import {
   DRAG_SLOP_PX,
   FLICK_PX_PER_MS,
   PROJECTION_MS,
+  MIN_OPEN_BODY_PX,
   TOP_CHROME_GAP_PX,
   VelocityTracker,
   clampSheetHeight,
@@ -11,6 +12,7 @@ import {
   nextSheetState,
   releaseSheetState,
   sheetStateLabel,
+  shortExplorerSnaps,
   snapHeights,
   stepSheetState,
   type SheetSnaps,
@@ -64,6 +66,49 @@ describe('bottom-sheet snaps and gestures (mobile sheets design §A.1.5)', () =>
     });
     expect(crowded.full).toBe(292);
     expect(crowded.half).toBe(292);
+  });
+
+  it('keeps the spec cap on a short explorer while it leaves a usable body', () => {
+    expect(MIN_OPEN_BODY_PX).toBe(96);
+    // 812x375 landscape: the docked strips do not cap the sheet (docked 0).
+    expect(
+      shortExplorerSnaps({
+        dockedHeight: 0,
+        explorerHeight: 289,
+        peekHeight: 66,
+        topChromeBottom: 70,
+      }),
+    ).toEqual({ full: 211, half: 145, peek: 66 });
+  });
+
+  it('lets a short explorer cover the top chrome when the cap leaves too little', () => {
+    // 812x375 under a warning banner: the cap (159) leaves 93 px above peek.
+    expect(
+      shortExplorerSnaps({
+        dockedHeight: 0,
+        explorerHeight: 289,
+        peekHeight: 66,
+        topChromeBottom: 122,
+      }),
+    ).toEqual({ full: 254, half: 145, peek: 66 });
+    // 1280x1024 at 400 % zoom (320x256): the cap would be 92.
+    expect(
+      shortExplorerSnaps({
+        dockedHeight: 0,
+        explorerHeight: 170,
+        peekHeight: 53,
+        topChromeBottom: 70,
+      }),
+    ).toEqual({ full: 149, half: 85, peek: 53 });
+    // Never below peek on an explorer with no room at all.
+    expect(
+      shortExplorerSnaps({
+        dockedHeight: 0,
+        explorerHeight: 50,
+        peekHeight: 53,
+        topChromeBottom: 70,
+      }),
+    ).toEqual({ full: 50, half: 50, peek: 50 });
   });
 
   it('cycles peek → half → full → peek and steps without wrapping', () => {

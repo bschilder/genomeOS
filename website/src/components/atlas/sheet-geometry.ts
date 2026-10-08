@@ -13,6 +13,8 @@ export const PROJECTION_MS = 120;
 export const TOP_CHROME_GAP_PX = 8;
 /** Sub-pixel slack for a flick released on a snap (§A.1.5). */
 export const SNAP_TOLERANCE_PX = 1;
+/** Least gap between peek and full on a short explorer: two 44 px rows and padding. */
+export const MIN_OPEN_BODY_PX = 96;
 const FULL_FRACTION = 0.88;
 const HALF_FRACTION = 0.5;
 const VELOCITY_WINDOW_MS = 100;
@@ -43,6 +45,25 @@ export function snapHeights(input: SnapInput): SheetSnaps {
     Math.max(peek, Math.round(HALF_FRACTION * height)),
   );
   return { full, half, peek };
+}
+
+/**
+ * Snaps on a short explorer (≤ 52rem wide and < 34rem tall: landscape phones
+ * and zoomed desktops; §A.1.5). The caller passes dockedHeight 0, since the
+ * docked strips hide while a sheet is above peek there (§A.1.7). When the cap
+ * still leaves less than MIN_OPEN_BODY_PX between peek and full, full takes
+ * 0.88 × the explorer and the sheet covers the top chrome.
+ */
+export function shortExplorerSnaps(input: SnapInput): SheetSnaps {
+  const snaps = snapHeights(input);
+  if (snaps.full - snaps.peek >= MIN_OPEN_BODY_PX) return snaps;
+  const height = Math.max(0, input.explorerHeight);
+  const full = Math.max(snaps.peek, Math.floor(FULL_FRACTION * height));
+  const half = Math.min(
+    full,
+    Math.max(snaps.peek, Math.round(HALF_FRACTION * height)),
+  );
+  return { full, half, peek: snaps.peek };
 }
 
 export function nextSheetState(state: SheetState): SheetState {

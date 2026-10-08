@@ -2784,10 +2784,71 @@ body:has(.atlas-explorer) .skip-link {
   /* end of mobile sheet rules */
 }
 
-/* Landscape phones under 34rem tall keep only the handle row at peek (mobile sheets design Part A). */
+/* Short explorers (landscape phones and zoomed desktops under 34rem tall)
+ * keep only the handle row at peek (mobile sheets design Part A, §A.1.5–7). */
 @media (max-width: 52rem) and (max-height: 34rem) {
   .atlas-sheet__summary {
     display: none;
+  }
+
+  /* The docked strips stay with a peeking sheet only: above peek they hide
+   * (links and all) instead of riding up over the short globe, and the
+   * full-height cap ignores them. */
+  .atlas-explorer:has(
+      :is(
+          .atlas-controls:not([hidden]),
+          .atlas-right-rail
+        )[data-sheet-state]:not([data-sheet-state='peek'])
+    )
+    :is(.atlas-legend, .atlas-data-credit, .atlas-scene .cesium-viewer-bottom) {
+    visibility: hidden;
+  }
+
+  /* At peek the legend strip gives way when it would reach the top chrome. */
+  .atlas-explorer[data-legend-collapsed] .atlas-legend {
+    visibility: hidden;
+  }
+
+  /* A full sheet that needs the top chrome's room covers it; the covered
+   * controls leave the tab order. The visually hidden h1 stays. */
+  .atlas-explorer[data-sheet-covers-top]
+    :is(
+      .atlas-warning-banner,
+      .atlas-top-slot > :not(h1),
+      .atlas-status-stack,
+      .atlas-view-notice
+    ) {
+    visibility: hidden;
+  }
+
+  /* A panel peeks at its handle row alone: the h2 sits on one line at the
+   * start of the row (touches pass through to the handle) and the kicker and
+   * the More info header's rule are hidden in every state. */
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    .atlas-kicker {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state] .atlas-external-details__header {
+    padding: 0;
+    border-bottom-width: 0;
+  }
+
+  .atlas-right-rail[data-sheet-state]
+    :is(.atlas-inspector, .atlas-external-details__header)
+    h2 {
+    position: absolute;
+    top: 1px;
+    left: calc(max(0.65rem, env(safe-area-inset-left)) + 0.3rem);
+    max-width: calc(50% - 1.6rem - max(0.65rem, env(safe-area-inset-left)));
+    margin: 0;
+    overflow: hidden;
+    font-size: 1.1rem;
+    line-height: 44px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
   }
 }
 

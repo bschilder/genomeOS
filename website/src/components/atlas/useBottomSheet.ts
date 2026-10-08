@@ -6,7 +6,9 @@
  * suppression after a drag), inert peek bodies, Escape back to peek,
  * and the --atlas-sheet-offset / --atlas-sheet-rest docking variables on the
  * explorer element — written once per animation frame while dragging, with
- * no React re-render.
+ * no React re-render. On a short explorer it also marks the explorer while
+ * the resting sheet covers the top chrome (data-sheet-covers-top) and while
+ * the docked legend would reach it at peek (data-legend-collapsed).
  */
 
 import {
@@ -23,10 +25,12 @@ import {
 
 import {
   DRAG_SLOP_PX,
+  TOP_CHROME_GAP_PX,
   VelocityTracker,
   clampSheetHeight,
   nextSheetState,
   releaseSheetState,
+  shortExplorerSnaps,
   snapHeights,
   type SheetSnaps,
   type SheetState,
@@ -37,6 +41,7 @@ import {
   writeDockedStack,
 } from './sheet-layout';
 import { useEscapeLayer } from './useEscapeStack';
+import { SHORT_QUERY } from './useMediaQuery';
 
 export type { SheetState } from './sheet-geometry';
 
@@ -105,14 +110,30 @@ export function useBottomSheet(options: BottomSheetOptions): BottomSheet {
     const root = sheet.current;
     if (!enabled || !explorer || !root) return;
     writeDockedStack(explorer);
-    snaps.current = snapHeights({
-      dockedHeight: measures.current.dockedHeight(),
+    // A short explorer keeps the docked strips off an open sheet (they hide
+    // above peek), so they do not cap it, and full may cover the top chrome.
+    const short = window.matchMedia(SHORT_QUERY).matches;
+    const docked = measures.current.dockedHeight();
+    const input = {
+      dockedHeight: short ? 0 : docked,
       explorerHeight: explorer.clientHeight,
       peekHeight: peekHeight(root),
       topChromeBottom: measures.current.topChrome(),
-    });
+    };
+    const current = short ? shortExplorerSnaps(input) : snapHeights(input);
+    snaps.current = current;
+    const room =
+      input.explorerHeight - input.topChromeBottom - TOP_CHROME_GAP_PX;
+    explorer.toggleAttribute(
+      'data-sheet-covers-top',
+      short && current[stateRef.current] > room + 0.5,
+    );
+    explorer.toggleAttribute(
+      'data-legend-collapsed',
+      short && docked + current.peek > room + 0.5,
+    );
     if (!drag.current?.dragging)
-      writeSheetOffset(explorer, snaps.current[stateRef.current], true);
+      writeSheetOffset(explorer, current[stateRef.current], true);
   }, [enabled, explorer]);
 
   useLayoutEffect(settle, [settle, state]);

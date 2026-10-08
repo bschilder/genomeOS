@@ -13,10 +13,10 @@ import {
   PHONE_PROFILES,
   setSheetState,
   sheetGeometry,
-  type SheetStateName,
   skipUnlessProject,
   startTouch,
   tapSelectNearCenter,
+  tapSheetState,
   topChromeClearance,
   touchDrag,
   uncoveredCredits,
@@ -1686,30 +1686,17 @@ for (const phone of PHONE_PROFILES) {
       );
       // The popover is shown whole or scrolls within the explorer wherever the
       // strip docks, over either sheet in every state, and Escape closes it.
-      // Touch only: Cesium's picking reacts to where the emulated mouse of a
-      // handle click is left, which a phone does not have.
-      const tapToState = async (sheet: Locator, state: SheetStateName) => {
-        for (let tap = 0; tap < 3; tap += 1) {
-          const current = await sheet.getAttribute('data-sheet-state');
-          if (current === state) return;
-          await sheet.locator('.atlas-sheet__handle').tap();
-          await expect(sheet).not.toHaveAttribute(
-            'data-sheet-state',
-            current ?? '',
-          );
-        }
-        await expect(sheet).toHaveAttribute('data-sheet-state', state);
-      };
+      // Touch only (tapSheetState): the globe is picked later.
       const controls = controlsSheet(page);
       for (const state of ['peek', 'half', 'full'] as const) {
-        await tapToState(controls, state);
+        await tapSheetState(controls, state);
         await summary.tap();
         await expectLegendPopoverShown(page, `controls sheet at ${state}`);
         await page.keyboard.press('Escape');
         await expect(info).not.toHaveAttribute('open', '');
         await expect(summary).toBeFocused();
       }
-      await tapToState(controls, 'peek');
+      await tapSheetState(controls, 'peek');
 
       // A tap outside closes it without pulling focus to the summary.
       await summary.tap();
@@ -1722,7 +1709,7 @@ for (const phone of PHONE_PROFILES) {
       const inspector = page.locator('.atlas-inspector');
       const rail = panelSheet(page);
       for (const state of ['half', 'peek', 'full'] as const) {
-        await tapToState(rail, state);
+        await tapSheetState(rail, state);
         await summary.tap();
         await expectLegendPopoverShown(page, `inspector sheet at ${state}`);
         await page.keyboard.press('Escape');
@@ -2148,5 +2135,275 @@ for (const phone of LANDSCAPE_PHONES) {
           1,
         );
       });
+  });
+}
+
+/** A warning banner as the stale-version link shows it, added after a pick. */
+async function addWarningBanner(page: Page): Promise<void> {
+  await page.locator('.atlas-explorer').evaluate((explorer) => {
+    const banner = document.createElement('p');
+    banner.className = 'atlas-warning-banner';
+    banner.setAttribute('role', 'status');
+    banner.textContent = 'Notice: Corrected invalid link fields: version.';
+    explorer.prepend(banner);
+  });
+}
+
+/** Sheet height and its body's client height once the sheet rests at its snap. */
+async function restingSheet(
+  page: Page,
+  selector: string,
+): Promise<{ body: number; explorer: number; height: number }> {
+  await expect
+    .poll(() =>
+      page.evaluate((sheetSelector) => {
+        const explorer =
+          document.querySelector<HTMLElement>('.atlas-explorer')!;
+        const rest = Number.parseFloat(
+          explorer.style.getPropertyValue('--atlas-sheet-rest'),
+        );
+        const height = document
+          .querySelector(sheetSelector)!
+          .getBoundingClientRect().height;
+        return Math.abs(height - rest);
+      }, selector),
+    )
+    .toBeLessThanOrEqual(1);
+  return page.evaluate((sheetSelector) => {
+    const sheet = document.querySelector(sheetSelector)!;
+    return {
+      body: sheet.querySelector('[data-sheet-body]')!.clientHeight,
+      explorer: document.querySelector('.atlas-explorer')!.clientHeight,
+      height: sheet.getBoundingClientRect().height,
+    };
+  }, selector);
+}
+
+/** The top chrome's bottom edge below the explorer top, as the sheets measure it. */
+async function topChromeBottom(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const top = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect().top;
+    return Math.max(
+      0,
+      ...Array.from(
+        document.querySelectorAll(
+          '.atlas-warning-banner, .atlas-top-slot, .atlas-status-stack, .atlas-view-notice',
+        ),
+      )
+        .map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.height > 0)
+        .map((rect) => rect.bottom - top),
+    );
+  });
+}
+
+/*
+ * Short explorers, ≤ 52rem wide and under 34rem tall (§A.1.5–§A.1.7 as
+ * amended under R30): the docked strips hide above peek instead of capping
+ * the sheets, a sheet whose cap leaves too little body covers the top chrome
+ * at full, and a panel peeks at its handle row alone.
+ */
+const SHORT_LANDSCAPE_PHONES = [
+  {
+    insets: { bottom: 21, left: 50, right: 50, top: 0 },
+    viewport: { height: 375, width: 812 },
+  },
+  { insets: null, viewport: { height: 360, width: 740 } },
+  { insets: null, viewport: { height: 300, width: 740 } },
+] as const;
+
+for (const phone of SHORT_LANDSCAPE_PHONES) {
+  const { height, width } = phone.viewport;
+  test.describe(`${width}x${height} short landscape phone`, () => {
+    test.use({
+      deviceScaleFactor: 3,
+      hasTouch: true,
+      isMobile: true,
+      viewport: phone.viewport,
+    });
+    test.beforeEach(({}, testInfo) =>
+      skipUnlessProject(testInfo, 'mobile-chromium'),
+    );
+
+    for (const banner of [false, true]) {
+      test(`both sheets open to a usable body${banner ? ' under a warning banner' : ''}`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        if (phone.insets) {
+          const cdp = await page.context().newCDPSession(page);
+          await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+            insets: phone.insets,
+          });
+        }
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        // The docked strips cover the short globe's centre, so pick in
+        // portrait first, then rotate: the inspector stays open.
+        const portrait = { height: width, width: height };
+        await page.setViewportSize(portrait);
+        await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+        await waitForAtlasReady(page);
+        await page.setViewportSize(phone.viewport);
+        if (banner) await addWarningBanner(page);
+        const controls = controlsSheet(page);
+        await expect(controls).toHaveAttribute('data-sheet-state', 'peek');
+        const chrome = await topChromeBottom(page);
+        const controlsPeek = await restingSheet(page, 'aside.atlas-controls');
+        // Where the strip is shown at peek, its popover stays inside the explorer.
+        const legend = page.locator('.atlas-legend');
+        if (
+          (await legend.evaluate(
+            (element) => getComputedStyle(element).visibility,
+          )) === 'visible'
+        ) {
+          await legend.locator('details.atlas-legend__info summary').tap();
+          await expectLegendPopoverShown(page, 'legend popover at peek');
+          await page.keyboard.press('Escape');
+        }
+
+        const opened: Record<'half' | 'full', number> = { full: 0, half: 0 };
+        for (const state of ['half', 'full'] as const) {
+          await tapSheetState(controls, state);
+          const sheet = await restingSheet(page, 'aside.atlas-controls');
+          opened[state] = sheet.height;
+          if (state === 'full')
+            expect(sheet.body, 'controls body at full').toBeGreaterThanOrEqual(
+              96,
+            );
+          await expect
+            .poll(() => topChromeClearance(page), { message: state })
+            .toEqual({ gap: true, intersections: [] });
+        }
+        if (controlsPeek.explorer - chrome - 8 > 0.5 * controlsPeek.explorer)
+          expect(opened.half).toBeLessThan(opened.full);
+        await tapSheetState(controls, 'peek');
+
+        await page.setViewportSize(portrait);
+        await tapSelectNearCenter(page);
+        await page.setViewportSize(phone.viewport);
+        const rail = panelSheet(page);
+        await tapSheetState(rail, 'peek');
+        // The panel peeks at its handle row alone, as the controls do, with
+        // its h2 on one line inside that row.
+        const railPeek = await restingSheet(page, '.atlas-right-rail');
+        expect(
+          Math.abs(railPeek.height - controlsPeek.height),
+        ).toBeLessThanOrEqual(1);
+        const heading = await page
+          .locator('.atlas-inspector h2')
+          .evaluate((element) => {
+            const rail = document
+              .querySelector('.atlas-right-rail')!
+              .getBoundingClientRect();
+            const rect = element.getBoundingClientRect();
+            const handle = document
+              .querySelector('.atlas-right-rail .atlas-sheet__handle')!
+              .getBoundingClientRect();
+            return {
+              inRow: rect.top >= rail.top && rect.bottom <= handle.bottom + 1,
+              text: element.textContent ?? '',
+              width: rect.width,
+            };
+          });
+        expect(heading.inRow).toBe(true);
+        expect(heading.width).toBeGreaterThan(40);
+        for (const state of ['half', 'full'] as const) {
+          await tapSheetState(rail, state);
+          const sheet = await restingSheet(page, '.atlas-right-rail');
+          if (state === 'full')
+            expect(sheet.body, 'inspector body at full').toBeGreaterThanOrEqual(
+              96,
+            );
+          await expect
+            .poll(() => topChromeClearance(page), { message: state })
+            .toEqual({ gap: true, intersections: [] });
+        }
+      });
+    }
+  });
+}
+
+/*
+ * Zoomed desktops and a landscape phone without touch (1366x657 at 200 %,
+ * 1280x1024 at 400 %): the controls sheet opens to a usable body whose every
+ * control is reachable, and no docked strip lies over the top chrome. At
+ * 320x256 the credit block alone still meets the top chrome at peek, below
+ * the short explorer's supported height (§A.1.7; follow-up #407).
+ */
+for (const viewport of [
+  { height: 328, width: 683 },
+  { height: 256, width: 320 },
+  { height: 375, width: 812 },
+] as const) {
+  test.describe(`${viewport.width}x${viewport.height} zoomed desktop`, () => {
+    test.use({ viewport });
+    test.beforeEach(({}, testInfo) =>
+      skipUnlessProject(testInfo, 'desktop-chromium'),
+    );
+
+    test('the controls sheet opens to reachable controls clear of the top chrome', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const sheet = controlsSheet(page);
+      for (const state of ['peek', 'half', 'full'] as const) {
+        await setSheetState(sheet, state);
+        await restingSheet(page, 'aside.atlas-controls');
+        if (state === 'peek' && viewport.width === 320) continue;
+        expect(
+          (await topChromeClearance(page)).intersections,
+          `docked strips over the top chrome at ${state}`,
+        ).toEqual([]);
+      }
+      const full = await restingSheet(page, 'aside.atlas-controls');
+      expect(full.body).toBeGreaterThanOrEqual(88);
+
+      // Every control Tab reaches in the open sheet is where a pointer finds it.
+      await sheet.locator('.atlas-sheet__handle').focus();
+      const unreachable: string[] = [];
+      let visited = 0;
+      for (let press = 0; press < 80; press += 1) {
+        await page.keyboard.press('Tab');
+        const step = await page.evaluate(() => {
+          const active = document.activeElement as HTMLElement | null;
+          if (!active?.closest('aside.atlas-controls')) return null;
+          const rect = active.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          const label =
+            active.getAttribute('aria-label') ??
+            (active.textContent?.trim() ||
+              `${active.tagName.toLowerCase()}.${active.className}`);
+          // A focused InfoTip shows its own tooltip, which on a viewport too
+          // short for it can lie over the trigger; that is the trigger's own
+          // description, not another control in its way.
+          const description = active.getAttribute('aria-describedby');
+          const reached =
+            hit !== null &&
+            (active.contains(hit) ||
+              (active.closest('label')?.contains(hit) ?? false) ||
+              (description !== null &&
+                (hit.closest(`[id="${description}"]`) ?? null) !== null));
+          return {
+            label: reached
+              ? label
+              : `${label} (hit ${hit?.tagName.toLowerCase()}.${hit?.className})`,
+            reached,
+          };
+        });
+        if (step === null) break;
+        visited += 1;
+        if (!step.reached) unreachable.push(step.label);
+      }
+      expect(visited).toBeGreaterThan(5);
+      expect(unreachable).toEqual([]);
+    });
   });
 }
