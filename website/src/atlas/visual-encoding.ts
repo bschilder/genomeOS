@@ -125,29 +125,23 @@ export function colorAtPosition(
   return hexFromBytes(colorBytesAtStops(LINEAR_STOPS[paletteId], position));
 }
 
+/** Custom stop list; `colorBytesAtStops` rejects fewer than two stops. */
 export function colorAtStops(
   palette: readonly string[],
   position: number,
 ): string {
-  if (palette.length < 2)
-    throw new Error('a color scale needs at least two stops');
   return hexFromBytes(colorBytesAtStops(palette.map(linearFromHex), position));
 }
 
 /** 32-bin palette quantisation used for hexagon colours and support bins. */
 export function quantizeMetric(
   value: number,
-  [lower, upper]: MetricDomain,
+  domain: MetricDomain,
   bins = 32,
 ): number {
   if (bins < 2 || !Number.isInteger(bins))
     throw new Error('bins must be an integer >= 2');
-  if (lower === upper) return 0;
-  const normalized = Math.min(
-    1,
-    Math.max(0, (value - lower) / (upper - lower)),
-  );
-  return Math.min(bins - 1, Math.floor(normalized * bins));
+  return Math.min(bins - 1, Math.floor(normalizedValue(value, domain) * bins));
 }
 
 /** Render height in metres; masked support states never rise (§B.2). */

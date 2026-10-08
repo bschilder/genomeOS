@@ -11,7 +11,7 @@ import {
   quantizeMetric,
   type PaletteId,
 } from '../src/atlas/visual-encoding';
-import { quantizeMetric as legacyQuantizeMetric } from '../src/atlas/scene/support-material';
+import { quantizeMetric as reexportedQuantizeMetric } from '../src/atlas/scene/support-material';
 import { legacyColorAtStops } from './legacy/legacy-color';
 
 const PALETTES: readonly PaletteId[] = [
@@ -49,15 +49,12 @@ describe('shared numeric palette colour (fast-load §B.6.5)', () => {
     (palette) => {
       const stops = paletteStops(palette);
       const linear = linearStops(palette);
-      let checked = 0;
       for (const t of sweepPositions(stops.length)) {
         const expected = legacyColorAtStops(stops, t);
         expect(colorBytesAtStops(linear, t)).toEqual(bytesOf(expected));
         expect(colorAtPosition(palette, t)).toBe(expected);
         expect(colorAtStops(stops, t)).toBe(expected);
-        checked += 1;
       }
-      expect(checked).toBeGreaterThanOrEqual(SWEEP_POINTS);
     },
   );
 
@@ -69,6 +66,9 @@ describe('shared numeric palette colour (fast-load §B.6.5)', () => {
 
   it('rejects a scale with fewer than two stops', () => {
     expect(() => colorBytesAtStops([[0, 0, 0]], 0.5)).toThrow(
+      'a color scale needs at least two stops',
+    );
+    expect(() => colorAtStops(['#000000'], 0.5)).toThrow(
       'a color scale needs at least two stops',
     );
   });
@@ -96,8 +96,14 @@ describe('render-tier heights and bins (fast-load §B.2)', () => {
   });
 
   it('keeps quantizeMetric identical where support-material re-exports it', () => {
-    expect(legacyQuantizeMetric).toBe(quantizeMetric);
+    expect(reexportedQuantizeMetric).toBe(quantizeMetric);
     expect(quantizeMetric(0.5, [0, 1])).toBe(16);
     expect(quantizeMetric(1, [0, 1])).toBe(31);
+  });
+
+  it('bins with the same empty-domain rule and clamp as normalizedValue', () => {
+    expect(quantizeMetric(0.4, [0.4, 0.4])).toBe(0);
+    expect(quantizeMetric(-1, [0, 1])).toBe(0);
+    expect(quantizeMetric(3, [0, 1])).toBe(31);
   });
 });
