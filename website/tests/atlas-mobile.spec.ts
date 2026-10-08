@@ -13,6 +13,7 @@ import {
   PHONE_PROFILES,
   setSheetState,
   sheetGeometry,
+  type SheetStateName,
   skipUnlessProject,
   startTouch,
   tapSelectNearCenter,
@@ -84,6 +85,83 @@ async function expectGlobeReachableAtPeek(page: Page): Promise<void> {
   expect((await canvasCoverage(page)).centreMisses).toBe(0);
   await expect.poll(() => dockedOutsideCentre(page)).toEqual([]);
   expect(await uncoveredCredits(page)).toEqual([]);
+}
+
+/**
+ * The open legend popover (§A.1.7) as a phone user sees it. toBeVisible()
+ * ignores clipping by the explorer's overflow, so this checks geometry and hit
+ * tests: the popover lies inside the explorer and below the top chrome, its
+ * heading (dataset and full metric label) is what a tap at its centre reaches,
+ * and its last line can be scrolled into the popover's own box.
+ */
+async function expectLegendPopoverShown(
+  page: Page,
+  label: string,
+): Promise<void> {
+  await expect(
+    page.locator('details.atlas-legend__info'),
+    label,
+  ).toHaveAttribute('open', '');
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const explorer = document.querySelector('.atlas-explorer')!;
+          const bounds = explorer.getBoundingClientRect();
+          const chromeBottom = Math.max(
+            bounds.top,
+            ...[
+              '.atlas-warning-banner',
+              '.atlas-top-slot',
+              '.atlas-status-stack',
+              '.atlas-view-notice',
+            ]
+              .map((selector) => document.querySelector(selector))
+              .filter((element) => element !== null)
+              .map((element) => element.getBoundingClientRect())
+              .filter((rect) => rect.height > 0)
+              .map((rect) => rect.bottom),
+          );
+          const details = document.querySelector('details.atlas-legend__info')!;
+          const popover = details.querySelector<HTMLElement>(':scope > div')!;
+          const box = popover.getBoundingClientRect();
+          const reaches = (selector: string) => {
+            const element = popover.querySelector(selector)!;
+            const rect = element.getBoundingClientRect();
+            const hit = document.elementFromPoint(
+              rect.left + rect.width / 2,
+              rect.top + rect.height / 2,
+            );
+            return (
+              hit !== null && element.contains(hit) && details.contains(hit)
+            );
+          };
+          popover.scrollTop = 0;
+          const heading = reaches('h2');
+          const metric = reaches('.atlas-legend__heading-metric');
+          const versions = popover.querySelectorAll('.atlas-legend__version');
+          const last = versions[versions.length - 1]!;
+          last.scrollIntoView({ block: 'nearest' });
+          const line = last.getBoundingClientRect();
+          const lastLine =
+            line.top >= box.top - 0.5 &&
+            line.bottom <= box.bottom + 0.5 &&
+            explorer.scrollTop === 0;
+          popover.scrollTop = 0;
+          return {
+            heading,
+            inside:
+              box.left >= bounds.left - 0.5 &&
+              box.right <= bounds.right + 0.5 &&
+              box.top >= chromeBottom - 0.5 &&
+              box.bottom <= bounds.bottom + 0.5,
+            lastLine,
+            metric,
+          };
+        }),
+      { message: label },
+    )
+    .toEqual({ heading: true, inside: true, lastLine: true, metric: true });
 }
 
 /**
@@ -1601,20 +1679,57 @@ for (const phone of PHONE_PROFILES) {
         }),
       ).toHaveCount(1);
 
-      await tapSelectNearCenter(page);
-      const inspector = page.locator('.atlas-inspector');
       const info = legend.locator('details.atlas-legend__info');
       const summary = info.locator('summary');
+      await expect(info.locator('h2 .atlas-legend__heading-metric')).toHaveText(
+        'Modeled frequency',
+      );
+      // The popover is shown whole or scrolls within the explorer wherever the
+      // strip docks, over either sheet in every state, and Escape closes it.
+      // Touch only: Cesium's picking reacts to where the emulated mouse of a
+      // handle click is left, which a phone does not have.
+      const tapToState = async (sheet: Locator, state: SheetStateName) => {
+        for (let tap = 0; tap < 3; tap += 1) {
+          const current = await sheet.getAttribute('data-sheet-state');
+          if (current === state) return;
+          await sheet.locator('.atlas-sheet__handle').tap();
+          await expect(sheet).not.toHaveAttribute(
+            'data-sheet-state',
+            current ?? '',
+          );
+        }
+        await expect(sheet).toHaveAttribute('data-sheet-state', state);
+      };
+      const controls = controlsSheet(page);
+      for (const state of ['peek', 'half', 'full'] as const) {
+        await tapToState(controls, state);
+        await summary.tap();
+        await expectLegendPopoverShown(page, `controls sheet at ${state}`);
+        await page.keyboard.press('Escape');
+        await expect(info).not.toHaveAttribute('open', '');
+        await expect(summary).toBeFocused();
+      }
+      await tapToState(controls, 'peek');
+
+      // A tap outside closes it without pulling focus to the summary.
       await summary.tap();
       await expect(info).toHaveAttribute('open', '');
-      // The full label is shown in the popover heading, not only present in its text.
-      const headingMetric = info.locator('h2 .atlas-legend__heading-metric');
-      await expect(headingMetric).toBeVisible();
-      await expect(headingMetric).toHaveText('Modeled frequency');
-      await page.keyboard.press('Escape');
+      await controls.locator('.atlas-sheet__summary').tap();
       await expect(info).not.toHaveAttribute('open', '');
-      await expect(summary).toBeFocused();
-      await expect(inspector).toBeVisible();
+      await expect(summary).not.toBeFocused();
+
+      await tapSelectNearCenter(page);
+      const inspector = page.locator('.atlas-inspector');
+      const rail = panelSheet(page);
+      for (const state of ['half', 'peek', 'full'] as const) {
+        await tapToState(rail, state);
+        await summary.tap();
+        await expectLegendPopoverShown(page, `inspector sheet at ${state}`);
+        await page.keyboard.press('Escape');
+        await expect(info).not.toHaveAttribute('open', '');
+        await expect(summary).toBeFocused();
+        await expect(inspector).toBeVisible();
+      }
     });
 
     for (const basemap of ['dark-streets', 'stadia-smooth'] as const) {

@@ -1,7 +1,8 @@
 /**
  * DOM measurements behind the Atlas bottom sheets (mobile sheets design
- * 2026-10-07 §A.1.5 full-height cap, §A.1.7 docking). Cesium-free: it reads
- * the Cesium credit container only as a DOM node.
+ * 2026-10-07 §A.1.5 full-height cap, §A.1.7 docking and the legend popover's
+ * room). Cesium-free: it reads the Cesium credit container only as a DOM
+ * node.
  */
 
 const TOP_CHROME =
@@ -46,6 +47,34 @@ export function writeDockedStack(explorer: HTMLElement): void {
   explorer.style.setProperty(
     '--atlas-credit-height',
     `${data + heightOf(explorer, CESIUM_CREDITS)}px`,
+  );
+}
+
+/**
+ * Places the phone legend popover (§A.1.7) inside the explorer: above the
+ * strip when it fits whole there, otherwise on the side with more room, which
+ * over a half or full sheet is below, across the sheet. The chosen side's
+ * room, between the top chrome (plus its 8 px gap) and the explorer's bottom
+ * less 8 px, caps the popover's height; it scrolls within it.
+ */
+export function placeLegendPopover(details: HTMLElement): void {
+  const explorer = details.closest<HTMLElement>('.atlas-explorer');
+  const popover = details.querySelector<HTMLElement>(':scope > div');
+  if (!explorer || !popover) return;
+  const bounds = explorer.getBoundingClientRect();
+  const info = details.getBoundingClientRect();
+  const gap =
+    0.7 *
+    Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const top = bounds.top + topChromeBottom(explorer) + PEEK_GAP_PX;
+  const above = info.top - gap - top;
+  const below = bounds.bottom - PEEK_GAP_PX - (info.bottom + gap);
+  const placement =
+    above >= popover.scrollHeight || above >= below ? 'above' : 'below';
+  details.dataset.placement = placement;
+  details.style.setProperty(
+    '--atlas-legend-room',
+    `${Math.max(0, Math.floor(placement === 'above' ? above : below))}px`,
   );
 }
 

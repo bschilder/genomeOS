@@ -2650,6 +2650,27 @@ body:has(.atlas-explorer) .skip-link {
     pointer-events: auto;
   }
 
+  /*
+   * The popover stays inside the explorer wherever the strip docks: AtlasLegend
+   * writes the side with room (below, across an open sheet, when the strip rides
+   * high) and that room, and the popover scrolls within it. While open, the
+   * strip paints over the sheets and the rail.
+   */
+  .atlas-legend__info > div {
+    max-height: var(--atlas-legend-room, 50svh);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .atlas-legend__info[data-placement='below'] > div {
+    top: calc(100% + 0.7rem);
+    bottom: auto;
+  }
+
+  .atlas-legend:has(> .atlas-legend__compact > .atlas-legend__info[open]) {
+    z-index: 5;
+  }
+
   .atlas-legend__compact {
     grid-template-columns: auto minmax(6rem, 1fr) auto;
     gap: 0.6rem;

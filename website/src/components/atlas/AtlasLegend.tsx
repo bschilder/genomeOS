@@ -1,15 +1,27 @@
 /**
  * Compact scientific legend and expandable explanation for Atlas design §11;
  * on phones a one-row strip [label | ramp | info] (mobile sheets design
- * 2026-10-07 §A.1.7) whose popover closes on Escape.
+ * 2026-10-07 §A.1.7) whose popover closes on Escape. On phones the popover
+ * stays inside the explorer wherever the docked strip rides (above it, or
+ * below over an open sheet, scrolling within the room it has), and a tap
+ * outside it closes it.
  */
 
-import { useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 
 import type { ArtifactRef } from '../../atlas/contracts';
 import type { ExplorerState } from '../../atlas/url-state';
 import { paletteStops } from '../../atlas/visual-encoding';
+import { placeLegendPopover } from './sheet-layout';
 import { useEscapeLayer } from './useEscapeStack';
+import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
 
 interface AtlasLegendProps {
   artifact: ArtifactRef;
@@ -24,28 +36,59 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+  // Escape returns focus to the summary only from the legend itself or from <body>: an
+  // Escape pressed inside another layer (the catalog's search box) closes the popover
+  // without pulling focus out of that layer. A tap outside never moves focus.
+  const closeInfo = useCallback((restoreFocus: boolean) => {
+    const focused = document.activeElement;
+    const returnFocus =
+      restoreFocus &&
+      (!focused ||
+        focused === document.body ||
+        Boolean(details.current?.contains(focused)));
+    if (details.current) details.current.open = false;
+    setInfoOpen(false);
+    if (returnFocus) summary.current?.focus();
+  }, []);
   // The popover joins the stack from the summary's click, not from the async `toggle`
   // event: click is a discrete React event, so the layer is registered before `open` is
   // even set and an Escape pressed right after opening closes the popover, not the layer
   // under it (§A.1.9: the popover is innermost). `onToggle` keeps the state in sync, and
   // the close callback resets it because Chromium can merge two toggle events into one.
-  useEscapeLayer(
-    infoOpen,
-    () => {
-      // Focus returns to the summary only from the legend itself or from <body>: an
-      // Escape pressed inside another layer (the catalog's search box) closes the
-      // popover without pulling focus out of that layer.
-      const focused = document.activeElement;
-      const returnFocus =
-        !focused ||
-        focused === document.body ||
-        Boolean(details.current?.contains(focused));
-      if (details.current) details.current.open = false;
-      setInfoOpen(false);
-      if (returnFocus) summary.current?.focus();
-    },
-    'popover',
-  );
+  useEscapeLayer(infoOpen, () => closeInfo(true), 'popover');
+
+  // Phones: keep the open popover inside the explorer as the strip moves with the
+  // sheets, and close it on a tap outside (which also starts any sheet drag).
+  useLayoutEffect(() => {
+    const element = details.current;
+    if (!isMobile || !infoOpen || !element) return;
+    const place = () => placeLegendPopover(element);
+    place();
+    const legend = element.closest('.atlas-legend');
+    const explorer = element.closest('.atlas-explorer');
+    const resize = new ResizeObserver(place);
+    for (const node of [
+      explorer,
+      legend,
+      element.querySelector(':scope > div'),
+    ])
+      if (node) resize.observe(node);
+    legend?.addEventListener('transitionend', place);
+    return () => {
+      resize.disconnect();
+      legend?.removeEventListener('transitionend', place);
+    };
+  }, [infoOpen, isMobile]);
+  useEffect(() => {
+    if (!isMobile || !infoOpen) return;
+    const dismiss = (event: PointerEvent) => {
+      const target = event.target instanceof Node ? event.target : null;
+      if (!details.current?.contains(target)) closeInfo(false);
+    };
+    document.addEventListener('pointerdown', dismiss, true);
+    return () => document.removeEventListener('pointerdown', dismiss, true);
+  }, [closeInfo, infoOpen, isMobile]);
   const domain = artifact.metric_domains[state.metric];
   const isEstimate = state.metric === 'post_mean';
   const metricLabel = isEstimate ? 'Modeled frequency' : 'Model uncertainty';
