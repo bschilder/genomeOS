@@ -1698,12 +1698,15 @@ for (const phone of PHONE_PROFILES) {
       }
       await tapSheetState(controls, 'peek');
 
-      // A tap outside closes it without pulling focus to the summary.
+      // A tap outside closes it without pulling focus to the summary. The
+      // header's status chip is inert and far from any control: Chromium snaps
+      // a tap near a button (the sheet handle by the summary row) onto it.
       await summary.tap();
       await expect(info).toHaveAttribute('open', '');
-      await controls.locator('.atlas-sheet__summary').tap();
+      await page.locator('.atlas-navbar-status-slot .atlas-status').tap();
       await expect(info).not.toHaveAttribute('open', '');
       await expect(summary).not.toBeFocused();
+      await expect(controls).toHaveAttribute('data-sheet-state', 'peek');
 
       await tapSelectNearCenter(page);
       const inspector = page.locator('.atlas-inspector');
