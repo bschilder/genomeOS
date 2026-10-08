@@ -49,6 +49,14 @@ export interface ScientificPrimitiveGroup {
   setVisibility(surface: boolean, support: boolean): void;
 }
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
+export type AtlasMark =
+  | 'observations-visible'
+  | 'surface-first-chunk'
+  | 'surface-visible'
+  | 'ready'
+  | 'values-ready'
+  | 'edges-ready'
+  | 'context-ready';
 
 export interface SceneProgress {
   detail: string;
