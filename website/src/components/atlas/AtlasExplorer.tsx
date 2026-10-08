@@ -50,6 +50,7 @@ import {
   type StateCorrection,
 } from '../../atlas/url-state';
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
+import { AtlasDataCredit } from './AtlasDataCredit';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
@@ -763,16 +764,7 @@ export default function AtlasExplorer({
               />
             )}
           </PanelSheet>
-          <p className="atlas-data-credit">
-            Scientific data and provenance:{' '}
-            <a
-              href="https://huggingface.co/datasets/bschilder/genomeos-data"
-              target="_blank"
-              rel="noreferrer"
-            >
-              <span className="brand-name">genomeOS</span> public dataset
-            </a>
-          </p>
+          <AtlasDataCredit />
         </div>
       </ExplorerPanelsProvider>
     </EscapeStackProvider>

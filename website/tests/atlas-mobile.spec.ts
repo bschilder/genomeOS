@@ -2,8 +2,10 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 import {
+  canvasCoverage,
   centreOf,
   controlsSheet,
+  dockedOutsideCentre,
   dockedStackInOrder,
   INSPECTOR_CAMERA,
   panelSheet,
@@ -13,7 +15,9 @@ import {
   skipUnlessProject,
   startTouch,
   tapSelectNearCenter,
+  topChromeClearance,
   touchDrag,
+  uncoveredCredits,
   waitForAtlasReady,
 } from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
@@ -1231,6 +1235,108 @@ for (const phone of PHONE_PROFILES) {
       await rail.locator('.atlas-sheet__handle').tap();
       await expect(rail).toHaveAttribute('data-sheet-state', 'full');
     });
+
+    test('the legend strip keeps a readable ramp and closes its popover on Escape', async ({
+      page,
+    }) => {
+      test.setTimeout(120_000);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+      await waitForAtlasReady(page);
+      const legend = page.getByRole('complementary', { name: 'Map legend' });
+      const strip = await legend.evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        rampWidth: element
+          .querySelector('.atlas-color-scale i')!
+          .getBoundingClientRect().width,
+        scrollWidth: element.scrollWidth,
+      }));
+      expect(strip.rampWidth).toBeGreaterThanOrEqual(108);
+      expect(strip.scrollWidth).toBeLessThanOrEqual(strip.clientWidth);
+      const shortLabel = legend.locator('.atlas-legend__label-short');
+      await expect(shortLabel).toBeVisible();
+      await expect(shortLabel).toHaveText('Frequency');
+      const fullLabel = legend.locator('.atlas-legend__label-full');
+      await expect(fullLabel).toHaveText('Modeled frequency');
+      expect(
+        await fullLabel.evaluate(
+          (element) => element.getBoundingClientRect().width,
+        ),
+      ).toBeLessThanOrEqual(1);
+      await expect(
+        legend.getByRole('img', {
+          name: /^Modeled frequency color scale, \d+(\.\d+)?% to \d+(\.\d+)?%$/,
+        }),
+      ).toHaveCount(1);
+
+      await tapSelectNearCenter(page);
+      const inspector = page.locator('.atlas-inspector');
+      const info = legend.locator('details.atlas-legend__info');
+      const summary = info.locator('summary');
+      await summary.tap();
+      await expect(info).toHaveAttribute('open', '');
+      await expect(info.locator('h2')).toContainText('Modeled frequency');
+      await page.keyboard.press('Escape');
+      await expect(info).not.toHaveAttribute('open', '');
+      await expect(summary).toBeFocused();
+      await expect(inspector).toBeVisible();
+    });
+
+    for (const basemap of ['dark-streets', 'stadia-smooth'] as const) {
+      test(`the globe stays reachable at peek with the ${basemap} credits`, async ({
+        page,
+      }) => {
+        await page.route('https://tiles.stadiamaps.com/**', (route) =>
+          route.abort(),
+        );
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto(`/app/?basemap=${basemap}`);
+        await waitForAtlasReady(page);
+        if (basemap === 'stadia-smooth') {
+          await expect(
+            page.locator('.atlas-scene .cesium-viewer-bottom'),
+          ).toContainText(/Data attribution|Stadia/);
+        }
+        await expect(controlsSheet(page)).toHaveAttribute(
+          'data-sheet-state',
+          'peek',
+        );
+        await expect(page.locator('.atlas-data-credit')).toBeVisible();
+        await expect(page.locator('.atlas-data-credit a')).toHaveAccessibleName(
+          'Data: genomeOS',
+        );
+        await expect.poll(() => dockedStackInOrder(page)).toBe(true);
+        await expect
+          .poll(async () => (await canvasCoverage(page)).fraction)
+          .toBeGreaterThanOrEqual(0.65);
+        expect((await canvasCoverage(page)).centreMisses).toBe(0);
+        expect(await dockedOutsideCentre(page)).toEqual([]);
+        expect(await uncoveredCredits(page)).toEqual([]);
+      });
+    }
+
+    for (const banner of [false, true]) {
+      test(`half and full sheets stop below the top chrome${banner ? ' and a warning banner' : ''}`, async ({
+        page,
+      }) => {
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto(
+          banner
+            ? '/app/?entity=hbs-rs334&version=v1%2Fmap-2026-08&metric=post_mean'
+            : '/app/',
+        );
+        await waitForAtlasReady(page);
+        if (banner)
+          await expect(page.locator('.atlas-warning-banner')).toBeVisible();
+        const sheet = controlsSheet(page);
+        for (const state of ['half', 'full'] as const) {
+          await setSheetState(sheet, state);
+          await expect
+            .poll(() => topChromeClearance(page))
+            .toEqual({ gap: true, intersections: [] });
+        }
+      });
+    }
   });
 }
 

@@ -1,4 +1,8 @@
-/** Compact scientific legend and expandable explanation for Atlas design §11. */
+/**
+ * Compact scientific legend and expandable explanation for Atlas design §11;
+ * on phones a one-row strip [label | ramp | info] (mobile sheets design
+ * 2026-10-07 §A.1.7) whose popover closes on Escape.
+ */
 
 import { useRef, useState, type CSSProperties } from 'react';
 
@@ -20,11 +24,9 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-  // The popover joins the stack from the summary's click, not from the async `toggle`
-  // event: click is a discrete React event, so the layer is registered before `open` is
-  // even set and an Escape pressed right after opening closes the popover, not the layer
-  // under it (§A.1.9: the popover is innermost). `onToggle` keeps the state in sync, and
-  // the close callback resets it because Chromium can merge two toggle events into one.
+  // Registered from the summary's click (a discrete event), kept in sync by `onToggle`, reset
+  // by the close callback — Task 6 (A6)'s rule, so the popover is the innermost layer from the
+  // moment it opens (§A.1.9).
   useEscapeLayer(
     infoOpen,
     () => {
@@ -44,6 +46,10 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   );
   const domain = artifact.metric_domains[state.metric];
   const isEstimate = state.metric === 'post_mean';
+  const metricLabel = isEstimate ? 'Modeled frequency' : 'Model uncertainty';
+  const shortLabel = isEstimate ? 'Frequency' : 'Uncertainty';
+  const low = percent(domain[0]);
+  const high = percent(domain[1]);
   const colors = paletteStops(state.surfacePalette);
   const scaleStyle = {
     '--atlas-scale': `linear-gradient(90deg, ${colors.join(', ')})`,
@@ -55,12 +61,19 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
     <aside className="atlas-legend" aria-label="Map legend">
       <div className="atlas-legend__compact">
         <strong>
-          {isEstimate ? 'Modeled frequency' : 'Model uncertainty'}
+          <span className="atlas-legend__label-full">{metricLabel}</span>
+          <span className="atlas-legend__label-short" aria-hidden="true">
+            {shortLabel}
+          </span>
         </strong>
-        <div className="atlas-color-scale" aria-label="Low to high color scale">
-          <span>{percent(domain[0])}</span>
+        <div
+          className="atlas-color-scale"
+          role="img"
+          aria-label={`${metricLabel} color scale, ${low} to ${high}`}
+        >
+          <span>{low}</span>
           <i aria-hidden="true" style={scaleStyle} />
-          <span>{percent(domain[1])}</span>
+          <span>{high}</span>
         </div>
         <span className="atlas-legend__mode">
           {state.view === 'map'
@@ -82,7 +95,12 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
             i
           </summary>
           <div>
-            <h2>{artifact.label}</h2>
+            <h2>
+              {artifact.label}
+              <span className="atlas-legend__heading-metric">
+                {metricLabel}
+              </span>
+            </h2>
             <p>
               Color shows the modeled value. Dots mark estimates still driven
               mostly by the model’s starting assumptions because local evidence

@@ -243,3 +243,162 @@ export async function tapSelectNearCenter(page: Page): Promise<void> {
   }
   await expect(inspector).toBeVisible();
 }
+
+/** 12 × 20 hit-test grid over the explorer: canvas fraction and misses in the central region. */
+export async function canvasCoverage(
+  page: Page,
+): Promise<{ centreMisses: number; fraction: number }> {
+  return page.evaluate(() => {
+    const explorer = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect();
+    let canvas = 0;
+    let centreMisses = 0;
+    for (let row = 0; row < 20; row += 1) {
+      for (let column = 0; column < 12; column += 1) {
+        const x = explorer.left + ((column + 0.5) * explorer.width) / 12;
+        const y = explorer.top + ((row + 0.5) * explorer.height) / 20;
+        const hit = document.elementFromPoint(x, y);
+        const onCanvas =
+          hit instanceof HTMLCanvasElement &&
+          hit.closest('.atlas-scene') !== null;
+        if (onCanvas) canvas += 1;
+        const central =
+          x >= explorer.left + explorer.width * 0.2 &&
+          x <= explorer.left + explorer.width * 0.8 &&
+          y >= explorer.top + explorer.height * 0.3 &&
+          y <= explorer.top + explorer.height * 0.7;
+        if (central && !onCanvas) centreMisses += 1;
+      }
+    }
+    return { centreMisses, fraction: canvas / 240 };
+  });
+}
+
+/** Docked or status elements that reach into the central 60 % × 40 % of the explorer. */
+export async function dockedOutsideCentre(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const explorer = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect();
+    const centre = {
+      bottom: explorer.top + explorer.height * 0.7,
+      left: explorer.left + explorer.width * 0.2,
+      right: explorer.left + explorer.width * 0.8,
+      top: explorer.top + explorer.height * 0.3,
+    };
+    return [
+      '.atlas-legend',
+      '.atlas-scene .cesium-viewer-bottom',
+      '.atlas-data-credit',
+      '.atlas-status-stack',
+    ].filter((selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return false;
+      const rect = element.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
+      return (
+        rect.left < centre.right &&
+        rect.right > centre.left &&
+        rect.top < centre.bottom &&
+        rect.bottom > centre.top
+      );
+    });
+  });
+}
+
+/** Credit logos and links that are off-screen or covered by another element. */
+export async function uncoveredCredits(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const targets = [
+      ...document.querySelectorAll<HTMLElement>(
+        '.atlas-scene .cesium-credit-logoContainer img, .atlas-scene .cesium-viewer-bottom a, .atlas-data-credit a',
+      ),
+    ];
+    if (targets.length === 0) return ['no credits rendered'];
+    const failures: string[] = [];
+    for (const target of targets) {
+      const rect = target.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) continue;
+      const label =
+        target.textContent?.trim() ||
+        target.getAttribute('alt') ||
+        target.tagName;
+      const inside =
+        rect.left >= 0 &&
+        rect.top >= 0 &&
+        rect.right <= window.innerWidth &&
+        rect.bottom <= window.innerHeight;
+      // The credit block wraps by design (§A.1.7), so an inline link can split
+      // across lines and its bounding-box centre can fall on the canvas. Hit-test
+      // the centre of every non-empty line fragment instead.
+      const fragments = Array.from(target.getClientRects()).filter(
+        (fragment) => fragment.width >= 1 && fragment.height >= 1,
+      );
+      const reachable =
+        fragments.length > 0 &&
+        fragments.every((fragment) => {
+          const hit = document.elementFromPoint(
+            fragment.left + fragment.width / 2,
+            fragment.top + fragment.height / 2,
+          );
+          return hit !== null && (hit === target || target.contains(hit));
+        });
+      if (!inside || !reachable) failures.push(label);
+    }
+    return failures;
+  });
+}
+
+/** Whether the active sheet clears the top chrome by 8 px and which docked strips overlap it. */
+export async function topChromeClearance(
+  page: Page,
+): Promise<{ gap: boolean; intersections: string[] }> {
+  return page.evaluate(() => {
+    const rectOf = (selector: string) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0 ? rect : null;
+    };
+    const explorerTop = document
+      .querySelector('.atlas-explorer')!
+      .getBoundingClientRect().top;
+    const chrome = [
+      '.atlas-warning-banner',
+      '.atlas-top-slot',
+      '.atlas-status-stack',
+      '.atlas-view-notice',
+    ]
+      .map(rectOf)
+      .filter((rect): rect is DOMRect => rect !== null);
+    const chromeBottom = Math.max(
+      0,
+      ...chrome.map((rect) => rect.bottom - explorerTop),
+    );
+    const sheet =
+      rectOf('aside.atlas-controls:not([hidden])') ??
+      rectOf('.atlas-right-rail[data-sheet-state]');
+    const intersections = [
+      '.atlas-legend',
+      '.atlas-scene .cesium-viewer-bottom',
+      '.atlas-data-credit',
+    ].filter((selector) => {
+      const rect = rectOf(selector);
+      return (
+        rect !== null &&
+        chrome.some(
+          (other) =>
+            rect.left < other.right &&
+            rect.right > other.left &&
+            rect.top < other.bottom &&
+            rect.bottom > other.top,
+        )
+      );
+    });
+    return {
+      gap: sheet !== null && sheet.top - explorerTop >= chromeBottom + 8 - 0.5,
+      intersections,
+    };
+  });
+}
