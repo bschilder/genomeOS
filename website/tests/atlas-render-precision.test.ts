@@ -25,6 +25,11 @@ const PALETTES: readonly PaletteId[] = [
 const HEIGHT_SCALE_METRES = 180_000;
 /** The f32 render tier moves exactly one 32-bin assignment across all layers. */
 const EXPECTED_FLIPS = ['cyt-il-10-819-t post_sd 84194e9ffffffff 4->5'];
+/**
+ * First-cell colour comparisons (bin × palette) behind "no bin's first-cell colour changes".
+ * Pinned to today's 30 layers, like EXPECTED_FLIPS, so the claim can never hold vacuously.
+ */
+const EXPECTED_FIRST_CELL_CHECKS = 13_909;
 
 describe.skipIf(SURFACES.length === 0)(
   'f32 render tier against the f64 artifacts (fast-load §B.1)',
@@ -33,6 +38,7 @@ describe.skipIf(SURFACES.length === 0)(
       expect(SURFACES).toHaveLength(30);
       const flips: string[] = [];
       const firstCellChanges: string[] = [];
+      let firstCellChecks = 0;
       const report: string[] = [];
       for (const ref of SURFACES) {
         const surface = surfaceArtifactSchema.parse(
@@ -73,14 +79,18 @@ describe.skipIf(SURFACES.length === 0)(
               if (!first32.has(renderedBin)) first32.set(renderedBin, cell);
             }
             const bound = (2 ** -24 * maxAbs) / (domain[1] - domain[0]);
-            expect(maxDelta, `${ref.id} ${metric}`).toBeLessThanOrEqual(bound);
+            expect(
+              maxDelta,
+              `${ref.id} ${metric} ${group.join('|')}`,
+            ).toBeLessThanOrEqual(bound);
             for (const [bin, cell] of first32) {
               const source = first64.get(bin);
               if (source?.h3_index !== cell.h3_index) {
                 firstCellChanges.push(`${ref.id} ${metric} bin ${bin}`);
                 continue;
               }
-              for (const palette of PALETTES)
+              for (const palette of PALETTES) {
+                firstCellChecks += 1;
                 if (
                   colorAtPosition(
                     palette,
@@ -94,6 +104,7 @@ describe.skipIf(SURFACES.length === 0)(
                   firstCellChanges.push(
                     `${ref.id} ${metric} bin ${bin} ${palette}`,
                   );
+              }
             }
             report.push(
               `${ref.id} ${metric} ${group.join('|')}: max |Δnormalised| ${maxDelta.toExponential(2)} ≤ ${bound.toExponential(2)}, height ≤ ${(bound * HEIGHT_SCALE_METRES).toFixed(3)} m`,
@@ -101,9 +112,17 @@ describe.skipIf(SURFACES.length === 0)(
           }
         }
       }
-      console.info(report.join('\n'));
+      report.push(
+        `flips: ${flips.join(', ') || 'none'}; first-cell colour checks: ${firstCellChecks} bin × palette, ${firstCellChanges.length} changed`,
+      );
+      // Straight to stdout: Vitest captures console.* and its agent-mode reporter
+      // ('minimal', silent: 'passed-only') drops it from passing tests.
+      process.stdout.write(
+        `\nf32 precision report (fast-load §B.1), one line per layer × metric × support group:\n${report.join('\n')}\n`,
+      );
       expect(flips).toEqual(EXPECTED_FLIPS);
       expect(firstCellChanges).toEqual([]);
+      expect(firstCellChecks).toBe(EXPECTED_FIRST_CELL_CHECKS);
     }, 300_000);
   },
 );
