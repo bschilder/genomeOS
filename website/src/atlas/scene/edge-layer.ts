@@ -16,12 +16,11 @@ import {
   BufferPolyline,
   BufferPolylineCollection,
   BufferPolylineMaterial,
-  Cartesian3,
   Color,
   ComponentDatatype,
-  Material,
   PolylineCollection,
   PrimitiveCollection,
+  type Material,
   type Polyline,
 } from 'cesium';
 
@@ -30,8 +29,10 @@ import type { ExplorerSceneMode } from '../url-state';
 import type { EdgesChunkMessage } from '../worker/protocol';
 import {
   abortError,
+  cartesiansOf,
   edgeRendererForMode,
   runSliced,
+  SharedColorMaterial,
   type EdgeRenderer,
   type SliceOptions,
 } from './sliced-lines';
@@ -73,34 +74,11 @@ interface RingRef {
   ring: number;
 }
 
-/** A Color material shared by every projected line of one colour. A Polyline destroys its material when
- * its collection is destroyed, so a shared instance would be destroyed once per line and the second
- * call would throw. A Color material holds no textures or sub-materials, so destroying it releases
- * nothing; this one ignores destroy and is left to the garbage collector. One material per line is
- * not an option: 61k Color materials cost about 200 MB of heap. */
-class SharedColorMaterial extends Material {
-  constructor(color: Color) {
-    super({ fabric: { type: 'Color' } });
-    this.uniforms.color = color;
-  }
-
-  override destroy(): void {}
-}
-
 function ringsOf(buffers: EdgeChunkBuffers): RingRef[] {
   return Array.from(
     { length: Math.max(0, buffers.ringOffsets.length - 1) },
     (_, ring) => ({ buffers, ring }),
   );
-}
-
-function cartesiansOf(values: Float64Array): Cartesian3[] {
-  const positions: Cartesian3[] = [];
-  for (let index = 0; index < values.length; index += 3)
-    positions.push(
-      new Cartesian3(values[index], values[index + 1], values[index + 2]),
-    );
-  return positions;
 }
 
 export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {

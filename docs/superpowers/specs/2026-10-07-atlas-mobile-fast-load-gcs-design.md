@@ -682,7 +682,8 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    `atlas:surface-visible`, parsed in the worker into ring vertex buffers and a label table, and drawn
    as a time-sliced `BufferPolylineCollection` plus a `LabelCollection` added in slices;
    `GeoJsonDataSource` and its entities are dropped. Its height adjustment is skipped at elevation 0
-   and computed in the worker from grid rows on the first non-zero factor. The sky box is hidden
+   and computed in the worker from grid rows on the first non-zero factor (or, when that factor
+   comes first, as soon as the worker has parsed the GeoJSON). The sky box is hidden
    (`viewer.scene.skyBox.show = false` right after `new Viewer`, keeping sun and moon) until
    `data-atlas-ready`, then shown.
 10. **No coarse aggregated tier.** Averaging res-4 children into res-3/2 parents is an aggregation that
