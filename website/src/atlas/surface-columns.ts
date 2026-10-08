@@ -4,9 +4,10 @@
  * anchors; `cellAt` (float64 detail tier) is the only source of displayed numbers.
  */
 
-import { h3IndexToSplitLong, splitLongToH3Index } from 'h3-js';
+import { splitLongToH3Index } from 'h3-js';
 
 import type { ArtifactIdentity, Support, SurfaceCell } from './contracts';
+import { gridRowOf } from './geometry/topology';
 import { SUPPORT_CODES } from './gosa/decode';
 import type { DecodedDetail, DecodedGrid } from './gosa/types';
 
@@ -58,22 +59,11 @@ export function h3At(surface: SurfaceArtifact, row: number): string {
   return splitLongToH3Index(surface.grid.h3Lo[row], surface.grid.h3Hi[row]);
 }
 
-/** Binary search over the sorted two-lane u64 grid; null when the cell is not in it. */
+/** Binary search over the sorted two-lane u64 grid (`gridRowOf`); null for text that is not an H3
+ * index or a cell that is not in it. */
 export function rowForH3(surface: SurfaceArtifact, h3: string): number | null {
   if (!/^[0-9a-f]{15,16}$/.test(h3)) return null;
-  const [lo, hi] = h3IndexToSplitLong(h3);
-  const { h3Hi, h3Lo } = surface.grid;
-  let low = 0;
-  let high = surface.grid.n - 1;
-  while (low <= high) {
-    const middle = (low + high) >>> 1;
-    const middleHi = h3Hi[middle];
-    const middleLo = h3Lo[middle];
-    if (middleHi < hi || (middleHi === hi && middleLo < lo)) low = middle + 1;
-    else if (middleHi > hi || middleLo > lo) high = middle - 1;
-    else return middle;
-  }
-  return null;
+  return gridRowOf(surface.grid, h3);
 }
 
 export function renderAt(surface: SurfaceArtifact, row: number): RenderCell {
