@@ -33,7 +33,8 @@ const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
   </Fragment>
   <AtlasExplorer
     client:load
+    artifactDataBase={artifactDataBase}
     cesiumToken={import.meta.env.CESIUM_TOKEN ?? ''}
-    dataBaseUrl={sitePath('/data/atlas/')}
+    siteDataBase={siteDataBase}
   />
 </SiteLayout>

@@ -7,19 +7,20 @@ import {
   type PopulatedPlaceCatalog,
 } from '../../atlas/place-context';
 
+/** `url` is the catalog's populated-places source resolved against the site data base, or null. */
 export function useObservationPlaces(
-  dataBaseUrl: string,
+  url: string | null,
   enabled: boolean,
 ): PopulatedPlaceCatalog | null {
   const request = useRef<Promise<PopulatedPlaceCatalog> | null>(null);
   const [catalog, setCatalog] = useState<PopulatedPlaceCatalog | null>(null);
 
   useEffect(() => {
-    if (!enabled || catalog) return;
+    if (!enabled || catalog || !url) return;
     let active = true;
     const pending =
       request.current ??
-      fetch(`${dataBaseUrl}ne-50m-populated-places.json`)
+      fetch(url)
         .then((response) => {
           if (!response.ok)
             throw new Error(
@@ -43,7 +44,7 @@ export function useObservationPlaces(
     return () => {
       active = false;
     };
-  }, [catalog, dataBaseUrl, enabled]);
+  }, [catalog, enabled, url]);
 
   return catalog;
 }

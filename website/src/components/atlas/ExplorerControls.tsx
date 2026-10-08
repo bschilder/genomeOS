@@ -10,6 +10,7 @@ import type {
   ObservationSizeVariable,
 } from '../../atlas/observation-encoding';
 import type { SceneCapabilities } from '../../atlas/scene/atlas-scene';
+import { dataHref } from '../../lib/data-url';
 import type {
   BasemapId,
   EdgeColorMode,
@@ -33,7 +34,7 @@ import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
 interface ExplorerControlsProps {
   capabilities: SceneCapabilities;
   catalog: AtlasCatalog;
-  dataBaseUrl: string;
+  artifactDataBase: string;
   state: ExplorerState;
   disabled: boolean;
   explorer: HTMLElement | null;
@@ -100,7 +101,7 @@ const layerDescriptions: Record<LayerId, string> = {
 export function ExplorerControls({
   capabilities,
   catalog,
-  dataBaseUrl,
+  artifactDataBase,
   state,
   disabled,
   explorer,
@@ -144,8 +145,7 @@ export function ExplorerControls({
   );
   const observationsAvailable =
     selectedArtifact?.observations_available !== false;
-  const downloadUrl = (path: string) =>
-    `${dataBaseUrl.endsWith('/') ? dataBaseUrl : `${dataBaseUrl}/`}${path.replace(/^\/+/, '')}`;
+  const downloadUrl = (key: string) => dataHref(key, artifactDataBase);
   const sheetSummary = `${selectedArtifact?.label ?? state.entityId} · ${
     state.metric === 'post_mean' ? 'Posterior estimate' : 'Uncertainty'
   }`;

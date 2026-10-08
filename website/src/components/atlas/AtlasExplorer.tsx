@@ -41,7 +41,6 @@ import type {
   SceneProgressListener,
 } from '../../atlas/scene/atlas-scene';
 import type { ContextWarning } from '../../atlas/scene/context-controller';
-import { StaticAtlasDataProvider } from '../../atlas/static-provider';
 import { applySceneStyle, observationStyleFor } from '../../atlas/scene-style';
 import {
   parseExplorerState,
@@ -65,24 +64,27 @@ import { EscapeStackProvider } from './useEscapeStack';
 import { ExplorerPanelsProvider } from './useExplorerPanels';
 import { useObservationPlaces } from './useObservationPlaces';
 import { useAtlasSceneLifecycle } from './useAtlasSceneLifecycle';
+import {
+  useAtlasDataProvider,
+  useContextSourceUrls,
+} from './useAtlasDataProvider';
 import type { SceneFailure } from './useAtlasSceneLifecycle';
 
 interface AtlasExplorerProps {
+  artifactDataBase: string;
   cesiumToken?: string;
-  dataBaseUrl: string;
+  siteDataBase: string;
 }
 
 // Island module evaluation (before React mounts) starts the data worker and the Cesium chunk.
 bootAtlas();
 
 export default function AtlasExplorer({
+  artifactDataBase,
   cesiumToken = '',
-  dataBaseUrl,
+  siteDataBase,
 }: AtlasExplorerProps) {
-  const provider = useMemo(
-    () => new StaticAtlasDataProvider(dataBaseUrl),
-    [dataBaseUrl],
-  );
+  const provider = useAtlasDataProvider(artifactDataBase, siteDataBase);
   const sceneElement = useRef<HTMLDivElement>(null);
   const scene = useRef<AtlasSceneController | null>(null);
   const surfaceCells = useRef<Map<string, SurfaceCell>>(new Map());
@@ -93,6 +95,7 @@ export default function AtlasExplorer({
   const [sceneAttempt, setSceneAttempt] = useState(0);
   const [dataAttempt, setDataAttempt] = useState(0);
   const [catalog, setCatalog] = useState<AtlasCatalog | null>(null);
+  const contextUrls = useContextSourceUrls(provider, catalog);
   const [state, setState] = useState<ExplorerState | null>(null);
   const [activeArtifact, setActiveArtifact] = useState<ArtifactRef | null>(
     null,
@@ -151,7 +154,10 @@ export default function AtlasExplorer({
   const wantsPlaceContext =
     hover?.selection.kind === 'observation' ||
     selection?.kind === 'observation';
-  const placeCatalog = useObservationPlaces(dataBaseUrl, wantsPlaceContext);
+  const placeCatalog = useObservationPlaces(
+    contextUrls?.places ?? null,
+    wantsPlaceContext,
+  );
   const placeContextFor = (
     candidate: InspectorSelection | null,
   ): ObservationPlaceContext | null => {
@@ -223,7 +229,7 @@ export default function AtlasExplorer({
     },
     cesiumToken,
     element: sceneElement,
-    naturalEarthUrl: `${dataBaseUrl}ne-50m-admin-0.geojson`,
+    naturalEarthUrl: contextUrls?.borders ?? null,
     onReset: () => {
       cameraApplied.current = false;
       appliedDisplay.current = null;
@@ -241,6 +247,7 @@ export default function AtlasExplorer({
   }, [sceneGeneration]);
 
   useEffect(() => {
+    if (!provider) return;
     const controller = new AbortController();
     const sequence = beginActivity('loading catalog', {
       detail: 'Waiting for the catalog response',
@@ -282,7 +289,8 @@ export default function AtlasExplorer({
   }, [provider, dataAttempt]);
 
   useEffect(() => {
-    if (!catalog || !state || !scene.current || sceneFailure) return;
+    if (!provider || !catalog || !state || !scene.current || sceneFailure)
+      return;
     const ref = catalog.artifacts.find(
       (candidate) => candidate.id === state.entityId,
     );
@@ -315,7 +323,11 @@ export default function AtlasExplorer({
     );
     setError(null);
     Promise.all([
-      provider.getSurface(ref, controller.signal, reportTransfer('surface')),
+      provider.getSurfaceJson(
+        ref,
+        controller.signal,
+        reportTransfer('surface'),
+      ),
       provider.getObservations(
         ref,
         controller.signal,
@@ -636,7 +648,7 @@ export default function AtlasExplorer({
             <ExplorerControls
               capabilities={capabilities}
               catalog={catalog}
-              dataBaseUrl={dataBaseUrl}
+              artifactDataBase={artifactDataBase}
               state={state}
               disabled={false}
               explorer={explorerNode}
@@ -646,7 +658,11 @@ export default function AtlasExplorer({
                 const selected = catalog.artifacts.find(
                   (artifact) => artifact.id === state.entityId,
                 );
-                if (!selected || activeArtifact?.id !== selected.id)
+                if (
+                  !provider ||
+                  !selected ||
+                  activeArtifact?.id !== selected.id
+                )
                   return Promise.reject(
                     new Error('Wait for the selected map to finish loading.'),
                   );
