@@ -1429,14 +1429,21 @@ for (const profile of [
       const handleBox = await sheet
         .locator('.atlas-sheet__handle')
         .boundingBox();
+      expect(handleBox, 'sheet handle box').not.toBeNull();
       expect(handleBox!.height).toBeGreaterThanOrEqual(44);
+      const visibleSummaries: Locator[] = [];
       for (const summary of await sheet
         .locator('.atlas-control-sheet > summary')
         .all()) {
-        if (!(await summary.isVisible())) continue;
-        expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(
-          44,
-        );
+        if (await summary.isVisible()) visibleSummaries.push(summary);
+      }
+      expect(visibleSummaries.length, 'visible summary rows').toBeGreaterThan(
+        0,
+      );
+      for (const summary of visibleSummaries) {
+        const box = await summary.boundingBox();
+        expect(box, 'summary row box').not.toBeNull();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
       }
     });
   });

@@ -886,16 +886,18 @@ html.atlas-page .site-header--compact .site-header__inner {
 /*
  * The 1.1rem glyph keeps its look inside a 24 px target box on every screen:
  * a transparent border pads the box, the ring is an inset shadow on the
- * padding edge (WCAG 2.2 SC 2.5.8; mobile sheets design §A.1.10).
+ * padding edge (WCAG 2.2 SC 2.5.8; mobile sheets design §A.1.10). Once
+ * 1.1rem passes 24 px (root font size above about 21.8 px), the box grows
+ * with the glyph and the border stays at zero, so the ring keeps scaling.
  */
 .atlas-info-tip__trigger,
 .atlas-legend__info summary {
-  width: 24px;
-  height: 24px;
+  width: max(24px, 1.1rem);
+  height: max(24px, 1.1rem);
   padding: 0;
   display: grid;
   place-items: center;
-  border: calc((24px - 1.1rem) / 2) solid transparent;
+  border: max(0px, calc((24px - 1.1rem) / 2)) solid transparent;
   border-radius: 50%;
   background: rgb(5 22 45 / 92%) padding-box;
   box-shadow: inset 0 0 0 1px rgb(112 230 255 / 42%);
