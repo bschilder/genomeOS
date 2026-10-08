@@ -117,10 +117,19 @@ describe('observation surface heights', () => {
     expect(anchors[1]).toEqual({ height: 0, triangle: null });
   });
 
-  it('refuses anchors that do not match the observations', () => {
+  it('refuses anchor heights that do not match the observations', () => {
     expect(() =>
       anchorsFromBuffers(
-        { heights: new Float64Array(1), triangles: new Float64Array(9) },
+        { heights: new Float64Array(1), triangles: new Float64Array(18) },
+        2,
+      ),
+    ).toThrow(/2 observations/);
+  });
+
+  it('refuses anchor triangles that do not match the observations', () => {
+    expect(() =>
+      anchorsFromBuffers(
+        { heights: new Float64Array(2), triangles: new Float64Array(9) },
         2,
       ),
     ).toThrow(/2 observations/);

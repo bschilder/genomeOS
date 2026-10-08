@@ -29,7 +29,7 @@ function setup() {
   layer.setArtifacts(source, observations, 'post_mean', true, 2);
   const lines = layer.collection.get(0) as PolylineCollection;
   const points = layer.collection.get(1) as PointPrimitiveCollection;
-  return { layer, lines, points, source, surface };
+  return { layer, lines, observations, points, source, surface };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -70,5 +70,37 @@ describe('selection highlight from the render tier', () => {
       source.cellHeight(CELL, 'post_mean')! * 2 + HIGHLIGHT_CLEARANCE_METRES,
       3,
     );
+  });
+
+  it('outlines a selected cell flat on the globe when elevation is off', () => {
+    const { layer, lines, observations, source } = setup();
+    expect(source.cellHeight(CELL, 'post_mean')).toBeGreaterThan(0);
+    layer.setArtifacts(source, observations, 'post_mean', false, 2);
+    layer.setSelection({ h3Index: CELL, kind: 'surface' });
+
+    const selection = lines.get(1);
+    expect(selection.show).toBe(true);
+    expect(
+      Ellipsoid.WGS84.cartesianToCartographic(selection.positions[0]).height,
+    ).toBeCloseTo(HIGHLIGHT_CLEARANCE_METRES, 3);
+  });
+
+  it('hides both highlights when the surface is withdrawn', () => {
+    const { layer, lines, observations, points, surface } = setup();
+    layer.setHover({ h3Index: CELL, kind: 'surface' }, true);
+    layer.setSelection({
+      artifactKey: surface.artifactKey,
+      kind: 'observation',
+      sourceRecordId: 'map-surveys:1',
+    });
+    expect(lines.get(0).show).toBe(true);
+    expect(points.get(1).show).toBe(true);
+
+    layer.setArtifacts(null, observations, 'post_mean', false, 0);
+
+    for (const index of [0, 1]) {
+      expect(lines.get(index).show).toBe(false);
+      expect(points.get(index).show).toBe(false);
+    }
   });
 });
