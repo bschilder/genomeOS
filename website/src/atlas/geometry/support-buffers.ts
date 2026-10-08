@@ -4,9 +4,22 @@
  * Unknown cells feed the existing `Grid` material and prior-dominated cells
  * the `Dot` material of their palette bin; both need per-cell `st` in [0, 1].
  * Each H3 polygon part (pole-enclosing cells keep the legacy fan split) is
- * triangulated around the cell centre at SURFACE_CLEARANCE_METRES; `st` is
- * the part's east/north extent in the tangent plane at the cell centre, the
- * frame Cesium's PolygonGeometry uses for these small polygons.
+ * triangulated around the cell centre at SURFACE_CLEARANCE_METRES. Normals are
+ * `Ellipsoid.WGS84.geodeticSurfaceNormal` of each raised position, as on
+ * Cesium's PolygonGeometry top face.
+ *
+ * `st` repeats the texture frame Cesium 1.145's PolygonGeometry gives a part
+ * whose rectangle spans less than π (stRotation 0): the east/north tangent
+ * plane at the centre of the ring's ground-level bounding box, each ground
+ * point projected onto it along its geocentric ray, then normalised over the
+ * ring. One step is simplified: the plane normal is taken at the box centre
+ * itself, where Cesium first scales that centre to the geodetic surface. Both
+ * points share a longitude, so east is unchanged; the normal tilts by under
+ * 2e-7 rad, and st matches PolygonGeometry to float32 rounding from the
+ * equator to 85° and across ±180° (atlas-geometry-support.test.ts). Cesium
+ * switches to a stereographic projection for a part spanning π or more (one
+ * split triangle of each pole-enclosing cell); that part keeps the tangent
+ * plane here.
  */
 
 import { cellToLatLng } from 'h3-js';
@@ -21,9 +34,13 @@ import {
 } from './surface-buffers';
 import { PRIOR_DOMINATED_CODE, UNKNOWN_CODE } from './support-codes';
 import { cellLanes } from './topology';
-import { boundingSphereOf, geodeticToEcef, type BoundingSphere } from './wgs84';
-
-const RADIANS_PER_DEGREE = Math.PI / 180.0;
+import {
+  boundingSphereOf,
+  geodeticSurfaceNormal,
+  geodeticToEcef,
+  type BoundingSphere,
+  type Vec3,
+} from './wgs84';
 
 export interface FlatCellBuffers {
   positions: Float64Array;
@@ -45,24 +62,64 @@ export interface SupportChunkBuffers {
 
 interface Part {
   points: [number, number][];
-  originLon: number;
-  originLat: number;
   fanCentre: [number, number] | null;
 }
 
 function partsForRow(input: MeshInput, row: number): Part[] {
   const cell = cellLanes(input.grid, row);
   const [centreLat, centreLon] = cellToLatLng(cell);
-  return h3PolygonParts(cell).map((points) =>
-    points.length === 3
-      ? { fanCentre: null, originLat: centreLat, originLon: centreLon, points }
-      : {
-          fanCentre: [centreLon, centreLat],
-          originLat: centreLat,
-          originLon: centreLon,
-          points,
-        },
-  );
+  return h3PolygonParts(cell).map((points) => ({
+    fanCentre: points.length === 3 ? null : [centreLon, centreLat],
+    points,
+  }));
+}
+
+/** `EllipsoidTangentPlane.fromPoints(ring)`, its normal taken at the box
+ * centre (module comment). */
+interface TangentPlane {
+  origin: Vec3;
+  east: Vec3;
+  north: Vec3;
+  up: Vec3;
+}
+
+function dot(left: Vec3, right: Vec3): number {
+  return left[0] * right[0] + left[1] * right[1] + left[2] * right[2];
+}
+
+function tangentPlaneOf(ring: readonly Vec3[]): TangentPlane {
+  const min: Vec3 = [...ring[0]];
+  const max: Vec3 = [...ring[0]];
+  for (const point of ring)
+    for (let axis = 0; axis < 3; axis += 1) {
+      if (point[axis] < min[axis]) min[axis] = point[axis];
+      if (point[axis] > max[axis]) max[axis] = point[axis];
+    }
+  const origin: Vec3 = [
+    (min[0] + max[0]) * 0.5,
+    (min[1] + max[1]) * 0.5,
+    (min[2] + max[2]) * 0.5,
+  ];
+  const up = geodeticSurfaceNormal(origin);
+  const length = Math.sqrt(origin[0] * origin[0] + origin[1] * origin[1]);
+  const east: Vec3 = [-origin[1] / length, origin[0] / length, 0];
+  const north: Vec3 = [
+    up[1] * east[2] - up[2] * east[1],
+    up[2] * east[0] - up[0] * east[2],
+    up[0] * east[1] - up[1] * east[0],
+  ];
+  return { east, north, origin, up };
+}
+
+/** `EllipsoidTangentPlane.projectPointOntoPlane`: along the geocentric ray. */
+function projectOntoPlane(plane: TangentPlane, point: Vec3): [number, number] {
+  const scale = dot(plane.up, plane.origin) / dot(plane.up, point);
+  const offset: Vec3 = [
+    point[0] * scale - plane.origin[0],
+    point[1] * scale - plane.origin[1],
+    point[2] * scale - plane.origin[2],
+  ];
+  return [dot(plane.east, offset), dot(plane.north, offset)];
 }
 
 /** Flat buffers for `rows` (all from one grid), in row then part order. */
@@ -84,45 +141,29 @@ export function flatCellBuffers(
   let vertex = 0;
   let next = 0;
   for (const part of parts) {
-    const lambda = part.originLon * RADIANS_PER_DEGREE;
-    const phi = part.originLat * RADIANS_PER_DEGREE;
-    const east = [-Math.sin(lambda), Math.cos(lambda), 0];
-    const north = [
-      -Math.sin(phi) * Math.cos(lambda),
-      -Math.sin(phi) * Math.sin(lambda),
-      Math.cos(phi),
-    ];
-    const origin = [0, 0, 0];
-    geodeticToEcef(part.originLon, part.originLat, 0, origin);
     const corners = part.fanCentre
       ? [part.fanCentre, ...part.points]
       : part.points;
-    const plane = corners.map(([lon, lat]) => {
-      const ground = [0, 0, 0];
-      geodeticToEcef(lon, lat, 0, ground);
-      const delta = [
-        ground[0] - origin[0],
-        ground[1] - origin[1],
-        ground[2] - origin[2],
-      ];
-      return [
-        delta[0] * east[0] + delta[1] * east[1] + delta[2] * east[2],
-        delta[0] * north[0] + delta[1] * north[1] + delta[2] * north[2],
-      ];
+    const ground = corners.map(([lon, lat]) => {
+      const point: Vec3 = [0, 0, 0];
+      geodeticToEcef(lon, lat, 0, point);
+      return point;
     });
-    const ring = part.fanCentre ? plane.slice(1) : plane;
-    const minE = Math.min(...ring.map(([e]) => e));
-    const maxE = Math.max(...ring.map(([e]) => e));
-    const minN = Math.min(...ring.map(([, n]) => n));
-    const maxN = Math.max(...ring.map(([, n]) => n));
+    const ring = part.fanCentre ? ground.slice(1) : ground;
+    const tangentPlane = tangentPlaneOf(ring);
+    const plane = ground.map((point) => projectOntoPlane(tangentPlane, point));
+    const ringPlane = part.fanCentre ? plane.slice(1) : plane;
+    const minE = Math.min(...ringPlane.map(([e]) => e));
+    const maxE = Math.max(...ringPlane.map(([e]) => e));
+    const minN = Math.min(...ringPlane.map(([, n]) => n));
+    const maxN = Math.max(...ringPlane.map(([, n]) => n));
     const first = vertex;
     corners.forEach(([lon, lat], index) => {
       geodeticToEcef(lon, lat, SURFACE_CLEARANCE_METRES, positions, vertex * 3);
-      const lonRadians = lon * RADIANS_PER_DEGREE;
-      const latRadians = lat * RADIANS_PER_DEGREE;
-      normals[vertex * 3] = Math.cos(latRadians) * Math.cos(lonRadians);
-      normals[vertex * 3 + 1] = Math.cos(latRadians) * Math.sin(lonRadians);
-      normals[vertex * 3 + 2] = Math.sin(latRadians);
+      normals.set(
+        geodeticSurfaceNormal(positions.subarray(vertex * 3, vertex * 3 + 3)),
+        vertex * 3,
+      );
       const [e, n] = plane[index];
       st[vertex * 2] = Math.min(1, Math.max(0, (e - minE) / (maxE - minE)));
       st[vertex * 2 + 1] = Math.min(1, Math.max(0, (n - minN) / (maxN - minN)));
