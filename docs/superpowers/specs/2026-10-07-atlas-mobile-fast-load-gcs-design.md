@@ -725,9 +725,13 @@ error and retry flows; the WebGL failure path; and every scientific value shown.
   the 2,000-cell subset; colour sweep (≥ 100k `t` points plus every stop ± 1e-9, all seven palettes,
   bytes equal `colorAtPosition`); chunk rule (every supported and masked cell exactly once; each
   chunk's support buffers cover exactly its masked cells; bounding radius ≤ 2,500 km; at most two
-  chunks per artifact fail the `splitLongitude` early-out, counting the default layer's surface
-  primitives (seam chunks included) of each of the 30 artifacts; support primitives may fail it and
-  are not counted, and seam chunks are budgeted as costly (B.6.7); max index fits its index type,
+  chunks of the default artifact `hbs-rs334` fail the `splitLongitude` early-out, counting its
+  default layer's surface primitives (seam chunks included); each of the 30 artifacts, which share
+  one chunk plan, has its count of default-layer surface chunks that fail it pinned at the measured
+  value as an upper bound, so a chunk-plan change that raises any count fails (layers with
+  supported cells along ±180° fail it in up to 13 chunks within the 2,500 km radius), and the
+  per-artifact surface and support counts are printed for the Part B PR; support primitives may fail
+  it and are not counted, and seam chunks are budgeted as costly (B.6.7); max index fits its index type,
   checked in `extruded` on the full HbS grid shape); pick resolver (flat, elevated smooth near edges at
   exaggeration 5, extruded walls → taller cell); `resolveDataUrl`/`dataHref` (bases `/data/atlas/`,
   `/genomeOS/data/atlas/`, absolute with slash; absolute without slash throws; rejected keys; preload
