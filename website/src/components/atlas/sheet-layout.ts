@@ -49,7 +49,13 @@ export function writeDockedStack(explorer: HTMLElement): void {
   );
 }
 
-/** Visible height of a sheet at peek: down to its last [data-sheet-peek] row. */
+/**
+ * Visible height of a sheet at peek: down to its last [data-sheet-peek] row,
+ * then the sheet's bottom padding (the safe-area inset), at least PEEK_GAP_PX.
+ * A home-indicator inset already spaces the last row from the screen edge, so
+ * it absorbs the gap instead of adding to it, and the peek band plus the
+ * docked strips above it stay clear of the globe's centre (§A.1.3).
+ */
 export function peekHeight(sheet: HTMLElement): number {
   const top = sheet.getBoundingClientRect().top;
   let bottom = 0;
@@ -59,7 +65,7 @@ export function peekHeight(sheet: HTMLElement): number {
     bottom = Math.max(bottom, element.getBoundingClientRect().bottom - top);
   }
   const padding = Number.parseFloat(getComputedStyle(sheet).paddingBottom);
-  return bottom + PEEK_GAP_PX + (Number.isFinite(padding) ? padding : 0);
+  return bottom + Math.max(PEEK_GAP_PX, Number.isFinite(padding) ? padding : 0);
 }
 
 /** Calls onChange (once per frame) when the explorer, chrome, docked block or peek rows change. */

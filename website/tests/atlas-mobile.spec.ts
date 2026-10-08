@@ -70,6 +70,22 @@ async function expectHandleControls(page: Page, panel: Locator): Promise<void> {
 }
 
 /**
+ * §A.1.3 with the active sheet at peek: at least 65 % of the explorer hits the
+ * canvas, its centre region is all canvas, the docked legend, credit block and
+ * status stack lie outside that region, and every credit stays shown and
+ * reachable.
+ */
+async function expectGlobeReachableAtPeek(page: Page): Promise<void> {
+  await expect.poll(() => dockedStackInOrder(page)).toBe(true);
+  await expect
+    .poll(async () => (await canvasCoverage(page)).fraction)
+    .toBeGreaterThanOrEqual(0.65);
+  expect((await canvasCoverage(page)).centreMisses).toBe(0);
+  await expect.poll(() => dockedOutsideCentre(page)).toEqual([]);
+  expect(await uncoveredCredits(page)).toEqual([]);
+}
+
+/**
  * Records every focus move from now on. Chromium blurs a hidden or inert focus
  * only at its next rendering update, so a move to <body> shows up here as a
  * focusout with no related target even when the end state looks right.
@@ -1275,7 +1291,10 @@ for (const phone of PHONE_PROFILES) {
       const summary = info.locator('summary');
       await summary.tap();
       await expect(info).toHaveAttribute('open', '');
-      await expect(info.locator('h2')).toContainText('Modeled frequency');
+      // The full label is shown in the popover heading, not only present in its text.
+      const headingMetric = info.locator('h2 .atlas-legend__heading-metric');
+      await expect(headingMetric).toBeVisible();
+      await expect(headingMetric).toHaveText('Modeled frequency');
       await page.keyboard.press('Escape');
       await expect(info).not.toHaveAttribute('open', '');
       await expect(summary).toBeFocused();
@@ -1305,13 +1324,42 @@ for (const phone of PHONE_PROFILES) {
         await expect(page.locator('.atlas-data-credit a')).toHaveAccessibleName(
           'Data: genomeOS',
         );
-        await expect.poll(() => dockedStackInOrder(page)).toBe(true);
-        await expect
-          .poll(async () => (await canvasCoverage(page)).fraction)
-          .toBeGreaterThanOrEqual(0.65);
-        expect((await canvasCoverage(page)).centreMisses).toBe(0);
-        expect(await dockedOutsideCentre(page)).toEqual([]);
-        expect(await uncoveredCredits(page)).toEqual([]);
+        await expectGlobeReachableAtPeek(page);
+        // One block, one tone: the Cesium credits paint under the explorer's
+        // vignette (inside .atlas-scene's stacking context), so the data credit
+        // that continues them must too, or the block steps in tone at the seam.
+        expect(
+          await page.evaluate(() => {
+            const layer = (element: Element, pseudo?: string) =>
+              Number(getComputedStyle(element, pseudo).zIndex);
+            const explorer = document.querySelector('.atlas-explorer')!;
+            return (
+              layer(document.querySelector('.atlas-data-credit')!) <
+              layer(explorer, '::after')
+            );
+          }),
+        ).toBe(true);
+      });
+    }
+
+    for (const panel of ['inspector', 'More info'] as const) {
+      test(`the globe stays reachable with the ${panel} sheet at peek`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+        await waitForAtlasReady(page);
+        if (panel === 'inspector') {
+          await tapSelectNearCenter(page);
+        } else {
+          await setSheetState(controlsSheet(page), 'half');
+          await page.getByRole('button', { name: 'More info' }).click();
+        }
+        const rail = panelSheet(page);
+        await expect(rail).toHaveAttribute('data-sheet-state', 'half');
+        await setSheetState(rail, 'peek');
+        await expectGlobeReachableAtPeek(page);
       });
     }
 
@@ -1335,6 +1383,76 @@ for (const phone of PHONE_PROFILES) {
             .poll(() => topChromeClearance(page))
             .toEqual({ gap: true, intersections: [] });
         }
+      });
+    }
+  });
+}
+
+/*
+ * Under viewport-fit=cover a portrait iPhone reports its status bar and home
+ * indicator as top and bottom insets (Safari with the toolbar minimised, or a
+ * home-screen web app). The sheets pad their bottom by the inset, so peek
+ * grows; the docked strips must still clear the globe's centre (§A.1.3).
+ * Apple's portrait values; 360 × 780 is the narrow profile with the same inset.
+ */
+const PORTRAIT_INSET_PHONES = [
+  {
+    insets: { bottom: 34, left: 0, right: 0, top: 47 },
+    viewport: { height: 844, width: 390 },
+  },
+  {
+    insets: { bottom: 34, left: 0, right: 0, top: 44 },
+    viewport: { height: 812, width: 375 },
+  },
+  {
+    insets: { bottom: 34, left: 0, right: 0, top: 47 },
+    viewport: { height: 780, width: 360 },
+  },
+] as const;
+
+for (const phone of PORTRAIT_INSET_PHONES) {
+  const { height, width } = phone.viewport;
+  test.describe(`${width}x${height} phone with portrait safe-area insets`, () => {
+    test.use({
+      deviceScaleFactor: 3,
+      hasTouch: true,
+      isMobile: true,
+      viewport: phone.viewport,
+    });
+    test.beforeEach(({}, testInfo) =>
+      skipUnlessProject(testInfo, 'mobile-chromium'),
+    );
+
+    for (const sheet of ['controls', 'inspector', 'More info'] as const) {
+      test(`the globe stays reachable with the ${sheet} sheet at peek`, async ({
+        page,
+      }) => {
+        test.setTimeout(120_000);
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+          insets: phone.insets,
+        });
+        await page.emulateMedia({ reducedMotion: 'reduce' });
+        await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+        await waitForAtlasReady(page);
+        const controls = controlsSheet(page);
+        // The inset reaches the sheet: its bottom padding clears the home indicator.
+        await expect(controls).toHaveCSS(
+          'padding-bottom',
+          `${phone.insets.bottom}px`,
+        );
+        if (sheet === 'controls') {
+          await expect(controls).toHaveAttribute('data-sheet-state', 'peek');
+        } else {
+          if (sheet === 'inspector') {
+            await tapSelectNearCenter(page);
+          } else {
+            await setSheetState(controls, 'half');
+            await page.getByRole('button', { name: 'More info' }).click();
+          }
+          await setSheetState(panelSheet(page), 'peek');
+        }
+        await expectGlobeReachableAtPeek(page);
       });
     }
   });
@@ -1402,5 +1520,44 @@ for (const phone of LANDSCAPE_PHONES) {
       expect(header.backgroundLeft).toBe(0);
       expect(header.backgroundRight).toBe(header.clientWidth);
     });
+
+    // 844 and 932 px keep the desktop dock (Part A preamble), so only the
+    // phone layout's docked strips are held to the side insets.
+    if (width <= 832)
+      test('the legend strip and its info trigger stay inside the side safe areas', async ({
+        page,
+      }) => {
+        const cdp = await page.context().newCDPSession(page);
+        await cdp.send('Emulation.setSafeAreaInsetsOverride', {
+          insets: { bottom: 21, left: phone.inset, right: phone.inset, top: 0 },
+        });
+        await page.goto('/app/');
+        await waitForAtlasReady(page);
+        const strip = await page.evaluate(() => {
+          const box = (selector: string) => {
+            const rect = document
+              .querySelector(selector)!
+              .getBoundingClientRect();
+            return { left: rect.left, right: rect.right };
+          };
+          return {
+            clientWidth: document.documentElement.clientWidth,
+            credits: box('.atlas-scene .cesium-viewer-bottom'),
+            info: box('.atlas-legend__info summary'),
+            legend: box('.atlas-legend'),
+          };
+        });
+        const safeRight = strip.clientWidth - phone.inset;
+        expect.soft(strip.legend.left).toBeGreaterThanOrEqual(phone.inset);
+        expect.soft(strip.legend.right).toBeLessThanOrEqual(safeRight);
+        expect.soft(strip.info.right).toBeLessThanOrEqual(safeRight);
+        // Flush with the credit block docked under it.
+        expect(Math.abs(strip.legend.left - strip.credits.left)).toBeLessThan(
+          1,
+        );
+        expect(Math.abs(strip.legend.right - strip.credits.right)).toBeLessThan(
+          1,
+        );
+      });
   });
 }

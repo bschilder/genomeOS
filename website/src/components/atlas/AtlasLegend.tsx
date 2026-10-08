@@ -24,9 +24,11 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
-  // Registered from the summary's click (a discrete event), kept in sync by `onToggle`, reset
-  // by the close callback — Task 6 (A6)'s rule, so the popover is the innermost layer from the
-  // moment it opens (§A.1.9).
+  // The popover joins the stack from the summary's click, not from the async `toggle`
+  // event: click is a discrete React event, so the layer is registered before `open` is
+  // even set and an Escape pressed right after opening closes the popover, not the layer
+  // under it (§A.1.9: the popover is innermost). `onToggle` keeps the state in sync, and
+  // the close callback resets it because Chromium can merge two toggle events into one.
   useEscapeLayer(
     infoOpen,
     () => {

@@ -2040,14 +2040,6 @@ body:has(.atlas-explorer) .skip-link {
     display: none;
   }
 
-  .atlas-legend {
-    right: 0.65rem;
-    left: 0.65rem;
-    width: auto;
-    min-width: 0;
-    padding: 0.75rem;
-  }
-
   .atlas-legend__mode {
     display: none;
   }
@@ -2381,13 +2373,6 @@ body:has(.atlas-explorer) .skip-link {
     transform: none;
   }
 
-  .atlas-legend {
-    bottom: calc(var(--atlas-sheet-rest) + var(--atlas-credit-height, 3.5rem));
-    transition:
-      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
-      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
   .atlas-scene .cesium-viewer-bottom {
     right: max(0.65rem, env(safe-area-inset-right)) !important;
     bottom: calc(
@@ -2485,9 +2470,10 @@ body:has(.atlas-explorer) .skip-link {
     backdrop-filter: none;
   }
 
-  /* The inspector's body scrolls, not the inspector, so its peek row (kicker,
-   * h2 and Close) never scrolls out of the peek band (§A.1.6). */
+  /* The inspector's body scrolls, not the inspector, so its peek row (h2 and
+   * Close) never scrolls out of the peek band (§A.1.6). */
   .atlas-right-rail[data-sheet-state] > .atlas-inspector {
+    position: static;
     padding: 0 0.3rem;
     display: flex;
     flex-direction: column;
@@ -2500,11 +2486,8 @@ body:has(.atlas-explorer) .skip-link {
     flex: none;
   }
 
-  .atlas-right-rail[data-sheet-state]
-    > .atlas-inspector
-    > .atlas-inspector__close {
-    top: 0.1rem;
-    right: 0.3rem;
+  .atlas-right-rail[data-sheet-state] > .atlas-inspector > h2 {
+    margin-right: 0;
   }
 
   .atlas-right-rail[data-sheet-state] > .atlas-inspector > .atlas-panel-body {
@@ -2516,7 +2499,11 @@ body:has(.atlas-explorer) .skip-link {
     overscroll-behavior: contain;
   }
 
-  /* The More info peek row is one dense h2 and Close line, like the inspector's. */
+  /* The More info peek row is one dense h2 line, like the inspector's. */
+  .atlas-right-rail[data-sheet-state] .atlas-external-details {
+    position: static;
+  }
+
   .atlas-right-rail[data-sheet-state] .atlas-external-details__header {
     padding: 0 0.3rem 0.3rem;
     gap: 0.5rem;
@@ -2547,11 +2534,35 @@ body:has(.atlas-explorer) .skip-link {
     line-height: 1.2;
   }
 
+  /*
+   * A panel peeks at its handle row and one h2 line, as the controls sheet
+   * peeks at its summary, so the docked legend and credits above it stay
+   * clear of the globe's centre (§A.1.3). Close sits at the end of the handle
+   * row (the panels are static here, so the rail places it), the grabber stays
+   * centred between equal insets, and the kicker and the More info header's
+   * rule show from half up.
+   */
+  .atlas-right-rail[data-sheet-state] > .atlas-sheet__handle-row {
+    padding-inline: 2.6rem;
+  }
+
   .atlas-right-rail[data-sheet-state]
-    .atlas-external-details__header
-    .atlas-inspector__close {
-    position: static;
-    flex: none;
+    :is(.atlas-inspector, .atlas-external-details__header)
+    > .atlas-inspector__close {
+    position: absolute;
+    top: calc((44px - 2.3rem) / 2);
+    right: calc(max(0.65rem, env(safe-area-inset-right)) + 0.3rem);
+  }
+
+  .atlas-right-rail[data-sheet-state='peek']
+    :is(.atlas-inspector, .atlas-external-details__header)
+    .atlas-kicker {
+    display: none;
+  }
+
+  .atlas-right-rail[data-sheet-state='peek'] .atlas-external-details__header {
+    padding-bottom: 0;
+    border-bottom-width: 0;
   }
 
   /* A long population label stays one line at peek, so the band keeps to 18%. */
@@ -2585,12 +2596,21 @@ body:has(.atlas-explorer) .skip-link {
   }
 
   /*
-   * Legend strip (§A.1.7). Only its info disclosure takes touches, so the
-   * strip never shrinks the reachable globe (§A.1.3).
+   * Legend strip (§A.1.7), docked above the credit block and inside the side
+   * safe areas. Only its info disclosure takes touches, so the strip never
+   * shrinks the reachable globe (§A.1.3).
    */
   .atlas-legend {
+    right: max(0.65rem, env(safe-area-inset-right));
+    bottom: calc(var(--atlas-sheet-rest) + var(--atlas-credit-height, 3.5rem));
+    left: max(0.65rem, env(safe-area-inset-left));
+    width: auto;
+    min-width: 0;
     padding: 0.35rem 0.6rem;
     pointer-events: none;
+    transition:
+      bottom 220ms cubic-bezier(0.22, 1, 0.36, 1),
+      translate 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .atlas-legend__info {
@@ -2646,19 +2666,38 @@ body:has(.atlas-explorer) .skip-link {
   /*
    * One wrapping credit block (§A.1.7): Cesium's credits, then the data
    * credit, directly above the sheet. Only links and the logo take touches.
+   * The ion logo keeps its native size and the credit lines wrap beside it at
+   * the 10 px credit size, so the docked stack stays clear of the globe's
+   * centre over a peeking sheet and a bottom inset (§A.1.3).
    */
   .atlas-scene .cesium-viewer-bottom {
     padding: 0.15rem 0.45rem 0;
+    display: flow-root;
     border-radius: 0.45rem 0.45rem 0 0;
     background: rgb(3 15 33 / 88%);
+    font-size: 10px;
+    line-height: 16px;
     pointer-events: none;
+  }
+
+  .atlas-scene .cesium-viewer-bottom .cesium-credit-logoContainer {
+    margin-right: 0.3rem;
+    float: left;
+  }
+
+  .atlas-scene .cesium-viewer-bottom .cesium-credit-logoContainer img {
+    display: block;
   }
 
   .atlas-scene .cesium-viewer-bottom a {
     pointer-events: auto;
   }
 
+  /* Under the explorer vignette, like the Cesium credits it continues, so the
+   * block has one tone across the seam (.atlas-scene is its own stacking
+   * context below the vignette). */
   .atlas-data-credit {
+    z-index: 0;
     right: max(0.65rem, env(safe-area-inset-right));
     bottom: var(--atlas-sheet-rest);
     left: max(0.65rem, env(safe-area-inset-left));

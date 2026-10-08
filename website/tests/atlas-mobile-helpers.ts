@@ -100,7 +100,10 @@ export async function sheetGeometry(
   }, selector);
 }
 
-/** True when data credit, Cesium credits and legend stack upward from the active sheet's top edge. */
+/**
+ * True when data credit, Cesium credits and legend are all shown and stack
+ * upward from the active sheet's top edge; a collapsed strip is a failure.
+ */
 export async function dockedStackInOrder(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const visible = (selector: string) => {
@@ -113,13 +116,15 @@ export async function dockedStackInOrder(page: Page): Promise<boolean> {
       visible('aside.atlas-controls:not([hidden])') ??
       visible('.atlas-right-rail[data-sheet-state]');
     if (!sheet) return false;
-    const stack = [
+    const selectors = [
       '.atlas-data-credit',
       '.atlas-scene .cesium-viewer-bottom',
       '.atlas-legend',
-    ]
+    ];
+    const stack = selectors
       .map(visible)
       .filter((rect): rect is DOMRect => rect !== null);
+    if (stack.length < selectors.length) return false;
     let edge = sheet.top;
     for (const rect of stack) {
       if (rect.bottom > edge + 1) return false;
@@ -307,16 +312,35 @@ export async function dockedOutsideCentre(page: Page): Promise<string[]> {
   });
 }
 
-/** Credit logos and links that are off-screen or covered by another element. */
+/**
+ * Credit logos and links that are missing, off-screen or covered by another
+ * element. The ion logo, a map credit link and the data credit link must be
+ * shown (§A.1.7), so a collapsed credit block fails instead of leaving
+ * nothing to check.
+ */
 export async function uncoveredCredits(page: Page): Promise<string[]> {
   return page.evaluate(() => {
+    const shown = (element: Element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    };
+    const failures: string[] = [];
+    for (const [label, selector] of [
+      ['Cesium ion logo', '.atlas-scene .cesium-credit-logoContainer img'],
+      [
+        'map credit link',
+        '.atlas-scene .cesium-credit-textContainer a, .atlas-scene .cesium-credit-expand-link',
+      ],
+      ['data credit link', '.atlas-data-credit a'],
+    ] as const) {
+      if (!Array.from(document.querySelectorAll(selector)).some(shown))
+        failures.push(`${label} not shown`);
+    }
     const targets = [
       ...document.querySelectorAll<HTMLElement>(
         '.atlas-scene .cesium-credit-logoContainer img, .atlas-scene .cesium-viewer-bottom a, .atlas-data-credit a',
       ),
     ];
-    if (targets.length === 0) return ['no credits rendered'];
-    const failures: string[] = [];
     for (const target of targets) {
       const rect = target.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;

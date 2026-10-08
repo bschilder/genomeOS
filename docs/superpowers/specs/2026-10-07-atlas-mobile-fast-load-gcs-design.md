@@ -126,8 +126,10 @@ phones under 34rem tall use the same sheets with `peek` reduced to the handle ro
      `::details-content` transition. "Scientific layers" stays open by default inside the sheet.
 6. **The panel sheet (inspector / More info).** `.atlas-right-rail` is restyled in place as a second
    sheet (the `[data-atlas-external-slot]` portal target is never moved or remounted), with its own
-   handle `<button>` and the same snap/drag rules. Its peek row is the panel's `<h2>` and Close
-   button; it opens at `half`. The inspector and the external panel are mutually exclusive on mobile:
+   handle `<button>` and the same snap/drag rules. Its peek row is the panel's `<h2>` on one line,
+   with the Close button at the end of the handle row above it (the panel's kicker shows from
+   `half` up), so a panel peeks about as low as the controls sheet and A.1.3 holds with it at
+   `peek`; it opens at `half`. The inspector and the external panel are mutually exclusive on mobile:
    whichever opened most recently is shown and opening one closes the other (closing the inspector
    clears the scene selection; closing the external panel aborts its request). While either is
    open the controls sheet has `inert` and `hidden`. Focus: opening from "More info" moves focus to
