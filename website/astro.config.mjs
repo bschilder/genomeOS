@@ -3,6 +3,7 @@ import sitemap from '@astrojs/sitemap';
 import starlight from '@astrojs/starlight';
 import { defineConfig } from 'astro/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import atlasScenePreload from './integrations/atlas-scene-preload.mjs';
 
 const site = process.env.SITE_URL ?? 'https://genome-os.org';
 const base = process.env.BASE_PATH ?? '/';
@@ -18,6 +19,7 @@ export default defineConfig({
   trailingSlash: 'always',
   integrations: [
     react(),
+    atlasScenePreload(),
     starlight({
       title: 'genomeOS',
       description: 'An open atlas of human genetic variation across geography.',

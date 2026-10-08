@@ -98,4 +98,19 @@ describe('Atlas client bundle', () => {
       staticGraph(islandChunk()).some((file) => code(file).includes(worker!)),
     ).toBe(true);
   });
+
+  it('modulepreloads the lazy scene chunk and its static imports from the /app/ head', () => {
+    const html = appHtml();
+    const head = html.slice(0, html.indexOf('</head>'));
+    const hrefs = [
+      ...head.matchAll(/<link rel="modulepreload" href="([^"]+)">/g),
+    ].map((match) => match[1]);
+    const scene = sceneChunk();
+    expect(hrefs[0]).toBe(`/_astro/${scene}`);
+    expect(new Set(hrefs)).toEqual(
+      new Set(staticGraph(scene).map((file) => `/_astro/${file}`)),
+    );
+    for (const href of hrefs)
+      expect(existsSync(path.join(dist, href))).toBe(true);
+  });
 });
