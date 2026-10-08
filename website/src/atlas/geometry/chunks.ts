@@ -23,7 +23,13 @@ import {
 } from './wgs84';
 
 export const CHUNK_MIN_CELLS = 2048;
-/** Merge cap on the group-bound chunk radius (centre to farthest cell centre). */
+/** Merge cap on the group-bound radius (spec §B.6.5 "Chunks"): the largest
+ * distance from the merged groups' cell-weighted centroid to a member group's
+ * centroid plus that group's own radius, over ground-level cell centres. By the
+ * triangle inequality this is an upper bound on the distance from that centroid
+ * to the farthest cell centre, so a merge can be refused although every cell
+ * centre lies within the cap.
+ */
 export const CHUNK_MAX_RADIUS_METRES = 1_800_000;
 
 export interface PlannedChunk {
@@ -82,6 +88,7 @@ function makeGroup(
   return { base, centroid, east, radius, rows, west };
 }
 
+/** The group-bound radius that CHUNK_MAX_RADIUS_METRES caps (see there). */
 function boundRadius(members: readonly Group[]): number {
   let count = 0;
   let x = 0;
