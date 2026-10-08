@@ -72,13 +72,9 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
       else placeLegendPopover(element);
     };
     place();
+    // Not the popover itself: placing it resizes it, which would loop.
     const resize = new ResizeObserver(place);
-    for (const node of [
-      explorer,
-      legend,
-      element.querySelector(':scope > div'),
-    ])
-      if (node) resize.observe(node);
+    for (const node of [explorer, legend]) if (node) resize.observe(node);
     legend?.addEventListener('transitionend', place);
     return () => {
       resize.disconnect();

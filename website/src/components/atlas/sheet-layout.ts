@@ -5,6 +5,8 @@
  * node.
  */
 
+import { TOP_CHROME_GAP_PX } from './sheet-geometry';
+
 const TOP_CHROME =
   '.atlas-warning-banner, .atlas-top-slot, .atlas-status-stack, .atlas-view-notice';
 const LEGEND = '.atlas-legend';
@@ -66,9 +68,9 @@ export function placeLegendPopover(details: HTMLElement): void {
   const gap =
     0.7 *
     Number.parseFloat(getComputedStyle(document.documentElement).fontSize);
-  const top = bounds.top + topChromeBottom(explorer) + PEEK_GAP_PX;
+  const top = bounds.top + topChromeBottom(explorer) + TOP_CHROME_GAP_PX;
   const above = info.top - gap - top;
-  const below = bounds.bottom - PEEK_GAP_PX - (info.bottom + gap);
+  const below = bounds.bottom - TOP_CHROME_GAP_PX - (info.bottom + gap);
   const placement =
     above >= popover.scrollHeight || above >= below ? 'above' : 'below';
   details.dataset.placement = placement;
