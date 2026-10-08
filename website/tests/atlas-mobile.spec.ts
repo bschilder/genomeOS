@@ -1002,6 +1002,11 @@ for (const phone of PHONE_PROFILES) {
       await tapSelectNearCenter(page);
       const inspector = page.locator('.atlas-inspector');
       await expect(inspector).toBeVisible();
+      // Opening from a canvas tap leaves focus where it is (§A.1.6).
+      await expect(page.locator('.atlas-scene')).toBeFocused();
+      await expect(
+        rail.getByRole('button', { name: 'Close inspector' }),
+      ).not.toBeFocused();
       await expect(rail).toHaveAttribute('data-sheet-state', 'half');
       await expect(rail.locator('.atlas-sheet__handle')).toHaveAccessibleName(
         'Selection details, half height',
@@ -1029,6 +1034,18 @@ for (const phone of PHONE_PROFILES) {
           'Colombia Sierra Nevada de Santa Marta Arsario pop 2';
       });
       await expectPanelPeekBand(page, inspector);
+      await expect
+        .poll(() =>
+          inspector.locator('h2').evaluate((heading) => {
+            const style = getComputedStyle(heading);
+            return (
+              style.whiteSpace === 'nowrap' &&
+              heading.getBoundingClientRect().height <=
+                1.5 * Number.parseFloat(style.lineHeight)
+            );
+          }),
+        )
+        .toBe(true);
       await setSheetState(rail, 'half');
       await expect(
         page.getByRole('heading', {
@@ -1047,21 +1064,26 @@ for (const phone of PHONE_PROFILES) {
       await expect(catalog).toHaveCount(0);
       await expect(inspector).toBeVisible();
 
+      // Focus outside the closing panel (the trigger the catalog gave it back
+      // to) stays put.
       await page.keyboard.press('Escape');
       await expect(inspector).toHaveCount(0);
       await expect(controls).toBeVisible();
       await expect(controls).not.toHaveAttribute('inert');
       await expect(controls).toHaveAttribute('data-sheet-state', 'peek');
-      expect(
-        await page.evaluate(
-          () =>
-            document.activeElement !== null &&
-            document.activeElement !== document.body,
-        ),
-      ).toBe(true);
+      await expect(
+        page.getByRole('button', { name: /Select dataset\. Current dataset:/ }),
+      ).toBeFocused();
       await expect(
         page.locator('[data-atlas-external-slot][data-probe="stable"]'),
       ).toHaveCount(1);
+
+      // Closing from the panel's own Close button gives focus to the globe.
+      await tapSelectNearCenter(page);
+      await page.getByRole('button', { name: 'Close inspector' }).focus();
+      await page.keyboard.press('Enter');
+      await expect(inspector).toHaveCount(0);
+      await expect(page.locator('.atlas-scene')).toBeFocused();
     });
 
     test('More info opens the panel sheet on its Close button and gives focus back', async ({
@@ -1113,30 +1135,21 @@ for (const phone of PHONE_PROFILES) {
       await expect(page.locator('.atlas-inspector')).toBeVisible();
       await expect(external).toHaveCount(0);
       await expect(rail).toHaveAttribute('data-sheet-state', 'half');
-      expect(
-        await page.evaluate(
-          () =>
-            document.activeElement !== null &&
-            document.activeElement !== document.body,
-        ),
-      ).toBe(true);
+      await expect(page.locator('.atlas-scene')).toBeFocused();
 
       // Escape on the inspector restores the controls sheet's *prior* state (§A.3).
       // The controls were left at 'half' before More info hid them, so a reset to
       // peek is distinguishable here (the first test starts at peek, where it is not).
+      // Escape from the panel's own handle closes the inspector (not the sheet)
+      // and gives focus to the globe.
+      await rail.locator('.atlas-sheet__handle').focus();
       await page.keyboard.press('Escape');
       await expect(page.locator('.atlas-inspector')).toHaveCount(0);
       await expect(controls).toBeVisible();
       await expect(controls).not.toHaveAttribute('inert');
       await expect(controls).toHaveAttribute('data-sheet-state', 'half');
       await expect(controls.locator('[data-sheet-body][inert]')).toHaveCount(0);
-      expect(
-        await page.evaluate(
-          () =>
-            document.activeElement !== null &&
-            document.activeElement !== document.body,
-        ),
-      ).toBe(true);
+      await expect(page.locator('.atlas-scene')).toBeFocused();
     });
 
     test('crossing the 52rem switch point with a panel open leaves the controls usable', async ({
