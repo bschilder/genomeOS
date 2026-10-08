@@ -38,15 +38,50 @@ function fakeTarget() {
   return target;
 }
 
-afterEach(() => vi.useRealTimers());
+/** A `document` whose visibility the test flips, firing `visibilitychange` like a browser. */
+function fakeDocument(initial: 'hidden' | 'visible') {
+  const listeners = new Set<() => void>();
+  const page = {
+    visibilityState: initial,
+    addEventListener(type: string, listener: () => void) {
+      if (type === 'visibilitychange') listeners.add(listener);
+    },
+    removeEventListener(type: string, listener: () => void) {
+      if (type === 'visibilitychange') listeners.delete(listener);
+    },
+  };
+  vi.stubGlobal('document', page);
+  return {
+    get listeners() {
+      return listeners.size;
+    },
+    setVisibility(state: 'hidden' | 'visible') {
+      page.visibilityState = state;
+      for (const listener of [...listeners]) listener();
+    },
+  };
+}
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('chunk reveal budget', () => {
   it('sizes the next batch from the measured chunk work', () => {
     expect(nextBatchCost(8, 4, 1)).toBe(2);
-    expect(nextBatchCost(50, 20, 2)).toBe(5);
+    expect(nextBatchCost(50, 40, 4)).toBe(5);
     expect(nextBatchCost(8, 100, 1)).toBe(1);
-    expect(nextBatchCost(8, 0, 1)).toBe(MAX_BATCH_COST);
-    expect(nextBatchCost(8, -3, 2)).toBe(MAX_BATCH_COST);
+  });
+
+  it('at most doubles the batch, however cheap one frame measured', () => {
+    // Work at or barely above a single baseline sample is noise, not proof
+    // that chunks are free, so it never jumps the batch to MAX_BATCH_COST.
+    expect(nextBatchCost(8, 0, 1)).toBe(2);
+    expect(nextBatchCost(8, -3, 2)).toBe(4);
+    expect(nextBatchCost(8, 0.01, 1)).toBe(2);
+    expect(nextBatchCost(50, 20, 2)).toBe(4);
+    expect(nextBatchCost(8, 0, 40)).toBe(MAX_BATCH_COST);
   });
 
   it('gives touch devices the 4x-CPU budget', () => {
@@ -85,6 +120,73 @@ describe('scheduleChunks', () => {
     });
     expect(loop.postRender.numberOfListeners).toBe(0);
     expect(loop.preUpdate.numberOfListeners).toBe(0);
+  });
+
+  it('grows batches gradually after an expensive baseline frame', () => {
+    const clock = { now: 0 };
+    const loop = fakeRenderLoop(clock);
+    const target = fakeTarget();
+    void scheduleChunks(
+      loop as never,
+      target,
+      Array.from({ length: 12 }, (_, chunk) => message(chunk)),
+      { frameBudgetMs: 8, now: () => clock.now, order: [] },
+    );
+
+    // The baseline frame also paid for start-up work (30 ms); after it each
+    // frame costs 2 ms plus 3 ms per chunk added.
+    loop.frame(30);
+    expect(target.added).toEqual([0]);
+    loop.frame(5);
+    expect(target.added).toEqual([0, 1, 2]);
+    loop.frame(8);
+    expect(target.added).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    // Measured against the cheapest frame seen (5 ms), not the 30 ms sample.
+    loop.frame(14);
+    expect(target.added).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it('rejects, and leaves the render loop running, when the group refuses a chunk', async () => {
+    const clock = { now: 0 };
+    const loop = fakeRenderLoop(clock);
+    const target = fakeTarget();
+    const addChunk = target.addChunk;
+    target.addChunk = (surface: ChunkMessage['surface']) => {
+      if (surface.chunk === 1)
+        throw new Error('support chunk 2 does not match surface chunk 1');
+      addChunk(surface);
+    };
+    const outcome = scheduleChunks(
+      loop as never,
+      target,
+      [message(0), message(1)],
+      { frameBudgetMs: 8, now: () => clock.now, order: [] },
+    );
+
+    loop.frame(1);
+    expect(() => loop.frame(1)).not.toThrow();
+    await expect(outcome).rejects.toThrow(
+      'support chunk 2 does not match surface chunk 1',
+    );
+    expect(loop.postRender.numberOfListeners).toBe(0);
+    expect(loop.preUpdate.numberOfListeners).toBe(0);
+  });
+
+  it('rejects, and leaves the render loop running, when a hook throws', async () => {
+    const clock = { now: 0 };
+    const loop = fakeRenderLoop(clock);
+    const outcome = scheduleChunks(loop as never, fakeTarget(), [message(0)], {
+      frameBudgetMs: 8,
+      now: () => clock.now,
+      onBeforeAdd: () => {
+        throw new Error('observation anchors are missing');
+      },
+      order: [],
+    });
+
+    expect(() => loop.frame(1)).not.toThrow();
+    await expect(outcome).rejects.toThrow('observation anchors are missing');
+    expect(loop.postRender.numberOfListeners).toBe(0);
   });
 
   it('waits for the previous batch to be ready before adding more', () => {
@@ -251,6 +353,47 @@ describe('scheduleChunks', () => {
 
   it('does not fail a reveal while the tab is hidden', async () => {
     vi.useFakeTimers();
+    const page = fakeDocument('visible');
+    const clock = { now: 0 };
+    const loop = fakeRenderLoop(clock);
+    const target = fakeTarget();
+    const queue = createMessageQueue<ChunkMessage>();
+    let settled = false;
+    const outcome = scheduleChunks(loop as never, target, queue, {
+      frameBudgetMs: 8,
+      now: () => clock.now,
+      order: [],
+      stallTimeoutMs: 100,
+    }).catch((error: Error) => error);
+    void outcome.then(() => {
+      settled = true;
+    });
+
+    loop.frame(1);
+    await vi.advanceTimersByTimeAsync(60);
+    page.setVisibility('hidden');
+    // No stall timer runs while hidden, so none frozen with the page fires late on return.
+    expect(vi.getTimerCount()).toBe(0);
+    // The worker keeps posting while the phone is in another app.
+    queue.push(message(0));
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(target.added).toEqual([0]);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(settled).toBe(false);
+
+    // RF1: coming back starts a whole stall window, not what was left of one.
+    page.setVisibility('visible');
+    await vi.advanceTimersByTimeAsync(99);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(outcome).resolves.toMatchObject({
+      message: 'Cesium geometry build timed out',
+    });
+    expect(page.listeners).toBe(0);
+  });
+
+  it('waits out a hidden tab that sends no visibility events', async () => {
+    vi.useFakeTimers();
     const clock = { now: 0 };
     const loop = fakeRenderLoop(clock);
     let hidden = true;
@@ -274,11 +417,27 @@ describe('scheduleChunks', () => {
     loop.frame(1);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(settled).toBe(false);
+    // Without visibilitychange, the return is seen when the timer next fires.
     hidden = false;
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(200);
     await expect(outcome).resolves.toMatchObject({
       message: 'Cesium geometry build timed out',
     });
+  });
+
+  it('reveals where document has no event target', async () => {
+    vi.stubGlobal('document', {});
+    const clock = { now: 0 };
+    const loop = fakeRenderLoop(clock);
+    const outcome = scheduleChunks(loop as never, fakeTarget(), [message(0)], {
+      frameBudgetMs: 8,
+      now: () => clock.now,
+      order: [],
+    });
+
+    loop.frame(1);
+    loop.frame(1);
+    await expect(outcome).resolves.toMatchObject({ frames: 1 });
   });
 
   it('fails a reveal that makes no progress', async () => {

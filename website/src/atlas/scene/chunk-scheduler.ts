@@ -5,6 +5,13 @@
  * from `preUpdate` to `postRender`, and sizes the next batch so chunk work
  * stays within the frame budget over a baseline frame. At least one chunk is
  * added per frame, and the next batch waits until the previous one is ready.
+ *
+ * The baseline is the cheapest frame seen so far, and a batch at most doubles
+ * per frame, so one noisy sample cannot jump it to MAX_BATCH_COST. Everything
+ * the scheduler runs inside Cesium's render events is guarded: a failed add or
+ * hook rejects the reveal instead of stopping Cesium's render loop. The stall
+ * timeout counts visible time only (RF1): hiding the tab stops it, and showing
+ * the tab again starts a whole window.
  */
 
 import type { Scene } from 'cesium';
@@ -16,6 +23,8 @@ export const DESKTOP_FRAME_BUDGET_MS = 8;
 export const COARSE_POINTER_FRAME_BUDGET_MS = 50;
 export const SEAM_CHUNK_COST = 4;
 export const MAX_BATCH_COST = 64;
+/** A batch grows at most this many times its measured cost per frame. */
+const MAX_BATCH_GROWTH = 2;
 const CHUNK_STALL_TIMEOUT_MS = 30_000;
 
 export interface RevealStats {
@@ -48,7 +57,10 @@ export function measureChunkFrame(
 export interface ChunkScheduleOptions {
   frameBudgetMs: number;
   order: number[];
-  /** A hidden tab renders no frames; the stall timeout waits for it to be shown again. */
+  /** A hidden tab renders no frames; the stall timeout waits for it to be shown again.
+   * Defaults to `document.visibilityState`; changes are observed through
+   * `document`'s `visibilitychange` when it has one, and otherwise when the
+   * timer fires. */
   isHidden?: () => boolean;
   /** Defaults to `measureChunkFrame`; times are those of `now`. */
   measureFrame?: (start: number, end: number, detail: ChunkFrameDetail) => void;
@@ -126,12 +138,12 @@ export function nextBatchCost(
   addedCost: number,
 ): number {
   if (addedCost <= 0) return 1;
-  const perUnitMs = Math.max(0, workMs) / addedCost;
-  if (perUnitMs === 0) return MAX_BATCH_COST;
-  return Math.min(
-    MAX_BATCH_COST,
-    Math.max(1, Math.floor(frameBudgetMs / perUnitMs)),
-  );
+  // Work at or near zero says only that the batch was cheap, not how cheap:
+  // grow by at most MAX_BATCH_GROWTH rather than to MAX_BATCH_COST.
+  const ceiling = Math.min(MAX_BATCH_COST, addedCost * MAX_BATCH_GROWTH);
+  if (workMs <= 0) return ceiling;
+  const perUnitMs = workMs / addedCost;
+  return Math.min(ceiling, Math.max(1, Math.floor(frameBudgetMs / perUnitMs)));
 }
 
 function chunkCost(message: ChunkMessage): number {
@@ -165,27 +177,51 @@ export function scheduleChunks(
     let streamDone = false;
     let phase: 'baseline' | 'idle' | 'rendering' = 'baseline';
     let frameStartedAt: number | null = null;
-    let baselineMs = 0;
+    let baselineMs = Number.POSITIVE_INFINITY;
     let batchCost = 1;
     let inFlightCost = 0;
     let firstAddAt: number | null = null;
     let unmeasured: ChunkFrameDetail | null = null;
     let stallTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const removePreUpdate = scene.preUpdate.addEventListener(() => {
-      frameStartedAt = now();
-    });
-    const removePostRender = scene.postRender.addEventListener(() =>
-      onRendered(),
+    // Cesium raises preUpdate and postRender outside its own try/catch, and a
+    // throw there stops its render loop, so every step taken from those events
+    // (or from the stall timer) settles the reveal instead of throwing.
+    const guarded = (step: () => void) => () => {
+      try {
+        step();
+      } catch (error) {
+        settle(error);
+      }
+    };
+    const removePreUpdate = scene.preUpdate.addEventListener(
+      guarded(() => {
+        frameStartedAt = now();
+      }),
+    );
+    const removePostRender = scene.postRender.addEventListener(
+      guarded(onRendered),
     );
     const onAbort = () =>
       settle(new DOMException('Chunk reveal was superseded', 'AbortError'));
+    const visibilityEvents =
+      typeof document !== 'undefined' &&
+      typeof document.addEventListener === 'function'
+        ? document
+        : null;
+    const onVisibilityChange = guarded(() => {
+      if (!settled) armStallTimer();
+    });
     function settle(error?: unknown): void {
       if (settled) return;
       settled = true;
       removePreUpdate();
       removePostRender();
       clearTimeout(stallTimer);
+      visibilityEvents?.removeEventListener(
+        'visibilitychange',
+        onVisibilityChange,
+      );
       options.signal?.removeEventListener('abort', onAbort);
       if (error === undefined) resolve(stats);
       else reject(error);
@@ -195,16 +231,25 @@ export function scheduleChunks(
       (() =>
         typeof document !== 'undefined' &&
         document.visibilityState === 'hidden');
+    // A phone that switches apps mid-reveal must not come back to an error
+    // (RF1): the stall window counts visible time only. While the tab is
+    // hidden no timer runs (so none frozen with the page fires late on
+    // return), and visibilitychange to visible starts a whole window. Without
+    // that event, a timer that fires while hidden starts a new window instead.
     const armStallTimer = () => {
       clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => {
-        // A phone that switches apps mid-reveal must not come back to an error.
-        if (isHidden()) {
-          armStallTimer();
-          return;
-        }
-        settle(new Error('Cesium geometry build timed out'));
-      }, options.stallTimeoutMs ?? CHUNK_STALL_TIMEOUT_MS);
+      stallTimer = undefined;
+      if (visibilityEvents && isHidden()) return;
+      stallTimer = setTimeout(
+        guarded(() => {
+          if (isHidden()) {
+            armStallTimer();
+            return;
+          }
+          settle(new Error('Cesium geometry build timed out'));
+        }),
+        options.stallTimeoutMs ?? CHUNK_STALL_TIMEOUT_MS,
+      );
     };
     const allReady = () => group.readyCount() >= group.totalCount();
     const addNextBatch = (): boolean => {
@@ -249,8 +294,11 @@ export function scheduleChunks(
       if (settled) return;
       const duration =
         frameStartedAt === null ? 0 : Math.max(0, now() - frameStartedAt);
+      // Every frame costs at least the baseline, so the cheapest frame seen is
+      // the best estimate of it; one inflated first frame does not stick.
+      const workMs = duration - baselineMs;
+      baselineMs = Math.min(baselineMs, duration);
       if (phase === 'baseline') {
-        baselineMs = duration;
         phase = 'idle';
         advance();
         return;
@@ -270,15 +318,12 @@ export function scheduleChunks(
         scene.requestRender();
         return;
       }
-      batchCost = nextBatchCost(
-        options.frameBudgetMs,
-        duration - baselineMs,
-        inFlightCost,
-      );
+      batchCost = nextBatchCost(options.frameBudgetMs, workMs, inFlightCost);
       phase = 'idle';
       advance();
     }
 
+    visibilityEvents?.addEventListener('visibilitychange', onVisibilityChange);
     options.signal?.addEventListener('abort', onAbort, { once: true });
     if (options.signal?.aborted) {
       onAbort();
