@@ -36,6 +36,18 @@ async function waitForServer(url) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+/** Fail unless the delayed tier's request reached its hold; it may start after the status. */
+async function waitForHeldRequest(delay, label) {
+  const deadline = Date.now() + 5_000;
+  while (delay.hits() === 0) {
+    if (Date.now() >= deadline)
+      throw new Error(
+        `The ${label} request never reached delayArtifactTier's hold, so the capture would not show its loading state.`,
+      );
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+}
+
 const server = spawn(
   process.execPath,
   [
@@ -67,15 +79,22 @@ try {
   await page.locator('[data-atlas-ready="true"]').waitFor({
     timeout: 60_000,
   });
-  await delayArtifactTier(page, 'g6pd-deficiency', 'render', 5_000, {
-    appUrl: `${baseUrl}/app/`,
-  });
+  const renderDelay = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    5_000,
+    { appUrl: `${baseUrl}/app/` },
+  );
   await page
     .getByRole('button', { name: /Select dataset\. Current dataset:/ })
     .click();
   await page.locator('[role="option"][data-map-id="g6pd-deficiency"]').click();
   const status = page.locator('[data-atlas-status-slot]');
   await status.getByText(/Loading G6PD deficiency/).waitFor();
+  // The status alone does not prove the hold matched: with a stale tier key the render tier
+  // slips through, and the figure freezes whichever phase happens to be on screen.
+  await waitForHeldRequest(renderDelay, 'G6PD render tier');
   await page.waitForTimeout(300);
   await page.screenshot({ path: outputPath });
   process.stdout.write(`Captured 1600×1000: ${outputPath}\n`);

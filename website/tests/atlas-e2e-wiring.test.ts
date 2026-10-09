@@ -73,8 +73,13 @@ describe('Atlas e2e build wiring', () => {
     expect(script).toContain(
       "import { delayArtifactTier } from '../tests/atlas-browser-fixture.ts';",
     );
+    expect(script).toMatch(
+      /const renderDelay = await delayArtifactTier\(\s*page,\s*'g6pd-deficiency',\s*'render',\s*5_000,/,
+    );
+    // The loading status alone cannot tell a held request from one that slipped past the hold.
+    expect(script).toContain('while (delay.hits() === 0) {');
     expect(script).toContain(
-      "await delayArtifactTier(page, 'g6pd-deficiency', 'render', 5_000, {",
+      "await waitForHeldRequest(renderDelay, 'G6PD render tier');",
     );
     expect(script).not.toMatch(/\.surface\.json/);
   });
