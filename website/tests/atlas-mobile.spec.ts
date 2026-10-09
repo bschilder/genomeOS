@@ -200,7 +200,8 @@ test.afterEach(async ({ page }) => {
 });
 
 for (const phone of PHONE_PROFILES) {
-  test.describe(`${phone.name} phone`, () => {
+  const title = `${phone.name} phone`;
+  test.describe(title, { tag: '@mobile-chromium' }, () => {
     test.use(phone.use);
     test.beforeEach(({}, testInfo) =>
       skipUnlessProject(testInfo, 'mobile-chromium'),
@@ -1869,7 +1870,8 @@ for (const viewport of [
   { height: 640, width: 320 },
   { height: 882, width: 344 },
 ] as const) {
-  test.describe(`${viewport.width}x${viewport.height} narrow phone`, () => {
+  const title = `${viewport.width}x${viewport.height} narrow phone`;
+  test.describe(title, { tag: '@mobile-chromium' }, () => {
     test.use({
       deviceScaleFactor: 3,
       hasTouch: true,
@@ -1918,7 +1920,8 @@ for (const profile of [
     use: { viewport: { height: 844, width: 390 } },
   },
 ] as const) {
-  test.describe(`${profile.name} accessibility`, () => {
+  const title = `${profile.name} accessibility`;
+  test.describe(title, { tag: `@${profile.project}` }, () => {
     test.use(profile.use);
     test.beforeEach(({}, testInfo) =>
       skipUnlessProject(testInfo, profile.project),
@@ -1994,7 +1997,8 @@ const PORTRAIT_INSET_PHONES = [
 
 for (const phone of PORTRAIT_INSET_PHONES) {
   const { height, width } = phone.viewport;
-  test.describe(`${width}x${height} phone with portrait safe-area insets`, () => {
+  const title = `${width}x${height} phone with portrait safe-area insets`;
+  test.describe(title, { tag: '@mobile-chromium' }, () => {
     test.use({
       deviceScaleFactor: 3,
       hasTouch: true,
@@ -2054,7 +2058,8 @@ const LANDSCAPE_PHONES = [
 
 for (const phone of LANDSCAPE_PHONES) {
   const { height, width } = phone.viewport;
-  test.describe(`${width}x${height} landscape phone`, () => {
+  const title = `${width}x${height} landscape phone`;
+  test.describe(title, { tag: '@mobile-chromium' }, () => {
     test.use({
       deviceScaleFactor: 3,
       hasTouch: true,
@@ -2222,7 +2227,8 @@ const SHORT_LANDSCAPE_PHONES = [
 
 for (const phone of SHORT_LANDSCAPE_PHONES) {
   const { height, width } = phone.viewport;
-  test.describe(`${width}x${height} short landscape phone`, () => {
+  const title = `${width}x${height} short landscape phone`;
+  test.describe(title, { tag: '@mobile-chromium' }, () => {
     test.use({
       deviceScaleFactor: 3,
       hasTouch: true,
@@ -2343,7 +2349,8 @@ for (const viewport of [
   { height: 256, width: 320 },
   { height: 375, width: 812 },
 ] as const) {
-  test.describe(`${viewport.width}x${viewport.height} zoomed desktop`, () => {
+  const title = `${viewport.width}x${viewport.height} zoomed desktop`;
+  test.describe(title, { tag: '@desktop-chromium' }, () => {
     test.use({ viewport });
     test.beforeEach(({}, testInfo) =>
       skipUnlessProject(testInfo, 'desktop-chromium'),

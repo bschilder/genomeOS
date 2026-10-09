@@ -343,11 +343,19 @@ is authoritative. Astro's `site` setting controls canonical and sitemap URLs.
 2. Install pinned Node 24.
 3. Run `npm ci` in `website/`.
 4. Run formatting/lint, `astro check`, unit/content tests, custom-domain build, fallback-subpath
-   build, internal-link checks, and browser accessibility tests.
+   build, and internal-link checks.
+
+**Browser test job (`e2e`), every PR and main push**
+
+Four runners start alongside validate (#411). Each prepares `website/` exactly as validate does
+(`website/tests/pages-workflow.test.ts` pins this), installs Chromium, builds the site, and runs one
+quarter of the Playwright browser and accessibility tests with `--fully-parallel --shard=N/4` on one
+worker. The shard count lives only in the job matrix (its `shard` list and `total`, which the same
+test keeps in step). A failing shard uploads its Playwright results.
 
 **Build and deploy jobs, main only**
 
-1. Build the already validated static site for `https://genome-os.org/`.
+1. Once validate and every e2e shard pass, build the static site for `https://genome-os.org/`.
 2. Upload the Pages artifact.
 3. Deploy through the `github-pages` environment using `pages:write` and `id-token:write` only in
    the deployment jobs.

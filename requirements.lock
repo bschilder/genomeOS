@@ -54,6 +54,8 @@ cycler==0.12.1
     # via matplotlib
 duckdb==1.5.5
     # via genomeos (pyproject.toml)
+execnet==2.1.2
+    # via pytest-xdist
 fastapi==0.141.1
     # via genomeos (pyproject.toml)
 filelock==4.0.1
@@ -176,7 +178,10 @@ pytest==8.4.2
     # via
     #   genomeos (pyproject.toml)
     #   pytest-cov
+    #   pytest-xdist
 pytest-cov==7.1.0
+    # via genomeos (pyproject.toml)
+pytest-xdist==3.8.0
     # via genomeos (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via

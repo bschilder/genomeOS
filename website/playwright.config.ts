@@ -1,27 +1,50 @@
 import { defineConfig, devices } from '@playwright/test';
 
+import {
+  playwrightPort,
+  playwrightWorkers,
+} from './tests/setup/playwright-env';
+
 delete process.env.NO_COLOR;
 process.env.NO_UPDATE_NOTIFIER = '1';
+
+const port = playwrightPort();
+const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './tests',
   testMatch: ['site.spec.ts', 'atlas-mobile.spec.ts'],
   fullyParallel: false,
-  workers: 1,
+  workers: playwrightWorkers(),
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,
+  // CI renders the Cesium globe through software WebGL, where a full /app/ load
+  // alone can take ~30 s; locally the default 30 s budget still applies.
+  timeout: process.env.CI ? 90_000 : 30_000,
   reporter: process.env.CI ? 'github' : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4322',
+    baseURL,
     trace: 'on-first-retry',
   },
+  // A describe tagged with one project's name is filtered out of the other at
+  // collection time. A runtime skip would still occupy a slot under --shard.
   projects: [
-    { name: 'desktop-chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
+    {
+      name: 'desktop-chromium',
+      grepInvert: /@mobile-chromium\b/,
+      use: { ...devices['Desktop Chrome'] },
+    },
+    {
+      name: 'mobile-chromium',
+      grepInvert: /@desktop-chromium\b/,
+      use: { ...devices['Pixel 7'] },
+    },
   ],
   webServer: {
+    // package.json `serve:test` is the one definition of the test server; it reads the port.
     command: 'npm run serve:test',
-    url: 'http://127.0.0.1:4322/',
+    env: { PLAYWRIGHT_PORT: String(port) },
+    url: `${baseURL}/`,
     reuseExistingServer: false,
     timeout: 30_000,
   },
