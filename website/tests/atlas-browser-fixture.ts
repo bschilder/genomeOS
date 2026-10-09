@@ -12,7 +12,12 @@ interface BrowserSurfaceArtifact {
 }
 
 interface BrowserCatalog {
-  artifacts: { n_cells: number; n_observations: number }[];
+  artifacts: {
+    n_cells: number;
+    n_observations: number;
+    observations_url?: string;
+    surface_url?: string;
+  }[];
 }
 
 interface BrowserObservation {
@@ -124,6 +129,28 @@ export async function installAtlasBrowserFixture(
   const surfaceBudget = options.surfaceBudget ?? RENDER_CELL_BUDGET;
   const observationBudget =
     options.observationBudget ?? RENDER_OBSERVATION_BUDGET;
+  // The row count the page's catalog states for each surface or observation file. The data routes
+  // serve exactly that many rows, so they agree with the provider's row-count check whichever
+  // catalog the build inlined: production's full counts, or the e2e catalog's 256 / 64.
+  const statedRows = new Map<string, number>();
+  const fileName = (url: string) => url.slice(url.lastIndexOf('/') + 1);
+  const capCounts = (payload: BrowserCatalog): BrowserCatalog => ({
+    ...payload,
+    artifacts: payload.artifacts.map((artifact) => {
+      const n_cells = Math.min(artifact.n_cells, surfaceBudget);
+      const n_observations = Math.min(
+        artifact.n_observations,
+        observationBudget,
+      );
+      if (artifact.surface_url)
+        statedRows.set(fileName(artifact.surface_url), n_cells);
+      if (artifact.observations_url)
+        statedRows.set(fileName(artifact.observations_url), n_observations);
+      return { ...artifact, n_cells, n_observations };
+    }),
+  });
+  const rowBudget = (requestUrl: string, budget: number) =>
+    statedRows.get(fileName(new URL(requestUrl).pathname)) ?? budget;
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
   );
@@ -141,16 +168,8 @@ export async function installAtlasBrowserFixture(
       const body = html.replace(
         /(<script\b[^>]*\bid="atlas-catalog"[^>]*>)([\s\S]*?)(<\/script>)/,
         (_match, open: string, json: string, close: string) => {
-          const payload = JSON.parse(json) as BrowserCatalog;
-          const artifacts = payload.artifacts.map((artifact) => ({
-            ...artifact,
-            n_cells: Math.min(artifact.n_cells, surfaceBudget),
-            n_observations: Math.min(
-              artifact.n_observations,
-              observationBudget,
-            ),
-          }));
-          return `${open}${JSON.stringify({ ...payload, artifacts }).replace(/</g, '\\u003c')}${close}`;
+          const payload = capCounts(JSON.parse(json) as BrowserCatalog);
+          return `${open}${JSON.stringify(payload).replace(/</g, '\\u003c')}${close}`;
         },
       );
       await route.fulfill({ body, response });
@@ -159,24 +178,27 @@ export async function installAtlasBrowserFixture(
   await page.route('**/data/atlas/catalog.json', async (route) => {
     const response = await route.fetch();
     const payload = (await response.json()) as BrowserCatalog;
-    const artifacts = payload.artifacts.map((artifact) => ({
-      ...artifact,
-      n_cells: Math.min(artifact.n_cells, surfaceBudget),
-      n_observations: Math.min(artifact.n_observations, observationBudget),
-    }));
-    await route.fulfill({ response, json: { ...payload, artifacts } });
+    await route.fulfill({ response, json: capCounts(payload) });
   });
   await page.route('**/data/atlas/*.surface.json', async (route) => {
     const response = await route.fetch();
     const payload = (await response.json()) as BrowserSurfaceArtifact;
-    await route.fulfill({ response, json: compactSurface(payload, options) });
+    const budget = rowBudget(route.request().url(), surfaceBudget);
+    await route.fulfill({
+      response,
+      json: compactSurface(payload, { ...options, surfaceBudget: budget }),
+    });
   });
   await page.route('**/data/atlas/*.observations.json', async (route) => {
     const response = await route.fetch();
     const payload = (await response.json()) as BrowserObservationArtifact;
+    const budget = rowBudget(route.request().url(), observationBudget);
     await route.fulfill({
       response,
-      json: compactObservations(payload, options),
+      json: compactObservations(payload, {
+        ...options,
+        observationBudget: budget,
+      }),
     });
   });
 }
