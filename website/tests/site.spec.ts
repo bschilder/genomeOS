@@ -2,6 +2,7 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
+import { StaticAtlasDataProvider } from '../src/atlas/static-provider';
 import { dataHref } from '../src/lib/data-url';
 import {
   artifactTierKey,
@@ -1953,8 +1954,16 @@ const DISPLAYED_VALUE = /\d+\.\d{2}%/;
 // Hex lookarounds, not \b: the hover preview's text is "Cell <id>" directly followed by the
 // support label ("…ffffobserved"), so there is no word boundary after the id.
 const CELL_ID = /(?<![0-9a-f])[0-9a-f]{15}(?![0-9a-f])/;
-/** `PUBLIC_ATLAS_REQUEST_STALL_MS` of `build:e2e` (Task 67 (B5.1)). */
-const E2E_REQUEST_STALL_MS = 120_000;
+/**
+ * Every production build aborts a fetch that sends no data for this long (fast-load design §B.2).
+ * Only `build:e2e` stretches the window, to 120 s (`PUBLIC_ATLAS_REQUEST_STALL_MS`, Task 67 (B5.1)).
+ */
+const PRODUCTION_REQUEST_STALL_MS =
+  StaticAtlasDataProvider.defaultRequestStallMs;
+/** Time for a production-window stall abort to reach the inspector before the hold is read. */
+const STALL_ABORT_SETTLE_MS = 2_000;
+const HELD_PAST_PRODUCTION_STALL =
+  'the provider aborted the held detail tier at the production stall window (build with npm run build:e2e)';
 
 async function pointNearCanvasCentre(
   page: Page,
@@ -2032,12 +2041,28 @@ test('surface hover and inspector wait for the detail tier without showing numbe
   expect(cellId).toBeDefined();
   const inspectorNode = await inspector.elementHandle();
 
-  // The held fetch must still be inside the e2e stall window, or the provider would already have
-  // aborted it and this would be a test of the unavailable state instead.
-  expect(
-    Date.now() - heldSince,
-    'detail tier held past the e2e stall window (build with npm run build:e2e)',
-  ).toBeLessThan(E2E_REQUEST_STALL_MS);
+  // Keep the detail tier held past the production stall window before releasing it. A build without
+  // build:e2e's 120 s override has aborted the one held fetch by now and shows "Cell values
+  // unavailable", so this would turn into a test of the unavailable state. The provider arms its
+  // stall timer before the route sees the request, so by the read below that timer has run for at
+  // least the production window plus the settle margin.
+  await page.waitForTimeout(
+    Math.max(
+      0,
+      heldSince +
+        PRODUCTION_REQUEST_STALL_MS +
+        STALL_ABORT_SETTLE_MS -
+        Date.now(),
+    ),
+  );
+  const heldText = await inspector.innerText();
+  expect(heldText, HELD_PAST_PRODUCTION_STALL).not.toContain(
+    'Cell values unavailable',
+  );
+  expect(heldText, HELD_PAST_PRODUCTION_STALL).toContain(
+    'Loading cell values…',
+  );
+  expect(detail.hits(), HELD_PAST_PRODUCTION_STALL).toBe(1);
   detail.release();
   await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
     timeout: 30_000,
