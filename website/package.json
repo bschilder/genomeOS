@@ -23,6 +23,7 @@
     "capture": "node scripts/capture-homepage.mjs",
     "capture:atlas": "npm run build:e2e && node scripts/capture-atlas.mjs",
     "capture:atlas-mobile": "npm run build:e2e && ATLAS_CAPTURE_PROFILE=mobile node scripts/capture-atlas.mjs",
+    "capture:fast-load": "npm run build && node scripts/capture-atlas-fast-load.mjs --phase after",
     "capture:gnomad": "npm run build && node scripts/capture-gnomad-evidence.mjs",
     "capture:progress": "npm run build && node scripts/capture-atlas-progress.mjs",
     "capture:studs": "npm run build:e2e && node scripts/capture-observation-studs.mjs"
