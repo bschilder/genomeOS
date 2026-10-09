@@ -471,132 +471,182 @@ test('the header home link is the FOUNDATION lockup, large at the top of the pag
   }
 });
 
-test('the lockup shrinks with the compact bar and the page stays put', async ({
-  page,
-  isMobile,
-}) => {
-  await page.goto('/');
-  const header = page.locator('[data-site-header]');
-  const landing = await measureHeaderLogo(page);
-  const layout = () =>
-    page.evaluate(() => ({
-      mainTop:
-        document.querySelector('main')!.getBoundingClientRect().top +
-        window.scrollY,
-      navLeft: document
-        .querySelector('.site-header__inner > :nth-child(2)')!
-        .getBoundingClientRect().left,
-      scrollHeight: document.documentElement.scrollHeight,
-    }));
-  const before = await layout();
+// Home, and a page whose scroll anchoring used to pull scrollTo(400) to 399.
+for (const route of ['/', '/contribute/']) {
+  test(`the lockup shrinks with the compact bar and the page stays put (${route})`, async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto(route);
+    const header = page.locator('[data-site-header]');
+    const landing = await measureHeaderLogo(page);
+    const layout = () =>
+      page.evaluate(() => {
+        const left = (selector: string) => {
+          const element = document.querySelector(selector)!;
+          // A display:none desktop nav (phones) has no box to compare.
+          return element.getClientRects().length > 0
+            ? element.getBoundingClientRect().left
+            : null;
+        };
+        return {
+          actionsLeft: left('.site-header__actions'),
+          headerBottom: document
+            .querySelector('[data-site-header]')!
+            .getBoundingClientRect().bottom,
+          mainTop:
+            document.querySelector('main')!.getBoundingClientRect().top +
+            window.scrollY,
+          navLeft: left('.site-header__inner > nav.desktop-nav'),
+          scrollHeight: document.documentElement.scrollHeight,
+        };
+      });
+    const before = await layout();
+    // At the top of the page the bar ends where the page begins.
+    expect(Math.abs(before.headerBottom - before.mainTop)).toBeLessThanOrEqual(
+      0.5,
+    );
+    expect(before.actionsLeft).not.toBeNull();
+    expect(before.navLeft === null).toBe(Boolean(isMobile));
 
-  // html has scroll-behavior: smooth; jump straight there.
-  await page.evaluate(() => window.scrollTo({ top: 400, behavior: 'instant' }));
-  await expect(header).toHaveClass(/site-header--compact/);
-  // Both transitions are 200 ms; wait for the bar and the logo to settle.
-  await expect(async () => {
+    // html has scroll-behavior: smooth; jump straight there.
+    await page.evaluate(() =>
+      window.scrollTo({ top: 400, behavior: 'instant' }),
+    );
+    await expect(header).toHaveClass(/site-header--compact/);
+    // Both transitions are 200 ms; wait for the bar and the logo to settle.
+    await expect(async () => {
+      const compact = await measureHeaderLogo(page);
+      expect(compact.headerHeight).toBeCloseTo(71.2, 0);
+      expect(compact.height).toBeCloseTo(isMobile ? 42.1 : 46.8, 0);
+    }).toPass({ timeout: 5_000 });
+
     const compact = await measureHeaderLogo(page);
-    expect(compact.headerHeight).toBeCloseTo(71.2, 0);
-    expect(compact.height).toBeCloseTo(isMobile ? 42.1 : 46.8, 0);
-  }).toPass({ timeout: 5_000 });
+    expect(compact.height).toBeLessThan(landing.height * 0.95);
+    expect(compact.height).toBeLessThan(compact.headerHeight - 16);
+    expect(await page.evaluate(() => window.scrollY)).toBe(400);
+    // The header is fixed over a spacer of its landing height, so nothing
+    // below it moves, and the nav and actions beside the logo stay put.
+    const after = await layout();
+    expect(after.mainTop).toBe(before.mainTop);
+    expect(after.scrollHeight).toBe(before.scrollHeight);
+    expect(after.actionsLeft).toBe(before.actionsLeft);
+    expect(after.navLeft).toBe(before.navLeft);
 
-  const compact = await measureHeaderLogo(page);
-  expect(compact.height).toBeLessThan(landing.height * 0.95);
-  expect(compact.height).toBeLessThan(compact.headerHeight - 16);
-  expect(await page.evaluate(() => window.scrollY)).toBe(400);
-  // The compact bar hands its lost height to a margin, so nothing below it
-  // (nor the nav beside the logo) moves.
-  const after = await layout();
-  expect(Math.abs(after.mainTop - before.mainTop)).toBeLessThanOrEqual(0.5);
-  expect(after.scrollHeight).toBe(before.scrollHeight);
-  expect(Math.abs(after.navLeft - before.navLeft)).toBeLessThanOrEqual(0.5);
-
-  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
-  await expect(header).not.toHaveClass(/site-header--compact/);
-  await expect
-    .poll(async () => (await measureHeaderLogo(page)).height)
-    .toBeCloseTo(landing.height, 0);
-});
-
-test('the header settles in one state while scrolling slowly across the threshold', async ({
-  page,
-}) => {
-  await page.goto('/');
-  await page.evaluate(() => {
-    const header = document.querySelector('[data-site-header]')!;
-    const record = window as unknown as {
-      headerFlips: boolean[];
-      scrollPositions: number[];
-    };
-    record.headerFlips = [];
-    record.scrollPositions = [];
-    new MutationObserver(() =>
-      record.headerFlips.push(
-        header.classList.contains('site-header--compact'),
-      ),
-    ).observe(header, { attributeFilter: ['class'] });
-    window.addEventListener(
-      'scroll',
-      () => record.scrollPositions.push(window.scrollY),
-      { passive: true },
-    );
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(header).not.toHaveClass(/site-header--compact/);
+    await expect
+      .poll(async () => (await measureHeaderLogo(page)).height)
+      .toBeCloseTo(landing.height, 0);
   });
+}
 
-  // 2 px steps through scrollY 48 (instant, not html's smooth scrolling),
-  // each held longer than a whole transition, so a resize that dragged
-  // scrollY back across the line would show up.
-  const steps = Array.from({ length: 13 }, (_, index) => 36 + 2 * index);
-  for (const top of [...steps, ...[...steps].reverse()]) {
-    await page.evaluate(
-      (y) => window.scrollTo({ top: y, behavior: 'instant' }),
-      top,
+// Home, and pages where, on phones, scroll anchoring used to correct scrollY
+// by a pixel and flip the header back.
+for (const route of ['/', '/project/', '/contribute/']) {
+  test(`the header settles in one state while scrolling slowly across the threshold (${route})`, async ({
+    page,
+  }) => {
+    await page.goto(route);
+    await page.evaluate(() => {
+      const header = document.querySelector('[data-site-header]')!;
+      const record = window as unknown as {
+        headerFlips: boolean[];
+        scrollPositions: number[];
+      };
+      record.headerFlips = [];
+      record.scrollPositions = [];
+      new MutationObserver(() =>
+        record.headerFlips.push(
+          header.classList.contains('site-header--compact'),
+        ),
+      ).observe(header, { attributeFilter: ['class'] });
+      window.addEventListener(
+        'scroll',
+        () => record.scrollPositions.push(window.scrollY),
+        { passive: true },
+      );
+    });
+
+    // 2 px steps from 36 to 60 and back (instant, not html's smooth
+    // scrolling), across both lines (compact above 56, expand below 40), each
+    // held longer than a whole transition, so a resize that moved scrollY
+    // would show up.
+    const steps = Array.from({ length: 13 }, (_, index) => 36 + 2 * index);
+    for (const top of [...steps, ...[...steps].reverse()]) {
+      await page.evaluate(
+        (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+        top,
+      );
+      await page.waitForTimeout(240);
+    }
+
+    const record = await page.evaluate(() => {
+      const { headerFlips, scrollPositions } = window as unknown as {
+        headerFlips: boolean[];
+        scrollPositions: number[];
+      };
+      return { headerFlips, scrollPositions };
+    });
+    expect(record.headerFlips).toEqual([true, false]);
+    // Only the positions scrolled to: no scroll-anchoring correction.
+    const unrequested = record.scrollPositions.filter(
+      (y) => !steps.some((step) => Math.abs(step - y) < 0.5),
     );
-    await page.waitForTimeout(240);
-  }
-
-  const record = await page.evaluate(() => {
-    const { headerFlips, scrollPositions } = window as unknown as {
-      headerFlips: boolean[];
-      scrollPositions: number[];
-    };
-    return { headerFlips, scrollPositions };
+    expect(unrequested).toEqual([]);
   });
-  expect(record.headerFlips).toEqual([true, false]);
-  // Only the positions scrolled to: no scroll-anchoring correction.
-  const unrequested = record.scrollPositions.filter(
-    (y) => !steps.some((step) => Math.abs(step - y) < 0.5),
-  );
-  expect(unrequested).toEqual([]);
-});
+}
 
 test(
   'the header shrinks the lockup instead of wrapping the nav at narrow desktop widths',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
-    // 829 px: first width above the phone layout. 1153 px: the desktop nav's
-    // first width, the tightest row.
-    for (const width of [829, 1153]) {
+    // Media queries count rem at 16 px, not the 112.5% root. 737 px: the first
+    // width above the phone layout (46rem). 1025 px: the first above 64rem,
+    // where the Atlas header gains the desktop nav. 1152 px: the lockup pages'
+    // last Menu width (72rem). 1153 px: their first desktop-nav width, the
+    // tightest row.
+    const desktopNavFrom = 1153;
+    for (const width of [737, 1025, 1152, 1153]) {
       await page.setViewportSize({ width, height: 800 });
-      await page.goto('/');
+      await page.goto('/project/');
       const row = await page.evaluate(() => {
         const inner = document.querySelector('.site-header__inner')!;
+        const shown = (selector: string) =>
+          document.querySelector(selector)!.getClientRects().length > 0;
         const links = [...document.querySelectorAll('nav.desktop-nav a')];
         return {
           clientWidth: inner.clientWidth,
+          desktopNav: shown('.site-header__inner > nav.desktop-nav'),
           linkHeights: links
             .filter((link) => link.getClientRects().length > 0)
             .map((link) => link.getBoundingClientRect().height),
+          menu: shown('.mobile-nav summary'),
           scrollWidth: inner.scrollWidth,
         };
       });
+      expect(row.desktopNav, `${width}`).toBe(width >= desktopNavFrom);
+      expect(row.menu, `${width}`).toBe(width < desktopNavFrom);
       expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
       // One line each: a wrapped label would be ~2x the 1rem line height.
       for (const height of row.linkHeights)
         expect(height, `${width}`).toBeLessThan(36);
-      const logo = await measureHeaderLogo(page);
-      expect(logo.height * FOUNDATION_SHARE, `${width}`).toBeGreaterThanOrEqual(
-        7,
+      const landing = await measureHeaderLogo(page);
+      expect(
+        landing.height * FOUNDATION_SHARE,
+        `${width}`,
+      ).toBeGreaterThanOrEqual(7);
+
+      // The landing lockup is still the larger one, so scrolling shrinks it.
+      await page.evaluate(() =>
+        window.scrollTo({ top: 400, behavior: 'instant' }),
       );
+      await expect(async () => {
+        const compact = await measureHeaderLogo(page);
+        expect(compact.headerHeight, `${width}`).toBeCloseTo(71.2, 0);
+        expect(compact.height, `${width}`).toBeCloseTo(46.8, 0);
+      }).toPass({ timeout: 5_000 });
+      expect(landing.height, `${width}`).toBeGreaterThan(46.8 * 1.1);
     }
   },
 );
@@ -1042,10 +1092,18 @@ test('reduced-motion preferences disable decorative hero movement', async ({
     .evaluate((element) => getComputedStyle(element).animationName);
   expect(animationName).toBe('none');
 
+  // The header still compacts, at once: no transition to animate it.
   const header = page.locator('.site-header');
+  await expect(header).toHaveCSS('transition-duration', '0s');
+  await expect(page.locator('.site-header__inner')).toHaveCSS(
+    'transition-duration',
+    '0s',
+  );
   await page.evaluate(() => window.scrollTo(0, 900));
-  await expect(header).not.toHaveClass(/site-header--compact/);
-  expect(Math.abs((await header.boundingBox())!.y)).toBeLessThanOrEqual(1);
+  await expect(header).toHaveClass(/site-header--compact/);
+  const box = (await header.boundingBox())!;
+  expect(Math.abs(box.y)).toBeLessThanOrEqual(1);
+  expect(box.height).toBeCloseTo(71.2, 0);
 });
 
 test('public typography keeps body and supporting text comfortably large', async ({

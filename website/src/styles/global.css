@@ -158,12 +158,12 @@ svg {
  * (public/brand/genomeos-lockup-dark.svg, 1395 x 300 user units). At the top
  * of the page the bar is --site-header-height tall and the lockup 3.6rem,
  * which puts the FOUNDATION capitals (41.1 of the 300 units) at ~8.9 px.
- * Past scrollY 48 (MotionController) both shrink to the compact bar.
+ * Once the page scrolls (MotionController) both shrink to the compact bar.
  *
- * Nothing else moves while they do. The compact bar takes the height it gives
- * up back as margin, on the same curve, so the page below keeps its place.
- * (Otherwise scroll anchoring shifts scrollY by the height change, back
- * across the 48 px threshold, and the bar flickers between its two states.)
+ * Nothing else moves while they do. The header is fixed, out of the flow, and
+ * .site-header-spacer holds the landing bar's height in its place, so a size
+ * change never reaches the page below: no scroll-anchoring correction, which
+ * on phones moved scrollY back across the threshold and made the bar flicker.
  * The brand slot keeps the landing width, so the nav does not slide over.
  *
  * Widths are set and heights follow from the aspect ratio, so a row too
@@ -174,15 +174,13 @@ svg {
   --compact-header-height: 3.9rem;
   --lockup-landing-width: calc(3.6rem * 1395 / 300);
   --lockup-compact-width: calc(2.6rem * 1395 / 300);
-  transition:
-    background-color 260ms ease,
-    border-color 260ms ease,
-    box-shadow 260ms ease,
-    margin-bottom 200ms var(--header-ease);
+  position: fixed;
+  inset: 0 0 auto;
 }
 
-.site-header--lockup.site-header--compact {
-  margin-bottom: calc(var(--site-header-height) - var(--compact-header-height));
+/* The landing bar: its min-height plus the 1px bottom border. */
+.site-header-spacer {
+  height: calc(var(--site-header-height) + 1px);
 }
 
 .site-header--lockup .site-header__inner {
@@ -345,6 +343,7 @@ svg {
 }
 
 .mobile-nav {
+  position: relative;
   display: none;
 }
 
@@ -395,51 +394,67 @@ svg {
   border: 0;
 }
 
+/* The Menu disclosure's styles; the queries below decide where it shows. */
+.mobile-nav summary {
+  cursor: pointer;
+  color: var(--color-starlight);
+  font-weight: 650;
+  list-style: none;
+}
+.mobile-nav summary::-webkit-details-marker {
+  display: none;
+}
+.mobile-nav summary::after {
+  content: '+';
+  margin-left: 0.5rem;
+  color: var(--color-ion);
+}
+.mobile-nav[open] summary::after {
+  content: '−';
+}
+.mobile-nav nav {
+  position: absolute;
+  top: 2.7rem;
+  right: 0;
+  width: min(19rem, calc(100vw - 2 * var(--space-page)));
+  padding: 1.2rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-orbit);
+  box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 44%);
+}
+.mobile-nav ul {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+.mobile-nav a {
+  color: var(--color-starlight);
+  text-decoration: none;
+}
+
 @media (max-width: 64rem) {
   .desktop-nav {
     display: none;
   }
   .mobile-nav {
     display: block;
-    position: relative;
   }
-  .mobile-nav summary {
-    cursor: pointer;
-    color: var(--color-starlight);
-    font-weight: 650;
-    list-style: none;
-  }
-  .mobile-nav summary::-webkit-details-marker {
+}
+
+/*
+ * The lockup pages keep the Menu up to 72rem: 1152 px, since media queries
+ * count rem at 16 px, not the 112.5% root (so 64rem is 1024 px). With the
+ * desktop nav, the row left the lockup 156 px wide at 1025 px (FOUNDATION
+ * 4.6 px, and smaller than the compact logo); at 1153 px it is 264 px.
+ */
+@media (max-width: 72rem) {
+  .site-header--lockup .desktop-nav {
     display: none;
   }
-  .mobile-nav summary::after {
-    content: '+';
-    margin-left: 0.5rem;
-    color: var(--color-ion);
-  }
-  .mobile-nav[open] summary::after {
-    content: '−';
-  }
-  .mobile-nav nav {
-    position: absolute;
-    top: 2.7rem;
-    right: 0;
-    width: min(19rem, calc(100vw - 2 * var(--space-page)));
-    padding: 1.2rem;
-    border: 1px solid var(--color-line);
-    background: var(--color-orbit);
-    box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 44%);
-  }
-  .mobile-nav ul {
-    display: grid;
-    gap: 0.8rem;
-    margin: 0 0 1rem;
-    padding: 0;
-    list-style: none;
-  }
-  .mobile-nav a {
-    color: var(--color-starlight);
-    text-decoration: none;
+  .site-header--lockup .mobile-nav {
+    display: block;
   }
 }
 
@@ -519,7 +534,6 @@ svg {
   .site-header__inner,
   .wordmark__logo,
   .launch-atlas-cta,
-  .site-header--lockup,
   .site-header--lockup .site-header__inner,
   .site-header--lockup .wordmark__logo {
     transition: none;
@@ -537,5 +551,15 @@ svg {
   .site-footer__logo {
     forced-color-adjust: none;
     background: var(--color-void);
+  }
+}
+
+/* A fixed header would repeat on every printed page; print it once, in flow. */
+@media print {
+  .site-header--lockup {
+    position: static;
+  }
+  .site-header-spacer {
+    display: none;
   }
 }

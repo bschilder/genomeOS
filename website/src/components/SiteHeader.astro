@@ -20,6 +20,10 @@ const isCurrent = (href: string) =>
  * sizes its globe from the header, so it keeps the shorter wordmark crop.
  * The alt text is the text the image shows, so the home link's accessible
  * name matches its visible label.
+ *
+ * The lockup header is fixed, and a spacer of its landing height holds its
+ * place in the page, so the header can change size without moving anything
+ * below it (global.css, .site-header--lockup).
  */
 const logo = isAtlasPage
   ? {
@@ -137,3 +141,4 @@ const logo = isAtlasPage
     </div>
   </div>
 </header>
+{!isAtlasPage && <div class="site-header-spacer" aria-hidden="true" />}
