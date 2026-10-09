@@ -15,6 +15,9 @@ interface AtlasPerformanceMetrics {
   warmSelectMs: number;
 }
 
+/** Any map other than the default HbS and the timed G6PD. */
+const SWITCH_WARM_UP_ID = 'cyt-il-10-1082-g';
+
 async function chooseAtlasMap(page: Page, id: string): Promise<void> {
   await page
     .getByRole('button', { name: /Select dataset\. Current dataset:/ })
@@ -91,21 +94,15 @@ test('atlas meets the warm-switch and interaction budget', async ({
     await Promise.all(responses.map((response) => response.arrayBuffer()));
     return urls;
   });
-  const switchRequests: string[] = [];
-  const recordSwitchRequest = (request: PlaywrightRequest): void => {
-    if (request.url().includes('g6pd-deficiency'))
-      switchRequests.push(request.url());
-  };
-  page.on('request', recordSwitchRequest);
-  await chooseAtlasMap(page, 'g6pd-deficiency');
+  // The timed switch must be G6PD's first: the provider keeps every surface it has handed out
+  // (Plan ruling R29), so a return visit makes no request and the pre-warm would not count. An
+  // untimed round trip through another map keeps the timed switch the session's second, as before.
+  await chooseAtlasMap(page, SWITCH_WARM_UP_ID);
   await expect(
     page.locator(
-      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+      `[data-atlas-active="${SWITCH_WARM_UP_ID}"][data-atlas-ready="true"]`,
     ),
   ).toBeVisible({ timeout: 45_000 });
-  page.off('request', recordSwitchRequest);
-  expect(switchRequests.length).toBeGreaterThan(0);
-  expect(switchRequests.filter((url) => !prewarmed.includes(url))).toEqual([]);
   await chooseAtlasMap(page, 'hbs-rs334');
   await expect(
     page.locator('[data-atlas-active="hbs-rs334"][data-atlas-ready="true"]'),
@@ -141,6 +138,12 @@ test('atlas meets the warm-switch and interaction budget', async ({
   const interactionFrameRate = await frameRatePromise;
   await page.waitForTimeout(1_500);
 
+  const switchRequests: string[] = [];
+  const recordSwitchRequest = (request: PlaywrightRequest): void => {
+    if (request.url().includes('g6pd-deficiency'))
+      switchRequests.push(request.url());
+  };
+  page.on('request', recordSwitchRequest);
   const warmStarted = Date.now();
   await chooseAtlasMap(page, 'g6pd-deficiency');
   const warmSelected = Date.now();
@@ -152,6 +155,10 @@ test('atlas meets the warm-switch and interaction budget', async ({
   ).toBeVisible({ timeout: 45_000 });
   const warmReady = Date.now();
   const warmArtifactMs = warmReady - warmStarted;
+  page.off('request', recordSwitchRequest);
+  // The timed switch fetched G6PD's tiers, and only ones the pre-warm already holds.
+  expect(switchRequests.length).toBeGreaterThan(0);
+  expect(switchRequests.filter((url) => !prewarmed.includes(url))).toEqual([]);
 
   const browserMetrics = await page.evaluate(() => {
     const canvas = document.createElement('canvas');
