@@ -6,6 +6,7 @@ import {
   DeveloperError,
   HorizontalOrigin,
   type Label,
+  LabelCollection,
   PolylineCollection,
   PrimitiveCollection,
   VerticalOrigin,
@@ -15,11 +16,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BORDER_CLEARANCE_METRES,
   ContextOverlay,
+  LABEL_READY_MAX_FRAMES,
 } from '../src/atlas/scene/context-overlay';
 import { countryLabelHeight } from '../src/atlas/scene/geographic-overlay';
 import type { ContextHeights } from '../src/atlas/worker/protocol';
 import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
-import { flushTasks } from './helpers/scene-fakes';
+import { FakeEvent, flushTasks } from './helpers/scene-fakes';
 
 const parsed = {
   labels: [{ lat: 47, lon: 2, minLabel: 2, text: 'France' }],
@@ -52,6 +54,8 @@ function setup(
       return label;
     },
     destroy() {},
+    // LabelCollection.ready: false until every glyph is in the texture atlas.
+    ready: false,
     show: true,
   };
   let contextParsed = false;
@@ -76,6 +80,7 @@ function setup(
   };
   const primitives = new PrimitiveCollection();
   const scene = {
+    postRender: new FakeEvent(),
     primitives,
     // A destroyed Cesium Scene throws here too; Viewer.destroy() destroys the primitives with it.
     requestRender: vi.fn(() => {
@@ -93,7 +98,7 @@ function setup(
     slice: config.slice ?? { yieldFn: () => Promise.resolve() },
     worker: worker as never,
   });
-  return { added, addCredit, overlay, scene, worker };
+  return { added, addCredit, labels, overlay, scene, worker };
 }
 
 function bufferOf(overlay: ContextOverlay): BufferPolylineCollection {
@@ -251,6 +256,75 @@ describe('Natural Earth context overlay', () => {
     expect(projected?.length).toBe(2);
     expect(projected?.show).toBe(true);
     expect(bufferOf(overlay).show).toBe(false);
+  });
+});
+
+describe('Natural Earth country label glyphs', () => {
+  // Cesium queues a new glyph in the label texture atlas only after an await, so the frame that
+  // created it finds the queue empty, its afterRender update returns false and no frame follows: in
+  // requestRenderMode the labels stayed undrawn until something else asked for a render.
+  it('requests frames after the labels are added until their glyphs are drawn', async () => {
+    const { labels, overlay, scene } = setup();
+    await overlay.load('/a.geojson');
+    expect(scene.postRender.numberOfListeners).toBe(1);
+
+    scene.requestRender.mockClear();
+    scene.postRender.raiseEvent();
+    scene.postRender.raiseEvent();
+    expect(scene.requestRender).toHaveBeenCalledTimes(2);
+
+    labels.ready = true;
+    scene.postRender.raiseEvent();
+    expect(scene.requestRender).toHaveBeenCalledTimes(2);
+    expect(scene.postRender.numberOfListeners).toBe(0);
+  });
+
+  it('waits without rendering while the countries layer is hidden', async () => {
+    // A hidden PrimitiveCollection does not update its labels, so they cannot become ready.
+    const { overlay, scene } = setup();
+    await overlay.load('/a.geojson');
+    overlay.setVisible(false);
+    scene.requestRender.mockClear();
+
+    scene.postRender.raiseEvent();
+    expect(scene.requestRender).not.toHaveBeenCalled();
+    expect(scene.postRender.numberOfListeners).toBe(1);
+
+    overlay.setVisible(true);
+    scene.requestRender.mockClear();
+    scene.postRender.raiseEvent();
+    expect(scene.requestRender).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops after a bounded number of frames when a glyph never loads', async () => {
+    const { overlay, scene } = setup();
+    await overlay.load('/a.geojson');
+    scene.requestRender.mockClear();
+
+    for (let frame = 0; frame < LABEL_READY_MAX_FRAMES + 5; frame += 1)
+      scene.postRender.raiseEvent();
+
+    expect(scene.requestRender).toHaveBeenCalledTimes(LABEL_READY_MAX_FRAMES);
+    expect(scene.postRender.numberOfListeners).toBe(0);
+  });
+
+  it('stops quietly when the scene is torn down before the glyphs are drawn', async () => {
+    const { overlay, scene } = setup();
+    await overlay.load('/a.geojson');
+    scene.primitives.destroy();
+    scene.requestRender.mockClear();
+
+    // The fake scene throws from requestRender once destroyed, like Cesium's.
+    expect(() => scene.postRender.raiseEvent()).not.toThrow();
+    expect(scene.requestRender).not.toHaveBeenCalled();
+    expect(scene.postRender.numberOfListeners).toBe(0);
+  });
+
+  it('reads the readiness Cesium LabelCollection exposes', () => {
+    // LabelCollection.ready is @private in Cesium; a release that drops it must fail here.
+    expect(
+      Object.getOwnPropertyDescriptor(LabelCollection.prototype, 'ready')?.get,
+    ).toBeTypeOf('function');
   });
 });
 

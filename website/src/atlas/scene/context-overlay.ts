@@ -12,6 +12,12 @@
  * so far, and later ones are added at the height and colour their renderer is
  * drawn with. When the scene is destroyed (unmount, "Retry globe") the load
  * stops at its next yield without a warning.
+ *
+ * Cesium copies a new label glyph into its texture atlas only after an await,
+ * so the frame that created the glyph can find the atlas queue empty and ask
+ * for no further frame; in requestRenderMode the labels would then stay
+ * undrawn. Once the labels are added, the overlay requests frames until the
+ * LabelCollection reports every glyph ready (at most LABEL_READY_MAX_FRAMES).
  */
 
 import {
@@ -64,12 +70,19 @@ export const BORDER_WIDTH_PIXELS = 1.65;
  */
 const BUFFER_BORDER_WIDTH_PIXELS = BORDER_WIDTH_PIXELS + 0.5;
 const ELEVATION_THROTTLE_MS = 50;
+/** Frames requested for the label glyphs to reach the texture atlas; a glyph that fails to load never
+ * makes the collection ready. A normal load needs two or three. */
+export const LABEL_READY_MAX_FRAMES = 120;
 const HEIGHT_CACHE_SIZE = 4;
 const NATURAL_EARTH_CREDIT =
   '<a href="https://www.naturalearthdata.com/" target="_blank">Natural Earth</a> (public domain)';
 
 export type ContextLoadStatus = 'ready' | 'fallback';
-type LabelSink = Pick<LabelCollection, 'add' | 'show'>;
+/** `ready` is a @private LabelCollection getter, absent from Cesium's typings: true once every glyph
+ * of every shown label is in the texture atlas. */
+type LabelSink = Pick<LabelCollection, 'add' | 'show'> & {
+  readonly ready: boolean;
+};
 type SurfaceRef = { artifactKey: string; metric: Metric };
 
 /** Surface heights and the factor they are drawn at; `heights: null` is the flat clearance. */
@@ -88,7 +101,11 @@ const surfaceKey = ({ artifactKey, metric }: SurfaceRef): string =>
 
 export interface ContextOverlayOptions {
   worker: Pick<AtlasWorkerClient, 'contextHeights' | 'parseContext'>;
-  scene: { primitives: PrimitiveCollection; requestRender(): void };
+  scene: {
+    postRender: { addEventListener(listener: () => void): () => void };
+    primitives: PrimitiveCollection;
+    requestRender(): void;
+  };
   addCredit: (credit: Credit) => void;
   fetchBytes?: (url: string) => Promise<ArrayBuffer>;
   createLabels?: () => LabelSink;
@@ -392,7 +409,8 @@ export class ContextOverlay {
 
   async #addLabels(parsed: NaturalEarthBuffers): Promise<void> {
     const labels = (
-      this.#options.createLabels ?? (() => new LabelCollection())
+      this.#options.createLabels ??
+      (() => new LabelCollection() as LabelCollection & LabelSink)
     )();
     this.collection.add(labels);
     this.#labels = [];
@@ -430,6 +448,30 @@ export class ContextOverlay {
       },
       this.#slice(),
     );
+    this.#renderUntilLabelsReady(labels);
+  }
+
+  /** Requests frames until the labels' glyphs are in the texture atlas, so they are drawn. */
+  #renderUntilLabelsReady(labels: LabelSink): void {
+    const { scene } = this.#options;
+    let frames = 0;
+    // Cesium raises postRender outside its try/catch, and a throw there stops its render loop: the
+    // destroyed check comes first, because a destroyed LabelCollection throws from `ready`.
+    const remove = scene.postRender.addEventListener(() => {
+      if (
+        this.#isDestroyed() ||
+        labels.ready ||
+        frames >= LABEL_READY_MAX_FRAMES
+      ) {
+        remove();
+        return;
+      }
+      // A hidden collection does not update its labels; showing it again requests a frame.
+      if (!this.collection.show) return;
+      frames += 1;
+      scene.requestRender();
+    });
+    scene.requestRender();
   }
 
   #requestHeights(): void {
