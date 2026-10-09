@@ -1524,6 +1524,55 @@ test('explorer reports unavailable WebGL with a retry action', async ({
   await expect(page.getByRole('button', { name: 'Retry globe' })).toBeVisible();
 });
 
+test('explorer recovers from a render-loop error through Retry globe', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  // Live failure: one transient worker-module fetch ("Failed to fetch dynamically imported
+  // module …/createPolygonGeometry.js") threw inside a Cesium frame, Cesium showed its raw error
+  // panel, and rendering stopped for good. The support layer's asynchronous PolygonGeometry is
+  // built by that module, so aborting only its first request reproduces the failure.
+  let polygonWorkerRequests = 0;
+  await context.route('**/cesium/Workers/createPolygonGeometry.js', (route) => {
+    polygonWorkerRequests += 1;
+    return polygonWorkerRequests === 1 ? route.abort() : route.continue();
+  });
+  // The binding and init script survive navigation, so a raw panel on any document is caught.
+  let rawPanelSeen = false;
+  await page.exposeFunction('reportRawCesiumErrorPanel', () => {
+    rawPanelSeen = true;
+  });
+  await page.addInitScript(() => {
+    const binding = window as Window & {
+      reportRawCesiumErrorPanel?: () => Promise<void>;
+    };
+    new MutationObserver((_, observer) => {
+      if (!document.querySelector('.cesium-widget-errorPanel')) return;
+      observer.disconnect();
+      void binding.reportRawCesiumErrorPanel?.();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  await page.goto('/app/');
+
+  const rawPanel = page.locator('.cesium-widget-errorPanel');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'The globe stopped rendering' });
+  await expect(failure.or(rawPanel).first()).toBeVisible({ timeout: 60_000 });
+  await expect(rawPanel).toHaveCount(0);
+  await expect(failure).toContainText('network or graphics error');
+  expect(polygonWorkerRequests).toBeGreaterThan(0);
+
+  await failure.getByRole('button', { name: 'Retry globe' }).click();
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 60_000,
+  });
+  await expect(failure).toHaveCount(0);
+  await expect(rawPanel).toHaveCount(0);
+  expect(rawPanelSeen).toBe(false);
+});
+
 test('polygon map validates a selected model cell before loading Google Maps', async ({
   page,
 }) => {

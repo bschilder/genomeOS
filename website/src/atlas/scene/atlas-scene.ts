@@ -94,9 +94,12 @@ class CesiumAtlasScene implements AtlasSceneController {
     (warnings: readonly ContextWarning[]) => void
   >();
   readonly #warnings = new Map<ContextWarning['id'], ContextWarning>();
+  readonly #renderErrorListeners = new Set<(error: unknown) => void>();
+  #renderError: { error: unknown } | null = null;
   readonly #unbindKeyboard: () => void;
   readonly #unbindPicking: () => void;
   readonly #removeMoveEnd: () => void;
+  readonly #removeRenderError: () => void;
   #surfaceArtifact: SurfaceArtifact | null = null;
   #observationArtifact: ObservationArtifact | null = null;
   #surfaceGroup: ScientificPrimitiveGroup | null = null;
@@ -144,9 +147,14 @@ class CesiumAtlasScene implements AtlasSceneController {
       scene3DOnly: false,
       sceneModePicker: false,
       selectionIndicator: false,
+      // Cesium's own panel is a dead end; render errors reach the explorer's retry instead.
+      showRenderLoopErrors: false,
       timeline: false,
       vrButton: false,
     });
+    this.#removeRenderError = this.#viewer.scene.renderError.addEventListener(
+      (_scene, error: unknown) => this.#failRendering(error),
+    );
     this.#contextController = new ContextController(
       this.#viewer,
       options.cesiumToken ?? '',
@@ -187,6 +195,19 @@ class CesiumAtlasScene implements AtlasSceneController {
   #setContextStatus(status: ContextStatus): void {
     this.#contextStatus = status;
     for (const listener of this.#contextListeners) listener(status);
+  }
+
+  /**
+   * Cesium has already stopped its render loop (Cesium globe design §12). A transient failure such
+   * as a worker module that did not download fails every later frame, and the document-wide
+   * geometry workers keep that failed import, so the error is reported once and recovery is a
+   * fresh page (the explorer's Retry globe), never a restarted loop or a new scene.
+   */
+  #failRendering(error: unknown): void {
+    if (this.#destroyed || this.#renderError) return;
+    this.#renderError = { error };
+    console.error('The Atlas globe stopped rendering.', error);
+    for (const listener of this.#renderErrorListeners) listener(error);
   }
 
   #setWarning(warning: ContextWarningUpdate): void {
@@ -668,6 +689,12 @@ class CesiumAtlasScene implements AtlasSceneController {
     return () => this.#warningListeners.delete(listener);
   }
 
+  onRenderError(listener: (error: unknown) => void): () => void {
+    this.#renderErrorListeners.add(listener);
+    if (this.#renderError) listener(this.#renderError.error);
+    return () => this.#renderErrorListeners.delete(listener);
+  }
+
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
@@ -677,6 +704,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#unbindKeyboard();
     this.#unbindPicking();
     this.#removeMoveEnd();
+    this.#removeRenderError();
     this.#viewer.destroy();
   }
 }

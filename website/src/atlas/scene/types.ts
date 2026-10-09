@@ -104,5 +104,10 @@ export interface AtlasSceneController {
   onWarning(
     listener: (warnings: readonly ContextWarning[]) => void,
   ): () => void;
+  /**
+   * A frame threw and Cesium stopped the render loop for good (Cesium globe design §12), so
+   * listeners offer a retry. A late listener still hears the error.
+   */
+  onRenderError(listener: (error: unknown) => void): () => void;
   destroy(): void;
 }
