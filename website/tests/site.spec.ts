@@ -1769,6 +1769,9 @@ test('cold load shows observations, then the surface, then outlines and borders'
   expect(marks['surface-first-chunk']!).toBeLessThanOrEqual(
     marks['surface-visible']!,
   );
+  // `ready` means surface, support and observations are all visible (§B.1).
+  expect(marks['observations-visible']!).toBeLessThanOrEqual(marks['ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['ready']!);
   expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['edges-ready']!);
   expect(marks['surface-visible']!).toBeLessThanOrEqual(
     marks['context-ready']!,
