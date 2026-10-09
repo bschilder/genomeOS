@@ -38920,7 +38920,8 @@ Slow 4G runs record `run ended in error: …timed out after 15000 ms…` (the ol
 ```bash
 cd $R && .venv/bin/python scripts/encode_atlas_web.py && cd $W && npm run build
 npx playwright test --config playwright.performance.config.ts atlas-cold-load --output test-results/cold-load-current
-npx playwright test --config playwright.performance.config.ts atlas-performance
+# Its own --output: without one, Playwright empties test-results/ and deletes both cold-load trees read below.
+npx playwright test --config playwright.performance.config.ts atlas-performance --output test-results/atlas-performance
 node --input-type=module -e "
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -38933,7 +38934,8 @@ find test-results -name 'atlas-cold-load-*-ledger.md' -exec cat {} +
 ```
 
 Expected: every current budget met on medians; `atlas-performance` passes (`warmArtifactMs < 2000`,
-no long task > 250 ms, ≥ 45 fps on hardware GPU).
+no long task > 250 ms, ≥ 45 fps on hardware GPU); the summary prints six lines and `find` prints six
+ledgers (baseline and current, one per profile).
 
 **Stop rule.** If any median misses a §B.1 budget, or any run breaks the per-run long-frame cap
 (Task 83 (B5.14)), stop before Task 85 (B5.16): record the miss, its profile and its ledger in the
