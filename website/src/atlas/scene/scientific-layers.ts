@@ -117,7 +117,6 @@ interface Displayed {
 }
 
 interface Epoch {
-  sequence: number;
   artifactKey: string;
   group: SurfaceChunkGroup | null;
   observationGroup: ObservationPrimitiveGroup | null;
@@ -201,14 +200,14 @@ export class ScientificLayers {
   readonly #removeMarkListener: () => void;
   #displayed: Displayed | null = null;
   #epoch: Epoch | null = null;
-  #revealing: { artifactKey: string; surface: SurfaceArtifact | null } | null =
-    null;
-  #current: {
-    artifactKey: string;
-    artifactId: string;
-    observations: ObservationArtifact | null;
-    surface: SurfaceArtifact;
-  } | null = null;
+  /** The cold epoch being revealed, picked until it commits or is discarded. */
+  #revealing: { epoch: Epoch; surface: SurfaceArtifact | null } | null = null;
+  /**
+   * What `rebuild()` replays: the latest request, pending or not, so a style
+   * change during a swap rebuilds the incoming artifact. Once that request
+   * fails it falls back to the displayed artifact.
+   */
+  #current: Omit<ArtifactLoad, 'lookAt'> | null = null;
   #sequence = 0;
   #build: AbortController | null = null;
   #edgeBuild: AbortController | null = null;
@@ -241,18 +240,28 @@ export class ScientificLayers {
   pickTarget(): PickTarget | null {
     const displayed = this.#displayed;
     if (displayed) {
+      // The incoming groups sit at opacity 0, but a translucent depth pick writes depth
+      // whatever the alpha, so both are hidden for that pass (§B.6.6).
+      const hidden: PrimitiveCollection[] = [];
       const incoming = this.#epoch?.group;
+      if (incoming && incoming !== displayed.group)
+        hidden.push(incoming.collection);
+      const incomingObservations = this.#epoch?.observationGroup;
+      if (
+        incomingObservations &&
+        incomingObservations !== displayed.observationGroup
+      )
+        hidden.push(incomingObservations.collection);
       return {
         artifactKey: displayed.artifactKey,
-        hidden:
-          incoming && incoming !== displayed.group ? [incoming.collection] : [],
+        hidden,
         surface: displayed.surface,
       };
     }
     const revealing = this.#revealing;
     return revealing?.surface
       ? {
-          artifactKey: revealing.artifactKey,
+          artifactKey: revealing.epoch.artifactKey,
           hidden: [],
           surface: revealing.surface,
         }
@@ -272,10 +281,15 @@ export class ScientificLayers {
       artifactKey: load.artifactKey,
       group: null,
       observationGroup: null,
-      sequence,
       streamDone: false,
     };
     this.#epoch = epoch;
+    this.#current = {
+      artifactId: load.artifactId,
+      artifactKey: load.artifactKey,
+      observations: load.observations,
+      surface: load.surface,
+    };
     this.#options.marks.beginEpoch();
     let partial: SurfaceChunkGroup | null = null;
     const assertCurrent = () => {
@@ -302,7 +316,7 @@ export class ScientificLayers {
             style.layers.observations,
             style.observationStyle.samplingAreas,
           );
-          this.#revealing = { artifactKey: load.artifactKey, surface: null };
+          this.#revealing = { epoch, surface: null };
         }
       }
       this.#raiseOverlays(observationGroup);
@@ -310,13 +324,7 @@ export class ScientificLayers {
 
       const surface = await load.surface;
       assertCurrent();
-      this.#current = {
-        artifactId: load.artifactId,
-        artifactKey: load.artifactKey,
-        observations,
-        surface,
-      };
-      if (cold) this.#revealing = { artifactKey: load.artifactKey, surface };
+      if (cold) this.#revealing = { epoch, surface };
       const style = this.#options.style();
       const key = surfaceKeyFor(load.artifactKey, style);
       let group = this.#surfaces.get(key) ?? null;
@@ -368,12 +376,14 @@ export class ScientificLayers {
       // A request made during the swap animation began a new epoch; this `ready` is not its own.
       if (sequence === this.#sequence) this.#options.marks.queue('ready');
     } catch (error) {
-      this.#discard(epoch, partial, cold);
+      this.#discard(epoch, partial);
       if (
         error instanceof SupersededBuild ||
         (sequence !== this.#sequence && isAbortError(error))
       )
         return;
+      // A rebuild must not replay a request that failed; it restyles what is displayed.
+      if (sequence === this.#sequence) this.#current = this.#displayedLoad();
       throw error;
     }
   }
@@ -381,15 +391,7 @@ export class ScientificLayers {
   async rebuild(progress?: SceneProgressListener): Promise<void> {
     const current = this.#current;
     if (!current) return;
-    await this.setArtifact(
-      {
-        artifactId: current.artifactId,
-        artifactKey: current.artifactKey,
-        observations: Promise.resolve(current.observations),
-        surface: Promise.resolve(current.surface),
-      },
-      progress,
-    );
+    await this.setArtifact({ ...current }, progress);
   }
 
   setSurfaceOpacity(opacity: number): void {
@@ -518,13 +520,25 @@ export class ScientificLayers {
     return marks;
   }
 
+  /** The displayed observation group and, during a swap or a cold reveal, the incoming one. */
   #observationGroupsInView(): ObservationPrimitiveGroup[] {
     const groups = new Set<ObservationPrimitiveGroup>();
     if (this.#displayed?.observationGroup)
       groups.add(this.#displayed.observationGroup);
-    else if (this.#epoch?.observationGroup)
-      groups.add(this.#epoch.observationGroup);
+    if (this.#epoch?.observationGroup) groups.add(this.#epoch.observationGroup);
     return [...groups];
+  }
+
+  #displayedLoad(): Omit<ArtifactLoad, 'lookAt'> | null {
+    const displayed = this.#displayed;
+    return displayed
+      ? {
+          artifactId: displayed.artifactId,
+          artifactKey: displayed.artifactKey,
+          observations: Promise.resolve(displayed.observations),
+          surface: Promise.resolve(displayed.surface),
+        }
+      : null;
   }
 
   #observationGroupFor(
@@ -719,11 +733,16 @@ export class ScientificLayers {
     void group.setCellEdges(style.cellEdges);
     void group.setSceneMode(style.mode);
     if (observationGroup) {
+      const presentation = style.observationStyle;
       observationGroup.setSurfaceHeights(this.#heights.get(group) ?? null);
       observationGroup.setElevationFactor(factor, true);
+      observationGroup.setSizeRange(presentation.sizeRange);
+      observationGroup.setSamplingAreaColor(presentation.samplingAreaColor);
+      observationGroup.setStyleOpacity(presentation.opacity);
+      observationGroup.setEarthOpacity(style.earthOpacity);
       observationGroup.setVisibility(
         style.layers.observations,
-        style.observationStyle.samplingAreas,
+        presentation.samplingAreas,
       );
     }
     this.#displayed = {
@@ -858,11 +877,7 @@ export class ScientificLayers {
     }
   }
 
-  #discard(
-    epoch: Epoch,
-    partial: SurfaceChunkGroup | null,
-    cold: boolean,
-  ): void {
+  #discard(epoch: Epoch, partial: SurfaceChunkGroup | null): void {
     const newer = this.#epoch === epoch ? null : this.#epoch;
     const displayed = this.#displayed;
     const keep = (group: object | null) =>
@@ -880,10 +895,9 @@ export class ScientificLayers {
       epoch.observationGroup.setOpacity(0);
       epoch.observationGroup.collection.show = false;
     }
-    if (this.#epoch === epoch) {
-      this.#epoch = null;
-      if (cold) this.#revealing = null;
-    }
+    if (this.#epoch === epoch) this.#epoch = null;
+    // Superseded or failed, this epoch's reveal is no longer what picks resolve against.
+    if (this.#revealing?.epoch === epoch) this.#revealing = null;
     this.#options.scene.requestRender();
   }
 

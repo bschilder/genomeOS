@@ -4,7 +4,9 @@ import {
   Ellipsoid,
   Primitive,
   PrimitiveCollection,
+  type Color,
   type PointPrimitiveCollection,
+  type PolylineCollection,
 } from 'cesium';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +21,11 @@ import {
   ScientificLayers,
   type ScientificStyle,
 } from '../src/atlas/scene/scientific-layers';
-import type { ArtifactLoad, AtlasMark } from '../src/atlas/scene/types';
+import type {
+  ArtifactLoad,
+  AtlasMark,
+  ObservationPresentation,
+} from '../src/atlas/scene/types';
 import type { SurfaceArtifact } from '../src/atlas/surface-columns';
 import type {
   BuildChunksBody,
@@ -365,6 +371,37 @@ describe('cold progressive reveal', () => {
     expect(h.attributes.get('data-atlas-displayed')).toBe('');
     expect(h.commits).toEqual([]);
   });
+
+  it('stops picking a cold reveal once a newer request supersedes it', async () => {
+    const h = harness();
+    const first = h.layers.setArtifact(h.load('hbs-rs334'));
+    for (let index = 0; index < 12 && !h.layers.pickTarget(); index += 1) {
+      await flushTasks();
+      h.frame();
+    }
+    expect(h.layers.pickTarget()).toMatchObject({
+      artifactKey: keyOf('hbs-rs334'),
+    });
+
+    const observations = deferred<ObservationArtifact | null>();
+    const surface = deferred<SurfaceArtifact>();
+    const second = h.layers.setArtifact({
+      ...h.load('g6pd-deficiency', surface.promise),
+      observations: observations.promise,
+    });
+    await h.pump();
+    await first;
+    // The superseded reveal is gone and the newer request has no surface yet.
+    expect(h.layers.pickTarget()).toBeNull();
+
+    observations.resolve(null);
+    surface.resolve(surfaceFor('g6pd-deficiency'));
+    await h.pump();
+    await second;
+    expect(h.layers.pickTarget()).toMatchObject({
+      artifactKey: keyOf('g6pd-deficiency'),
+    });
+  });
 });
 
 describe('atomic replacement', () => {
@@ -385,7 +422,8 @@ describe('atomic replacement', () => {
     expect(h.layers.pickTarget()).toMatchObject({
       artifactKey: keyOf('hbs-rs334'),
     });
-    expect(h.layers.pickTarget()!.hidden).toHaveLength(1);
+    // The incoming surface and observation groups (fix round 1, finding 1).
+    expect(h.layers.pickTarget()!.hidden).toHaveLength(2);
     expect(h.commits).toEqual([keyOf('hbs-rs334')]);
 
     await h.pump();
@@ -396,6 +434,160 @@ describe('atomic replacement', () => {
     expect(h.layers.displayedLayer()?.artifactKey).toBe(
       keyOf('g6pd-deficiency'),
     );
+  });
+
+  it('keeps the incoming observation group out of depth picks until the swap commits', async () => {
+    // Translucent depth picks write depth whatever the alpha, so the opacity-0 incoming markers
+    // and sampling-area rings would otherwise set the depth (§B.6.6).
+    const h = harness();
+    await h.show('hbs-rs334');
+    const displayed = h.childCollections().find((child) => child.length === 5);
+    const pending = deferred<SurfaceArtifact>();
+    const second = h.layers.setArtifact(
+      h.load('g6pd-deficiency', pending.promise),
+    );
+    await h.pump(3);
+    const incoming = h
+      .childCollections()
+      .find((child) => child.length === 5 && child !== displayed);
+    expect(incoming).toBeDefined();
+    expect(h.layers.pickTarget()!.hidden).toEqual([incoming]);
+
+    pending.resolve(surfaceFor('g6pd-deficiency'));
+    await flushTasks();
+    h.frame();
+    expect(h.layers.pickTarget()!.hidden).toContain(incoming);
+    expect(h.layers.pickTarget()!.hidden).not.toContain(displayed);
+
+    await h.pump();
+    await second;
+    expect(h.layers.pickTarget()).toMatchObject({
+      artifactKey: keyOf('g6pd-deficiency'),
+      hidden: [],
+    });
+  });
+
+  it('rebuilds a pending replacement, not the displayed artifact, on a style change', async () => {
+    const h = harness();
+    await h.show('hbs-rs334');
+    const pending = deferred<SurfaceArtifact>();
+    const second = h.layers.setArtifact(
+      h.load('g6pd-deficiency', pending.promise),
+    );
+    await h.pump(2);
+
+    h.style.metric = 'post_sd';
+    const rebuilt = h.layers.rebuild();
+    pending.resolve(surfaceFor('g6pd-deficiency'));
+    await h.pump();
+    await Promise.all([second, rebuilt]);
+    await h.pump(1);
+    expect(h.commits).toEqual([keyOf('hbs-rs334'), keyOf('g6pd-deficiency')]);
+    expect(h.layers.displayedLayer()).toMatchObject({
+      artifactKey: keyOf('g6pd-deficiency'),
+      metric: 'post_sd',
+    });
+    expect(h.attributes.get('data-atlas-displayed')).toBe('g6pd-deficiency');
+  });
+
+  it('rebuilds the displayed artifact once its replacement has failed', async () => {
+    const h = harness();
+    await h.show('hbs-rs334');
+    const failing = deferred<SurfaceArtifact>();
+    const outcome = h.layers
+      .setArtifact(h.load('g6pd-deficiency', failing.promise))
+      .catch((error: Error) => error);
+    failing.reject(new Error('render tier failed its checksum'));
+    await expect(outcome).resolves.toMatchObject({
+      message: 'render tier failed its checksum',
+    });
+
+    h.style.metric = 'post_sd';
+    const rebuilt = h.layers.rebuild();
+    await h.pump();
+    await rebuilt;
+    expect(h.commits).toEqual([keyOf('hbs-rs334'), keyOf('hbs-rs334')]);
+    expect(h.layers.displayedLayer()).toMatchObject({
+      artifactKey: keyOf('hbs-rs334'),
+      metric: 'post_sd',
+    });
+  });
+
+  it('restyles the incoming measured points during a replacement', async () => {
+    const h = harness();
+    await h.show('hbs-rs334');
+    const displayed = h.childCollections().find((child) => child.length === 5)!;
+    const displayedAlpha = (displayed.get(2) as PointPrimitiveCollection).get(0)
+      .color.alpha;
+    const pending = deferred<SurfaceArtifact>();
+    const second = h.layers.setArtifact(
+      h.load('g6pd-deficiency', pending.promise),
+    );
+    await h.pump(2);
+    const incoming = h
+      .childCollections()
+      .find((child) => child.length === 5 && child !== displayed)!;
+    const points = incoming.get(2) as PointPrimitiveCollection;
+    const rings = incoming.get(0) as PolylineCollection;
+
+    const observationStyle: ObservationPresentation = {
+      ...h.style.observationStyle,
+      opacity: 0.5,
+      samplingAreaColor: '#ff0000',
+      sizeRange: [40, 40],
+    };
+    h.style.observationStyle = observationStyle;
+    h.layers.setObservationAppearance(observationStyle, h.style.layers);
+    h.style.earthOpacity = 0.5;
+    h.layers.setEarthOpacity(0.5);
+    expect(points.get(0).pixelSize).toBe(40);
+
+    pending.resolve(surfaceFor('g6pd-deficiency'));
+    await h.pump();
+    await second;
+    expect(h.layers.displayedLayer()?.artifactKey).toBe(
+      keyOf('g6pd-deficiency'),
+    );
+    expect(points.get(0).color.alpha).toBeCloseTo(displayedAlpha * 0.25, 6);
+    const ringColor = rings.get(0).material.uniforms.color as Color;
+    expect(ringColor.red).toBe(1);
+    expect(ringColor.green).toBe(0);
+    expect(ringColor.alpha).toBeCloseTo(0.9 * 0.25, 6);
+  });
+
+  it('applies the observation style current at the commit to the incoming group', async () => {
+    // As the commit does for the surface's opacity, visibility, outlines and mode.
+    const h = harness();
+    await h.show('hbs-rs334');
+    const displayed = h.childCollections().find((child) => child.length === 5)!;
+    const displayedAlpha = (displayed.get(2) as PointPrimitiveCollection).get(0)
+      .color.alpha;
+    const pending = deferred<SurfaceArtifact>();
+    const second = h.layers.setArtifact(
+      h.load('g6pd-deficiency', pending.promise),
+    );
+    await h.pump(2);
+    const incoming = h
+      .childCollections()
+      .find((child) => child.length === 5 && child !== displayed)!;
+    const points = incoming.get(2) as PointPrimitiveCollection;
+    const rings = incoming.get(0) as PolylineCollection;
+
+    h.style.observationStyle = {
+      ...h.style.observationStyle,
+      opacity: 0.5,
+      samplingAreaColor: '#ff0000',
+      sizeRange: [40, 40],
+    };
+    h.style.earthOpacity = 0.5;
+    pending.resolve(surfaceFor('g6pd-deficiency'));
+    await h.pump();
+    await second;
+    expect(points.get(0).pixelSize).toBe(40);
+    expect(points.get(0).color.alpha).toBeCloseTo(displayedAlpha * 0.25, 6);
+    const ringColor = rings.get(0).material.uniforms.color as Color;
+    expect(ringColor.red).toBe(1);
+    expect(ringColor.alpha).toBeCloseTo(0.9 * 0.25, 6);
   });
 
   it('commits only the latest request when one is superseded', async () => {
