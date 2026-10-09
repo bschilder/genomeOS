@@ -5,6 +5,12 @@
  * the scene. The scene receives promises, so observations can appear before
  * the surface. The displayed artifact changes only at the scene's commit, and
  * the f64 detail tier is fetched after `atlas:surface-visible`.
+ *
+ * Marks describe the scene's current epoch, so they are read against the
+ * request last handed to the scene, never a newer one still on its way. A
+ * detail tier belongs to its artifact: the commit that leaves an artifact
+ * aborts its request, and an outcome for an artifact that is neither displayed
+ * nor requested changes nothing.
  */
 
 import { useEffect, useRef, useState } from 'react';
@@ -107,6 +113,8 @@ export function useArtifactPipeline(
   const activityId = useRef(0);
   const entries = useRef(new Map<string, LoadedArtifact>());
   const latestRequest = useRef<ArtifactRequest | null>(null);
+  /** The artifact last handed to the scene: the one its marks describe. */
+  const sceneEntry = useRef<LoadedArtifact | null>(null);
   const displayedRef = useRef<LoadedArtifact | null>(null);
   const targetRef = useRef<LoadedArtifact | null>(null);
   const detailRequests = useRef(new Map<string, AbortController>());
@@ -122,31 +130,43 @@ export function useArtifactPipeline(
   const { catalog, controller, dataAttempt, provider, reducedMotion, state } =
     options;
 
+  /** Displayed, or still requested: the artifacts a detail outcome may report on. */
+  const isCurrent = (key: string): boolean =>
+    displayedRef.current?.artifactKey === key ||
+    latestRequest.current?.entry.artifactKey === key;
+
   const loadDetail = (entry: LoadedArtifact): void => {
     const surface = entry.surface;
     const key = entry.artifactKey;
     const detailProvider = latest.current.provider;
-    if (
-      !detailProvider ||
-      !surface ||
-      surface.detail ||
-      detailRequests.current.has(key)
-    )
+    if (!detailProvider || !surface) return;
+    if (surface.detail) {
+      // Attached under an earlier scene (the provider keeps each surface); this scene's
+      // values-ready mark still needs it.
+      latest.current.controller?.markValuesReady(key);
       return;
+    }
+    if (detailRequests.current.has(key)) return;
     const abort = new AbortController();
     detailRequests.current.set(key, abort);
     setFailures((current) => withoutKey(current, key));
+    // A request aborted at a commit may settle after a newer one for the same key started.
+    const release = () => {
+      if (detailRequests.current.get(key) === abort)
+        detailRequests.current.delete(key);
+    };
     detailProvider
       .getSurfaceDetail(entry.ref, abort.signal)
       .then(() => {
-        detailRequests.current.delete(key);
+        release();
         setDetailVersion((version) => version + 1);
         latest.current.controller?.markValuesReady(key);
       })
       .catch((caught: unknown) => {
-        detailRequests.current.delete(key);
+        release();
         const failure = classifyDetailFailure(caught);
-        if (failure === 'aborted') return;
+        if (failure === 'aborted' || abort.signal.aborted || !isCurrent(key))
+          return;
         setFailures((current) => ({ ...current, [key]: failure }));
         if (failure !== 'invalid') return;
         const {
@@ -224,6 +244,7 @@ export function useArtifactPipeline(
   }, [catalog, provider, state?.entityId, state?.artifactVersion, dataAttempt]);
 
   useEffect(() => {
+    sceneEntry.current = null;
     displayedRef.current = null;
     targetRef.current = null;
     setDisplayed(null);
@@ -247,19 +268,31 @@ export function useArtifactPipeline(
       ]);
       for (const key of [...entries.current.keys()])
         if (!keep.has(key)) entries.current.delete(key);
+      // A left artifact's detail tier is neither awaited nor reported.
+      for (const [key, abort] of [...detailRequests.current])
+        if (!keep.has(key)) {
+          detailRequests.current.delete(key);
+          abort.abort();
+        }
+      setFailures((current) => {
+        let next = current;
+        for (const key of Object.keys(current))
+          if (!keep.has(key)) next = withoutKey(next, key);
+        return next;
+      });
     });
     const removeMark = controller.onMark((mark) => {
-      const pending = latestRequest.current;
-      if (!pending) return;
+      const entry = sceneEntry.current;
+      if (!entry) return;
       if (
         (mark === 'observations-visible' || mark === 'surface-first-chunk') &&
         displayedRef.current === null
       ) {
-        targetRef.current = pending.entry;
-        setRevealing(pending.entry);
+        targetRef.current = entry;
+        setRevealing(entry);
         if (mark === 'surface-first-chunk') setRevealLegend(true);
       }
-      if (mark === 'surface-visible') loadDetail(pending.entry);
+      if (mark === 'surface-visible') loadDetail(entry);
     });
     return () => {
       removeCommit();
@@ -291,25 +324,43 @@ export function useArtifactPipeline(
         current,
         reducedMotion,
       );
-      await controller.setArtifact(
-        {
-          artifactId: ref.id,
-          artifactKey: request.entry.artifactKey,
-          lookAt: latest.current.cameraApplied.current
-            ? undefined
-            : { lat: current.camera.lat, lon: current.camera.lon },
-          observations: request.observations,
-          surface: request.surface,
-        },
-        (progress) => {
-          if (!live()) return;
-          latest.current.activity.update(id, {
-            detail: progress.detail,
-            label: `Rendering ${ref.label}`,
-            progress: progress.progress,
-          });
-        },
-      );
+      // The scene begins this request's epoch now: a cold reveal of another artifact ends.
+      if (
+        displayedRef.current === null &&
+        sceneEntry.current !== request.entry
+      ) {
+        targetRef.current = null;
+        setRevealing(null);
+        setRevealLegend(false);
+      }
+      sceneEntry.current = request.entry;
+      try {
+        await controller.setArtifact(
+          {
+            artifactId: ref.id,
+            artifactKey: request.entry.artifactKey,
+            lookAt: latest.current.cameraApplied.current
+              ? undefined
+              : { lat: current.camera.lat, lon: current.camera.lon },
+            observations: request.observations,
+            surface: request.surface,
+          },
+          (progress) => {
+            if (!live()) return;
+            latest.current.activity.update(id, {
+              detail: progress.detail,
+              label: `Rendering ${ref.label}`,
+              progress: progress.progress,
+            });
+          },
+        );
+      } catch (caught) {
+        // After a failed request the scene rebuilds the displayed artifact (Task 62's fallback).
+        // A cancelled handoff's scene is gone or has a newer request; it decides nothing here.
+        if (!canceled && sceneEntry.current === request.entry)
+          sceneEntry.current = displayedRef.current;
+        throw caught;
+      }
       if (!live()) return;
       if (!latest.current.cameraApplied.current) {
         controller.setCamera(

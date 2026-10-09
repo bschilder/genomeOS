@@ -6,6 +6,10 @@ import type {
   ObservationArtifact,
 } from '../../atlas/contracts';
 import type { SurfaceArtifact } from '../../atlas/surface-columns';
+import {
+  AtlasWorkerError,
+  isArtifactValidationError,
+} from '../../atlas/worker/client';
 import type { DetailStatus } from './surface-cell-view';
 
 export type DetailFailure = 'unavailable' | 'invalid';
@@ -52,21 +56,19 @@ export function detailStatusFor(
   return surface?.detail ? 'ready' : 'loading';
 }
 
-/** Checksum or validation failures are corrupt data; everything else is retryable. */
+/**
+ * Corrupt data is the worker's checksum or validation failure (`isArtifactValidationError`, the
+ * one owner of that rule); everything else is retryable.
+ */
 export function classifyDetailFailure(
   error: unknown,
 ): DetailFailure | 'aborted' {
-  if (!(error instanceof Error)) return 'unavailable';
-  if (error.name === 'AbortError') return 'aborted';
-  const code = (error as Error & { code?: unknown }).code;
-  if (code === 'cancelled') return 'aborted';
   if (
-    code === 'checksum' ||
-    code === 'validation' ||
-    error.name === 'GosaError'
+    (error instanceof Error && error.name === 'AbortError') ||
+    (error instanceof AtlasWorkerError && error.code === 'cancelled')
   )
-    return 'invalid';
-  return 'unavailable';
+    return 'aborted';
+  return isArtifactValidationError(error) ? 'invalid' : 'unavailable';
 }
 
 export function withoutKey<T>(

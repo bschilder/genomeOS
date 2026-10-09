@@ -8,6 +8,8 @@ import {
   detailStatusFor,
   withoutKey,
 } from '../src/components/atlas/artifact-pipeline';
+import { AtlasWorkerError } from '../src/atlas/worker/client';
+import type { WorkerErrorCode } from '../src/atlas/worker/protocol';
 import { columnarSurface } from './helpers/columnar-surface';
 
 const cells = [
@@ -19,8 +21,8 @@ const cells = [
   },
 ];
 
-function coded(code: string): Error {
-  return Object.assign(new Error(`worker ${code}`), { code });
+function coded(code: WorkerErrorCode): AtlasWorkerError {
+  return new AtlasWorkerError(code, `worker ${code}`, null);
 }
 
 describe('detail-tier state rules', () => {
@@ -43,9 +45,24 @@ describe('detail-tier state rules', () => {
     expect(classifyDetailFailure(coded('validation'))).toBe('invalid');
     expect(
       classifyDetailFailure(
-        Object.assign(new Error('bad column'), { name: 'GosaError' }),
+        new AtlasWorkerError(
+          'validation',
+          'cross_tier: bits differ',
+          'cross_tier',
+        ),
       ),
     ).toBe('invalid');
+    // Only the worker's own error says corrupt (isArtifactValidationError); a look-alike is not.
+    expect(
+      classifyDetailFailure(
+        Object.assign(new Error('worker checksum'), { code: 'checksum' }),
+      ),
+    ).toBe('unavailable');
+    expect(
+      classifyDetailFailure(
+        Object.assign(new Error('bad column'), { name: 'GosaError' }),
+      ),
+    ).toBe('unavailable');
     expect(classifyDetailFailure(coded('internal'))).toBe('unavailable');
     expect(
       classifyDetailFailure(new Error('Atlas request stalled for 15000 ms')),
