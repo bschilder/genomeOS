@@ -30,6 +30,16 @@ jobs:
       - name: Test
         env:
           COVERAGE_CORE: sysmon
+          # One BLAS/OpenMP thread per xdist worker (the NUMERICAL_THREAD_CAPS set). JAX's CPU
+          # Cholesky and triangular solves call scipy's bundled OpenBLAS, whose thread pool wakes
+          # and spin-waits on every one of the ~10^5 tiny calls in an inducing-point fit. With the
+          # OpenBLAS scipy build that Linux wheels ship, one h3 inducing fit measured 38 s on one
+          # thread and 131 s on the default pool, and four at once ran past 1,470 s; on this
+          # runner it was the 893 s test that set the job's critical path.
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
         run: pytest -n auto --dist loadfile -v --durations=40 --cov=genomeos --cov-report=term-missing --cov-report=json
       - name: Coverage badge is current
         run: |
