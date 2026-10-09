@@ -17,7 +17,16 @@ const isCurrent = (href: string) =>
 
 <header class="site-header" data-site-header>
   <div class="site-header__inner">
-    <a class="wordmark" href={sitePath('/')}>genomeOS</a>
+    <a class="wordmark" href={sitePath('/')}>
+      <img
+        class="wordmark__logo"
+        src={sitePath('/brand/genomeos-wordmark-dark.svg')}
+        width="1391"
+        height="228"
+        alt="genomeOS"
+        decoding="async"
+      />
+    </a>
 
     <nav class="desktop-nav" aria-label="Primary navigation">
       <ul>

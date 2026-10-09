@@ -241,17 +241,21 @@ for (const phone of PHONE_PROFILES) {
         const menu = document
           .querySelector('.mobile-nav summary')!
           .getBoundingClientRect();
+        const logo =
+          document.querySelector<HTMLImageElement>('.wordmark__logo')!;
+        const logoBox = logo.getBoundingClientRect();
         return {
           chipRight: chip.getBoundingClientRect().right,
           clientWidth: inner.clientWidth,
           label: label.textContent,
           labelOverflow: getComputedStyle(label).textOverflow,
+          logoHeight: logoBox.height,
+          logoNaturalWidth: logo.naturalWidth,
+          logoWidth: logoBox.width,
           menuHeight: menu.height,
           menuLeft: menu.left,
           menuWidth: menu.width,
           scrollWidth: inner.scrollWidth,
-          wordmarkFont: getComputedStyle(document.querySelector('.wordmark')!)
-            .fontFamily,
         };
       });
       expect(header.scrollWidth).toBeLessThanOrEqual(header.clientWidth);
@@ -260,7 +264,11 @@ for (const phone of PHONE_PROFILES) {
       expect(header.menuHeight).toBeGreaterThanOrEqual(44);
       expect(header.label).toBe('Atlas ready');
       expect(header.labelOverflow).toBe('ellipsis');
-      expect(header.wordmarkFont).toContain('Raleway');
+      // The logo keeps the ~106 px the old 1rem text wordmark took here.
+      expect(header.logoNaturalWidth).toBeGreaterThan(0);
+      expect(header.logoWidth).toBeLessThanOrEqual(106);
+      expect(header.logoHeight).toBeGreaterThanOrEqual(16);
+      await expect(page.locator('.wordmark')).toHaveAccessibleName('genomeOS');
       await expect(page.locator('.mobile-nav summary')).toHaveAccessibleName(
         'Menu',
       );

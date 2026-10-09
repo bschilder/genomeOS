@@ -100,14 +100,24 @@ svg {
   transition: min-height 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
+/*
+ * The header logo is the wordmark crop of the genomeOS Foundation artwork
+ * (public/brand/genomeos-wordmark-dark.svg). CSS sets its height; its width
+ * follows from the img's width/height attributes, so nothing shifts while the
+ * SVG loads. The compact header scales it down with the bar.
+ */
 .wordmark {
-  color: var(--color-starlight);
-  font-family: var(--font-display);
-  font-size: 1.28rem;
-  font-weight: 380;
-  letter-spacing: 0.13em;
+  --wordmark-height: 1.6rem;
+  --wordmark-scale: 1;
+  flex: none;
   text-decoration: none;
-  transition: font-size 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.wordmark__logo {
+  width: auto;
+  max-width: none;
+  height: calc(var(--wordmark-height) * var(--wordmark-scale));
+  transition: height 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
 .brand-name {
@@ -128,7 +138,7 @@ svg {
 }
 
 .site-header--compact .wordmark {
-  font-size: 1.16rem;
+  --wordmark-scale: 0.9;
 }
 
 .desktop-nav,
@@ -266,9 +276,23 @@ svg {
   min-height: 9rem;
   padding-block: 2rem;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 2rem;
+}
+
+.site-footer__brand {
+  display: grid;
+  justify-items: start;
+  gap: 0.9rem;
+}
+
+/* Wide enough that the tagline stays legible (its glyphs are ~10% of the
+ * lockup's height); a phone footer column caps it. A definite width keeps the
+ * brand column's max-content at 22rem, not the SVG's 1380 px natural width. */
+.site-footer__logo {
+  width: 22rem;
+  height: auto;
 }
 
 .site-footer p {
@@ -339,6 +363,11 @@ svg {
 }
 
 @media (max-width: 46rem) {
+  /* About the old 1.28rem text wordmark's width, so the phone header fits at 360 px. */
+  .wordmark {
+    --wordmark-height: 1.3rem;
+  }
+
   .launch-atlas-cta {
     padding-inline: 0.7rem;
   }
@@ -391,12 +420,22 @@ svg {
   }
   .site-header,
   .site-header__inner,
-  .wordmark,
+  .wordmark__logo,
   .launch-atlas-cta {
     transition: none;
   }
   .launch-atlas-cta:hover .launch-atlas-cta__rocket,
   .launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
     animation: none;
+  }
+}
+
+/* The logo is the dark-theme artwork (light glyphs on transparency), so it
+ * keeps its dark ground when a forced palette repaints the header. */
+@media (forced-colors: active) {
+  .wordmark__logo,
+  .site-footer__logo {
+    forced-color-adjust: none;
+    background: var(--color-void);
   }
 }

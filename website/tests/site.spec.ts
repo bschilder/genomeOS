@@ -390,6 +390,128 @@ test('navigation stays visible and condenses after scrolling', async ({
   expect(navFontSize).toBeGreaterThanOrEqual(16);
 });
 
+test('the header home link is the logo and shrinks with the compact bar', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/');
+  const home = page
+    .locator('.site-header')
+    .getByRole('link', { name: 'genomeOS', exact: true });
+  await expect(home).toHaveAttribute('href', '/');
+  const logo = home.getByRole('img', { name: 'genomeOS', exact: true });
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveJSProperty('complete', true);
+  await expect(logo).not.toHaveAttribute('loading', 'lazy');
+
+  const measure = () =>
+    logo.evaluate((img: HTMLImageElement) => {
+      const box = img.getBoundingClientRect();
+      return {
+        height: box.height,
+        naturalHeight: img.naturalHeight,
+        naturalWidth: img.naturalWidth,
+        width: box.width,
+      };
+    });
+  const initial = await measure();
+  expect(initial.naturalWidth).toBeGreaterThan(0);
+  expect(initial.width / initial.height).toBeCloseTo(
+    initial.naturalWidth / initial.naturalHeight,
+    1,
+  );
+  // About 1.6-2x the old text wordmark's cap height; phones keep its width.
+  const [minHeight, maxHeight] = isMobile ? [20, 26] : [26, 33];
+  expect(initial.height).toBeGreaterThanOrEqual(minHeight);
+  expect(initial.height).toBeLessThanOrEqual(maxHeight);
+
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect(page.locator('.site-header')).toHaveClass(
+    /site-header--compact/,
+  );
+  await expect
+    .poll(async () => (await measure()).height)
+    .toBeLessThan(initial.height * 0.95);
+});
+
+test('the footer shows the full logo with a legible tagline', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const lockup = page
+    .locator('.site-footer')
+    .getByRole('img', { name: /^genomeOS Foundation.*benefit of all$/ });
+  await lockup.scrollIntoViewIfNeeded();
+  await expect(lockup).toBeVisible();
+  await expect
+    .poll(() => lockup.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  // The tagline's glyphs span 43.2 of the artwork's 435 user units of height.
+  const taglinePx = await lockup.evaluate(
+    (img) => (img.getBoundingClientRect().height * 43.23) / 435,
+  );
+  expect(taglinePx).toBeGreaterThanOrEqual(10);
+});
+
+test(
+  'brand SVGs are served and the header crop frames the whole wordmark',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    const svgs = new Map<string, string>();
+    for (const name of [
+      'genomeos-wordmark-dark.svg',
+      'genomeos-foundation-dark.svg',
+    ]) {
+      const response = await request.get(`/brand/${name}`);
+      expect(response.status(), name).toBe(200);
+      expect(response.headers()['content-type'], name).toContain(
+        'image/svg+xml',
+      );
+      svgs.set(name, await response.text());
+    }
+
+    await page.setContent(
+      svgs.get('genomeos-wordmark-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const frame = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const box = (id: string) =>
+        document.querySelector<SVGGraphicsElement>(`#${id}`)!.getBBox();
+      const genome = box('wordmark-genome');
+      const os = box('wordmark-os');
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        bottom: y + height,
+        foundationTop: box('foundation-line').y,
+        height,
+        left: x,
+        right: x + width,
+        top: y,
+        width,
+        wordmark: {
+          bottom: Math.max(genome.y + genome.height, os.y + os.height),
+          left: Math.min(genome.x, os.x),
+          right: Math.max(genome.x + genome.width, os.x + os.width),
+          top: Math.min(genome.y, os.y),
+        },
+      };
+    });
+    // At least 1% of clear space on every side, so no glyph edge is clipped,
+    // and the FOUNDATION line below the wordmark stays out of the frame.
+    expect(frame.wordmark.left - frame.left).toBeGreaterThan(
+      0.01 * frame.width,
+    );
+    expect(frame.right - frame.wordmark.right).toBeGreaterThan(
+      0.01 * frame.width,
+    );
+    expect(frame.wordmark.top - frame.top).toBeGreaterThan(0.01 * frame.height);
+    expect(frame.bottom - frame.wordmark.bottom).toBeGreaterThan(
+      0.01 * frame.height,
+    );
+    expect(frame.foundationTop).toBeGreaterThan(frame.bottom);
+  },
+);
+
 test('visible project names use the wordmark typography', async ({ page }) => {
   for (const route of brandAuditRoutes) {
     await page.goto(route);
@@ -409,8 +531,9 @@ test('visible project names use the wordmark typography', async ({ page }) => {
             !nonVisual &&
             getComputedStyle(parent).display !== 'none'
           ) {
+            // The header wordmark is the logo image, so it has no text node.
             const wordmark = parent.closest<HTMLElement>(
-              '.brand-name, .wordmark, .site-title',
+              '.brand-name, .site-title',
             );
             if (!wordmark) {
               failures.push(
