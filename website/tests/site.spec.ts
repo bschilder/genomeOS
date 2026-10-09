@@ -2,7 +2,12 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
-import { installAtlasBrowserFixture } from './atlas-browser-fixture';
+import { dataHref } from '../src/lib/data-url';
+import {
+  E2E_ARTIFACT_DATA_BASE,
+  installAtlasBrowserFixture,
+  readInlineCatalog,
+} from './atlas-browser-fixture';
 import {
   expandExplorerSheet,
   INSPECTOR_CAMERA,
@@ -112,7 +117,7 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
     header.getByRole('link', { name: 'Launch Atlas', exact: true }),
   ).toHaveCount(0);
   await expect(header.getByLabel('Atlas status')).toContainText(
-    /loading catalog|loading artifact|validating|rendering|Atlas ready/i,
+    /loading|validating|rendering|revealing|Atlas ready/i,
   );
 
   await page.goto('/project/');
@@ -636,11 +641,7 @@ test('explorer switches among globe, map, and perspective views', async ({
 
 test('explorer restores a complete shareable URL', async ({ page }) => {
   test.setTimeout(90_000);
-  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
-  expect(servedCatalog.ok()).toBe(true);
-  const servedArtifacts = (await servedCatalog.json()) as {
-    artifacts: { id: string; model_version: string }[];
-  };
+  const servedArtifacts = await readInlineCatalog(page);
   expect(servedArtifacts.artifacts).toHaveLength(30);
   expect(servedArtifacts.artifacts).toContainEqual(
     expect.objectContaining({
@@ -700,15 +701,7 @@ test('explorer recovers a stale version link for an available map', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
-  expect(servedCatalog.ok()).toBe(true);
-  const servedArtifacts = (await servedCatalog.json()) as {
-    artifacts: {
-      data_version: string;
-      id: string;
-      model_version: string;
-    }[];
-  };
+  const servedArtifacts = await readInlineCatalog(page);
   const current = servedArtifacts.artifacts.find(
     ({ id }) => id === 'hbs-rs334',
   );
@@ -1288,15 +1281,21 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expandExplorerSheet(page);
 
   await page.locator('.atlas-downloads > summary').click();
-  await expect(
-    page.getByRole('link', { name: 'Artifact manifest' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.manifest.json');
-  await expect(
-    page.getByRole('link', { name: 'Measured observations' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.observations.json');
-  await expect(
-    page.getByRole('link', { name: 'Inferred surface' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.surface.json');
+  const hbs = (await readInlineCatalog(page)).artifacts.find(
+    ({ id }) => id === 'hbs-rs334',
+  );
+  if (hbs?.downloads.observations == null)
+    throw new Error('hbs-rs334 downloads are missing from the inline catalog');
+  for (const [name, key] of [
+    ['Artifact manifest', hbs.downloads.manifest.url],
+    ['Measured observations', hbs.downloads.observations.url],
+    ['Inferred surface', hbs.downloads.surface.url],
+  ] as const) {
+    await expect(page.getByRole('link', { name })).toHaveAttribute(
+      'href',
+      dataHref(key, E2E_ARTIFACT_DATA_BASE),
+    );
+  }
 
   await page.getByRole('button', { name: 'More info' }).click();
   const externalPanel = page.getByRole('complementary', {
