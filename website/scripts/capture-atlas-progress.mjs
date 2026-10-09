@@ -5,6 +5,8 @@ import path from 'node:path';
 
 import { chromium } from 'playwright';
 
+import { delayArtifactTier } from '../tests/atlas-browser-fixture.ts';
+
 const websiteRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
@@ -65,9 +67,8 @@ try {
   await page.locator('[data-atlas-ready="true"]').waitFor({
     timeout: 60_000,
   });
-  await page.route('**/g6pd-deficiency.surface.json', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
-    await route.continue();
+  await delayArtifactTier(page, 'g6pd-deficiency', 'render', 5_000, {
+    appUrl: `${baseUrl}/app/`,
   });
   await page
     .getByRole('button', { name: /Select dataset\. Current dataset:/ })

@@ -64,4 +64,18 @@ describe('Atlas e2e build wiring', () => {
     expect(config).toContain("include: ['tests/**/*.test.ts']");
     expect(config).not.toContain('exclude');
   });
+
+  it('delays the progress capture through the catalog-keyed helper', () => {
+    const script = readFileSync(
+      path.join(websiteRoot, 'scripts/capture-atlas-progress.mjs'),
+      'utf8',
+    );
+    expect(script).toContain(
+      "import { delayArtifactTier } from '../tests/atlas-browser-fixture.ts';",
+    );
+    expect(script).toContain(
+      "await delayArtifactTier(page, 'g6pd-deficiency', 'render', 5_000, {",
+    );
+    expect(script).not.toMatch(/\.surface\.json/);
+  });
 });
