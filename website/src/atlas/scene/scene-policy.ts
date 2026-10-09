@@ -78,3 +78,20 @@ export function styleAtlasScene(viewer: Viewer): void {
   scene.postProcessStages.bloom.enabled = false;
   viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5);
 }
+
+/** Defers the sky-box textures until the map is ready (spec 2026-10-07 §B.6.9). */
+export function hideSkyUntilReady(scene: {
+  skyBox?: { show: boolean } | undefined;
+  requestRender(): void;
+}): () => void {
+  const skyBox = scene.skyBox;
+  if (!skyBox) return () => {};
+  skyBox.show = false;
+  let revealed = false;
+  return () => {
+    if (revealed) return;
+    revealed = true;
+    skyBox.show = true;
+    scene.requestRender();
+  };
+}
