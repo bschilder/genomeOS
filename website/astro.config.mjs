@@ -86,6 +86,28 @@ export default defineConfig({
   ],
   vite: {
     envDir: '..',
+    build: {
+      rolldownOptions: {
+        output: {
+          // Fast-load design §B.1: a stable chunk name lets the cold-load
+          // harness attribute long animation frames to Cesium. Rolldown's
+          // replacement for the deprecated manualChunks.
+          codeSplitting: {
+            groups: [
+              {
+                name: 'cesium',
+                // JavaScript only. CSS must stay out of the group: AtlasExplorer.tsx
+                // still imports cesium/Build/Cesium/Widgets/widgets.css, and if that
+                // stub lands in the Cesium chunk the island gains a static
+                // import"./cesium.<hash>.js", loading all of Cesium with the island
+                // and undoing Task 35 (B2.12)'s lazy scene chunk.
+                test: /[\\/]node_modules[\\/](?:cesium|@cesium[\\/][^\\/]+)[\\/].*\.js$/,
+              },
+            ],
+          },
+        },
+      },
+    },
     define: {
       CESIUM_BASE_URL: JSON.stringify(`${normalizedBase}cesium/`),
     },
