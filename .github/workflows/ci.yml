@@ -30,7 +30,17 @@ jobs:
       - name: Test
         env:
           COVERAGE_CORE: sysmon
-        run: pytest -n auto --dist loadfile -v --cov=genomeos --cov-report=term-missing --cov-report=json
+          # One BLAS/OpenMP thread per xdist worker (the NUMERICAL_THREAD_CAPS set). JAX's CPU
+          # Cholesky and triangular solves call scipy's OpenBLAS, whose thread pool wakes and
+          # spin-waits on every one of the many tiny calls in an inducing-point fit; with four
+          # workers on a 4-vCPU runner that oversubscription made one surface-fit test take
+          # 893 s on CI (issue #413). Uncapped OpenBLAS was over an order of magnitude slower
+          # than capped in local measurements; the CI --durations output is the reference.
+          OMP_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
+        run: pytest -n auto --dist loadfile -v --durations=40 --cov=genomeos --cov-report=term-missing --cov-report=json
       - name: Coverage badge is current
         run: |
           python scripts/render_coverage_badge.py --readme README.md
