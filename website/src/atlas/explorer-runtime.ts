@@ -36,3 +36,17 @@ export function supportsWebGL(): boolean {
   const canvas = document.createElement('canvas');
   return Boolean(canvas.getContext('webgl2') ?? canvas.getContext('webgl'));
 }
+
+export const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)';
+
+/**
+ * The reduced-motion preference at first render (Cesium globe design §12). The scene is built
+ * with it, so reading it only in an effect would build a second Viewer for reduced-motion users.
+ * The server cannot know it; no server-rendered markup depends on it, so hydration still matches.
+ */
+export function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia(REDUCED_MOTION_QUERY).matches
+  );
+}

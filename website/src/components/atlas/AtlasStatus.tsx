@@ -26,23 +26,27 @@ interface AtlasStatusProps {
 
 /**
  * Why the globe cannot render (Cesium globe design §12): WebGL never started, or a frame threw
- * and Cesium stopped rendering. Both offer Retry globe; the explorer chooses how to retry.
+ * and rendering stopped. Both offer Retry globe; the explorer chooses how to retry, and for a
+ * render failure that is a page reload, which the copy says. Browser requirements only help with
+ * WebGL.
  */
 export type SceneFailure = 'webgl' | 'render';
 
 const SCENE_FAILURE_COPY: Record<
   SceneFailure,
-  { kicker: string; title: string; body: string }
+  { kicker: string; title: string; body: string; requirements: boolean }
 > = {
   webgl: {
     kicker: 'Globe unavailable',
     title: 'This globe needs WebGL',
     body: 'Your browser could not start the graphics engine. Try enabling hardware acceleration or opening the explorer in a current browser. No scientific data was changed.',
+    requirements: true,
   },
   render: {
     kicker: 'Globe interrupted',
     title: 'The globe stopped rendering',
-    body: 'A network or graphics error interrupted the graphics engine. Retry the globe to start it again. No scientific data was changed.',
+    body: 'A network or graphics error caused this. Retry reloads the explorer with your current view. No scientific data was changed.',
+    requirements: false,
   },
 };
 
@@ -120,13 +124,15 @@ export function AtlasStatus({
           <button type="button" onClick={onRetry}>
             Retry globe
           </button>
-          <a
-            href="https://cesium.com/learn/cesiumjs-learn/cesiumjs-quickstart/#system-requirements"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Browser requirements
-          </a>
+          {copy.requirements && (
+            <a
+              href="https://cesium.com/learn/cesiumjs-learn/cesiumjs-quickstart/#system-requirements"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Browser requirements
+            </a>
+          )}
         </div>
       </section>
     );

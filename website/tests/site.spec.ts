@@ -1522,6 +1522,9 @@ test('explorer reports unavailable WebGL with a retry action', async ({
   await page.goto('/app/');
   await expect(page.getByText('This globe needs WebGL')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry globe' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Browser requirements' }),
+  ).toBeVisible();
 });
 
 test('explorer recovers from a render-loop error through Retry globe', async ({
@@ -1553,21 +1556,47 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
       void binding.reportRawCesiumErrorPanel?.();
     }).observe(document, { childList: true, subtree: true });
   });
-  await page.goto('/app/');
+  // Retry reloads the page, so a non-default map, view and metric must come back from the URL.
+  await page.goto(
+    '/app/?entity=g6pd-deficiency&view=perspective&metric=post_sd',
+  );
 
   const rawPanel = page.locator('.cesium-widget-errorPanel');
+  const explorer = page.locator('[data-atlas-explorer]');
   const failure = page
     .getByRole('alert')
     .filter({ hasText: 'The globe stopped rendering' });
   await expect(failure.or(rawPanel).first()).toBeVisible({ timeout: 60_000 });
   await expect(rawPanel).toHaveCount(0);
   await expect(failure).toContainText('network or graphics error');
+  await expect(failure).toContainText('Retry reloads the explorer');
+  await expect(
+    failure.getByRole('link', { name: 'Browser requirements' }),
+  ).toHaveCount(0);
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'false');
   expect(polygonWorkerRequests).toBeGreaterThan(0);
 
-  await failure.getByRole('button', { name: 'Retry globe' }).click();
-  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
-    timeout: 60_000,
+  await page.evaluate(() => {
+    (window as Window & { beforeRetry?: boolean }).beforeRetry = true;
   });
+  await Promise.all([
+    page.waitForEvent('load'),
+    failure.getByRole('button', { name: 'Retry globe' }).click(),
+  ]);
+  expect(
+    await page.evaluate(
+      () => (window as Window & { beforeRetry?: boolean }).beforeRetry,
+    ),
+  ).toBeUndefined();
+  await expect(
+    page.locator(
+      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+    ),
+  ).toBeVisible({ timeout: 60_000 });
+  const restored = new URL(page.url()).searchParams;
+  expect(restored.get('entity')).toBe('g6pd-deficiency');
+  expect(restored.get('view')).toBe('perspective');
+  expect(restored.get('metric')).toBe('post_sd');
   await expect(failure).toHaveCount(0);
   await expect(rawPanel).toHaveCount(0);
   expect(rawPanelSeen).toBe(false);

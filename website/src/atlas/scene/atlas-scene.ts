@@ -27,6 +27,7 @@ import {
   type ObservationPrimitiveGroup,
 } from './observation-layer';
 import { bindAtlasPicking } from './picking';
+import { RenderLoop } from './render-loop';
 import {
   DEFAULT_LAYERS,
   DEFAULT_OBSERVATIONS,
@@ -94,8 +95,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     (warnings: readonly ContextWarning[]) => void
   >();
   readonly #warnings = new Map<ContextWarning['id'], ContextWarning>();
-  readonly #renderErrorListeners = new Set<(error: unknown) => void>();
-  #renderError: { error: unknown } | null = null;
+  readonly #renderLoop: RenderLoop;
   readonly #unbindKeyboard: () => void;
   readonly #unbindPicking: () => void;
   readonly #removeMoveEnd: () => void;
@@ -147,13 +147,19 @@ class CesiumAtlasScene implements AtlasSceneController {
       scene3DOnly: false,
       sceneModePicker: false,
       selectionIndicator: false,
-      // Cesium's own panel is a dead end; render errors reach the explorer's retry instead.
+      // Cesium's own panel is a dead end, and its loop stops silently on errors outside
+      // Scene.render; the Atlas loop sends every render error to the explorer's retry instead.
       showRenderLoopErrors: false,
       timeline: false,
+      useDefaultRenderLoop: false,
       vrButton: false,
     });
+    this.#renderLoop = new RenderLoop(() => {
+      this.#viewer.resize();
+      this.#viewer.render();
+    });
     this.#removeRenderError = this.#viewer.scene.renderError.addEventListener(
-      (_scene, error: unknown) => this.#failRendering(error),
+      (_scene, error: unknown) => this.#renderLoop.fail(error),
     );
     this.#contextController = new ContextController(
       this.#viewer,
@@ -190,24 +196,12 @@ class CesiumAtlasScene implements AtlasSceneController {
       .then((status) => {
         if (!this.#destroyed) this.#setContextStatus(status);
       });
+    this.#renderLoop.start();
   }
 
   #setContextStatus(status: ContextStatus): void {
     this.#contextStatus = status;
     for (const listener of this.#contextListeners) listener(status);
-  }
-
-  /**
-   * Cesium has already stopped its render loop (Cesium globe design §12). A transient failure such
-   * as a worker module that did not download fails every later frame, and the document-wide
-   * geometry workers keep that failed import, so the error is reported once and recovery is a
-   * fresh page (the explorer's Retry globe), never a restarted loop or a new scene.
-   */
-  #failRendering(error: unknown): void {
-    if (this.#destroyed || this.#renderError) return;
-    this.#renderError = { error };
-    console.error('The Atlas globe stopped rendering.', error);
-    for (const listener of this.#renderErrorListeners) listener(error);
   }
 
   #setWarning(warning: ContextWarningUpdate): void {
@@ -690,9 +684,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   }
 
   onRenderError(listener: (error: unknown) => void): () => void {
-    this.#renderErrorListeners.add(listener);
-    if (this.#renderError) listener(this.#renderError.error);
-    return () => this.#renderErrorListeners.delete(listener);
+    return this.#renderLoop.onError(listener);
   }
 
   destroy(): void {
@@ -701,6 +693,7 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#buildSequence += 1;
     this.#artifactSequence += 1;
     this.#elevationSequence += 1;
+    this.#renderLoop.stop();
     this.#unbindKeyboard();
     this.#unbindPicking();
     this.#removeMoveEnd();

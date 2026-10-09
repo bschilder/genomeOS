@@ -15,7 +15,9 @@ import {
   artifactVersion,
   displayKey,
   errorMessage,
+  prefersReducedMotion,
   PUBLIC_SCENE_CAPABILITIES,
+  REDUCED_MOTION_QUERY,
   supportsWebGL,
 } from '../../atlas/explorer-runtime';
 import {
@@ -106,7 +108,7 @@ export default function AtlasExplorer({
   const [error, setError] = useState<string | null>(null);
   const [sceneFailure, setSceneFailure] = useState<SceneFailure | null>(null);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [explorerNode, setExplorerNode] = useState<HTMLDivElement | null>(null);
   const [topSlot, setTopSlot] = useState<HTMLDivElement | null>(null);
   const {
@@ -153,7 +155,7 @@ export default function AtlasExplorer({
     return nearestPlaceContext(candidate.value, placeCatalog);
   };
   useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const media = window.matchMedia(REDUCED_MOTION_QUERY);
     const updatePreference = () => setReducedMotion(media.matches);
     updatePreference();
     media.addEventListener('change', updatePreference);
@@ -621,7 +623,9 @@ export default function AtlasExplorer({
           className="atlas-explorer"
           data-atlas-explorer="AtlasExplorer"
           data-atlas-active={activeArtifact?.id ?? ''}
-          data-atlas-ready={status === 'ready' ? 'true' : 'false'}
+          data-atlas-ready={
+            status === 'ready' && !sceneFailure ? 'true' : 'false'
+          }
           role="application"
           aria-label="genomeOS globe explorer"
           ref={setExplorerNode}
