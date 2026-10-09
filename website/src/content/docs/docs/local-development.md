@@ -83,3 +83,21 @@ The `/app/` page inlines the Atlas catalog at build time from `public/data/atlas
 Set `ATLAS_CATALOG_PATH` (relative to `website/`) to build against another catalog, for example
 `ATLAS_CATALOG_PATH=tests/fixtures/atlas/e2e/catalog.json npm run build`. The build fails if that
 catalog does not pass the strict browser schema.
+
+## Atlas cold-load measurement
+
+`tests/atlas-cold-load.spec.ts` measures the default HbS map in headed Chrome on a hardware GPU
+(fast-load design §B.1). It needs the encoded web data and a production build:
+
+```bash
+python scripts/encode_atlas_web.py   # from the repository root
+cd website
+npm run build
+npm run test:performance -- atlas-cold-load
+```
+
+Each profile — desktop 1440×900, and 390×844 at DPR 3 with 4× CPU on DevTools Fast 4G and Slow 4G —
+runs three times in fresh contexts. The JSON report and bytes ledger are written to `test-results/`
+and attached to the Playwright report. Budgets are asserted on medians and skipped on software
+renderers. To measure an older build, serve its `dist/` and set `ATLAS_COLD_LOAD_BASELINE=1` and
+`ATLAS_COLD_LOAD_BASE_URL`.
