@@ -2159,24 +2159,60 @@ test('a corrupted detail object removes the map and offers Retry data', async ({
   page,
 }) => {
   test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
   const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'detail');
+  // The detail tier loads after the reveal (fast-load design §B.2). Holding the corrupted body until
+  // the surface and its cell edges are shown makes this a test of their removal, not of a surface
+  // that never finished.
+  const detail = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'detail',
+    Number.POSITIVE_INFINITY,
+  );
   await page.goto('/app/');
 
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-edges-ready', 'true', {
+    timeout: 30_000,
+  });
+  await expect.poll(() => detail.hits(), { timeout: 30_000 }).toBe(1);
+  // The cell values wait on the held tier: only a detail tier that passes validation marks them ready.
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'false');
+
+  detail.release();
   const failure = page.locator('.atlas-error');
   await expect(failure).toContainText('That map could not be displayed.', {
     timeout: 45_000,
   });
-  const explorer = page.locator('.atlas-explorer');
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  expect(corruption.hits()).toBe(1);
+  // §B.2: the surface and support layers are removed and the map is marked not ready. The cell
+  // edges belong to the surface, so their mark is withdrawn with it (`data-atlas-surface-visible` is
+  // a one-shot load mark and stays set). The observations are not part of the removal, so
+  // `data-atlas-displayed` keeps hbs-rs334, unlike a corrupted render object, which renders nothing.
   await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
-  await expect(explorer).not.toHaveAttribute('data-atlas-values-ready', 'true');
+  await expect(explorer).toHaveAttribute('data-atlas-edges-ready', 'false');
+  // Stable for 1 s: nothing brings the edges back or marks the failed tier's values ready.
+  await page.waitForTimeout(1_000);
+  expect(await explorer.getAttribute('data-atlas-ready')).toBe('false');
+  expect(await explorer.getAttribute('data-atlas-edges-ready')).toBe('false');
+  expect(await explorer.getAttribute('data-atlas-values-ready')).toBe('false');
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
 
   await corruption.restore();
-  await failure.getByRole('button', { name: 'Retry data' }).click();
+  await retry.click();
   await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
     timeout: 45_000,
   });
   await expect(explorer).toHaveAttribute('data-atlas-ready', 'true');
   await expect(page.locator('.atlas-error')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
 });
 
 test('a browser that cannot start the data worker gets Retry data, not an endless load', async ({
@@ -2223,5 +2259,5 @@ test('Retry data recovers once the render object is served intact again', async 
   await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
     timeout: 45_000,
   });
-  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+  await expect.poll(() => displayedArtifactIds(page)).toEqual(['hbs-rs334']);
 });
