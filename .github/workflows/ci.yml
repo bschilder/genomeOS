@@ -30,7 +30,7 @@ jobs:
       - name: Test
         env:
           COVERAGE_CORE: sysmon
-        run: pytest -n auto --dist loadfile -v --cov=genomeos --cov-report=term-missing --cov-report=json
+        run: pytest -n auto --dist loadfile -v --durations=40 --cov=genomeos --cov-report=term-missing --cov-report=json
       - name: Coverage badge is current
         run: |
           python scripts/render_coverage_badge.py --readme README.md
