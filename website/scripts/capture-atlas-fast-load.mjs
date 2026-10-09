@@ -8,13 +8,13 @@
  * modes after the sky box has loaded, with time frozen and neutral imagery,
  * twice: at the default URL (every layer; the committed figures) and with the
  * Natural Earth countries overlay off (GATE_LAYERS). The after phase compares
- * every pair with the before captures and writes
- * docs/figures/atlas-fast-load-parity.receipt.json. The gate is the
- * countries-off comparison: it exits non-zero when any pair differs on more
- * than 0.5% of pixels. §B.6.9 redraws the borders with a
- * BufferPolylineCollection instead of GeoJsonDataSource entity polylines, whose
- * 1-px anti-aliasing differs, so the every-layer comparison is recorded as
- * informational, with magnified before/after border crops in
+ * every pair with the before captures in both views, writes
+ * docs/figures/atlas-fast-load-parity.receipt.json and exits non-zero when any
+ * pair, in either view, differs on more than 0.5% of pixels. The countries-off
+ * view isolates the scientific layers; the every-layer view also covers the
+ * country borders and labels. §B.6.9 redraws the borders with a
+ * BufferPolylineCollection instead of GeoJsonDataSource entity polylines, so
+ * the after phase also writes magnified before/after border crops to
  * docs/figures/atlas-fast-load-border-crops.png.
  */
 import { execFileSync, spawn } from 'node:child_process';
@@ -32,7 +32,7 @@ import { parseArgs } from 'node:util';
 
 import { chromium } from 'playwright';
 
-import { countPixelDifferences, decodePng } from './pixel-diff.mjs';
+import { countPixelDifferences, decodePng, gateViews } from './pixel-diff.mjs';
 
 const websiteRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -49,10 +49,10 @@ const VIEWPORT = { height: 900, width: 1440 };
 const FIXED_TIME = new Date('2026-10-07T12:00:00Z');
 const CHANNEL_TOLERANCE = 2;
 const MAX_DIFFERENT_FRACTION = 0.005;
-/** Every layer but the Natural Earth countries overlay: the §B.1 screenshot gate. */
+/** Every layer but the Natural Earth countries overlay: the scientific layers alone. */
 const GATE_LAYERS = 'surface,observations,support,context';
 const VIEWS = [
-  // The default URL, every layer on: the committed figures and the informational delta.
+  // The default URL, every layer on: the committed figures and the every-layer comparison.
   { figure: true, kind: 'globe', params: {} },
   { figure: false, kind: 'gate', params: { layers: GATE_LAYERS } },
 ];
@@ -338,14 +338,15 @@ async function writeParityReceipt(browser) {
   if (!existsSync(beforeMetaPath))
     throw new Error(`Run --phase before first (missing ${beforeMetaPath}).`);
   const page = await browser.newPage();
-  let pairs;
-  let everyLayerPairs;
+  let gate;
   try {
-    pairs = (await comparePairs(page, 'gate')).map((pair) => ({
-      ...pair,
-      pass: pair.fractionOverTolerance <= MAX_DIFFERENT_FRACTION,
-    }));
-    everyLayerPairs = await comparePairs(page, 'globe');
+    gate = gateViews(
+      {
+        'countries off': await comparePairs(page, 'gate'),
+        'every layer': await comparePairs(page, 'globe'),
+      },
+      MAX_DIFFERENT_FRACTION,
+    );
     await writeBorderCrops(page);
   } finally {
     await page.close();
@@ -362,30 +363,25 @@ async function writeParityReceipt(browser) {
     compared: `globe captures with page overlays hidden and the Natural Earth countries overlay off (layers=${GATE_LAYERS})`,
     channel_tolerance: CHANNEL_TOLERANCE,
     max_different_fraction: MAX_DIFFERENT_FRACTION,
-    pairs,
-    informational: {
+    pairs: gate.views['countries off'],
+    // Gated at max_different_fraction too.
+    every_layer: {
       compared:
         'globe captures with page overlays hidden and every layer on (the default URL)',
-      why_not_gated:
-        '§B.6.9 draws the Natural Earth borders as a BufferPolylineCollection instead of GeoJsonDataSource entity polylines; their 1-px anti-aliasing differs',
       border_crops: 'docs/figures/atlas-fast-load-border-crops.png',
-      pairs: everyLayerPairs,
+      pairs: gate.views['every layer'],
     },
   };
   writeFileSync(
     path.join(figuresDir, 'atlas-fast-load-parity.receipt.json'),
     `${JSON.stringify(receipt, null, 2)}\n`,
   );
-  const percent = (pair) => (pair.fractionOverTolerance * 100).toFixed(3);
-  for (const pair of pairs)
-    process.stdout.write(
-      `${pair.pass ? 'ok  ' : 'FAIL'} ${pair.entity} ${pair.geometry}: ${percent(pair)}% of pixels differ by more than ${CHANNEL_TOLERANCE}/255 (countries off)\n`,
-    );
-  for (const pair of everyLayerPairs)
-    process.stdout.write(
-      `info ${pair.entity} ${pair.geometry}: ${percent(pair)}% with every layer on\n`,
-    );
-  return pairs.some((pair) => !pair.pass);
+  for (const [view, pairs] of Object.entries(gate.views))
+    for (const pair of pairs)
+      process.stdout.write(
+        `${pair.pass ? 'ok  ' : 'FAIL'} ${pair.entity} ${pair.geometry}: ${(pair.fractionOverTolerance * 100).toFixed(3)}% of pixels differ by more than ${CHANNEL_TOLERANCE}/255 (${view})\n`,
+      );
+  return gate.failed;
 }
 
 let server;

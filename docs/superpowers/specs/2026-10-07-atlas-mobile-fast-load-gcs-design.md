@@ -341,17 +341,17 @@ sharing. Separately, a precision report over all 30 layers bounds the f32-vs-f64
 flip (today exactly one: `cyt-il-10-819-t` post_sd, `84194e9ffffffff`, bin 4 → 5; no bin's
 first-cell colour changes). Rendered bins come from the render tier; flips are reported, not hidden.
 HbS and G6PD screenshots at the default camera, for `triangles`, `hexagons`, `extruded` and
-`honmoon`, match the pre-change build within 0.5% of pixels, captured after the sky box has loaded
-with the Natural Earth countries overlay off (`layers=surface,observations,support,context`). The
-figures `docs/figures/atlas-fast-load-{before,after}-{hbs,g6pd}.png` show every layer, and
-`docs/figures/atlas-fast-load-parity.receipt.json` records both comparisons. The gate guards the
-scientific layers. The countries overlay is context, and §B.6.9 redraws its borders on purpose, as
-a `BufferPolylineCollection` instead of `GeoJsonDataSource` entity polylines, which rasterise
-differently. Its every-layer delta is therefore recorded in the receipt as informational, with
-magnified before/after border crops (`docs/figures/atlas-fast-load-border-crops.png`). The buffer
-borders are drawn 0.5 px wider than the entity borders' nominal 1.65 px, because Cesium's entity
-and `PolylineCollection` shaders add that 0.5 px and the buffer shader does not, so the on-screen
-weight matches.
+`honmoon`, match the pre-change build within 0.5% of pixels, captured after the sky box has loaded,
+both with every layer on and with the Natural Earth countries overlay off
+(`layers=surface,observations,support,context`). The figures
+`docs/figures/atlas-fast-load-{before,after}-{hbs,g6pd}.png` show every layer, and
+`docs/figures/atlas-fast-load-parity.receipt.json` records both comparisons. The countries-off
+comparison isolates the scientific layers. §B.6.9 redraws the country borders on purpose, as a
+`BufferPolylineCollection` instead of `GeoJsonDataSource` entity polylines, which rasterise
+differently, so the receipt also carries magnified before/after border crops
+(`docs/figures/atlas-fast-load-border-crops.png`). The buffer borders are drawn 0.5 px wider than
+the entity borders' nominal 1.65 px, because Cesium's entity and `PolylineCollection` shaders add
+that 0.5 px and the buffer shader does not, so the on-screen weight matches.
 
 ### B.2 Data tiers and the shared grid
 

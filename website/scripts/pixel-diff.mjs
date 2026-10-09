@@ -35,6 +35,30 @@ export function countPixelDifferences(before, after, tolerance) {
 }
 
 /**
+ * Gate every pair of every view: a pair passes when at most `maxFraction` of its pixels differ by
+ * more than the channel tolerance, and the run fails when any pair of any view does not.
+ * @template {{ fractionOverTolerance: number }} Pair
+ * @param {Record<string, Pair[]>} views
+ * @param {number} maxFraction
+ * @returns {{ failed: boolean, views: Record<string, (Pair & { pass: boolean })[]> }}
+ */
+export function gateViews(views, maxFraction) {
+  /** @type {Record<string, (Pair & { pass: boolean })[]>} */
+  const gated = {};
+  for (const [view, pairs] of Object.entries(views))
+    gated[view] = pairs.map((pair) => ({
+      ...pair,
+      pass: pair.fractionOverTolerance <= maxFraction,
+    }));
+  return {
+    failed: Object.values(gated).some((pairs) =>
+      pairs.some((pair) => !pair.pass),
+    ),
+    views: gated,
+  };
+}
+
+/**
  * Decode a PNG to raw RGBA in the browser (no PNG dependency in Node).
  * @param {import('playwright').Page} page
  * @param {Buffer} png
