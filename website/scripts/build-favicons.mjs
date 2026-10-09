@@ -9,10 +9,16 @@
  * vertically rather than stretched. Coordinates stay in the logo's user space,
  * so the userSpaceOnUse gradient lands exactly where it does in the logo.
  *
+ * OS sits on a rounded tile of the header ground #020712, the dark ground the
+ * logo is drawn for. Without it the cyan end of the gradient (#12ffff) all but
+ * vanishes on a light tab strip (about 1.1:1 against Chrome's #f1f3f4); on the
+ * tile every stop of the gradient clears 3:1. Chrome and Firefox draw the SVG
+ * itself at 16 px, so the backing has to live in the SVG, not only in the PNGs.
+ *
  * The raster fallbacks are rendered from favicon.svg by the same Chromium
  * (Playwright, already a dev dependency), so no image tooling is needed:
  *
- *   favicon-16.png, favicon-32.png, favicon-48.png   transparent ground
+ *   favicon-16.png, favicon-32.png, favicon-48.png   the tile, transparent corners
  *   apple-touch-icon.png   180 x 180 on the site header's #020712, because iOS
  *                          fills transparency with black; OS spans 70% of it
  *   favicon.ico            the 16, 32 and 48 px PNGs in one ICO container
@@ -38,7 +44,9 @@ const APPLE_SIZE = 180;
 /** Share of the apple-touch-icon width the OS spans. */
 const APPLE_FILL = 0.7;
 /** The site header background (global.css `.site-header`). */
-const APPLE_GROUND = '#020712';
+const GROUND = '#020712';
+/** Corner radius of the favicon tile, as a fraction of its side. */
+const TILE_RADIUS = 0.2;
 
 function extract(pattern, name) {
   const match = logo.match(pattern);
@@ -49,22 +57,24 @@ function extract(pattern, name) {
 const defs = extract(/^ {2}<defs>\n[\s\S]*?^ {2}<\/defs>$/m, 'gradient defs');
 const os = extract(/^ {2}<g id="wordmark-os"[\s\S]*?^ {2}<\/g>$/m, 'OS group');
 
-/** A square box centred on `box` in which the wider axis spans `fill`. */
+const round = (value) => Number(value.toFixed(3));
+
+/** A square box [x, y, side, side] centred on `box`, in which the wider axis spans `fill`. */
 function squareFrame(box, fill) {
   const side = Math.ceil(Math.max(box.width, box.height) / fill);
-  const round = (value) => Number(value.toFixed(3));
   return [
     round(box.x + box.width / 2 - side / 2),
     round(box.y + box.height / 2 - side / 2),
     side,
     side,
-  ].join(' ');
+  ];
 }
 
-const faviconSvg = (viewBox) => `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" role="img" aria-labelledby="favicon-title">
+const faviconSvg = ([x, y, side]) => `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="${[x, y, side, side].join(' ')}" role="img" aria-labelledby="favicon-title">
   <title id="favicon-title">genomeOS</title>
 ${defs}
+  <rect id="favicon-tile" x="${x}" y="${y}" width="${side}" height="${side}" rx="${round(side * TILE_RADIUS)}" fill="${GROUND}"/>
 ${os}
 </svg>
 `;
@@ -106,8 +116,9 @@ try {
       .getBBox();
     return { x, y, width, height };
   });
-  const viewBox = squareFrame(box, 1 - 2 * PADDING);
-  const svg = faviconSvg(viewBox);
+  const iconFrame = squareFrame(box, 1 - 2 * PADDING);
+  const viewBox = iconFrame.join(' ');
+  const svg = faviconSvg(iconFrame);
   writeFileSync(path.join(publicDir, 'favicon.svg'), svg);
 
   const render = async (size, { frame = viewBox, ground } = {}) => {
@@ -118,7 +129,10 @@ try {
         element.setAttribute('width', String(size));
         element.setAttribute('height', String(size));
         element.setAttribute('viewBox', frame);
-        if (ground) element.style.background = ground;
+        if (!ground) return;
+        // An opaque ground replaces the tile; iOS rounds the corners itself.
+        element.querySelector('#favicon-tile').remove();
+        element.style.background = ground;
       },
       { size, frame, ground },
     );
@@ -135,8 +149,8 @@ try {
   writeFileSync(
     path.join(publicDir, 'apple-touch-icon.png'),
     await render(APPLE_SIZE, {
-      frame: squareFrame(box, APPLE_FILL),
-      ground: APPLE_GROUND,
+      frame: squareFrame(box, APPLE_FILL).join(' '),
+      ground: GROUND,
     }),
   );
 

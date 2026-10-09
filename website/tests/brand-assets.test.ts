@@ -68,7 +68,11 @@ const binary = (name: string) => readFileSync(path.join(site, name));
 const block = (svg: string, start: string, end: string) => {
   const from = svg.indexOf(start);
   expect(from, start).toBeGreaterThanOrEqual(0);
-  return svg.slice(from, svg.indexOf(`\n${end}\n`, from) + end.length + 1);
+  // A missing end line would otherwise slice an empty string, which every
+  // comparison below would accept.
+  const close = svg.indexOf(`\n${end}\n`, from);
+  expect(close, end).toBeGreaterThan(from);
+  return svg.slice(from, close + end.length + 1);
 };
 
 /** Width and height from a PNG's IHDR chunk, which always follows the signature. */
@@ -105,6 +109,29 @@ describe('genomeOS favicon', () => {
       .map(Number);
     expect(width).toBeGreaterThan(0);
     expect(width).toBe(height);
+  });
+
+  it('backs OS with one dark tile that fills the viewBox', () => {
+    // The cyan end of the gradient is about 1.1:1 on a light tab strip; on
+    // the header ground #020712 every stop clears 3:1.
+    const tiles = favicon.match(/<rect\b[^>]*\/>/g) ?? [];
+    expect(tiles).toHaveLength(1);
+    const tile = tiles[0]!;
+    expect(attribute(tile, 'id')).toBe('favicon-tile');
+    expect(attribute(tile, 'fill')).toBe('#020712');
+    const [x, y, side] = attribute(rootTag(favicon), 'viewBox')
+      .split(' ')
+      .map(Number);
+    expect(
+      ['x', 'y', 'width', 'height'].map((name) =>
+        Number(attribute(tile, name)),
+      ),
+    ).toEqual([x, y, side, side]);
+    expect(Number(attribute(tile, 'rx'))).toBeCloseTo(side * 0.2, 3);
+    // Drawn first, so it sits behind the OS group.
+    expect(favicon.indexOf(tile)).toBeLessThan(
+      favicon.indexOf('<g id="wordmark-os"'),
+    );
   });
 
   it.each([

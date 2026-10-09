@@ -522,8 +522,15 @@ test(
       ['/favicon-16.png', /^image\/png/],
       ['/apple-touch-icon.png', /^image\/png/],
     ]);
-    // SiteLayout pages, the Atlas, and Starlight docs build their heads separately.
-    for (const route of ['/', '/app/', '/docs/', '/docs/system-overview/']) {
+    // SiteLayout pages, the Atlas, the standalone polygon page (opened in its
+    // own tab from the inspector) and Starlight docs build their heads separately.
+    for (const route of [
+      '/',
+      '/app/',
+      '/app/polygon/',
+      '/docs/',
+      '/docs/system-overview/',
+    ]) {
       await page.goto(route, { waitUntil: 'domcontentloaded' });
       const icons = await page
         .locator('link[rel~="icon"], link[rel="apple-touch-icon"]')
@@ -552,9 +559,9 @@ test(
 );
 
 test(
-  'the favicon frames the OS glyphs; the apple icon is opaque',
+  'the favicon frames OS on a dark tile, and its PNGs render the shipped SVG',
   { tag: '@desktop-chromium' },
-  async ({ page, request }) => {
+  async ({ page }) => {
     await page.goto('/favicon.svg');
     const frame = await page.evaluate(() => {
       const svg = document.querySelector('svg')!;
@@ -579,57 +586,72 @@ test(
     }
     expect(Math.abs(frame.top - frame.bottom)).toBeLessThan(1);
 
-    // Bounds of the drawn pixels: alpha > 0 on a transparent icon, anything
-    // other than the ground on the opaque apple-touch icon.
-    const measure = async (href: string) => {
-      const png = await (await request.get(href)).body();
-      return page.evaluate(
-        async (source) => {
+    /** RGBA bytes of a same-origin image drawn at `size` x `size`. */
+    const pixels = (href: string, size: number) =>
+      page.evaluate(
+        async ([href, size]) => {
           const image = new Image();
-          image.src = source;
+          image.src = href;
           await image.decode();
           const canvas = document.createElementNS(
             'http://www.w3.org/1999/xhtml',
             'canvas',
           ) as HTMLCanvasElement;
-          canvas.width = image.width;
-          canvas.height = image.height;
+          canvas.width = size;
+          canvas.height = size;
           const context = canvas.getContext('2d')!;
-          context.drawImage(image, 0, 0);
-          const { data } = context.getImageData(
-            0,
-            0,
-            image.width,
-            image.height,
-          );
-          const corner = [...data.subarray(0, 4)];
-          let minX = image.width;
-          let maxX = -1;
-          for (let index = 0; index < data.length; index += 4) {
-            const differs = corner.some(
-              (value, channel) => Math.abs(data[index + channel] - value) > 8,
-            );
-            if (!differs) continue;
-            const x = (index / 4) % image.width;
-            minX = Math.min(minX, x);
-            maxX = Math.max(maxX, x);
-          }
-          return { corner, width: image.width, drawn: maxX - minX + 1 };
+          context.drawImage(image, 0, 0, size, size);
+          return [...context.getImageData(0, 0, size, size).data];
         },
-        `data:image/png;base64,${png.toString('base64')}`,
+        [href, size] as const,
       );
+    const pixel = (data: number[], size: number, x: number, y: number) =>
+      data.slice(4 * (y * size + x), 4 * (y * size + x) + 4);
+    const ground = [2, 7, 18, 255]; // header ground #020712, the tile colour
+    /** Columns spanned by OS: opaque pixels that are not the ground. */
+    const drawnShare = (data: number[], size: number) => {
+      let minX = size;
+      let maxX = -1;
+      for (let index = 0; index < data.length; index += 4) {
+        const differs = [0, 1, 2].some(
+          (channel) => Math.abs(data[index + channel] - ground[channel]) > 8,
+        );
+        if (data[index + 3] < 128 || !differs) continue;
+        const x = (index / 4) % size;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+      return (maxX - minX + 1) / size;
     };
 
-    const tab = await measure('/favicon-48.png');
-    expect(tab.corner[3]).toBe(0);
-    expect(tab.drawn / tab.width).toBeGreaterThan(0.84);
-    expect(tab.drawn / tab.width).toBeLessThan(0.92);
+    const tab = await pixels('/favicon-48.png', 48);
+    expect(pixel(tab, 48, 0, 0)[3]).toBe(0); // the tile's rounded corner
+    expect(pixel(tab, 48, 0, 24)).toEqual(ground); // the tile's straight edge
+    expect(drawnShare(tab, 48)).toBeGreaterThan(0.84);
+    expect(drawnShare(tab, 48)).toBeLessThan(0.92);
 
-    const apple = await measure('/apple-touch-icon.png');
-    expect(apple.width).toBe(180);
-    expect(apple.corner).toEqual([2, 7, 18, 255]); // header ground #020712
-    expect(apple.drawn / apple.width).toBeGreaterThan(0.66);
-    expect(apple.drawn / apple.width).toBeLessThan(0.74);
+    const apple = await pixels('/apple-touch-icon.png', 180);
+    expect(pixel(apple, 180, 0, 0)).toEqual(ground);
+    expect(drawnShare(apple, 180)).toBeGreaterThan(0.66);
+    expect(drawnShare(apple, 180)).toBeLessThan(0.74);
+
+    // The rasters are renderings of the favicon.svg being served, not stale
+    // copies. Chromium's drawing of the SVG matches each PNG exactly where they
+    // were built; 16 levels per channel leaves room for another platform's
+    // anti-aliasing, while a stale PNG is off by up to 255. Channels are
+    // premultiplied, so colour under zero alpha does not count.
+    const premultiplied = (data: number[]) =>
+      data.map((value, index) =>
+        index % 4 === 3 ? value : (value * data[index - (index % 4) + 3]) / 255,
+      );
+    for (const size of [16, 32, 48]) {
+      const svg = premultiplied(await pixels('/favicon.svg', size));
+      const png = premultiplied(await pixels(`/favicon-${size}.png`, size));
+      const worst = Math.max(
+        ...svg.map((value, index) => Math.abs(value - png[index])),
+      );
+      expect(worst, `favicon-${size}.png against favicon.svg`).toBeLessThan(16);
+    }
   },
 );
 
