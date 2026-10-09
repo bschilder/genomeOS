@@ -11,6 +11,8 @@
  * detaches, when the socket closes or has closed, or when the socket refuses
  * the write.
  */
+import { createServer } from 'node:net';
+
 export interface CdpSocket {
   send(data: string): void;
   close(): void;
@@ -197,9 +199,62 @@ function protocolError(method: string, error: CdpErrorBody): Error {
   return new Error(`${method}: ${error.message}${data}`, { cause: error });
 }
 
+/**
+ * Fails unless `127.0.0.1:<port>` is free. A Chrome launched with
+ * `--remote-debugging-port` on a taken port starts anyway without its
+ * endpoint, and the client then talks to whatever already listens there,
+ * such as a Chrome left over from an earlier run.
+ */
+export async function assertDevToolsPortFree(port: number): Promise<void> {
+  const failure = await new Promise<NodeJS.ErrnoException | null>((resolve) => {
+    const server = createServer();
+    server.once('error', (error: NodeJS.ErrnoException) => resolve(error));
+    server.listen({ port, host: '127.0.0.1' }, () =>
+      server.close(() => resolve(null)),
+    );
+  });
+  if (failure === null) return;
+  let holder = '';
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/json/version`, {
+      signal: AbortSignal.timeout(1_000),
+    });
+    const body = (await response.json()) as { Browser?: string };
+    if (body.Browser) holder = `: ${body.Browser} serves DevTools there`;
+  } catch {
+    // Not a DevTools endpoint; the bind error says enough.
+  }
+  throw new Error(
+    `The DevTools port ${port} is not free (${failure.code ?? failure.message})${holder}. ` +
+      'Close the browser left on it or set ATLAS_COLD_LOAD_CDP_PORT to a free port.',
+  );
+}
+
+/** The browser process id in a `SystemInfo.getProcessInfo` result. */
+export function browserProcessId(info: {
+  processInfo: readonly { type: string; id: number }[];
+}): number {
+  const browser = info.processInfo.filter(
+    (process) => process.type === 'browser',
+  );
+  if (browser.length !== 1)
+    throw new Error(
+      `SystemInfo.getProcessInfo listed ${browser.length} browser processes, expected 1.`,
+    );
+  return browser[0].id;
+}
+
 /** The browser-level DevTools WebSocket for a Chrome started with --remote-debugging-port. */
 export async function browserWebSocketUrl(port: number): Promise<string> {
-  const response = await fetch(`http://127.0.0.1:${port}/json/version`);
+  let response: Response;
+  try {
+    response = await fetch(`http://127.0.0.1:${port}/json/version`);
+  } catch (error) {
+    throw new Error(
+      `Nothing answers on the DevTools port ${port}; Chrome did not open --remote-debugging-port.`,
+      { cause: error },
+    );
+  }
   if (!response.ok)
     throw new Error(
       `The DevTools endpoint on port ${port} returned HTTP ${response.status}.`,

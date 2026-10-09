@@ -1,7 +1,15 @@
 /** Unit tests for the flattened CDP client (fast-load design §B.1). */
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { describe, expect, it } from 'vitest';
 
-import { CdpConnection, type CdpSocket } from './support/cdp-connection';
+import {
+  CdpConnection,
+  assertDevToolsPortFree,
+  browserProcessId,
+  type CdpSocket,
+} from './support/cdp-connection';
 
 class FakeSocket implements CdpSocket {
   sent: Record<string, unknown>[] = [];
@@ -226,5 +234,47 @@ describe('CdpConnection', () => {
     await expect(refused).rejects.toMatchObject({
       cause: new Error('InvalidStateError: still CONNECTING'),
     });
+  });
+});
+
+describe('DevTools endpoint checks', () => {
+  /** A stand-in for a Chrome left on the port by an earlier run. */
+  async function staleEndpoint(): Promise<{ server: Server; port: number }> {
+    const server = createServer((_request, response) => {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ Browser: 'Chrome/154.0.8037.98' }));
+    });
+    await new Promise<void>((resolve) =>
+      server.listen({ port: 0, host: '127.0.0.1' }, resolve),
+    );
+    return { server, port: (server.address() as AddressInfo).port };
+  }
+
+  it('refuses a taken DevTools port and names what serves it', async () => {
+    const { server, port } = await staleEndpoint();
+    try {
+      await expect(assertDevToolsPortFree(port)).rejects.toThrow(
+        `The DevTools port ${port} is not free (EADDRINUSE): Chrome/154.0.8037.98 serves DevTools there. ` +
+          'Close the browser left on it or set ATLAS_COLD_LOAD_CDP_PORT to a free port.',
+      );
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    await expect(assertDevToolsPortFree(port)).resolves.toBeUndefined();
+  });
+
+  it('reads the browser process id', () => {
+    expect(
+      browserProcessId({
+        processInfo: [
+          { type: 'GPU', id: 12 },
+          { type: 'browser', id: 58124 },
+          { type: 'renderer', id: 13 },
+        ],
+      }),
+    ).toBe(58124);
+    expect(() => browserProcessId({ processInfo: [] })).toThrow(
+      'SystemInfo.getProcessInfo listed 0 browser processes, expected 1.',
+    );
   });
 });

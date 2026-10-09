@@ -98,6 +98,12 @@ npm run test:performance -- atlas-cold-load
 
 Each profile — desktop 1440×900, and 390×844 at DPR 3 with 4× CPU on DevTools Fast 4G and Slow 4G —
 runs three times in fresh contexts. The JSON report and bytes ledger are written to `test-results/`
-and attached to the Playwright report. Budgets are asserted on medians and skipped on software
-renderers. To measure an older build, serve its `dist/` and set `ATLAS_COLD_LOAD_BASELINE=1` and
-`ATLAS_COLD_LOAD_BASE_URL`.
+and attached to the Playwright report. The `observations-visible`, `surface-visible` and reveal
+budgets are asserted on the median of the three runs. The Atlas long-frame cap (200 ms on desktop,
+800 ms on mobile) applies to every run, and so do the transport checks and "no request timeout or
+error". Budgets are skipped on software renderers. To measure an older build, serve its `dist/` and
+set `ATLAS_COLD_LOAD_BASELINE=1` and `ATLAS_COLD_LOAD_BASE_URL`; a baseline reports observed times.
+
+The spec launches its own Chrome with DevTools on port 9333 (`ATLAS_COLD_LOAD_CDP_PORT` picks
+another). It fails before launching if that port is taken, for example by a Chrome left from an
+interrupted run.
