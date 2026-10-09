@@ -1,6 +1,6 @@
 /** Cesium lifecycle and scientific-layer orchestration for Atlas design §11. */
 
-import { PrimitiveCollection, SceneMode, Viewer } from 'cesium';
+import { SceneMode, Viewer } from 'cesium';
 
 import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
 import type { Metric, PaletteId } from '../visual-encoding';
@@ -42,6 +42,7 @@ import {
   type ScientificPrimitiveGroup,
 } from './surface-layer';
 import { animateSwap, animateValue, waitForReady } from './scene-transition';
+import { raiseScientificOverlays } from './scientific-layers';
 import { legacyHeightSource } from './surface-heights';
 import type {
   AtlasPick,
@@ -77,15 +78,7 @@ interface PreparedSurfaceSwap {
   sequence: number;
 }
 
-export function raiseScientificOverlays(
-  primitives: PrimitiveCollection,
-  observationLayer: PrimitiveCollection | null,
-  highlightLayer: PrimitiveCollection,
-): void {
-  if (observationLayer?.isDestroyed() === false)
-    primitives.raiseToTop(observationLayer);
-  if (!highlightLayer.isDestroyed()) primitives.raiseToTop(highlightLayer);
-}
+export { raiseScientificOverlays } from './scientific-layers';
 
 class CesiumAtlasScene implements AtlasSceneController {
   readonly #viewer: Viewer;

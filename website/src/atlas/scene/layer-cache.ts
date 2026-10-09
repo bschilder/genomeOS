@@ -22,6 +22,11 @@ export class LayerCache<T> {
     this.#entries.set(key, value);
   }
 
+  delete(value: T): void {
+    for (const [key, entry] of this.#entries)
+      if (entry === value) this.#entries.delete(key);
+  }
+
   prune(active: T, dispose: (value: T) => void): void {
     for (const [key, value] of this.#entries) {
       if (this.#entries.size <= this.maximumSize) return;

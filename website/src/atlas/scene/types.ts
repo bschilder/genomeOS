@@ -3,6 +3,7 @@
 import type { Primitive, PrimitiveCollection } from 'cesium';
 
 import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
+import type { SurfaceArtifact as SurfaceColumns } from '../surface-columns';
 import type {
   ObservationColorVariable,
   ObservationShape,
@@ -79,6 +80,34 @@ export interface SceneProgress {
 }
 
 export type SceneProgressListener = (progress: SceneProgress) => void;
+
+export interface ArtifactLoad {
+  artifactKey: string;
+  artifactId: string;
+  observations: Promise<ObservationArtifact | null>;
+  surface: Promise<SurfaceColumns>;
+  /** Degrees; the worker orders chunks nearest this point first. Defaults to the camera. */
+  lookAt?: { lat: number; lon: number };
+}
+
+export interface DisplayedLayer {
+  artifactKey: string;
+  metric: Metric;
+  palette: PaletteId;
+  geometry: SurfaceGeometry;
+}
+
+export interface ArtifactSceneApi {
+  setArtifact(
+    load: ArtifactLoad,
+    progress?: SceneProgressListener,
+  ): Promise<void>;
+  onCommit(listener: (artifactKey: string) => void): () => void;
+  onMark(listener: (mark: AtlasMark) => void): () => void;
+  displayedLayer(): DisplayedLayer | null;
+  markValuesReady(artifactKey: string): void;
+  removeSurface(artifactKey: string): void;
+}
 
 export interface SceneCapabilities {
   basemaps: Record<BasemapId, boolean>;
