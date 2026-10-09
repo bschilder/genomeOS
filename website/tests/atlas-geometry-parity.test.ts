@@ -20,8 +20,8 @@ import {
   surfaceMeshForCell,
   surfaceVertexHeights,
   surfaceVertexValues,
-} from '../src/atlas/scene/surface-mesh';
-import { partitionSurfaceCells } from '../src/atlas/scene/support-material';
+} from './legacy/surface-mesh';
+import { partitionSurfaceCells } from './legacy/support-material';
 import type { SurfaceGeometry } from '../src/atlas/url-state';
 import type { Metric, PaletteId } from '../src/atlas/visual-encoding';
 import {

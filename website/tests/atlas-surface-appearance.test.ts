@@ -8,7 +8,7 @@ import {
   SURFACE_CLEARANCE_METRES,
   usesVertexColorGamma,
 } from '../src/atlas/scene/surface-appearance';
-import * as legacyMesh from '../src/atlas/scene/surface-mesh';
+import * as legacyMesh from './legacy/surface-mesh';
 import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
 
 afterEach(() => vi.unstubAllGlobals());

@@ -25,7 +25,7 @@ import {
   type FlatCellBuffers,
 } from '../src/atlas/geometry/support-buffers';
 import { buildGridTopology } from '../src/atlas/geometry/topology';
-import { paletteBinsForCells } from '../src/atlas/scene/support-material';
+import { paletteBinsForCells } from './legacy/support-material';
 import { PARITY_DIR, surfaceFixturesIn } from './helpers/atlas-geometry';
 import { meshInputFor, sortedU64, wholeGridChunk } from './helpers/mesh-input';
 

@@ -23,8 +23,8 @@ import {
   brighterEdgeColor,
   buildSurfaceLayer,
   edgeColorForSurface,
-} from '../src/atlas/scene/surface-layer';
-import { partitionSurfaceCells } from '../src/atlas/scene/support-material';
+} from './legacy/surface-layer';
+import { partitionSurfaceCells } from './legacy/support-material';
 import type { SurfaceGeometry } from '../src/atlas/url-state';
 import { colorAtPosition, type Metric } from '../src/atlas/visual-encoding';
 import {

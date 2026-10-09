@@ -11,7 +11,7 @@ import {
   quantizeMetric,
   type PaletteId,
 } from '../src/atlas/visual-encoding';
-import { quantizeMetric as reexportedQuantizeMetric } from '../src/atlas/scene/support-material';
+import { quantizeMetric as reexportedQuantizeMetric } from './legacy/support-material';
 import { legacyColorAtStops } from './legacy/legacy-color';
 
 const PALETTES: readonly PaletteId[] = [

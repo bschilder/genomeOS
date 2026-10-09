@@ -8,12 +8,8 @@
 
 import { latLngToCell } from 'h3-js';
 
-import type {
-  SurfaceArtifact as SurfaceArtifactJson,
-  SurfaceCell,
-} from '../contracts';
 import { renderAt, rowForH3, type SurfaceArtifact } from '../surface-columns';
-import { heightFor, heightForCell, type Metric } from '../visual-encoding';
+import { heightFor, type Metric } from '../visual-encoding';
 
 export interface SurfaceHeightSource {
   readonly artifactKey: string | null;
@@ -38,30 +34,6 @@ export function columnarHeightSource(
         surface.artifact.metric_domains[metric],
         1,
       );
-    },
-  };
-}
-
-/** Interim adapter for the main-thread builder; removed with it in B4.16. */
-export function legacyHeightSource(
-  surface: SurfaceArtifactJson,
-): SurfaceHeightSource {
-  const cells = new Map<string, SurfaceCell>(
-    surface.cells.map((cell) => [cell.h3_index, cell]),
-  );
-  return {
-    artifactKey: null,
-    resolution: surface.artifact.resolution,
-    cellHeight(h3Index, metric) {
-      const cell = cells.get(h3Index);
-      return cell
-        ? heightForCell(
-            cell,
-            surface.artifact.metric_domains[metric],
-            1,
-            metric,
-          )
-        : null;
     },
   };
 }

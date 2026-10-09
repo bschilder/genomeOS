@@ -1,77 +1,13 @@
-/** Surface batching and support materials for Atlas design §11. */
+/** Support materials for masked cells (Atlas design §11; Cesium explorer design §8.4).
+ *
+ * `unknown` cells draw a neutral hatch; `prior_dominated` cells draw dots in
+ * their palette-bin colour. Geometry comes from the data worker (spec
+ * 2026-10-07 §B.6.5); only the materials live here.
+ */
 
 import { Cartesian2, Color, Material } from 'cesium';
 
-import type { Support, SurfaceCell } from '../contracts';
-import {
-  colorForCell,
-  quantizeMetric,
-  type Metric,
-  type MetricDomain,
-  type PaletteId,
-} from '../visual-encoding';
-
-export { quantizeMetric } from '../visual-encoding';
-
-export interface SurfaceBin {
-  bin: number;
-  color: string;
-  cells: SurfaceCell[];
-}
-
-export interface SurfacePartitions {
-  surface: SurfaceBin[];
-  support: Record<'unknown' | 'prior_dominated', SurfaceCell[]>;
-}
-
-export function partitionSurfaceCells(
-  cells: readonly SurfaceCell[],
-  metric: Metric,
-  domain: MetricDomain,
-  palette?: PaletteId,
-): SurfacePartitions {
-  const support: SurfacePartitions['support'] = {
-    prior_dominated: [],
-    unknown: [],
-  };
-  const supported: SurfaceCell[] = [];
-
-  for (const cell of cells) {
-    if (cell.support === 'unknown' || cell.support === 'prior_dominated') {
-      support[cell.support].push(cell);
-      continue;
-    }
-    supported.push(cell);
-  }
-
-  return {
-    support,
-    surface: paletteBinsForCells(supported, metric, domain, palette),
-  };
-}
-
-export function paletteBinsForCells(
-  cells: readonly SurfaceCell[],
-  metric: Metric,
-  domain: MetricDomain,
-  palette?: PaletteId,
-): SurfaceBin[] {
-  const bins = new Map<number, SurfaceCell[]>();
-  for (const cell of cells) {
-    const bin = quantizeMetric(cell[metric], domain);
-    const binCells = bins.get(bin);
-    if (binCells) binCells.push(cell);
-    else bins.set(bin, [cell]);
-  }
-
-  return [...bins.entries()]
-    .sort(([left], [right]) => left - right)
-    .map(([bin, binCells]) => ({
-      bin,
-      cells: binCells,
-      color: colorForCell(binCells[0], metric, domain, palette),
-    }));
-}
+import type { Support } from '../contracts';
 
 export function materialForSupport(
   support: Extract<Support, 'unknown' | 'prior_dominated'>,

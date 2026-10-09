@@ -4,14 +4,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { SurfaceArtifact, SurfaceCell } from '../src/atlas/contracts';
 import {
-  observationSurfaceAnchor,
   observationSurfacePlacement,
   sphereSurfacePlacement,
   STUD_ASPECT_RATIO,
   SYMBOL_CLEARANCE_METRES,
 } from '../src/atlas/scene/observation-symbols';
-import { SURFACE_CLEARANCE_METRES } from '../src/atlas/scene/surface-mesh';
+import { SURFACE_CLEARANCE_METRES } from '../src/atlas/scene/surface-appearance';
 import { heightForCell } from '../src/atlas/visual-encoding';
+import { observationSurfaceAnchor } from './legacy/observation-anchors';
 
 const baseCell: SurfaceCell = {
   dist_nearest_obs_km: 25,

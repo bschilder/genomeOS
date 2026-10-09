@@ -18,13 +18,17 @@ import {
   GeometryInstance,
 } from 'cesium';
 
-import type { SurfaceArtifact, SurfaceCell } from '../contracts';
+import type { SurfaceArtifact, SurfaceCell } from '../../src/atlas/contracts';
 import type {
   EdgeColorMode,
   ExplorerSceneMode,
   SurfaceGeometry,
-} from '../url-state';
-import { heightForCell, type Metric, type PaletteId } from '../visual-encoding';
+} from '../../src/atlas/url-state';
+import {
+  heightForCell,
+  type Metric,
+  type PaletteId,
+} from '../../src/atlas/visual-encoding';
 import {
   elevatedSurfaceAppearance,
   geometryForExtrudedSurfaceCell,
@@ -42,10 +46,13 @@ import {
   paletteBinsForCells,
   partitionSurfaceCells,
 } from './support-material';
-import type { ScientificPrimitiveGroup } from './types';
-import { h3PolygonParts } from '../geometry/polygon-parts';
+import type { ScientificPrimitiveGroup } from '../../src/atlas/scene/types';
+import { h3PolygonParts } from '../../src/atlas/geometry/polygon-parts';
 
-export { h3BoundaryDegrees, h3PolygonParts } from '../geometry/polygon-parts';
+export {
+  h3BoundaryDegrees,
+  h3PolygonParts,
+} from '../../src/atlas/geometry/polygon-parts';
 
 export type SurfacePick = { kind: 'surface'; h3Index: string };
 
@@ -75,7 +82,7 @@ export function edgeColorForSurface(
   return mode === 'matched' ? brighterEdgeColor(surfaceColor) : fixedColor;
 }
 
-export type { ScientificPrimitiveGroup } from './types';
+export type { ScientificPrimitiveGroup } from '../../src/atlas/scene/types';
 
 type OpacityMaterial = {
   applySurfaceOpacity: boolean;

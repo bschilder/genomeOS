@@ -7,7 +7,7 @@ import { buildGridTopology } from '../src/atlas/geometry/topology';
 import {
   observationSurfaceAnchor,
   observationSurfaceContext,
-} from '../src/atlas/scene/observation-symbols';
+} from './legacy/observation-anchors';
 import type { SurfaceGeometry } from '../src/atlas/url-state';
 import type { Metric } from '../src/atlas/visual-encoding';
 import {

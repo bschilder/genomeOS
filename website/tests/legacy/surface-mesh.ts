@@ -18,21 +18,21 @@ import {
   PrimitiveType,
 } from 'cesium';
 
-import type { SurfaceCell } from '../contracts';
-import { SURFACE_CLEARANCE_METRES } from '../geometry/surface-buffers';
+import type { SurfaceCell } from '../../src/atlas/contracts';
+import { SURFACE_CLEARANCE_METRES } from '../../src/atlas/geometry/surface-buffers';
 import {
   colorAtPosition,
   heightForCell,
   type Metric,
   type MetricDomain,
   type PaletteId,
-} from '../visual-encoding';
+} from '../../src/atlas/visual-encoding';
 export {
   elevatedSurfaceAppearance,
   HONMOON_CONTOUR_BANDS,
   honmoonModeForGeometry,
   type ElevatedSurfaceAppearance,
-} from './surface-appearance';
+} from '../../src/atlas/scene/surface-appearance';
 
 export interface SurfaceMeshVertex {
   height: number;
