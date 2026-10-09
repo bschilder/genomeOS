@@ -59,3 +59,83 @@ describe('genomeOS brand assets', () => {
     expect(attribute(root, 'height')).toBe(String(height));
   });
 });
+
+const site = path.resolve(import.meta.dirname, '../public');
+const favicon = readFileSync(path.join(site, 'favicon.svg'), 'utf8');
+const binary = (name: string) => readFileSync(path.join(site, name));
+
+/** The lines from `start` through the next line that is exactly `end`, indentation included. */
+const block = (svg: string, start: string, end: string) => {
+  const from = svg.indexOf(start);
+  expect(from, start).toBeGreaterThanOrEqual(0);
+  return svg.slice(from, svg.indexOf(`\n${end}\n`, from) + end.length + 1);
+};
+
+/** Width and height from a PNG's IHDR chunk, which always follows the signature. */
+const pngSize = (png: Buffer) => {
+  expect(png.subarray(0, 8)).toEqual(
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+  );
+  expect(png.toString('latin1', 12, 16)).toBe('IHDR');
+  return [png.readUInt32BE(16), png.readUInt32BE(20)];
+};
+
+describe('genomeOS favicon', () => {
+  it('keeps only the gradient and the OS paths, byte for byte', () => {
+    for (const [start, end] of [
+      ['  <defs>', '  </defs>'],
+      ['  <g id="wordmark-os"', '  </g>'],
+    ]) {
+      const kept = block(favicon, start, end);
+      expect(kept).toBe(block(lockup, start, end));
+      expect(favicon).toContain(kept);
+    }
+    expect(paths(favicon)).toEqual(
+      paths(block(lockup, '  <g id="wordmark-os"', '  </g>')),
+    );
+    expect(paths(favicon)).toHaveLength(2);
+    for (const dropped of ['wordmark-genome', 'foundation-line', 'tagline']) {
+      expect(favicon).not.toContain(dropped);
+    }
+  });
+
+  it('has a square viewBox', () => {
+    const [, , width, height] = attribute(rootTag(favicon), 'viewBox')
+      .split(' ')
+      .map(Number);
+    expect(width).toBeGreaterThan(0);
+    expect(width).toBe(height);
+  });
+
+  it.each([
+    ['favicon-16.png', 16],
+    ['favicon-32.png', 32],
+    ['favicon-48.png', 48],
+    ['apple-touch-icon.png', 180],
+  ])('renders %s at %i px square', (name, size) => {
+    expect(pngSize(binary(name))).toEqual([size, size]);
+  });
+
+  it('packs the 16, 32 and 48 px PNGs into favicon.ico', () => {
+    const ico = binary('favicon.ico');
+    expect([ico.readUInt16LE(0), ico.readUInt16LE(2)]).toEqual([0, 1]);
+    const count = ico.readUInt16LE(4);
+    const images = Array.from({ length: count }, (_, index) => {
+      const entry = 6 + 16 * index;
+      const length = ico.readUInt32LE(entry + 8);
+      const offset = ico.readUInt32LE(entry + 12);
+      return {
+        size: [ico.readUInt8(entry), ico.readUInt8(entry + 1)],
+        png: ico.subarray(offset, offset + length),
+      };
+    });
+    expect(images.map(({ size }) => size)).toEqual([
+      [16, 16],
+      [32, 32],
+      [48, 48],
+    ]);
+    for (const { size, png } of images) {
+      expect(png.equals(binary(`favicon-${size[0]}.png`))).toBe(true);
+    }
+  });
+});

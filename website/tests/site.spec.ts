@@ -512,6 +512,127 @@ test(
   },
 );
 
+test(
+  'every page declares the OS favicon set and the files are served',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    const served = new Map<string, RegExp>([
+      ['/favicon.svg', /^image\/svg\+xml/],
+      ['/favicon-32.png', /^image\/png/],
+      ['/favicon-16.png', /^image\/png/],
+      ['/apple-touch-icon.png', /^image\/png/],
+    ]);
+    // SiteLayout pages, the Atlas, and Starlight docs build their heads separately.
+    for (const route of ['/', '/app/', '/docs/', '/docs/system-overview/']) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      const icons = await page
+        .locator('link[rel~="icon"], link[rel="apple-touch-icon"]')
+        .evaluateAll((links) =>
+          (links as HTMLLinkElement[]).map((link) => ({
+            href: new URL(link.href).pathname,
+            type: link.type,
+          })),
+        );
+      expect(
+        icons.filter(({ type }) => type === 'image/svg+xml'),
+        route,
+      ).toEqual([{ href: '/favicon.svg', type: 'image/svg+xml' }]);
+      expect(icons.map(({ href }) => href).sort(), route).toEqual(
+        [...served.keys()].sort(),
+      );
+    }
+
+    served.set('/favicon.ico', /^image\/(x-icon|vnd\.microsoft\.icon)/);
+    for (const [href, type] of served) {
+      const response = await request.get(href);
+      expect(response.status(), href).toBe(200);
+      expect(response.headers()['content-type'], href).toMatch(type);
+    }
+  },
+);
+
+test(
+  'the favicon frames the OS glyphs; the apple icon is opaque',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    await page.goto('/favicon.svg');
+    const frame = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const os = document
+        .querySelector<SVGGraphicsElement>('#wordmark-os')!
+        .getBBox();
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        side: width,
+        square: width === height,
+        left: os.x - x,
+        right: x + width - (os.x + os.width),
+        top: os.y - y,
+        bottom: y + height - (os.y + os.height),
+      };
+    });
+    // OS is wider than tall: about 6% clear left and right, centred vertically.
+    expect(frame.square).toBe(true);
+    for (const side of [frame.left, frame.right]) {
+      expect(side / frame.side).toBeGreaterThan(0.05);
+      expect(side / frame.side).toBeLessThan(0.07);
+    }
+    expect(Math.abs(frame.top - frame.bottom)).toBeLessThan(1);
+
+    // Bounds of the drawn pixels: alpha > 0 on a transparent icon, anything
+    // other than the ground on the opaque apple-touch icon.
+    const measure = async (href: string) => {
+      const png = await (await request.get(href)).body();
+      return page.evaluate(
+        async (source) => {
+          const image = new Image();
+          image.src = source;
+          await image.decode();
+          const canvas = document.createElementNS(
+            'http://www.w3.org/1999/xhtml',
+            'canvas',
+          ) as HTMLCanvasElement;
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext('2d')!;
+          context.drawImage(image, 0, 0);
+          const { data } = context.getImageData(
+            0,
+            0,
+            image.width,
+            image.height,
+          );
+          const corner = [...data.subarray(0, 4)];
+          let minX = image.width;
+          let maxX = -1;
+          for (let index = 0; index < data.length; index += 4) {
+            const differs = corner.some(
+              (value, channel) => Math.abs(data[index + channel] - value) > 8,
+            );
+            if (!differs) continue;
+            const x = (index / 4) % image.width;
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+          }
+          return { corner, width: image.width, drawn: maxX - minX + 1 };
+        },
+        `data:image/png;base64,${png.toString('base64')}`,
+      );
+    };
+
+    const tab = await measure('/favicon-48.png');
+    expect(tab.corner[3]).toBe(0);
+    expect(tab.drawn / tab.width).toBeGreaterThan(0.84);
+    expect(tab.drawn / tab.width).toBeLessThan(0.92);
+
+    const apple = await measure('/apple-touch-icon.png');
+    expect(apple.width).toBe(180);
+    expect(apple.corner).toEqual([2, 7, 18, 255]); // header ground #020712
+    expect(apple.drawn / apple.width).toBeGreaterThan(0.66);
+    expect(apple.drawn / apple.width).toBeLessThan(0.74);
+  },
+);
+
 test('visible project names use the wordmark typography', async ({ page }) => {
   for (const route of brandAuditRoutes) {
     await page.goto(route);
