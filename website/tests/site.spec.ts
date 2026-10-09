@@ -390,48 +390,241 @@ test('navigation stays visible and condenses after scrolling', async ({
   expect(navFontSize).toBeGreaterThanOrEqual(16);
 });
 
-test('the header home link is the logo and shrinks with the compact bar', async ({
+/**
+ * The FOUNDATION capitals span 41.1 of the header lockup's 300 user units of
+ * height (the brand SVG test below checks that against the artwork).
+ */
+const FOUNDATION_SHARE = 41.11 / 300;
+
+async function measureHeaderLogo(page: Page) {
+  return page.evaluate(() => {
+    const img = document.querySelector<HTMLImageElement>('.wordmark__logo')!;
+    const box = img.getBoundingClientRect();
+    const header = document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect();
+    return {
+      headerHeight: header.height,
+      height: box.height,
+      naturalHeight: img.naturalHeight,
+      naturalWidth: img.naturalWidth,
+      width: box.width,
+    };
+  });
+}
+
+test('the header home link is the FOUNDATION lockup, large at the top of the page', async ({
   page,
   isMobile,
 }) => {
   await page.goto('/');
   const home = page
     .locator('.site-header')
-    .getByRole('link', { name: 'genomeOS', exact: true });
+    .getByRole('link', { name: 'genomeOS Foundation', exact: true });
   await expect(home).toHaveAttribute('href', '/');
-  const logo = home.getByRole('img', { name: 'genomeOS', exact: true });
+  const logo = home.getByRole('img', {
+    name: 'genomeOS Foundation',
+    exact: true,
+  });
   await expect(logo).toBeVisible();
   await expect(logo).toHaveJSProperty('complete', true);
   await expect(logo).not.toHaveAttribute('loading', 'lazy');
+  await expect(logo).toHaveAttribute('src', '/brand/genomeos-lockup-dark.svg');
+  await expect(logo).toHaveAttribute('width', '1395');
+  await expect(logo).toHaveAttribute('height', '300');
 
-  const measure = () =>
-    logo.evaluate((img: HTMLImageElement) => {
-      const box = img.getBoundingClientRect();
-      return {
-        height: box.height,
-        naturalHeight: img.naturalHeight,
-        naturalWidth: img.naturalWidth,
-        width: box.width,
-      };
-    });
-  const initial = await measure();
-  expect(initial.naturalWidth).toBeGreaterThan(0);
-  expect(initial.width / initial.height).toBeCloseTo(
-    initial.naturalWidth / initial.naturalHeight,
+  const landing = await measureHeaderLogo(page);
+  expect(landing.naturalWidth).toBeGreaterThan(0);
+  expect(landing.width / landing.height).toBeCloseTo(
+    landing.naturalWidth / landing.naturalHeight,
     1,
   );
-  // About 1.6-2x the old text wordmark's cap height; phones keep its width.
-  const [minHeight, maxHeight] = isMobile ? [20, 26] : [26, 33];
-  expect(initial.height).toBeGreaterThanOrEqual(minHeight);
-  expect(initial.height).toBeLessThanOrEqual(maxHeight);
+  if (isMobile) {
+    // Pixel 7 (412 px): the width left beside Launch Atlas and Menu.
+    expect(landing.height).toBeGreaterThanOrEqual(40);
+    expect(landing.height).toBeLessThanOrEqual(50);
+    expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(5);
+    expect(landing.headerHeight).toBeCloseTo(86.5, 0);
+  } else {
+    // 3.6rem (64.8 px) in a 5.5rem bar: FOUNDATION capitals at ~8.9 px.
+    expect(landing.height).toBeGreaterThanOrEqual(62);
+    expect(landing.height).toBeLessThanOrEqual(68);
+    expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(7);
+    expect(landing.headerHeight).toBeCloseTo(100, 0);
 
-  await page.evaluate(() => window.scrollTo(0, 900));
-  await expect(page.locator('.site-header')).toHaveClass(
-    /site-header--compact/,
-  );
+    // The taller bar keeps the nav links on its vertical centre line.
+    const centres = await page.evaluate(() => {
+      const middle = (element: Element) => {
+        const box = element.getBoundingClientRect();
+        return box.top + box.height / 2;
+      };
+      return {
+        bar: middle(document.querySelector('.site-header__inner')!),
+        links: [
+          ...document.querySelectorAll('nav.desktop-nav a, .launch-atlas-cta'),
+        ].map(middle),
+        logo: middle(document.querySelector('.wordmark__logo')!),
+      };
+    });
+    for (const centre of [centres.logo, ...centres.links])
+      expect(Math.abs(centre - centres.bar)).toBeLessThanOrEqual(1);
+  }
+});
+
+test('the lockup shrinks with the compact bar and the page stays put', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/');
+  const header = page.locator('[data-site-header]');
+  const landing = await measureHeaderLogo(page);
+  const layout = () =>
+    page.evaluate(() => ({
+      mainTop:
+        document.querySelector('main')!.getBoundingClientRect().top +
+        window.scrollY,
+      navLeft: document
+        .querySelector('.site-header__inner > :nth-child(2)')!
+        .getBoundingClientRect().left,
+      scrollHeight: document.documentElement.scrollHeight,
+    }));
+  const before = await layout();
+
+  // html has scroll-behavior: smooth; jump straight there.
+  await page.evaluate(() => window.scrollTo({ top: 400, behavior: 'instant' }));
+  await expect(header).toHaveClass(/site-header--compact/);
+  // Both transitions are 200 ms; wait for the bar and the logo to settle.
+  await expect(async () => {
+    const compact = await measureHeaderLogo(page);
+    expect(compact.headerHeight).toBeCloseTo(71.2, 0);
+    expect(compact.height).toBeCloseTo(isMobile ? 42.1 : 46.8, 0);
+  }).toPass({ timeout: 5_000 });
+
+  const compact = await measureHeaderLogo(page);
+  expect(compact.height).toBeLessThan(landing.height * 0.95);
+  expect(compact.height).toBeLessThan(compact.headerHeight - 16);
+  expect(await page.evaluate(() => window.scrollY)).toBe(400);
+  // The compact bar hands its lost height to a margin, so nothing below it
+  // (nor the nav beside the logo) moves.
+  const after = await layout();
+  expect(Math.abs(after.mainTop - before.mainTop)).toBeLessThanOrEqual(0.5);
+  expect(after.scrollHeight).toBe(before.scrollHeight);
+  expect(Math.abs(after.navLeft - before.navLeft)).toBeLessThanOrEqual(0.5);
+
+  await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+  await expect(header).not.toHaveClass(/site-header--compact/);
   await expect
-    .poll(async () => (await measure()).height)
-    .toBeLessThan(initial.height * 0.95);
+    .poll(async () => (await measureHeaderLogo(page)).height)
+    .toBeCloseTo(landing.height, 0);
+});
+
+test('the header settles in one state while scrolling slowly across the threshold', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const header = document.querySelector('[data-site-header]')!;
+    const record = window as unknown as {
+      headerFlips: boolean[];
+      scrollPositions: number[];
+    };
+    record.headerFlips = [];
+    record.scrollPositions = [];
+    new MutationObserver(() =>
+      record.headerFlips.push(
+        header.classList.contains('site-header--compact'),
+      ),
+    ).observe(header, { attributeFilter: ['class'] });
+    window.addEventListener(
+      'scroll',
+      () => record.scrollPositions.push(window.scrollY),
+      { passive: true },
+    );
+  });
+
+  // 2 px steps through scrollY 48 (instant, not html's smooth scrolling),
+  // each held longer than a whole transition, so a resize that dragged
+  // scrollY back across the line would show up.
+  const steps = Array.from({ length: 13 }, (_, index) => 36 + 2 * index);
+  for (const top of [...steps, ...[...steps].reverse()]) {
+    await page.evaluate(
+      (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+      top,
+    );
+    await page.waitForTimeout(240);
+  }
+
+  const record = await page.evaluate(() => {
+    const { headerFlips, scrollPositions } = window as unknown as {
+      headerFlips: boolean[];
+      scrollPositions: number[];
+    };
+    return { headerFlips, scrollPositions };
+  });
+  expect(record.headerFlips).toEqual([true, false]);
+  // Only the positions scrolled to: no scroll-anchoring correction.
+  const unrequested = record.scrollPositions.filter(
+    (y) => !steps.some((step) => Math.abs(step - y) < 0.5),
+  );
+  expect(unrequested).toEqual([]);
+});
+
+test(
+  'the header shrinks the lockup instead of wrapping the nav at narrow desktop widths',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // 829 px: first width above the phone layout. 1153 px: the desktop nav's
+    // first width, the tightest row.
+    for (const width of [829, 1153]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/');
+      const row = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const links = [...document.querySelectorAll('nav.desktop-nav a')];
+        return {
+          clientWidth: inner.clientWidth,
+          linkHeights: links
+            .filter((link) => link.getClientRects().length > 0)
+            .map((link) => link.getBoundingClientRect().height),
+          scrollWidth: inner.scrollWidth,
+        };
+      });
+      expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
+      // One line each: a wrapped label would be ~2x the 1rem line height.
+      for (const height of row.linkHeights)
+        expect(height, `${width}`).toBeLessThan(36);
+      const logo = await measureHeaderLogo(page);
+      expect(logo.height * FOUNDATION_SHARE, `${width}`).toBeGreaterThanOrEqual(
+        7,
+      );
+    }
+  },
+);
+
+test('the Atlas header keeps the wordmark crop at its previous size', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const header = page.locator('[data-site-header]');
+  await expect(header).not.toHaveClass(/site-header--lockup/);
+  const logo = header
+    .getByRole('link', { name: 'genomeOS', exact: true })
+    .getByRole('img', { name: 'genomeOS', exact: true });
+  await expect(logo).toHaveAttribute(
+    'src',
+    '/brand/genomeos-wordmark-dark.svg',
+  );
+  // 1.6rem on desktop and 0.96rem in the phone header (atlas.css), in the
+  // unchanged 4.75rem bar.
+  await expect(async () => {
+    const measured = await measureHeaderLogo(page);
+    expect(measured.height).toBeCloseTo(isMobile ? 17.28 : 28.8, 0);
+    expect(measured.headerHeight).toBeCloseTo(86.5, 0);
+  }).toPass({ timeout: 5_000 });
 });
 
 test('the footer shows the full logo with a legible tagline', async ({
@@ -454,12 +647,13 @@ test('the footer shows the full logo with a legible tagline', async ({
 });
 
 test(
-  'brand SVGs are served and the header crop frames the whole wordmark',
+  'brand SVGs are served and the header crops frame their glyphs',
   { tag: '@desktop-chromium' },
   async ({ page, request }) => {
     const svgs = new Map<string, string>();
     for (const name of [
       'genomeos-wordmark-dark.svg',
+      'genomeos-lockup-dark.svg',
       'genomeos-foundation-dark.svg',
     ]) {
       const response = await request.get(`/brand/${name}`);
@@ -509,6 +703,59 @@ test(
       0.01 * frame.height,
     );
     expect(frame.foundationTop).toBeGreaterThan(frame.bottom);
+
+    // The lockup crop adds the FOUNDATION line and leaves out the tagline.
+    await page.setContent(
+      svgs.get('genomeos-foundation-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const taglineTop = await page.evaluate(
+      () => document.querySelector<SVGGraphicsElement>('#tagline')!.getBBox().y,
+    );
+    await page.setContent(
+      svgs.get('genomeos-lockup-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const lockup = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const boxes = ['wordmark-genome', 'wordmark-os', 'foundation-line'].map(
+        (id) => document.querySelector<SVGGraphicsElement>(`#${id}`)!.getBBox(),
+      );
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        bottom: y + height,
+        foundationHeight: boxes[2].height,
+        glyphs: {
+          bottom: Math.max(...boxes.map((box) => box.y + box.height)),
+          left: Math.min(...boxes.map((box) => box.x)),
+          right: Math.max(...boxes.map((box) => box.x + box.width)),
+          top: Math.min(...boxes.map((box) => box.y)),
+        },
+        hasTagline: document.querySelector('#tagline') !== null,
+        height,
+        left: x,
+        right: x + width,
+        top: y,
+        width,
+      };
+    });
+    expect(lockup.glyphs.left - lockup.left).toBeGreaterThan(
+      0.01 * lockup.width,
+    );
+    expect(lockup.right - lockup.glyphs.right).toBeGreaterThan(
+      0.01 * lockup.width,
+    );
+    expect(lockup.glyphs.top - lockup.top).toBeGreaterThan(
+      0.01 * lockup.height,
+    );
+    expect(lockup.bottom - lockup.glyphs.bottom).toBeGreaterThan(
+      0.01 * lockup.height,
+    );
+    expect(lockup.hasTagline).toBe(false);
+    expect(taglineTop).toBeGreaterThan(lockup.bottom);
+    // FOUNDATION_SHARE, which the header size checks rely on.
+    expect(lockup.foundationHeight / lockup.height).toBeCloseTo(
+      FOUNDATION_SHARE,
+      3,
+    );
   },
 );
 

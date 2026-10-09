@@ -13,6 +13,10 @@ const wordmark = readFileSync(
   path.join(brand, 'genomeos-wordmark-dark.svg'),
   'utf8',
 );
+const headerLockup = readFileSync(
+  path.join(brand, 'genomeos-lockup-dark.svg'),
+  'utf8',
+);
 
 const rootTag = (svg: string) => svg.match(/<svg\b[^>]*>/)![0];
 const attribute = (tag: string, name: string) =>
@@ -51,13 +55,48 @@ describe('genomeOS brand assets', () => {
     expect(wordmark).toContain('<desc id="logo-description">genomeOS</desc>');
   });
 
-  it('sizes the crop at one user unit per pixel, like the lockup', () => {
-    const root = rootTag(wordmark);
-    const [, , width, height] = attribute(root, 'viewBox')
-      .split(' ')
-      .map(Number);
-    expect(attribute(root, 'width')).toBe(String(width));
-    expect(attribute(root, 'height')).toBe(String(height));
+  it('sizes the crops at one user unit per pixel, like the lockup', () => {
+    for (const crop of [wordmark, headerLockup]) {
+      const root = rootTag(crop);
+      const [, , width, height] = attribute(root, 'viewBox')
+        .split(' ')
+        .map(Number);
+      expect(attribute(root, 'width')).toBe(String(width));
+      expect(attribute(root, 'height')).toBe(String(height));
+    }
+  });
+});
+
+/** The full artwork's #tagline group, which the header lockup leaves out. */
+const taglineGroup =
+  /\n {2}<g id="tagline"[^>]*>\n(?: {4}<path\b[^>]*\/>\n)+ {2}<\/g>/;
+
+describe('genomeOS header lockup (genome + OS + FOUNDATION)', () => {
+  it('crops to the wordmark and FOUNDATION line measured in Chromium', () => {
+    // Union of getBBox() for #wordmark-genome, #wordmark-os and
+    // #foundation-line (163.793,276.449 to 1503.649,564.211), padded 2% per
+    // axis and rounded outward.
+    const root = rootTag(headerLockup);
+    expect(attribute(root, 'viewBox')).toBe('136 270 1395 300');
+  });
+
+  it('keeps the wordmark and FOUNDATION paths byte for byte, without the tagline', () => {
+    expect(lockup).toMatch(taglineGroup);
+    expect(headerLockup).not.toContain('id="tagline"');
+    expect(paths(headerLockup)).toEqual(paths(lockup).slice(0, 4));
+    expect(paths(lockup)[4]).toContain('M256.310,661.710');
+  });
+
+  it('changes only the root box, the title and description, and drops the tagline', () => {
+    expect(artwork(headerLockup)).toBe(
+      artwork(lockup).replace(taglineGroup, ''),
+    );
+    expect(headerLockup).toContain(
+      '<title id="logo-title">genomeOS Foundation</title>',
+    );
+    expect(headerLockup).toContain(
+      '<desc id="logo-description">genomeOS Foundation</desc>',
+    );
   });
 });
 

@@ -1,6 +1,6 @@
 .hero {
   position: relative;
-  min-height: min(47rem, calc(100svh - 4.75rem));
+  min-height: min(47rem, calc(100svh - var(--site-header-height)));
   overflow: hidden;
   border-bottom: 1px solid var(--color-line);
   isolation: isolate;

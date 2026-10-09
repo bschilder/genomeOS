@@ -13,20 +13,46 @@ const links = [
 
 const isCurrent = (href: string) =>
   path === sitePath(href) || path.startsWith(sitePath(href));
+
+/*
+ * Every page but the Atlas shows the genomeOS + FOUNDATION lockup, large at
+ * the top of the page and compact once it scrolls. The Atlas never scrolls and
+ * sizes its globe from the header, so it keeps the shorter wordmark crop.
+ * The alt text is the text the image shows, so the home link's accessible
+ * name matches its visible label.
+ */
+const logo = isAtlasPage
+  ? {
+      src: '/brand/genomeos-wordmark-dark.svg',
+      width: 1391,
+      height: 228,
+      alt: 'genomeOS',
+    }
+  : {
+      src: '/brand/genomeos-lockup-dark.svg',
+      width: 1395,
+      height: 300,
+      alt: 'genomeOS Foundation',
+    };
 ---
 
-<header class="site-header" data-site-header>
+<header
+  class:list={['site-header', { 'site-header--lockup': !isAtlasPage }]}
+  data-site-header
+>
   <div class="site-header__inner">
-    <a class="wordmark" href={sitePath('/')}>
-      <img
-        class="wordmark__logo"
-        src={sitePath('/brand/genomeos-wordmark-dark.svg')}
-        width="1391"
-        height="228"
-        alt="genomeOS"
-        decoding="async"
-      />
-    </a>
+    <div class="site-header__brand">
+      <a class="wordmark" href={sitePath('/')}>
+        <img
+          class="wordmark__logo"
+          src={sitePath(logo.src)}
+          width={logo.width}
+          height={logo.height}
+          alt={logo.alt}
+          decoding="async"
+        />
+      </a>
+    </div>
 
     <nav class="desktop-nav" aria-label="Primary navigation">
       <ul>

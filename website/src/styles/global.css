@@ -71,6 +71,12 @@ svg {
   transform: translateY(0);
 }
 
+/* The site header's bar at the top of a page (the hero fills the rest of the
+ * first screen). The Atlas keeps its own 4.75rem bar. */
+:root {
+  --site-header-height: 5.5rem;
+}
+
 .site-header {
   position: sticky;
   z-index: 40;
@@ -101,11 +107,17 @@ svg {
 }
 
 /*
- * The header logo is the wordmark crop of the genomeOS Foundation artwork
- * (public/brand/genomeos-wordmark-dark.svg). CSS sets its height; its width
- * follows from the img's width/height attributes, so nothing shifts while the
- * SVG loads. The compact header scales it down with the bar.
+ * On the Atlas the header logo is the wordmark crop of the genomeOS Foundation
+ * artwork (public/brand/genomeos-wordmark-dark.svg). CSS sets its height; its
+ * width follows from the img's width/height attributes, so nothing shifts
+ * while the SVG loads. Other pages show the lockup (.site-header--lockup).
  */
+.site-header__brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
 .wordmark {
   --wordmark-height: 1.6rem;
   --wordmark-scale: 1;
@@ -139,6 +151,75 @@ svg {
 
 .site-header--compact .wordmark {
   --wordmark-scale: 0.9;
+}
+
+/*
+ * Every page but the Atlas: the genomeOS + FOUNDATION lockup
+ * (public/brand/genomeos-lockup-dark.svg, 1395 x 300 user units). At the top
+ * of the page the bar is --site-header-height tall and the lockup 3.6rem,
+ * which puts the FOUNDATION capitals (41.1 of the 300 units) at ~8.9 px.
+ * Past scrollY 48 (MotionController) both shrink to the compact bar.
+ *
+ * Nothing else moves while they do. The compact bar takes the height it gives
+ * up back as margin, on the same curve, so the page below keeps its place.
+ * (Otherwise scroll anchoring shifts scrollY by the height change, back
+ * across the 48 px threshold, and the bar flickers between its two states.)
+ * The brand slot keeps the landing width, so the nav does not slide over.
+ *
+ * Widths are set and heights follow from the aspect ratio, so a row too
+ * narrow for the full size shrinks the logo instead of overflowing.
+ */
+.site-header--lockup {
+  --header-ease: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --compact-header-height: 3.9rem;
+  --lockup-landing-width: calc(3.6rem * 1395 / 300);
+  --lockup-compact-width: calc(2.6rem * 1395 / 300);
+  transition:
+    background-color 260ms ease,
+    border-color 260ms ease,
+    box-shadow 260ms ease,
+    margin-bottom 200ms var(--header-ease);
+}
+
+.site-header--lockup.site-header--compact {
+  margin-bottom: calc(var(--site-header-height) - var(--compact-header-height));
+}
+
+.site-header--lockup .site-header__inner {
+  min-height: var(--site-header-height);
+  gap: 1.25rem;
+  transition: min-height 200ms var(--header-ease);
+}
+
+.site-header--lockup.site-header--compact .site-header__inner {
+  min-height: var(--compact-header-height);
+}
+
+/* Only the logo gives way, so a nav label never wraps to make room for it. */
+.site-header--lockup .site-header__inner > :not(.site-header__brand) {
+  flex-shrink: 0;
+}
+
+.site-header--lockup .site-header__brand {
+  min-width: 0;
+  flex: 0 1 var(--lockup-landing-width);
+}
+
+.site-header--lockup .wordmark {
+  --lockup-width: var(--lockup-landing-width);
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.site-header--lockup.site-header--compact .wordmark {
+  --lockup-width: var(--lockup-compact-width);
+}
+
+.site-header--lockup .wordmark__logo {
+  width: var(--lockup-width);
+  max-width: 100%;
+  height: auto;
+  transition: width 200ms var(--header-ease);
 }
 
 .desktop-nav,
@@ -363,9 +444,25 @@ svg {
 }
 
 @media (max-width: 46rem) {
+  :root {
+    --site-header-height: 4.75rem;
+  }
+
   /* About the old 1.28rem text wordmark's width, so the phone header fits at 360 px. */
   .wordmark {
     --wordmark-height: 1.3rem;
+  }
+
+  /* The lockup takes the row's width left beside Launch Atlas and Menu
+   * (~132 px) after a 1rem gap, up to 14rem. Flex shrinking still covers a
+   * wider Menu label or a classic scrollbar inside 100vw. */
+  .site-header--lockup .site-header__inner {
+    gap: 1rem;
+  }
+
+  .site-header--lockup {
+    --lockup-landing-width: min(14rem, 100vw - 2 * var(--space-page) - 8.4rem);
+    --lockup-compact-width: calc(0.9 * var(--lockup-landing-width));
   }
 
   .launch-atlas-cta {
@@ -382,7 +479,7 @@ svg {
   }
 
   .hero {
-    min-height: min(43rem, calc(100svh - 4.75rem));
+    min-height: min(43rem, calc(100svh - var(--site-header-height)));
   }
   .hero__image {
     background-position: 69% center;
@@ -421,7 +518,10 @@ svg {
   .site-header,
   .site-header__inner,
   .wordmark__logo,
-  .launch-atlas-cta {
+  .launch-atlas-cta,
+  .site-header--lockup,
+  .site-header--lockup .site-header__inner,
+  .site-header--lockup .wordmark__logo {
     transition: none;
   }
   .launch-atlas-cta:hover .launch-atlas-cta__rocket,
