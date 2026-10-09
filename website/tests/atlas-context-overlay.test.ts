@@ -216,7 +216,24 @@ describe('Natural Earth context overlay', () => {
     line.getMaterial(material);
     expect(material.color.red).toBeCloseTo(1, 2);
     expect(material.color.alpha).toBeCloseTo(0.25, 2);
-    expect(material.width).toBeCloseTo(1.65, 2);
+    expect(material.width).toBeCloseTo(2.15, 2);
+  });
+
+  it("draws borders at the legacy entity polylines' on-screen width in both renderers", async () => {
+    // The legacy borders were 1.65 px entity polylines, which PolylineColorAppearanceVS draws
+    // 0.5 px wider; PolylineVS (the projected renderer) widens by 0.5 px too, BufferPolylineMaterialVS
+    // does not.
+    stubCesiumBrowserImageTypes();
+    const { overlay } = setup();
+    await overlay.load('/a.geojson');
+    const line = new BufferPolyline();
+    const material = new BufferPolylineMaterial();
+    bufferOf(overlay).get(0, line);
+    line.getMaterial(material);
+    expect(material.width).toBeCloseTo(2.15, 2);
+
+    await overlay.setSceneMode('map');
+    expect(projectedOf(overlay)!.get(0).width).toBeCloseTo(1.65, 2);
   });
 
   it('switches to projected borders in the 2D map', async () => {
@@ -593,7 +610,7 @@ describe('Natural Earth context built across several slices', () => {
       expect(material.color.red).toBeCloseTo(1, 2);
       expect(material.color.green).toBeCloseTo(0, 2);
       expect(material.color.alpha).toBeCloseTo(0.25, 2);
-      expect(material.width).toBeCloseTo(1.65, 2);
+      expect(material.width).toBeCloseTo(2.15, 2);
     }
   });
 

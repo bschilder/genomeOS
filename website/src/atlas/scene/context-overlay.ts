@@ -56,6 +56,13 @@ import {
 
 export const BORDER_CLEARANCE_METRES = 1_800;
 export const BORDER_WIDTH_PIXELS = 1.65;
+/**
+ * The buffer renderer's border width. PolylineCollection and the entity polyline appearances draw
+ * every line 0.5 px wider than its width (PolylineVS, PolylineColorAppearanceVS), so the legacy
+ * GeoJsonDataSource borders, 1.65 px entity polylines, were 2.15 px on screen.
+ * BufferPolylineMaterialVS draws the width as given, so it gets the extra 0.5 px here.
+ */
+const BUFFER_BORDER_WIDTH_PIXELS = BORDER_WIDTH_PIXELS + 0.5;
 const ELEVATION_THROTTLE_MS = 50;
 const HEIGHT_CACHE_SIZE = 4;
 const NATURAL_EARTH_CREDIT =
@@ -117,7 +124,7 @@ export class ContextOverlay {
   // Rings added in later slices read this, so a style change mid-build reaches them too.
   #bufferMaterial = new BufferPolylineMaterial({
     color: this.#borderColor,
-    width: BORDER_WIDTH_PIXELS,
+    width: BUFFER_BORDER_WIDTH_PIXELS,
   });
   // The elevation each renderer and the labels are drawn at. Items added in later slices use it, so
   // none mixes heights; #applyElevation moves all three to the current elevation.
@@ -188,7 +195,7 @@ export class ContextOverlay {
     );
     this.#bufferMaterial = new BufferPolylineMaterial({
       color: this.#borderColor,
-      width: BORDER_WIDTH_PIXELS,
+      width: BUFFER_BORDER_WIDTH_PIXELS,
     });
     if (this.#buffer) {
       const polyline = new BufferPolyline();
