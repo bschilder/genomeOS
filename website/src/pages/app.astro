@@ -3,7 +3,10 @@ import AtlasExplorer from '../components/atlas/AtlasExplorer';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import { INLINE_CATALOG_ID } from '../atlas/inline-catalog';
 import { preloadScriptSource } from '../atlas/preload-script';
-import { loadPageCatalog } from '../lib/catalog-build';
+import {
+  assertRequestStallOverride,
+  loadPageCatalog,
+} from '../lib/catalog-build';
 import { assertDataBase, dataOrigin } from '../lib/data-url';
 import { sitePath } from '../lib/paths';
 
@@ -15,6 +18,10 @@ assertDataBase(siteDataBase);
 assertDataBase(artifactDataBase);
 // fast-load design §B.6.1: the same strict schema the client uses; a violation fails the build.
 const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
+assertRequestStallOverride(
+  process.env.ATLAS_CATALOG_PATH,
+  import.meta.env.PUBLIC_ATLAS_REQUEST_STALL_MS,
+);
 const preconnect = dataOrigin(artifactDataBase);
 ---
 

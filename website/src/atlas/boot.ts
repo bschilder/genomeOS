@@ -38,3 +38,12 @@ export function bootAtlas(): void {
   atlasWorker();
   void loadAtlasSceneModule().catch(() => undefined);
 }
+
+/**
+ * The provider's stall window override (fast-load design §B.2). Unset in every production build
+ * (`assertRequestStallOverride` refuses it there), so the provider keeps its 15 s default; the e2e
+ * build sets it so a browser test can hold a tier until it releases it.
+ */
+export function atlasRequestStallMs(): number | undefined {
+  return Number(import.meta.env.PUBLIC_ATLAS_REQUEST_STALL_MS) || undefined;
+}

@@ -35,3 +35,26 @@ export function loadPageCatalog(
   }
   return { catalog: parsed.data, json: escapeInlineJson(JSON.stringify(raw)) };
 }
+
+/** The committed e2e fixture catalog, relative to `website/` (Task 21 (B1.7)). */
+export const E2E_ATLAS_CATALOG_PATH = 'tests/fixtures/atlas/e2e/catalog.json';
+
+/**
+ * fast-load design §B.2: production keeps the 15 s stall window. Only the e2e build, which
+ * inlines the e2e fixture catalog, may stretch it (`PUBLIC_ATLAS_REQUEST_STALL_MS`), so a browser
+ * test can hold a tier until it releases it. Any other build that sets it fails here.
+ */
+export function assertRequestStallOverride(
+  catalogPath: string | undefined,
+  override: string | undefined,
+): void {
+  if (override === undefined || override === '') return;
+  if (catalogPath !== E2E_ATLAS_CATALOG_PATH)
+    throw new Error(
+      `PUBLIC_ATLAS_REQUEST_STALL_MS is only allowed in the e2e build (npm run build:e2e, ATLAS_CATALOG_PATH=${E2E_ATLAS_CATALOG_PATH}); production keeps the 15 s stall window (fast-load design §B.2).`,
+    );
+  if (!/^[1-9]\d*$/.test(override))
+    throw new Error(
+      `PUBLIC_ATLAS_REQUEST_STALL_MS must be a positive whole number of milliseconds, not ${JSON.stringify(override)}.`,
+    );
+}

@@ -5,6 +5,10 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  assertRequestStallOverride,
+  E2E_ATLAS_CATALOG_PATH,
+} from '../src/lib/catalog-build';
 import { goldenCatalogRaw } from './support/gosa-builder';
 
 const websiteRoot = path.resolve(import.meta.dirname, '..');
@@ -61,4 +65,29 @@ describe('ATLAS_CATALOG_PATH build wiring', () => {
       rmSync(outDir, { force: true, recursive: true });
     }
   }, 180_000);
+});
+
+describe('request stall override (fast-load design §B.2)', () => {
+  it('allows no override, or one in the e2e build only', () => {
+    expect(() =>
+      assertRequestStallOverride(undefined, undefined),
+    ).not.toThrow();
+    expect(() => assertRequestStallOverride(undefined, '')).not.toThrow();
+    expect(() =>
+      assertRequestStallOverride(E2E_ATLAS_CATALOG_PATH, '120000'),
+    ).not.toThrow();
+    expect(E2E_ATLAS_CATALOG_PATH).toBe(
+      'tests/fixtures/atlas/e2e/catalog.json',
+    );
+  });
+
+  it('refuses an override baked into a production build', () => {
+    for (const catalogPath of [undefined, '', 'public/data/atlas/catalog.json'])
+      expect(() => assertRequestStallOverride(catalogPath, '120000')).toThrow(
+        /only allowed in the e2e build/,
+      );
+    expect(() =>
+      assertRequestStallOverride(E2E_ATLAS_CATALOG_PATH, 'soon'),
+    ).toThrow(/positive whole number of milliseconds/);
+  });
 });

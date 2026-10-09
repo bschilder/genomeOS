@@ -6,7 +6,7 @@
 
 import { useMemo } from 'react';
 
-import { atlasWorker } from '../../atlas/boot';
+import { atlasRequestStallMs, atlasWorker } from '../../atlas/boot';
 import {
   NATURAL_EARTH_BORDERS,
   NATURAL_EARTH_PLACES,
@@ -35,6 +35,7 @@ export function useAtlasDataProvider(
         : new StaticAtlasDataProvider({
             artifactDataBase,
             inlineCatalog: readInlineCatalog(document),
+            requestStallMs: atlasRequestStallMs(),
             siteDataBase,
             worker: atlasWorker(),
           }),
