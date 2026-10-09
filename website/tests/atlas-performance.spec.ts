@@ -1,4 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Page,
+  type Request as PlaywrightRequest,
+} from '@playwright/test';
+import { assertProductionBuild } from './support/production-build';
 
 interface AtlasPerformanceMetrics {
   interactionFrameRate: number;
@@ -34,26 +40,72 @@ test('atlas meets the warm-switch and interaction budget', async ({
       );
     }).observe({ entryTypes: ['longtask'] });
   });
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
+  await assertProductionBuild(String(testInfo.project.use.baseURL));
+  // CDP blocking keeps the HTTP cache on; page.route would disable it.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.setBlockedURLs', {
+    urls: ['*tile.openstreetmap.org*'],
+  });
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
 
-  await page.evaluate(async () => {
-    await Promise.all([
-      fetch('/data/atlas/g6pd-deficiency.surface.json'),
-      fetch('/data/atlas/g6pd-deficiency.observations.json'),
-    ]);
+  const prewarmed = await page.evaluate(async () => {
+    const text = document.getElementById('atlas-catalog')?.textContent;
+    if (!text) throw new Error('The /app/ page has no inline catalog.');
+    const catalog = JSON.parse(text) as {
+      artifacts: {
+        id: string;
+        observations_url: string | null;
+        web: { render: { url: string }; detail: { url: string } };
+      }[];
+    };
+    const selected = catalog.artifacts[0];
+    const preload = [
+      ...document.querySelectorAll<HTMLLinkElement>(
+        'link[rel="preload"][as="fetch"]',
+      ),
+    ].find((link) => link.href.endsWith(`/${selected.web.render.url}`));
+    if (preload === undefined)
+      throw new Error('No preload link for the selected render tier.');
+    const base = preload.href.slice(
+      0,
+      preload.href.length - selected.web.render.url.length,
+    );
+    const g6pd = catalog.artifacts.find(({ id }) => id === 'g6pd-deficiency');
+    if (!g6pd?.observations_url)
+      throw new Error('G6PD deficiency is missing from the inline catalog.');
+    const urls = [
+      g6pd.web.render.url,
+      g6pd.web.detail.url,
+      g6pd.observations_url,
+    ].map((key) => new URL(key, base).href);
+    const responses = await Promise.all(urls.map((url) => fetch(url)));
+    const failed = responses
+      .filter((response) => !response.ok)
+      .map((response) => `${response.status} ${response.url}`);
+    if (failed.length > 0)
+      throw new Error(`Pre-warm failed: ${failed.join(', ')}`);
+    await Promise.all(responses.map((response) => response.arrayBuffer()));
+    return urls;
   });
+  const switchRequests: string[] = [];
+  const recordSwitchRequest = (request: PlaywrightRequest): void => {
+    if (request.url().includes('g6pd-deficiency'))
+      switchRequests.push(request.url());
+  };
+  page.on('request', recordSwitchRequest);
   await chooseAtlasMap(page, 'g6pd-deficiency');
   await expect(
     page.locator(
       '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
     ),
   ).toBeVisible({ timeout: 45_000 });
+  page.off('request', recordSwitchRequest);
+  expect(switchRequests.length).toBeGreaterThan(0);
+  expect(switchRequests.filter((url) => !prewarmed.includes(url))).toEqual([]);
   await chooseAtlasMap(page, 'hbs-rs334');
   await expect(
     page.locator('[data-atlas-active="hbs-rs334"][data-atlas-ready="true"]'),
