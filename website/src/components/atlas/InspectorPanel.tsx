@@ -1,6 +1,7 @@
 /** Evidence-only pick inspector for Atlas design §11. */
 
 import { cellToLatLng } from 'h3-js';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 
 import type {
   ArtifactRef,
@@ -9,14 +10,8 @@ import type {
 } from '../../atlas/contracts';
 import type { ObservationColorEncoding } from '../../atlas/observation-encoding';
 import type { ObservationPlaceContext } from '../../atlas/place-context';
-import { sitePath } from '../../lib/paths';
-import { useEscapeLayer } from './useEscapeStack';
-import {
-  useExplorerPanel,
-  usePanelBodyId,
-  usePanelBodyInert,
-} from './useExplorerPanels';
 import type { SurfaceArtifact } from '../../atlas/surface-columns';
+import { sitePath } from '../../lib/paths';
 import {
   CELL_VALUES_UNAVAILABLE,
   LOADING_CELL_VALUES,
@@ -26,6 +21,12 @@ import {
   type DetailStatus,
   type SurfaceSelection,
 } from './surface-cell-view';
+import { useEscapeLayer } from './useEscapeStack';
+import {
+  useExplorerPanel,
+  usePanelBodyId,
+  usePanelBodyInert,
+} from './useExplorerPanels';
 
 export type InspectorSelection =
   | { kind: 'surface'; value: SurfaceCell }
@@ -80,6 +81,41 @@ function GoogleMapsIcon() {
   );
 }
 
+/**
+ * "Retry cell values" unmounts as soon as the retry moves the detail tier back
+ * to loading. Its layout cleanup runs before React removes the button, so a
+ * retry that still holds focus hands it to the panel's Close button, which
+ * stays mounted in every cell-value state and sits outside the phone sheet's
+ * inert body, instead of letting it fall to <body> (mobile sheets design
+ * 2026-10-07 §A.1.6).
+ */
+function RetryCellValues({
+  close,
+  onRetry,
+}: {
+  close: RefObject<HTMLButtonElement | null>;
+  onRetry: () => void;
+}) {
+  const button = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    const node = button.current;
+    return () => {
+      if (node && node.ownerDocument.activeElement === node)
+        close.current?.focus();
+    };
+  }, [close]);
+  return (
+    <button
+      className="atlas-inspector__retry"
+      ref={button}
+      type="button"
+      onClick={onRetry}
+    >
+      {RETRY_CELL_VALUES}
+    </button>
+  );
+}
+
 export function InspectorPanel({
   artifact,
   colorEncoding,
@@ -102,6 +138,7 @@ export function InspectorPanel({
   useExplorerPanel('inspector', shown, onClose);
   const bodyId = usePanelBodyId('inspector');
   const bodyInert = usePanelBodyInert();
+  const close = useRef<HTMLButtonElement | null>(null);
   if (selection.kind === 'surface') {
     if (!view) return null;
     const [centroidLat, centroidLon] = cellToLatLng(view.h3Index);
@@ -110,6 +147,7 @@ export function InspectorPanel({
         <button
           className="atlas-inspector__close"
           data-sheet-peek
+          ref={close}
           type="button"
           onClick={onClose}
           aria-label="Close inspector"
@@ -152,13 +190,7 @@ export function InspectorPanel({
                       : CELL_VALUES_UNAVAILABLE}
                   </span>
                   {view.state === 'unavailable' && onRetryDetail && (
-                    <button
-                      className="atlas-inspector__retry"
-                      type="button"
-                      onClick={onRetryDetail}
-                    >
-                      {RETRY_CELL_VALUES}
-                    </button>
+                    <RetryCellValues close={close} onRetry={onRetryDetail} />
                   )}
                 </dd>
               </div>

@@ -1826,6 +1826,13 @@ html.atlas-page .site-header--compact .site-header__inner {
   overflow-wrap: anywhere;
 }
 
+/* The retry takes the shared button look (≥ 24 px target) but stacks under
+ * "Cell values unavailable" with a gap instead of butting against it. */
+.atlas-inspector__retry {
+  margin-top: 0.38rem;
+  display: block;
+}
+
 .atlas-centroid-link {
   display: inline-flex;
   align-items: center;
@@ -2220,7 +2227,8 @@ body:has(.atlas-explorer) .skip-link {
 .atlas-inspector dt,
 .atlas-inspector dd,
 .atlas-inspector__meta,
-.atlas-inspector__citation {
+.atlas-inspector__citation,
+.atlas-inspector__retry {
   font-size: 0.8rem;
 }
 
