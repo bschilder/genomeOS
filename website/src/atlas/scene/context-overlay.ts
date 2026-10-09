@@ -25,12 +25,14 @@ import {
   Credit,
   DistanceDisplayCondition,
   Ellipsoid,
+  HorizontalOrigin,
   LabelCollection,
   LabelStyle,
   NearFarScalar,
   PolylineCollection,
   PrimitiveCollection,
   type Polyline,
+  VerticalOrigin,
 } from 'cesium';
 
 import type { ExplorerSceneMode } from '../url-state';
@@ -402,6 +404,8 @@ export class ContextOverlay {
             ),
             fillColor: Color.WHITE,
             font: '600 17px Inter, system-ui, sans-serif',
+            // Label defaults to LEFT/BASELINE; the legacy entity labels (LabelVisualizer) were centred.
+            horizontalOrigin: HorizontalOrigin.CENTER,
             outlineColor,
             outlineWidth: 5,
             position: this.#labelPosition(index, this.#labelElevation),
@@ -413,6 +417,7 @@ export class ContextOverlay {
             ),
             style: LabelStyle.FILL_AND_OUTLINE,
             text,
+            verticalOrigin: VerticalOrigin.CENTER,
           }),
         );
       },

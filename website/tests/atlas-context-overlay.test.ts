@@ -4,8 +4,11 @@ import {
   BufferPolylineMaterial,
   Cartesian3,
   DeveloperError,
+  HorizontalOrigin,
+  type Label,
   PolylineCollection,
   PrimitiveCollection,
+  VerticalOrigin,
 } from 'cesium';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,10 +40,14 @@ function setup(
   config: SetupOptions = {},
 ) {
   const context = config.context ?? parsed;
-  const added: { position: Cartesian3; text: string }[] = [];
+  type AddedLabel = Pick<
+    Label,
+    'horizontalOrigin' | 'position' | 'text' | 'verticalOrigin'
+  >;
+  const added: AddedLabel[] = [];
   const labels = {
-    add(options: { position: Cartesian3; text: string }) {
-      const label = { position: options.position, text: options.text };
+    add({ horizontalOrigin, position, text, verticalOrigin }: AddedLabel) {
+      const label = { horizontalOrigin, position, text, verticalOrigin };
       added.push(label);
       return label;
     },
@@ -141,6 +148,17 @@ describe('Natural Earth context overlay', () => {
     expect(addCredit.mock.calls[0][0].html).toContain('Natural Earth');
     expect(worker.contextHeights).not.toHaveBeenCalled();
     expect(overlay.isReady()).toBe(true);
+  });
+
+  it('centers each country label on its anchor, as the legacy entity labels were', async () => {
+    // Cesium's Label defaults to LEFT/BASELINE, which drew each name to the right of and above its
+    // country; LabelVisualizer gave the GeoJsonDataSource labels CENTER/CENTER.
+    const { added, overlay } = setup();
+    await overlay.load('/a.geojson');
+
+    expect(added).toHaveLength(1);
+    expect(added[0].horizontalOrigin).toBe(HorizontalOrigin.CENTER);
+    expect(added[0].verticalOrigin).toBe(VerticalOrigin.CENTER);
   });
 
   it('loads once however often it is asked', async () => {
