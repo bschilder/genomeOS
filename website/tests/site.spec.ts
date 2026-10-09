@@ -8,6 +8,7 @@ import {
   delayArtifactTier,
   displayedArtifactIds,
   E2E_ARTIFACT_DATA_BASE,
+  failArtifactTier,
   installAtlasBrowserFixture,
   readInlineCatalog,
   urlMatchesKey,
@@ -1916,24 +1917,13 @@ test('switching dataset closes the inspector instead of keeping the old artifact
   await page
     .getByRole('checkbox', { name: 'Observation radii', exact: true })
     .uncheck();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
   const inspector = page.getByRole('complementary', {
     name: 'Selected map cell',
   });
-  const box = await page.locator('.atlas-scene canvas').first().boundingBox();
-  if (box === null) throw new Error('the globe canvas has no box');
-  for (const [dx, dy] of [
-    [0, 0],
-    [-18, 0],
-    [18, 0],
-    [0, -18],
-    [0, 18],
-  ]) {
-    await page.mouse.click(
-      box.x + box.width / 2 + dx,
-      box.y + box.height / 2 + dy,
-    );
-    if (await inspector.isVisible()) break;
-  }
+  await pointNearCanvasCentre(page, 'click', inspector);
   await expect(inspector).toBeVisible();
 
   await chooseAtlasMap(page, 'g6pd-deficiency');
@@ -1945,4 +1935,164 @@ test('switching dataset closes the inspector instead of keeping the old artifact
     },
   );
   await expect(inspector).toBeHidden();
+});
+
+const CANVAS_CENTRE_OFFSETS = [
+  [0, 0],
+  [-18, 0],
+  [18, 0],
+  [0, -18],
+  [0, 18],
+  [-18, -18],
+  [18, -18],
+  [-18, 18],
+  [18, 18],
+] as const;
+const SUPPORT_LABEL = /observed|interpolated|Mostly model assumptions|unknown/;
+const DISPLAYED_VALUE = /\d+\.\d{2}%/;
+// Hex lookarounds, not \b: the hover preview's text is "Cell <id>" directly followed by the
+// support label ("…ffffobserved"), so there is no word boundary after the id.
+const CELL_ID = /(?<![0-9a-f])[0-9a-f]{15}(?![0-9a-f])/;
+/** `PUBLIC_ATLAS_REQUEST_STALL_MS` of `build:e2e` (Task 67 (B5.1)). */
+const E2E_REQUEST_STALL_MS = 120_000;
+
+async function pointNearCanvasCentre(
+  page: Page,
+  action: 'move' | 'click',
+  until: Locator,
+): Promise<void> {
+  const box = await page.locator('.atlas-scene canvas').first().boundingBox();
+  expect(box).not.toBeNull();
+  for (const [offsetX, offsetY] of CANVAS_CENTRE_OFFSETS) {
+    const x = box!.x + box!.width / 2 + offsetX;
+    const y = box!.y + box!.height / 2 + offsetY;
+    if (action === 'move') await page.mouse.move(x, y);
+    else await page.mouse.click(x, y);
+    if (await until.isVisible()) return;
+  }
+}
+
+async function openSurfaceOnlyView(page: Page): Promise<void> {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
+}
+
+test('surface hover and inspector wait for the detail tier without showing numbers', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const detail = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'detail',
+    Number.POSITIVE_INFINITY,
+  );
+  await openSurfaceOnlyView(page);
+  const explorer = page.locator('.atlas-explorer');
+  await expect.poll(() => detail.hits(), { timeout: 30_000 }).toBe(1);
+  const heldSince = Date.now();
+  await expect(explorer).not.toHaveAttribute('data-atlas-values-ready', 'true');
+
+  const hoverPreview = page.locator('.atlas-hover-preview');
+  await pointNearCanvasCentre(page, 'move', hoverPreview);
+  await expect(hoverPreview).toContainText('Loading cell values…');
+  // innerText: `.atlas-hover-preview` is a grid, so its <small> rows are separated by line breaks.
+  await expect(hoverPreview).toContainText(CELL_ID, { useInnerText: true });
+  await expect(hoverPreview).toContainText(SUPPORT_LABEL);
+  await expect(hoverPreview).not.toContainText(DISPLAYED_VALUE);
+
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearCanvasCentre(page, 'click', inspector);
+  await expect(inspector).toBeVisible();
+  await expect(inspector).toContainText('Loading cell values…');
+  await expect(inspector).toContainText(SUPPORT_LABEL);
+  await expect(inspector).not.toContainText(DISPLAYED_VALUE);
+  const cellId = (await inspector.innerText()).match(CELL_ID)?.[0];
+  expect(cellId).toBeDefined();
+  const inspectorNode = await inspector.elementHandle();
+
+  // The held fetch must still be inside the e2e stall window, or the provider would already have
+  // aborted it and this would be a test of the unavailable state instead.
+  expect(
+    Date.now() - heldSince,
+    'detail tier held past the e2e stall window (build with npm run build:e2e)',
+  ).toBeLessThan(E2E_REQUEST_STALL_MS);
+  detail.release();
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 30_000,
+  });
+  await expect(inspector).toContainText(DISPLAYED_VALUE);
+  await expect(inspector).not.toContainText('Loading cell values…');
+  await expect(inspector).toContainText(cellId!);
+  expect(await inspectorNode!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(hoverPreview).toContainText('95% credible range');
+  await expect(hoverPreview).toContainText(DISPLAYED_VALUE);
+  expect(detail.hits()).toBe(1);
+  expect(pageErrors).toEqual([]);
+});
+
+test('surface values report an unavailable detail tier and recover on retry', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const failure = await failArtifactTier(page, 'hbs-rs334', 'detail');
+  await openSurfaceOnlyView(page);
+  await expect
+    .poll(() => failure.hits(), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(1);
+
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearCanvasCentre(page, 'click', inspector);
+  await expect(inspector).toContainText('Cell values unavailable', {
+    timeout: 20_000,
+  });
+  await expect(inspector).not.toContainText(DISPLAYED_VALUE);
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-ready',
+    'true',
+  );
+
+  await failure.restore();
+  await inspector.getByRole('button', { name: /retry/i }).click();
+  // The retry button unmounts once the tier is loading again; focus moves to Close, never <body>.
+  await expect(
+    inspector.getByRole('button', { name: 'Close inspector' }),
+  ).toBeFocused();
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-values-ready',
+    'true',
+    { timeout: 30_000 },
+  );
+  await expect(inspector).toContainText(DISPLAYED_VALUE);
+  expect(pageErrors).toEqual([]);
 });
