@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 import pandera.errors
+import pyarrow.parquet as pq
 import pytest
 
 from genomeos.observations.ingest import read_observations, write_observations
@@ -57,3 +58,36 @@ def test_write_rejects_a_frame_that_violates_the_schema(tmp_path, obs):
     broken.loc[0, "sampling_design"] = "unknown"
     with pytest.raises(pandera.errors.SchemaError):
         write_observations(broken, tmp_path)
+
+
+def test_write_never_hands_column_buffers_to_arrows_async_dataset_writer(tmp_path, obs, monkeypatch):
+    """`to_parquet(partition_cols=...)` goes through `pyarrow.dataset.write_dataset`, whose worker
+    thread releases the NumPy-backed buffers after the call returns. When that release lands in
+    interpreter shutdown, the process aborts with SIGABRT after finishing its work (#413's CI run)."""
+    import pyarrow.dataset
+
+    def refuse(*_args, **_kwargs):
+        raise AssertionError("write_observations must write each partition synchronously")
+
+    monkeypatch.setattr(pyarrow.dataset, "write_dataset", refuse)
+    write_observations(obs, tmp_path)
+    assert len(read_observations(tmp_path)) == len(obs)
+
+
+def test_a_namespaced_id_gets_an_encoded_partition_with_the_store_schema(tmp_path, obs):
+    """Partitions are written one at a time, but keep Arrow's hive encoding and one schema.
+
+    `phenotype:` ids land in `chrom=phenotype%3A...`, which DuckDB decodes for the pruned read, and
+    a column null throughout one partition (no rsid for a phenotype) keeps the store's type there.
+    """
+    mixed = obs.copy()
+    mixed.loc[0, "variant_id"] = "phenotype:sickle-cell-trait"
+    mixed.loc[0, "rsid"] = None
+    write_observations(mixed, tmp_path)
+
+    files = sorted(tmp_path.glob("chrom=*/*.parquet"))
+    assert [f.parent.name for f in files] == ["chrom=chr11", "chrom=phenotype%3Asickle"]
+    schemas = [pq.read_schema(f).remove_metadata() for f in files]
+    assert schemas[1].equals(schemas[0])
+    assert len(read_observations(tmp_path, variant_id="phenotype:sickle-cell-trait")) == 1
+    assert len(read_observations(tmp_path)) == len(obs)
