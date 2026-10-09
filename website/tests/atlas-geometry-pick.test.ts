@@ -14,6 +14,8 @@ import {
   resolveSurfaceRow,
   type PickRay,
 } from '../src/atlas/geometry/pick-resolver';
+import { buildSupportChunk } from '../src/atlas/geometry/support-buffers';
+import { isSupportedCode } from '../src/atlas/geometry/support-codes';
 import {
   buildSurfaceChunk,
   SURFACE_CLEARANCE_METRES,
@@ -60,6 +62,7 @@ function setup(
     support: 'interpolated',
     value: h3 === centre ? TALL : SHORT,
   }),
+  radius = 1,
 ): {
   disk: string[];
   input: MeshInput;
@@ -67,7 +70,7 @@ function setup(
   buffers: SurfaceChunkBuffers;
   heights: (row: number) => number;
 } {
-  const disk = sortedU64(gridDisk(centre, 1));
+  const disk = sortedU64(gridDisk(centre, radius));
   const input = meshInputFor(
     disk.map((h3) => ({ h3, ...cellOf(h3) })),
     { geometry },
@@ -773,5 +776,394 @@ describe('extruded picks along the pick ray (fast-load §B.6.6 prism test)', () 
       origin: down.origin,
     };
     expect(resolve(noisy, away)).toBe(resolve(noisy, null));
+  });
+});
+
+/** GeographicProjection's semimajor axis (WGS84), Cesium's default map projection. */
+const MAP_RADIUS = 6378137;
+
+/** Geodetic degrees and height of an ECEF point (Bowring iteration): what
+ * Cesium's `cartesianToCartographic` gives `projectTo2D` for each vertex. */
+function cartographicOf([x, y, z]: readonly number[]): {
+  height: number;
+  lat: number;
+  lon: number;
+} {
+  const a = 6378137;
+  const b = 6356752.3142451793;
+  const e2 = 1 - (b * b) / (a * a);
+  const radius = Math.hypot(x, y);
+  let lat = Math.atan2(z, radius * (1 - e2));
+  let height = 0;
+  for (let step = 0; step < 10; step += 1) {
+    const n = a / Math.sqrt(1 - e2 * Math.sin(lat) ** 2);
+    height = radius / Math.cos(lat) - n;
+    lat = Math.atan2(z, radius * (1 - (e2 * n) / (n + height)));
+  }
+  return {
+    height,
+    lat: (lat * 180) / Math.PI,
+    lon: (Math.atan2(y, x) * 180) / Math.PI,
+  };
+}
+
+/** A vertex as Columbus view draws it: projected to `[lon·a, lat·a, height]`,
+ * then moved by its ECEF elevation normal times the lift, which the shader
+ * adds in the world frame's `(height, x, y)` order. */
+function mapFrameVertex(
+  positions: ArrayLike<number>,
+  vertex: number,
+  normals: ArrayLike<number> | null,
+  lift: number,
+): Cartesian {
+  const { height, lat, lon } = cartographicOf([
+    positions[vertex * 3],
+    positions[vertex * 3 + 1],
+    positions[vertex * 3 + 2],
+  ]);
+  const normal = normals
+    ? [normals[vertex * 3], normals[vertex * 3 + 1], normals[vertex * 3 + 2]]
+    : [0, 0, 0];
+  return [
+    ((lon * Math.PI) / 180) * MAP_RADIUS + normal[1] * lift,
+    ((lat * Math.PI) / 180) * MAP_RADIUS + normal[2] * lift,
+    height + normal[0] * lift,
+  ];
+}
+
+/** The first triangle along the ray (Moller-Trumbore), or `null` when that
+ * first hit lies on or near an edge, where either owner is right. */
+function firstMeshHit(
+  triangles: readonly Cartesian[][],
+  owners: readonly number[],
+  { direction, origin }: PickRay,
+): { owner: number; t: number } | null {
+  let best: { edge: number; owner: number; t: number } | null = null;
+  triangles.forEach(([a, b, c], triangle) => {
+    const e1 = [0, 1, 2].map((axis) => b[axis] - a[axis]);
+    const e2 = [0, 1, 2].map((axis) => c[axis] - a[axis]);
+    const p = [
+      direction[1] * e2[2] - direction[2] * e2[1],
+      direction[2] * e2[0] - direction[0] * e2[2],
+      direction[0] * e2[1] - direction[1] * e2[0],
+    ];
+    const det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+    if (Math.abs(det) < 1e-9) return;
+    const s = [0, 1, 2].map((axis) => origin[axis] - a[axis]);
+    const u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) / det;
+    const q = [
+      s[1] * e1[2] - s[2] * e1[1],
+      s[2] * e1[0] - s[0] * e1[2],
+      s[0] * e1[1] - s[1] * e1[0],
+    ];
+    const v =
+      (direction[0] * q[0] + direction[1] * q[1] + direction[2] * q[2]) / det;
+    const t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) / det;
+    const edge = Math.min(u, v, 1 - u - v);
+    if (edge < -1e-9 || t <= 0) return;
+    if (best === null || t < best.t)
+      best = { edge, owner: owners[triangle], t };
+  });
+  if (best === null) return null;
+  const { edge, owner, t } = best;
+  return edge < 1e-4 ? null : { owner, t };
+}
+
+describe('surface picks in the map frame (Columbus view and 2D, fast-load §B.6.6)', () => {
+  const MAP_GEOMETRIES = ['triangles', 'hexagons', 'extruded'] as const;
+  /** Where the shader's ECEF normal shears the surface in the map frame:
+   * mostly up and north at 45°N 10°E; sideways (and slightly down) at 30°N
+   * 95°E; down at 30°S 150°E; mostly north at 75°N. */
+  const PLACES = {
+    'mostly sideways (30°N 95°E)': latLngToCell(30, 95, RESOLUTION),
+    'downwards (30°S 150°E)': latLngToCell(-30, 150, RESOLUTION),
+    'mid-latitude (45°N 10°E)': MID_LATITUDE,
+    'polar (75°N 20°E)': latLngToCell(75, 20, RESOLUTION),
+  };
+
+  /** The disk around `centre` as Columbus view draws it, with each triangle's
+   * row: rising heights so most rays meet a wall or an overlap, and one masked
+   * ring cell whose flat support plate is drawn unlifted. */
+  function drawnDisk(
+    geometry: (typeof MAP_GEOMETRIES)[number],
+    centre: string,
+    factor: number,
+    radius = 1,
+  ) {
+    const ring = sortedU64(gridDisk(centre, radius)).filter(
+      (cell) => cell !== centre,
+    );
+    const masked = ring[2];
+    const { buffers, disk, heights, input, surface } = setup(
+      geometry,
+      centre,
+      (h3) => ({
+        support: h3 === masked ? 'unknown' : 'interpolated',
+        // Rising round the first ring; further rings repeat the pattern.
+        value: h3 === centre ? 0.95 : 0.1 + 0.12 * (ring.indexOf(h3) % 6),
+      }),
+      radius,
+    );
+    const meshed = (row: number) => isSupportedCode(input.support[row]);
+    const triangles: Cartesian[][] = [];
+    const owners: number[] = [];
+    let triangle = 0;
+    disk.forEach((_, row) => {
+      if (!meshed(row)) return;
+      const corners =
+        input.topology.cornerOffsets[row + 1] -
+        input.topology.cornerOffsets[row];
+      const count = geometry === 'extruded' ? corners * 3 : corners;
+      for (let index = 0; index < count; index += 1, triangle += 1) {
+        triangles.push(
+          [0, 1, 2].map((offset) => {
+            const vertex = buffers.indices[triangle * 3 + offset];
+            return mapFrameVertex(
+              buffers.positions,
+              vertex,
+              buffers.elevationNormals,
+              buffers.heights[vertex] * factor,
+            );
+          }),
+        );
+        owners.push(row);
+      }
+    });
+    expect(triangle, 'every surface triangle has a row').toBe(
+      buffers.indices.length / 3,
+    );
+    const plate = buildSupportChunk(input, wholeGridChunk(input)).unknown!;
+    for (let index = 0; index < plate.indices.length; index += 3) {
+      triangles.push(
+        [0, 1, 2].map((offset) =>
+          mapFrameVertex(
+            plate.positions,
+            plate.indices[index + offset],
+            null,
+            0,
+          ),
+        ),
+      );
+      owners.push(disk.indexOf(masked));
+    }
+    const resolve = (point: Cartesian, ray: PickRay | null) =>
+      resolveSurfaceRow(
+        {
+          cartesian: null,
+          clearance: SURFACE_CLEARANCE_METRES,
+          ellipsoidHit: null,
+          factor,
+          geometry,
+          mapFrame: { point, ray },
+        },
+        surface,
+        heights,
+        meshed,
+      );
+    return { owners, resolve, surface, triangles };
+  }
+
+  /** A point inside each drawn triangle, so rays find the disk however far
+   * the shear spread its cells. */
+  function targetsOn(triangles: readonly Cartesian[][]): Cartesian[] {
+    return triangles.map(
+      ([a, b, c]) =>
+        [0, 1, 2].map(
+          (axis) => a[axis] * 0.25 + b[axis] * 0.35 + c[axis] * 0.4,
+        ) as Cartesian,
+    );
+  }
+
+  /** Rays from three camera positions, one nearly overhead and two oblique,
+   * at each target. */
+  function raysOver(triangles: readonly Cartesian[][]): PickRay[] {
+    const targets = targetsOn(triangles);
+    const centre = [0, 1].map(
+      (axis) =>
+        targets.reduce((total, target) => total + target[axis], 0) /
+        targets.length,
+    );
+    const highest = Math.max(...triangles.flat().map(([, , h]) => h));
+    const rays: PickRay[] = [];
+    for (const [east, north] of [
+      [30_000, 20_000],
+      [900_000, -400_000],
+      [-500_000, 800_000],
+    ]) {
+      const origin: Cartesian = [
+        centre[0] + east,
+        centre[1] + north,
+        highest + 1_500_000,
+      ];
+      for (const target of targets) {
+        const length = Math.hypot(
+          ...[0, 1, 2].map((axis) => target[axis] - origin[axis]),
+        );
+        rays.push({
+          direction: [0, 1, 2].map(
+            (axis) => (target[axis] - origin[axis]) / length,
+          ) as Cartesian,
+          origin,
+        });
+      }
+    }
+    return rays;
+  }
+
+  for (const [place, centre] of Object.entries(PLACES))
+    describe(place, () => {
+      it.each(
+        MAP_GEOMETRIES.flatMap((geometry) =>
+          [1, 5].map((factor) => [geometry, factor] as const),
+        ),
+      )(
+        'agrees with rays cast at the drawn %s mesh at exaggeration %d',
+        (geometry, factor) => {
+          const { owners, resolve, triangles } = drawnDisk(
+            geometry,
+            centre,
+            factor,
+          );
+          let checked = 0;
+          for (const ray of raysOver(triangles)) {
+            const hit = firstMeshHit(triangles, owners, ray);
+            if (hit === null) continue;
+            // Depth-buffer noise moves the hit along the ray either way (Task
+            // 69's probe measured up to about 16 km in a world view).
+            for (const noise of [-16_000, -2_000, 0, 2_000, 16_000]) {
+              const point = [0, 1, 2].map(
+                (axis) =>
+                  ray.origin[axis] + ray.direction[axis] * (hit.t + noise),
+              ) as Cartesian;
+              expect(resolve(point, ray), `noise ${noise}`).toBe(hit.owner);
+            }
+            checked += 1;
+          }
+          expect(checked, 'rays that meet the drawn disk').toBeGreaterThan(40);
+        },
+      );
+    });
+
+  it.each(MAP_GEOMETRIES)(
+    'keeps its answer under depth noise up to the window on a resolution-7 grid (%s)',
+    (geometry) => {
+      // Cells about 2.5 km across: 18 km of noise along an oblique ray moves
+      // the hit several cells sideways, so the walk has to follow the ray,
+      // not the hit.
+      const { owners, resolve, triangles } = drawnDisk(
+        geometry,
+        latLngToCell(45, 10, 7),
+        1,
+        3,
+      );
+      let checked = 0;
+      for (const ray of raysOver(triangles)) {
+        const hit = firstMeshHit(triangles, owners, ray);
+        if (hit === null) continue;
+        for (const noise of [-18_000, 18_000]) {
+          const point = [0, 1, 2].map(
+            (axis) => ray.origin[axis] + ray.direction[axis] * (hit.t + noise),
+          ) as Cartesian;
+          expect(resolve(point, ray), `noise ${noise}`).toBe(hit.owner);
+        }
+        checked += 1;
+      }
+      expect(checked).toBeGreaterThan(40);
+    },
+  );
+
+  it('resolves hits the radial projection gives to another cell', () => {
+    // The globe's projection, applied to the ECEF point Cesium returns for a
+    // Columbus-view hit, misses the drawn cell for most of these rays.
+    const factor = 1;
+    const { owners, resolve, surface, triangles } = drawnDisk(
+      'triangles',
+      MID_LATITUDE,
+      factor,
+    );
+    let radialMisses = 0;
+    let checked = 0;
+    for (const ray of raysOver(triangles)) {
+      const hit = firstMeshHit(triangles, owners, ray);
+      if (hit === null) continue;
+      const point = [0, 1, 2].map(
+        (axis) => ray.origin[axis] + ray.direction[axis] * hit.t,
+      ) as Cartesian;
+      const ecef = [0, 0, 0];
+      geodeticToEcef(
+        (point[0] / MAP_RADIUS) * (180 / Math.PI),
+        (point[1] / MAP_RADIUS) * (180 / Math.PI),
+        point[2],
+        ecef,
+      );
+      const radial = resolveSurfaceRow(
+        {
+          cartesian: ecef as Cartesian,
+          clearance: SURFACE_CLEARANCE_METRES,
+          ellipsoidHit: null,
+          factor,
+          geometry: 'triangles',
+        },
+        surface,
+        () => 0,
+      );
+      if (radial !== hit.owner) radialMisses += 1;
+      expect(resolve(point, ray)).toBe(hit.owner);
+      checked += 1;
+    }
+    expect(radialMisses / checked).toBeGreaterThan(0.5);
+  });
+
+  it.each(MAP_GEOMETRIES)(
+    'reads the base from the hit height without a ray where the shear is mostly upward (%s)',
+    (geometry) => {
+      const { owners, resolve, triangles } = drawnDisk(
+        geometry,
+        MID_LATITUDE,
+        5,
+      );
+      let checked = 0;
+      for (const target of targetsOn(triangles)) {
+        // Straight down, so an exact hit lies on a top or a fan, not a wall.
+        const nadir: PickRay = {
+          direction: [0, 0, -1],
+          origin: [target[0], target[1], target[2] + 2_000_000],
+        };
+        const hit = firstMeshHit(triangles, owners, nadir);
+        if (hit === null) continue;
+        const point = [0, 1, 2].map(
+          (axis) => nadir.origin[axis] + nadir.direction[axis] * hit.t,
+        ) as Cartesian;
+        expect(resolve(point, null)).toBe(resolve(point, nadir));
+        expect(resolve(point, null)).toBe(hit.owner);
+        checked += 1;
+      }
+      expect(checked).toBeGreaterThan(20);
+    },
+  );
+
+  it('moves a hit Cesium returned one map width away back onto the ray', () => {
+    // Cesium returns the depth hit through cartesianToCartographic, so a
+    // surface the shear pushes past ±180° comes back on the far side.
+    const { owners, resolve, triangles } = drawnDisk(
+      'hexagons',
+      MID_LATITUDE,
+      5,
+    );
+    const width = 2 * Math.PI * MAP_RADIUS;
+    let checked = 0;
+    for (const ray of raysOver(triangles)) {
+      const hit = firstMeshHit(triangles, owners, ray);
+      if (hit === null) continue;
+      const point = [0, 1, 2].map(
+        (axis) => ray.origin[axis] + ray.direction[axis] * hit.t,
+      ) as Cartesian;
+      for (const shift of [-width, width])
+        expect(resolve([point[0] + shift, point[1], point[2]], ray)).toBe(
+          hit.owner,
+        );
+      checked += 1;
+    }
+    expect(checked).toBeGreaterThan(40);
   });
 });

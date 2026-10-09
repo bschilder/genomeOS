@@ -2,13 +2,16 @@
  *
  * Surface chunks carry one pick id per chunk, so the cell under the cursor is
  * recovered from the picked position: the ellipsoid hit at elevation factor
- * 0; otherwise the picked Cartesian projected back along the geocentric
- * radial, which undoes the shader's `elevationNormal` displacement exactly.
- * For `extruded`, the cell is the first of the ≤ 7 candidate prisms (the
+ * 0; otherwise, on the globe, the picked Cartesian projected back along the
+ * geocentric radial, which undoes the shader's `elevationNormal` displacement
+ * exactly. For `extruded`, the cell is the first of the ≤ 7 candidate prisms (the
  * projected cell and its ring) that the pick ray enters, so depth-buffer
  * noise in the picked position only chooses the neighbourhood; without a ray,
  * or when it enters none of them, the hit altitude decides between the
- * projected cell and the taller neighbour whose wall was hit. Cesium-free.
+ * projected cell and the taller neighbour whose wall was hit. In Columbus view
+ * and 2D the same displacement shears the surface in the map frame instead,
+ * and `map-frame-pick.ts` resolves the hit there (`input.mapFrame`).
+ * Cesium-free.
  */
 
 import {
@@ -21,6 +24,13 @@ import {
 
 import { rowForH3, type SurfaceArtifact } from '../surface-columns';
 import type { SurfaceGeometry } from '../url-state';
+import { MAX_HEIGHT_METRES } from '../visual-encoding';
+import {
+  alignToRay,
+  firstDrawnRow,
+  unshearedBase,
+  type MapFrameHit,
+} from './map-frame-pick';
 import { CPU_EXTRUSION_EPSILON_METRES } from './surface-buffers';
 import {
   geodeticToEcef,
@@ -36,7 +46,8 @@ function topTolerance(top: number): number {
   return CPU_EXTRUSION_EPSILON_METRES + 0.5 + 0.002 * top;
 }
 
-/** The pointer's pick ray in ECEF metres (globe mode); `direction` need not be unit length. */
+/** The pointer's pick ray: ECEF metres on the globe, the map frame's
+ * `[x, y, height]` in `MapFrameHit`; `direction` need not be unit length. */
 export interface PickRay {
   origin: Vec3;
   direction: Vec3;
@@ -50,6 +61,9 @@ export interface SurfacePickInput {
   clearance: number;
   /** Only `extruded` reads it; null (or absent) keeps the altitude test. */
   ray?: PickRay | null;
+  /** Columbus view and 2D: the hit and ray in the map frame. When set,
+   * `cartesian` and `ray` are not read. */
+  mapFrame?: MapFrameHit | null;
 }
 
 const dot = (a: Vec3, b: Vec3): number =>
@@ -154,51 +168,19 @@ function firstPrismAlongRay(
 }
 
 /**
- * The grid row under a surface or support pick, or `null` off the grid.
- * `heights(row)` is the row's render height at exaggeration 1 (`heightFor`
- * over the render tier; 0 for masked rows); only `extruded` reads it.
- *
- * `extruded`: with `input.ray`, the row of the first `gridDisk(cell, 1)`
- * prism the ray enters wins (ties to the lower row). Without a ray, or when it
- * enters none, the projected row wins while the hit altitude is within its top
- * (plus slack). Otherwise the hit is a wall, and the nearest `gridDisk(cell, 1)`
- * neighbour (by centre, ties to the lower row) whose top reaches the altitude
- * wins; with none, the projected row stands (`null` off the grid).
+ * The altitude test: `row` while `altitude` is within its top (plus slack);
+ * otherwise the hit is a wall, and the nearest `gridDisk(cell, 1)` neighbour
+ * (by centre, ties to the lower row) whose top reaches the altitude wins; with
+ * none, `row` stands (`null` off the grid).
  */
-export function resolveSurfaceRow(
-  input: SurfacePickInput,
+function altitudeRow(
+  cell: string,
+  row: number | null,
+  { lat, lon }: { lat: number; lon: number },
+  altitude: number,
   surface: SurfaceArtifact,
-  heights: (row: number) => number,
+  top: (row: number) => number,
 ): number | null {
-  const resolution = surface.grid.resolution;
-  if (input.factor <= 0) {
-    if (!input.ellipsoidHit) return null;
-    return rowForH3(
-      surface,
-      latLngToCell(input.ellipsoidHit.lat, input.ellipsoidHit.lon, resolution),
-    );
-  }
-  if (!input.cartesian) return null;
-  const onSurface = scaleToGeocentricSurface(input.cartesian);
-  const { lat, lon } = surfacePointToDegrees(onSurface);
-  const cell = latLngToCell(lat, lon, resolution);
-  const row = rowForH3(surface, cell);
-  if (input.geometry !== 'extruded') return row;
-
-  const altitude =
-    magnitude(input.cartesian) - magnitude(onSurface) - input.clearance;
-  const top = (candidate: number): number =>
-    Math.max(0, heights(candidate)) * input.factor;
-  if (input.ray) {
-    const first = firstPrismAlongRay(
-      input.ray,
-      cell,
-      surface,
-      input.clearance,
-      top,
-    );
-    if (first !== null) return first;
-  }
   if (row !== null && altitude <= top(row) + topTolerance(top(row))) return row;
 
   const hit = [0, 0, 0];
@@ -228,4 +210,92 @@ export function resolveSurfaceRow(
     }
   }
   return best ?? row;
+}
+
+/**
+ * Columbus view and 2D: the first drawn cell the ray meets near the hit
+ * (`firstDrawnRow`). Without a ray, or when it meets none, the base recovered
+ * from the hit's height (`unshearedBase`) gives the row, with the altitude
+ * test for `extruded`.
+ */
+function mapFrameRow(
+  input: SurfacePickInput,
+  hit: MapFrameHit,
+  surface: SurfaceArtifact,
+  top: (row: number) => number,
+  meshed: (row: number) => boolean,
+): number | null {
+  const maxLift = MAX_HEIGHT_METRES * input.factor;
+  const point = hit.ray ? alignToRay(hit.point, hit.ray) : hit.point;
+  if (hit.ray) {
+    const first = firstDrawnRow(hit.ray, point, {
+      clearance: input.clearance,
+      geometry: input.geometry,
+      maxLift,
+      meshed,
+      surface,
+      top,
+    });
+    if (first !== null) return first;
+  }
+  const base = unshearedBase(point, input.clearance, maxLift);
+  const cell = latLngToCell(base.lat, base.lon, surface.grid.resolution);
+  const row = rowForH3(surface, cell);
+  if (input.geometry !== 'extruded') return row;
+  return altitudeRow(cell, row, base, base.lift, surface, top);
+}
+
+/**
+ * The grid row under a surface or support pick, or `null` off the grid.
+ * `heights(row)` is the row's render height at exaggeration 1 (`heightFor`
+ * over the render tier; 0 for masked rows); on the globe only `extruded`
+ * reads it. `meshed(row)` is true for rows the surface mesh draws (observed or
+ * interpolated); only the map frame reads it, and without it a row counts as
+ * meshed when its height is above 0.
+ *
+ * `input.mapFrame` (Columbus view and 2D): see `mapFrameRow`.
+ *
+ * `extruded` on the globe: with `input.ray`, the row of the first
+ * `gridDisk(cell, 1)` prism the ray enters wins (ties to the lower row).
+ * Without a ray, or when it enters none, the altitude test decides
+ * (`altitudeRow`).
+ */
+export function resolveSurfaceRow(
+  input: SurfacePickInput,
+  surface: SurfaceArtifact,
+  heights: (row: number) => number,
+  meshed: (row: number) => boolean = (row) => heights(row) > 0,
+): number | null {
+  const resolution = surface.grid.resolution;
+  if (input.factor <= 0) {
+    if (!input.ellipsoidHit) return null;
+    return rowForH3(
+      surface,
+      latLngToCell(input.ellipsoidHit.lat, input.ellipsoidHit.lon, resolution),
+    );
+  }
+  const top = (candidate: number): number =>
+    Math.max(0, heights(candidate)) * input.factor;
+  if (input.mapFrame)
+    return mapFrameRow(input, input.mapFrame, surface, top, meshed);
+  if (!input.cartesian) return null;
+  const onSurface = scaleToGeocentricSurface(input.cartesian);
+  const { lat, lon } = surfacePointToDegrees(onSurface);
+  const cell = latLngToCell(lat, lon, resolution);
+  const row = rowForH3(surface, cell);
+  if (input.geometry !== 'extruded') return row;
+
+  if (input.ray) {
+    const first = firstPrismAlongRay(
+      input.ray,
+      cell,
+      surface,
+      input.clearance,
+      top,
+    );
+    if (first !== null) return first;
+  }
+  const altitude =
+    magnitude(input.cartesian) - magnitude(onSurface) - input.clearance;
+  return altitudeRow(cell, row, { lat, lon }, altitude, surface, top);
 }

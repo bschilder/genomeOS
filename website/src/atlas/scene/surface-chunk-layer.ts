@@ -29,7 +29,7 @@ import type {
 } from '../geometry/support-buffers';
 import type { SurfaceChunkBuffers } from '../geometry/surface-buffers';
 import { needsLongitudeSplit } from '../geometry/wgs84';
-import type { SurfaceGeometry } from '../url-state';
+import type { ExplorerSceneMode, SurfaceGeometry } from '../url-state';
 import { hexFromBytes } from '../visual-encoding';
 import { createEdgeLayer, type EdgeLayer } from './edge-layer';
 import { materialForSupport } from './support-material';
@@ -180,6 +180,23 @@ export function createSurfaceChunkGroup(
   let surfaceVisible = true;
   let supportVisible = true;
   let elevationFactor = Math.max(0, options.elevationFactor);
+  let sceneMode: ExplorerSceneMode = 'globe';
+  /**
+   * Whether Cesium may cull a surface chunk. At rest its bounds hold every
+   * drawn vertex. Raised, two cases lose them: a chunk Cesium re-bounds at the
+   * antimeridian (below), and every chunk off the globe, where Cesium culls
+   * against the ECEF sphere projected into the map frame while the shader
+   * shears the raised surface sideways in that frame (`map-frame-pick.ts`).
+   * In perspective mode at exaggeration 5 the pick and translucent-depth
+   * passes then dropped chunks whose columns the colour pass drew, so a hover
+   * over them showed nothing or the cell behind (Task 69 fix-round probe).
+   */
+  const cullable = (rebounded: boolean): boolean =>
+    elevationFactor === 0 || (sceneMode === 'globe' && !rebounded);
+  const applyCulling = () => {
+    for (const primitive of surfacePrimitives)
+      primitive.cull = cullable(reboundedSurfaces.includes(primitive));
+  };
 
   const applyEdgeVisibility = () => {
     edges.collection.show =
@@ -230,7 +247,7 @@ export function createSurfaceChunkGroup(
       // Custom vertex attributes cannot use Cesium's stock geometry workers;
       // the data worker already built every array.
       asynchronous: false,
-      cull: !(rebounded && elevationFactor > 0),
+      cull: cullable(rebounded),
       geometryInstances: new GeometryInstance({
         geometry: surfaceGeometry(buffers),
         id: surfaceChunkPickId(options.artifactKey, chunk),
@@ -334,12 +351,13 @@ export function createSurfaceChunkGroup(
         elevationFactor = safeFactor;
         for (const appearance of appearances)
           appearance.uniforms.u_elevationFactor = safeFactor;
-        for (const primitive of reboundedSurfaces)
-          primitive.cull = safeFactor === 0;
+        applyCulling();
       }
       edges.setElevationFactor(safeFactor, force);
     },
     async setSceneMode(mode) {
+      sceneMode = mode;
+      applyCulling();
       await edges.setMode(mode);
       applyEdgeVisibility();
     },

@@ -431,6 +431,34 @@ describe('surface chunk group', () => {
     expect(culled()).toEqual([true, true, true]);
   });
 
+  it('keeps raised chunks out of culling off the globe, where the shader shears them', async () => {
+    // In Columbus view Cesium culls against the ECEF sphere projected into the
+    // map frame, which the sheared raised surface leaves; the pick and
+    // translucent-depth passes then dropped chunks that were on screen.
+    const layer = group();
+    layer.addChunk(triangleSurfaceBuffers(0), maskedSupport(0));
+    layer.addChunk(seamSurfaceBuffers(1), emptySupport(1));
+    const culled = () =>
+      childrenOf(layer, 0).map((primitive) => primitive.cull);
+
+    await layer.setSceneMode('perspective');
+    expect(culled(), 'at rest the bounds hold').toEqual([true, true]);
+    layer.setElevationFactor(2);
+    expect(culled()).toEqual([false, false]);
+    layer.addChunk(triangleSurfaceBuffers(2), emptySupport(2));
+    expect(culled()).toEqual([false, false, false]);
+    expect(
+      childrenOf(layer, 1).every((primitive) => primitive.cull),
+      'masks are never raised',
+    ).toBe(true);
+    await layer.setSceneMode('globe');
+    expect(culled()).toEqual([true, false, true]);
+    await layer.setSceneMode('map');
+    expect(culled()).toEqual([false, false, false]);
+    layer.setElevationFactor(0);
+    expect(culled()).toEqual([true, true, true]);
+  });
+
   it('loses the raised extent only where Cesium splits at the antimeridian', () => {
     // scene3DOnly is false, so Primitive runs splitLongitude on every chunk;
     // past its early exit it re-bounds the geometry over the unraised positions.

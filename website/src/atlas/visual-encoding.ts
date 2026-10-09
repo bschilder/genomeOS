@@ -14,7 +14,8 @@ export type PaletteId =
 /** One palette stop in linear light, each channel in [0, 1]. */
 export type LinearRgb = readonly [number, number, number];
 
-const MAX_HEIGHT_METRES = 180_000;
+/** A full-scale column at exaggeration 1 (`heightFor`). */
+export const MAX_HEIGHT_METRES = 180_000;
 const PALETTES: Record<PaletteId, readonly string[]> = {
   cividis: ['#00204c', '#7d7c78', '#fee838'],
   genome: ['#10213e', '#27a9d0', '#72e7c1'],

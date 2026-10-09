@@ -8,6 +8,9 @@ import {
 import {
   Cartesian2,
   Cartesian3,
+  Ellipsoid,
+  GeographicProjection,
+  Math as CesiumMath,
   SceneMode,
   type PolylineCollection,
 } from 'cesium';
@@ -526,7 +529,11 @@ describe('extruded picks along the camera ray', () => {
       [{ id: surfaceChunkPickId(disk.artifactKey, 0) }],
       WINDOW,
     );
-    return { pick, rays: scene.camera.getPickRay.mock.calls };
+    return {
+      depthPicks: scene.pickPosition.mock.calls.length,
+      pick,
+      rays: scene.camera.getPickRay.mock.calls,
+    };
   }
 
   it('keeps the short cell whose top the camera ray meets on the globe', () => {
@@ -535,13 +542,160 @@ describe('extruded picks along the camera ray', () => {
     expect(rays).toEqual([[WINDOW]]);
   });
 
-  it('keeps the altitude test where the camera ray is not in globe coordinates', () => {
-    // Columbus view's camera works in projected coordinates, so no ray is cast.
-    const { pick, rays } = resolveIn(SceneMode.COLUMBUS_VIEW);
-    expect(pick).toMatchObject({ h3Index: CELL });
-    expect(rays).toEqual([]);
+  it('casts the globe ray only for extruded', () => {
     expect(resolveIn(SceneMode.SCENE3D, 'hexagons').rays).toEqual([]);
   });
+
+  it('resolves nothing while the scene morphs between modes', () => {
+    const { depthPicks, pick, rays } = resolveIn(SceneMode.MORPHING);
+    expect(pick).toBeNull();
+    expect(depthPicks).toBe(0);
+    expect(rays).toEqual([]);
+  });
+});
+
+describe('surface picks in the map frame (Columbus view and 2D)', () => {
+  // Cesium's map frame: GeographicProjection puts (lon, lat, height) at
+  // (lon·a, lat·a, height); the world frame stores it as (height, x, y).
+  const projection = new GeographicProjection();
+  const A = projection.ellipsoid.maximumRadius;
+  const factor = 5;
+
+  /** Where the shader draws a base point lifted `lift` metres: the ECEF
+   * elevation normal is added in the world frame's (height, x, y) order. */
+  function drawnAt(lat: number, lon: number, height: number, lift: number) {
+    const normal = Cartesian3.normalize(
+      Cartesian3.fromDegrees(lon, lat, SURFACE_CLEARANCE_METRES),
+      new Cartesian3(),
+    );
+    return {
+      height: height + normal.x * lift,
+      x: CesiumMath.toRadians(lon) * A + normal.y * lift,
+      y: CesiumMath.toRadians(lat) * A + normal.z * lift,
+    };
+  }
+
+  function diskAround(centre: string, value: (h3: string) => number) {
+    return columnarSurface(
+      gridDisk(centre, 1).map((h3) => ({
+        h3,
+        post_mean: value(h3),
+        post_sd: 0.1,
+        support: 'interpolated' as const,
+      })),
+    );
+  }
+
+  /** Resolves a hover straight down the world frame onto `drawn`, with the
+   * depth hit lifted `noise` metres along the ray, as Cesium returns it: the
+   * world point unprojected and converted to ECEF. */
+  function resolveDown(
+    mode: SceneMode,
+    disk: ReturnType<typeof columnarSurface>,
+    drawn: { height: number; x: number; y: number },
+    noise: number,
+    geometry: SurfaceGeometry = 'extruded',
+  ) {
+    const world = new Cartesian3(drawn.height + noise, drawn.x, drawn.y);
+    const hit = projection.ellipsoid.cartographicToCartesian(
+      projection.unproject(new Cartesian3(world.y, world.z, world.x)),
+    );
+    const scene = {
+      camera: {
+        getPickRay: vi.fn(() => ({
+          direction: new Cartesian3(-1, 0, 0),
+          origin: new Cartesian3(3_000_000, drawn.x, drawn.y),
+        })),
+        pickEllipsoid: vi.fn(),
+      },
+      mapProjection: projection,
+      mode,
+      pick: vi.fn(),
+      pickPosition: vi.fn(() => hit),
+      pickTranslucentDepth: false,
+    };
+    const resolve = createSurfacePickResolver(scene as never, {
+      ...context(factor),
+      geometry: () => geometry,
+      target: () => ({
+        artifactKey: disk.artifactKey,
+        hidden: [],
+        surface: disk,
+      }),
+    });
+    return {
+      hit,
+      pick: resolve([{ id: surfaceChunkPickId(disk.artifactKey, 0) }], WINDOW),
+      rays: scene.camera.getPickRay.mock.calls,
+    };
+  }
+
+  it.each([SceneMode.COLUMBUS_VIEW, SceneMode.SCENE2D])(
+    'keeps the short cell whose top the ray meets beside a taller one (mode %d)',
+    (mode) => {
+      // Near 0°N 0°E the shear is almost straight up (it leans under 1.2%
+      // of the lift, so the tall centre's walls overhang its ring by up to
+      // about 10 km); the hover is over a short ring cell's centre.
+      const disk = diskAround(CELL, (h3) => (h3 === CELL ? 0.9 : 0.2));
+      const [short] = gridDisk(CELL, 1).filter((h3) => h3 !== CELL);
+      const [lat, lon] = cellToLatLng(short);
+      const drawn = drawnAt(
+        lat,
+        lon,
+        SURFACE_CLEARANCE_METRES + 1,
+        heightFor('interpolated', 0.2, [0, 1], factor),
+      );
+      // 2 km of depth noise above the short top: the altitude test alone
+      // would hand the hover to the tall neighbour.
+      const { pick, rays } = resolveDown(mode, disk, drawn, 2_000);
+      expect(pick).toMatchObject({
+        h3Index: short,
+        row: rowForH3(disk, short),
+      });
+      expect(rays).toEqual([[WINDOW]]);
+    },
+  );
+
+  it.each(['extruded', 'hexagons', 'triangles'] as const)(
+    'undoes the shear of the drawn %s surface at 45°N',
+    (geometry) => {
+      // At 45°N 10°E the shader moves a lifted vertex about 0.7 of its lift
+      // north in the map frame, so the radial projection of the ECEF point
+      // Cesium returns lands cells away. Equal heights keep every cell's top
+      // in one sheared sheet, so the ray meets the centre's own top.
+      const centre = latLngToCell(45, 10, 3);
+      const disk = diskAround(centre, () => 0.5);
+      const [lat, lon] = cellToLatLng(centre);
+      const drawn = drawnAt(
+        lat,
+        lon,
+        SURFACE_CLEARANCE_METRES + (geometry === 'extruded' ? 1 : 0),
+        heightFor('interpolated', 0.5, [0, 1], factor),
+      );
+      const { hit, pick } = resolveDown(
+        SceneMode.COLUMBUS_VIEW,
+        disk,
+        drawn,
+        0,
+        geometry,
+      );
+      const radial = Ellipsoid.WGS84.cartesianToCartographic(
+        Ellipsoid.WGS84.scaleToGeocentricSurface(hit, new Cartesian3()),
+      );
+      expect(
+        latLngToCell(
+          CesiumMath.toDegrees(radial.latitude),
+          CesiumMath.toDegrees(radial.longitude),
+          3,
+        ),
+        'precondition: the radial projection leaves the centre cell',
+      ).not.toBe(centre);
+      expect(pick).toMatchObject({
+        h3Index: centre,
+        row: rowForH3(disk, centre),
+      });
+    },
+  );
 });
 
 describe('keyed selection highlight', () => {
