@@ -6,6 +6,7 @@ import { StaticAtlasDataProvider } from '../src/atlas/static-provider';
 import { dataHref } from '../src/lib/data-url';
 import {
   artifactTierKey,
+  corruptArtifactTier,
   delayArtifactTier,
   displayedArtifactIds,
   E2E_ARTIFACT_DATA_BASE,
@@ -2120,4 +2121,107 @@ test('surface values report an unavailable detail tier and recover on retry', as
   );
   await expect(inspector).toContainText(DISPLAYED_VALUE);
   expect(pageErrors).toEqual([]);
+});
+
+test('a corrupted render object shows Retry data and renders nothing', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  await page.goto('/app/');
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
+  await expect.poll(() => displayedArtifactIds(page)).toEqual([]);
+  await page.waitForTimeout(1_000);
+  expect(await displayedArtifactIds(page)).toEqual([]);
+  expect(corruption.hits()).toBeGreaterThanOrEqual(1);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+  await expect.poll(() => displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a corrupted detail object removes the map and offers Retry data', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'detail');
+  await page.goto('/app/');
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
+  await expect(explorer).not.toHaveAttribute('data-atlas-values-ready', 'true');
+
+  await corruption.restore();
+  await failure.getByRole('button', { name: 'Retry data' }).click();
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true');
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+});
+
+test('a browser that cannot start the data worker gets Retry data, not an endless load', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  await page.addInitScript(() => {
+    // Firefox before 114 has no module workers, and a strict CSP `worker-src` blocks them; Cesium's
+    // own classic workers keep working.
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        if (String(url).includes('atlas-data')) {
+          throw new Error('module workers are unavailable');
+        }
+        super(url, options);
+      }
+    };
+  });
+  await page.goto('/app/');
+  await expect(page.getByRole('button', { name: 'Retry data' })).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-explorer')).not.toHaveAttribute(
+    'data-atlas-ready',
+    'true',
+  );
+  expect(errors).toEqual([]);
+});
+
+test('Retry data recovers once the render object is served intact again', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const corrupt = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  await page.goto('/app/');
+  const retry = page.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible({ timeout: 45_000 });
+  await corrupt.restore();
+  await retry.click();
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
 });
