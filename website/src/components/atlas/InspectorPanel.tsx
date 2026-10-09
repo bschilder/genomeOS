@@ -16,17 +16,31 @@ import {
   usePanelBodyId,
   usePanelBodyInert,
 } from './useExplorerPanels';
+import type { SurfaceArtifact } from '../../atlas/surface-columns';
+import {
+  CELL_VALUES_UNAVAILABLE,
+  LOADING_CELL_VALUES,
+  RETRY_CELL_VALUES,
+  surfaceCellView,
+  valuesView,
+  type DetailStatus,
+  type SurfaceSelection,
+} from './surface-cell-view';
 
 export type InspectorSelection =
   | { kind: 'surface'; value: SurfaceCell }
+  | SurfaceSelection
   | { kind: 'observation'; value: Observation };
 
 interface InspectorPanelProps {
   artifact: ArtifactRef;
   colorEncoding?: ObservationColorEncoding | null;
+  detail?: DetailStatus;
   placeContext?: ObservationPlaceContext | null;
   selection: InspectorSelection;
+  surface?: SurfaceArtifact | null;
   onClose: () => void;
+  onRetryDetail?: () => void;
 }
 
 function percent(value: number): string {
@@ -69,17 +83,28 @@ function GoogleMapsIcon() {
 export function InspectorPanel({
   artifact,
   colorEncoding,
+  detail = 'loading',
   placeContext,
   selection,
+  surface = null,
   onClose,
+  onRetryDetail,
 }: InspectorPanelProps) {
-  useEscapeLayer(true, onClose, 'inspector');
-  useExplorerPanel('inspector', true, onClose);
+  const view =
+    selection.kind !== 'surface'
+      ? null
+      : 'value' in selection
+        ? valuesView(selection.value)
+        : surfaceCellView(surface, selection, detail);
+  // A panel that renders nothing must not hold the Escape stack or the phone panel sheet.
+  const shown = selection.kind !== 'surface' || view !== null;
+  useEscapeLayer(shown, onClose, 'inspector');
+  useExplorerPanel('inspector', shown, onClose);
   const bodyId = usePanelBodyId('inspector');
   const bodyInert = usePanelBodyInert();
   if (selection.kind === 'surface') {
-    const cell = selection.value;
-    const [centroidLat, centroidLon] = cellToLatLng(cell.h3_index);
+    if (!view) return null;
+    const [centroidLat, centroidLon] = cellToLatLng(view.h3Index);
     return (
       <aside className="atlas-inspector" aria-label="Selected map cell">
         <button
@@ -100,31 +125,57 @@ export function InspectorPanel({
           inert={bodyInert}
         >
           <dl>
-            <div>
-              <dt>Posterior estimate</dt>
-              <dd>{percent(cell.post_mean)}</dd>
-            </div>
-            <div>
-              <dt>95% credible interval</dt>
-              <dd>
-                {percent(cell.q025)}–{percent(cell.q975)}
-              </dd>
-            </div>
-            <div>
-              <dt>Uncertainty</dt>
-              <dd>{percent(cell.post_sd)}</dd>
-            </div>
+            {view.state === 'values' ? (
+              <>
+                <div>
+                  <dt>Posterior estimate</dt>
+                  <dd>{percent(view.cell.post_mean)}</dd>
+                </div>
+                <div>
+                  <dt>95% credible interval</dt>
+                  <dd>
+                    {percent(view.cell.q025)}–{percent(view.cell.q975)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Uncertainty</dt>
+                  <dd>{percent(view.cell.post_sd)}</dd>
+                </div>
+              </>
+            ) : (
+              <div>
+                <dt>Cell values</dt>
+                <dd>
+                  <span role="status">
+                    {view.state === 'loading'
+                      ? LOADING_CELL_VALUES
+                      : CELL_VALUES_UNAVAILABLE}
+                  </span>
+                  {view.state === 'unavailable' && onRetryDetail && (
+                    <button
+                      className="atlas-inspector__retry"
+                      type="button"
+                      onClick={onRetryDetail}
+                    >
+                      {RETRY_CELL_VALUES}
+                    </button>
+                  )}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Evidence support</dt>
-              <dd>{evidenceSupportLabel(cell.support)}</dd>
+              <dd>{evidenceSupportLabel(view.support)}</dd>
             </div>
-            <div>
-              <dt>Nearest measurement</dt>
-              <dd>{Math.round(cell.dist_nearest_obs_km)} km</dd>
-            </div>
+            {view.state === 'values' && (
+              <div>
+                <dt>Nearest measurement</dt>
+                <dd>{Math.round(view.cell.dist_nearest_obs_km)} km</dd>
+              </div>
+            )}
             <div>
               <dt>Cell ID</dt>
-              <dd>{cell.h3_index}</dd>
+              <dd>{view.h3Index}</dd>
             </div>
             <div>
               <dt>Google Maps</dt>
@@ -154,7 +205,7 @@ export function InspectorPanel({
                       </span>
                     </a>
                     <a
-                      href={googleMapsPolygonUrl(cell.h3_index)}
+                      href={googleMapsPolygonUrl(view.h3Index)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

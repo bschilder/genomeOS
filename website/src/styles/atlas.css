@@ -813,7 +813,8 @@ html.atlas-page .site-header--compact .site-header__inner {
 .atlas-camera-actions button,
 .atlas-keyboard-help summary,
 .atlas-error button,
-.atlas-failure button {
+.atlas-failure button,
+.atlas-inspector__retry {
   min-height: 2.65rem;
   padding: 0.58rem 0.8rem;
   border: 1px solid rgb(112 230 255 / 30%);
@@ -829,7 +830,8 @@ html.atlas-page .site-header--compact .site-header__inner {
 .atlas-camera-actions button:hover,
 .atlas-keyboard-help summary:hover,
 .atlas-error button:hover,
-.atlas-failure button:hover {
+.atlas-failure button:hover,
+.atlas-inspector__retry:hover {
   border-color: var(--color-ion);
   background: rgb(25 67 101 / 95%);
 }
