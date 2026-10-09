@@ -4,9 +4,13 @@ import { cellToLatLng } from 'h3-js';
 
 import { dataHref } from '../src/lib/data-url';
 import {
+  artifactTierKey,
+  delayArtifactTier,
+  displayedArtifactIds,
   E2E_ARTIFACT_DATA_BASE,
   installAtlasBrowserFixture,
   readInlineCatalog,
+  urlMatchesKey,
 } from './atlas-browser-fixture';
 import {
   expandExplorerSheet,
@@ -219,14 +223,22 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.route('**/g6pd-deficiency.surface.json', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1_800));
-    await route.fallback();
-  });
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  const render = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  const observations = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'observations',
+    Number.POSITIVE_INFINITY,
+  );
 
   await chooseAtlasMap(page, 'g6pd-deficiency');
   const status = page.locator('[data-atlas-status-slot]');
@@ -238,10 +250,110 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
     'Atlas operation progress',
   );
   await expect(progress).toBeVisible();
+  await expect.poll(() => render.hits()).toBe(1);
   await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  render.release();
+  observations.release();
   await expect(
     page.locator('[data-atlas-active="g6pd-deficiency"]'),
   ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect
+    .poll(() => displayedArtifactIds(page))
+    .toEqual(['g6pd-deficiency']);
+  expect(render.hits()).toBe(1);
+});
+
+test('a replacement stays hidden until its render tier arrives, then swaps atomically', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const observationsKey = artifactTierKey(
+    await readInlineCatalog(page),
+    'g6pd-deficiency',
+    'observations',
+  );
+  const render = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.evaluate(() => {
+    const explorer = document.querySelector('.atlas-explorer');
+    if (explorer === null) throw new Error('missing .atlas-explorer');
+    const history: string[] = [];
+    const probe = window as Window & {
+      __atlasDisplayedHistory?: string[];
+      __atlasReleaseMark?: () => void;
+    };
+    probe.__atlasDisplayedHistory = history;
+    probe.__atlasReleaseMark = () => history.push('|release|');
+    new MutationObserver(() =>
+      history.push(explorer.getAttribute('data-atlas-displayed') ?? ''),
+    ).observe(explorer, {
+      attributes: true,
+      attributeFilter: ['data-atlas-displayed'],
+    });
+  });
+  const observationsArrived = page.waitForResponse((response) =>
+    urlMatchesKey(new URL(response.url()), observationsKey),
+  );
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await observationsArrived;
+  await expect.poll(() => render.hits()).toBe(1);
+  await page.waitForTimeout(750);
+  await expect(page.locator('[data-atlas-status-slot]')).toContainText(
+    'G6PD deficiency',
+  );
+  await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  await page.evaluate(() =>
+    (
+      window as Window & { __atlasReleaseMark?: () => void }
+    ).__atlasReleaseMark?.(),
+  );
+  render.release();
+  await expect(
+    page.locator('[data-atlas-active="g6pd-deficiency"]'),
+  ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect
+    .poll(() => displayedArtifactIds(page))
+    .toEqual(['g6pd-deficiency']);
+  const history = await page.evaluate(
+    () =>
+      (window as Window & { __atlasDisplayedHistory?: string[] })
+        .__atlasDisplayedHistory ?? [],
+  );
+  const cut = history.indexOf('|release|');
+  expect(cut).toBeGreaterThanOrEqual(0);
+  const parse = (value: string) =>
+    [...new Set(value.split(/\s+/).filter(Boolean))].sort().join(' ');
+  const before = history.slice(0, cut).map(parse);
+  const after = history.slice(cut + 1).map(parse);
+  // Nothing of G6PD is displayed while its render tier is held.
+  for (const value of before) expect(value).toBe('hbs-rs334');
+  // After the release: hbs-rs334 -> (cross-fade: both)* -> g6pd-deficiency, never back.
+  expect(after.at(-1)).toBe('g6pd-deficiency');
+  const rank = {
+    'g6pd-deficiency': 2,
+    'g6pd-deficiency hbs-rs334': 1,
+    'hbs-rs334': 0,
+  } as const;
+  let last = 0;
+  for (const value of after) {
+    expect(Object.keys(rank)).toContain(value);
+    const step = rank[value as keyof typeof rank];
+    expect(step).toBeGreaterThanOrEqual(last);
+    last = step;
+  }
 });
 
 test('navigation stays visible and condenses after scrolling', async ({
