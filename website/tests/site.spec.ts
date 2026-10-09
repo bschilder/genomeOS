@@ -513,7 +513,7 @@ test(
 );
 
 test(
-  'every page declares the OS favicon set and the files are served',
+  'every page declares the favicon set and the files are served',
   { tag: '@desktop-chromium' },
   async ({ page, request }) => {
     const served = new Map<string, RegExp>([
@@ -559,32 +559,43 @@ test(
 );
 
 test(
-  'the favicon frames OS on a dark tile, and its PNGs render the shipped SVG',
+  'the favicon frames the globe O on a dark circle, and its PNGs render the shipped SVG',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
     await page.goto('/favicon.svg');
     const frame = await page.evaluate(() => {
       const svg = document.querySelector('svg')!;
+      // The O is the left square of the OS group: its side is the group's height.
       const os = document
         .querySelector<SVGGraphicsElement>('#wordmark-os')!
         .getBBox();
+      const circle = (selector: string) => {
+        const { cx, cy, r } =
+          document.querySelector<SVGCircleElement>(selector)!;
+        return [cx, cy, r].map((length) => length.baseVal.value);
+      };
       const { x, y, width, height } = svg.viewBox.baseVal;
       return {
-        side: width,
+        view: [x + width / 2, y + height / 2, width / 2],
         square: width === height,
-        left: os.x - x,
-        right: x + width - (os.x + os.width),
-        top: os.y - y,
-        bottom: y + height - (os.y + os.height),
+        globe: [os.x + os.height / 2, os.y + os.height / 2, os.height / 2],
+        clip: circle('clipPath circle'),
+        backing: circle('#favicon-backing'),
       };
     });
-    // OS is wider than tall: about 6% clear left and right, centred vertically.
     expect(frame.square).toBe(true);
-    for (const side of [frame.left, frame.right]) {
-      expect(side / frame.side).toBeGreaterThan(0.05);
-      expect(side / frame.side).toBeLessThan(0.07);
+    const [cx, cy, radius] = frame.globe;
+    // The clip just clears the O's rim and cuts away the S; the backing is
+    // 1.12 times the O's radius and exactly fills the square viewBox.
+    for (const [actual, expected] of [
+      [frame.view, [cx, cy, radius * 1.12]],
+      [frame.backing, [cx, cy, radius * 1.12]],
+      [frame.clip, [cx, cy, radius + 1.5]],
+    ]) {
+      actual.forEach((value, index) =>
+        expect(value).toBeCloseTo(expected[index], 2),
+      );
     }
-    expect(Math.abs(frame.top - frame.bottom)).toBeLessThan(1);
 
     /** RGBA bytes of a same-origin image drawn at `size` x `size`. */
     const pixels = (href: string, size: number) =>
@@ -607,8 +618,8 @@ test(
       );
     const pixel = (data: number[], size: number, x: number, y: number) =>
       data.slice(4 * (y * size + x), 4 * (y * size + x) + 4);
-    const ground = [2, 7, 18, 255]; // header ground #020712, the tile colour
-    /** Columns spanned by OS: opaque pixels that are not the ground. */
+    const ground = [2, 7, 18, 255]; // header ground #020712, the backing colour
+    /** Columns spanned by the O: opaque pixels that are not the ground. */
     const drawnShare = (data: number[], size: number) => {
       let minX = size;
       let maxX = -1;
@@ -625,10 +636,12 @@ test(
     };
 
     const tab = await pixels('/favicon-48.png', 48);
-    expect(pixel(tab, 48, 0, 0)[3]).toBe(0); // the tile's rounded corner
-    expect(pixel(tab, 48, 0, 24)).toEqual(ground); // the tile's straight edge
-    expect(drawnShare(tab, 48)).toBeGreaterThan(0.84);
-    expect(drawnShare(tab, 48)).toBeLessThan(0.92);
+    expect(pixel(tab, 48, 0, 0)[3]).toBe(0); // outside the round backing
+    expect(pixel(tab, 48, 0, 8)[3]).toBe(0); // still outside, by the rim
+    expect(pixel(tab, 48, 1, 24)).toEqual(ground); // the backing's rim, left
+    expect(pixel(tab, 48, 46, 24)).toEqual(ground); // and right, where S was
+    expect(drawnShare(tab, 48)).toBeGreaterThan(0.86);
+    expect(drawnShare(tab, 48)).toBeLessThan(0.93);
 
     const apple = await pixels('/apple-touch-icon.png', 180);
     expect(pixel(apple, 180, 0, 0)).toEqual(ground);

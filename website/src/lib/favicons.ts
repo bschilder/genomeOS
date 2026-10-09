@@ -1,6 +1,6 @@
 /**
  * The favicon set, built into public/ by scripts/build-favicons.mjs from the
- * globe "OS" of the genomeOS logo, drawn on a dark rounded tile. SiteLayout
+ * globe "O" of the genomeOS logo, drawn on a dark circle. SiteLayout
  * pages and the standalone /app/polygon/ page link every entry; the Starlight
  * docs link the SVG through Starlight's `favicon` option and the raster
  * entries through its `head` option, so every page declares the same icons.

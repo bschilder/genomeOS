@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { inflateSync } from 'node:zlib';
 
 import { describe, expect, it } from 'vitest';
 
@@ -84,6 +85,63 @@ const pngSize = (png: Buffer) => {
   return [png.readUInt32BE(16), png.readUInt32BE(20)];
 };
 
+/** The Paeth predictor of PNG filter type 4. */
+const paeth = (left: number, up: number, upLeft: number) => {
+  const estimate = left + up - upLeft;
+  const [toLeft, toUp, toUpLeft] = [left, up, upLeft].map((value) =>
+    Math.abs(estimate - value),
+  );
+  if (toLeft <= toUp && toLeft <= toUpLeft) return left;
+  return toUp <= toUpLeft ? up : upLeft;
+};
+
+/**
+ * RGBA pixels of an 8-bit, non-interlaced RGBA PNG, the kind Chromium writes
+ * for a screenshot with a transparent background. node:zlib inflates; the
+ * five scanline filters are undone here, so no image package is needed.
+ */
+const decodePng = (png: Buffer) => {
+  const [width, height] = pngSize(png);
+  // Bit depth 8, colour type 6 (RGBA), no interlacing.
+  expect([png[24], png[25], png[28]]).toEqual([8, 6, 0]);
+  const data: Buffer[] = [];
+  for (let offset = 8; offset < png.length;) {
+    const length = png.readUInt32BE(offset);
+    if (png.toString('latin1', offset + 4, offset + 8) === 'IDAT')
+      data.push(png.subarray(offset + 8, offset + 8 + length));
+    offset += 12 + length; // length, type, data, CRC
+  }
+  const scanlines = inflateSync(Buffer.concat(data));
+  const stride = 4 * width;
+  expect(scanlines.length).toBe((stride + 1) * height);
+  const pixels = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = scanlines[y * (stride + 1)];
+    expect(filter, `filter of row ${y}`).toBeLessThan(5);
+    for (let i = 0; i < stride; i++) {
+      const left = i >= 4 ? pixels[y * stride + i - 4] : 0;
+      const up = y > 0 ? pixels[(y - 1) * stride + i] : 0;
+      const upLeft = i >= 4 && y > 0 ? pixels[(y - 1) * stride + i - 4] : 0;
+      const predicted = [
+        0,
+        left,
+        up,
+        (left + up) >> 1,
+        paeth(left, up, upLeft),
+      ][filter];
+      pixels[y * stride + i] =
+        (scanlines[y * (stride + 1) + 1 + i] + predicted) & 0xff;
+    }
+  }
+  return {
+    width,
+    height,
+    pixel: (x: number, y: number) => [
+      ...pixels.subarray(4 * (y * width + x), 4 * (y * width + x) + 4),
+    ],
+  };
+};
+
 describe('genomeOS favicon', () => {
   it('keeps only the gradient and the OS paths, byte for byte', () => {
     for (const [start, end] of [
@@ -103,6 +161,56 @@ describe('genomeOS favicon', () => {
     }
   });
 
+  it('adds only a clip circle around the O and a dark backing circle', () => {
+    // Everything outside the logo's own defs and OS group: the root and its
+    // title, the clip that cuts away the S, the backing, and the <g> that
+    // applies the clip (the OS group itself must stay byte for byte).
+    const added = [
+      block(favicon, '  <defs>', '  </defs>'),
+      block(favicon, '  <g id="wordmark-os"', '  </g>'),
+    ].reduce((svg, kept) => svg.replace(kept, ''), favicon);
+    expect(added.match(/<[a-zA-Z][^\s/>]*/g)).toEqual([
+      '<svg',
+      '<title',
+      '<clipPath',
+      '<circle',
+      '<circle',
+      '<g',
+    ]);
+
+    const clipPath = added.match(
+      /<clipPath id="([^"]+)">\s*(<circle\b[^>]*\/>)\s*<\/clipPath>/,
+    );
+    expect(clipPath, 'a clipPath holding one circle').not.toBeNull();
+    const [, clipId, clip] = clipPath!;
+    const backing = added.match(/<circle id="favicon-backing"[^>]*\/>/)?.[0];
+    expect(backing, 'the backing circle').toBeDefined();
+    // The header ground: the cyan end of the gradient is about 1.1:1 on a
+    // light tab strip, while on #020712 every stop clears 3:1.
+    expect(attribute(backing!, 'fill')).toBe('#020712');
+
+    // The O's group is wrapped in the clip, drawn after (over) the backing.
+    const wrapper = `  <g clip-path="url(#${clipId})">\n  <g id="wordmark-os"`;
+    expect(favicon).toContain(wrapper);
+    expect(favicon.indexOf(backing!)).toBeLessThan(favicon.indexOf(wrapper));
+
+    // Concentric, with the backing 1.12 times the O's radius and the clip
+    // 1.5 logo units past it, and the viewBox the backing's bounding box.
+    const circle = (tag: string) =>
+      ['cx', 'cy', 'r'].map((name) => Number(attribute(tag, name)));
+    const [cx, cy, backingR] = circle(backing!);
+    const [clipX, clipY, clipR] = circle(clip);
+    expect([clipX, clipY]).toEqual([cx, cy]);
+    expect(clipR).toBeCloseTo(backingR / 1.12 + 1.5, 2);
+    const [x, y, side] = attribute(rootTag(favicon), 'viewBox')
+      .split(' ')
+      .map(Number);
+    expect(x + side / 2).toBeCloseTo(cx, 2);
+    expect(y + side / 2).toBeCloseTo(cy, 2);
+    expect(side / 2).toBeCloseTo(backingR, 2);
+    expect(favicon).not.toContain('<rect');
+  });
+
   it('has a square viewBox', () => {
     const [, , width, height] = attribute(rootTag(favicon), 'viewBox')
       .split(' ')
@@ -111,27 +219,43 @@ describe('genomeOS favicon', () => {
     expect(width).toBe(height);
   });
 
-  it('backs OS with one dark tile that fills the viewBox', () => {
-    // The cyan end of the gradient is about 1.1:1 on a light tab strip; on
-    // the header ground #020712 every stop clears 3:1.
-    const tiles = favicon.match(/<rect\b[^>]*\/>/g) ?? [];
-    expect(tiles).toHaveLength(1);
-    const tile = tiles[0]!;
-    expect(attribute(tile, 'id')).toBe('favicon-tile');
-    expect(attribute(tile, 'fill')).toBe('#020712');
-    const [x, y, side] = attribute(rootTag(favicon), 'viewBox')
-      .split(' ')
-      .map(Number);
-    expect(
-      ['x', 'y', 'width', 'height'].map((name) =>
-        Number(attribute(tile, name)),
-      ),
-    ).toEqual([x, y, side, side]);
-    expect(Number(attribute(tile, 'rx'))).toBeCloseTo(side * 0.2, 3);
-    // Drawn first, so it sits behind the OS group.
-    expect(favicon.indexOf(tile)).toBeLessThan(
-      favicon.indexOf('<g id="wordmark-os"'),
+  it('draws the 32 px PNG as an opaque disc with transparent corners', () => {
+    const icon = decodePng(binary('favicon-32.png'));
+    expect(icon.width).toBe(32);
+    /** Pixels whose centres lie `from` to `to` px from the image centre. */
+    const ring = (from: number, to: number) => {
+      const found: number[][] = [];
+      for (let y = 0; y < 32; y++) {
+        for (let x = 0; x < 32; x++) {
+          const distance = Math.hypot(x + 0.5 - 16, y + 0.5 - 16);
+          if (distance >= from && distance < to) found.push(icon.pixel(x, y));
+        }
+      }
+      return found;
+    };
+    // The backing's rim is 16 px out; a pixel 0.75 px clear of it either
+    // way is wholly inside or wholly outside it.
+    expect(ring(0, 15.25).every(([, , , alpha]) => alpha === 255)).toBe(true);
+    for (const [x, y] of [
+      [0, 0],
+      [31, 0],
+      [0, 31],
+      [31, 31],
+    ] as const) {
+      expect(icon.pixel(x, y)[3], `corner ${x},${y}`).toBe(0);
+    }
+    expect(ring(16.75, 99).every(([, , , alpha]) => alpha === 0)).toBe(true);
+    // Between the clipped O (14.5 px out) and the rim, the backing shows.
+    const edge = ring(14.75, 15.25);
+    const ground = edge.filter(
+      ([red, green, blue, alpha]) =>
+        alpha === 255 &&
+        Math.abs(red - 2) <= 4 &&
+        Math.abs(green - 7) <= 4 &&
+        Math.abs(blue - 18) <= 4,
     );
+    expect(edge.length).toBeGreaterThan(30);
+    expect(ground.length / edge.length).toBeGreaterThan(0.85);
   });
 
   it.each([
