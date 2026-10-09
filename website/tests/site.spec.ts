@@ -251,6 +251,7 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
   );
   await expect(progress).toBeVisible();
   await expect.poll(() => render.hits()).toBe(1);
+  await expect.poll(() => observations.hits()).toBe(1);
   await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
   expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
 
@@ -263,6 +264,7 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
     .poll(() => displayedArtifactIds(page))
     .toEqual(['g6pd-deficiency']);
   expect(render.hits()).toBe(1);
+  expect(observations.hits()).toBe(1);
 });
 
 test('a replacement stays hidden until its render tier arrives, then swaps atomically', async ({
