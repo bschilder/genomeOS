@@ -41,7 +41,12 @@ describe('legend follows the displayed layer', () => {
     const html = render();
     expect(html).toContain('Modeled frequency');
     expect(html).toContain('#6e40aa');
+    expect(html).toContain(
+      'aria-label="Modeled frequency color scale, 0.08% to 17.3%"',
+    );
     expect(html).not.toContain('Loading map…');
+    expect(html).not.toContain('data-atlas-legend-loading');
+    expect(html).not.toContain('role="status"');
   });
 
   it('keeps the committed metric and palette while a replacement builds', () => {
@@ -49,12 +54,20 @@ describe('legend follows the displayed layer', () => {
     expect(html).toContain('Model uncertainty');
     expect(html).toContain('#0d0887');
     expect(html).not.toContain('#6e40aa');
+    // The ramp's endpoints come from the committed metric's domain too.
+    expect(html).toContain(
+      'aria-label="Model uncertainty color scale, 0.10% to 5.0%"',
+    );
+    expect(html).not.toContain('17.3%');
   });
 
   it('marks a legend shown during the cold reveal as loading', () => {
     const html = render({ loading: true });
     expect(html).toContain('Loading map…');
     expect(html).toContain('data-atlas-legend-loading="true"');
-    expect(html).toContain('role="status"');
+    // The pill the browser tests' markLegendLoading mirrors.
+    expect(html).toContain(
+      '<span class="atlas-legend__mode atlas-legend__loading" role="status">Loading map…</span>',
+    );
   });
 });

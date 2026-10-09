@@ -450,3 +450,64 @@ export async function topChromeClearance(
     };
   });
 }
+
+/**
+ * Puts the legend in its cold-reveal state as AtlasLegend renders it
+ * (fast-load design §B.6.8): the attribute on the aside and the status pill
+ * after the mode pill, markup that tests/atlas-legend.test.ts pins. Until the
+ * explorer passes `loading` (Task 69 (B4.15)), nothing else puts it on a page.
+ */
+export async function markLegendLoading(page: Page): Promise<void> {
+  await page.locator('.atlas-legend').evaluate((legend) => {
+    legend.setAttribute('data-atlas-legend-loading', 'true');
+    const pill = document.createElement('span');
+    pill.className = 'atlas-legend__mode atlas-legend__loading';
+    pill.setAttribute('role', 'status');
+    pill.textContent = 'Loading map…';
+    legend.querySelector('.atlas-legend__mode')!.after(pill);
+  });
+}
+
+export interface LegendRow {
+  /** The info trigger shares the ramp's row. */
+  infoInRow: boolean;
+  /** How far the legend's content overflows its box, in CSS px. */
+  overflow: number;
+  rampWidth: number;
+  /** Top of the [label | ramp | … | info] row in the viewport. */
+  rowTop: number;
+  /** Where the loading status sits, when the legend shows one. */
+  status: { aboveRow: boolean; insideLegend: boolean } | null;
+}
+
+/** The legend's one row of label, ramp and info trigger, and its loading status. */
+export async function legendRow(page: Page): Promise<LegendRow> {
+  return page.locator('.atlas-legend').evaluate((legend) => {
+    const box = (selector: string) =>
+      legend.querySelector(selector)!.getBoundingClientRect();
+    const outer = legend.getBoundingClientRect();
+    const label = box('.atlas-legend__compact > strong');
+    const scale = box('.atlas-color-scale');
+    const info = box('.atlas-legend__info summary');
+    const rowTop = Math.min(label.top, scale.top, info.top);
+    const status = legend
+      .querySelector('.atlas-legend__loading')
+      ?.getBoundingClientRect();
+    return {
+      infoInRow: info.top < scale.bottom && info.bottom > scale.top,
+      overflow: legend.scrollWidth - legend.clientWidth,
+      rampWidth: box('.atlas-color-scale i').width,
+      rowTop,
+      status: status
+        ? {
+            aboveRow: status.bottom <= rowTop + 0.5,
+            insideLegend:
+              status.left >= outer.left - 0.5 &&
+              status.right <= outer.right + 0.5 &&
+              status.top >= outer.top - 0.5 &&
+              status.bottom <= outer.bottom + 0.5,
+          }
+        : null,
+    };
+  });
+}

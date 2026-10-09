@@ -3,7 +3,12 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
-import { expandExplorerSheet } from './atlas-mobile-helpers';
+import {
+  expandExplorerSheet,
+  legendRow,
+  markLegendLoading,
+  type LegendRow,
+} from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
 
 test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
@@ -1100,6 +1105,56 @@ test('the legend info summary takes pointers across its whole 24 px box', async 
       });
     });
   expect(corners).toEqual(Array(5).fill('summary'));
+});
+
+test('the legend keeps its row while it shows the loading status', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'atlas-mobile.spec.ts holds the phone strip to its row',
+  );
+  // The centred legend at its minimum width, then the right-docked one (≤ 75rem).
+  const viewports = [
+    { height: 900, width: 1440 },
+    { height: 800, width: 1100 },
+  ];
+  await page.setViewportSize(viewports[0]!);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const before: LegendRow[] = [];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    before.push(await legendRow(page));
+  }
+  await markLegendLoading(page);
+  const legend = page.getByRole('complementary', { name: 'Map legend' });
+  for (const [index, viewport] of viewports.entries()) {
+    await page.setViewportSize(viewport);
+    const size = `${viewport.width}x${viewport.height}`;
+    await expect(legend.getByRole('status'), size).toHaveText('Loading map…');
+    await expect(legend.getByRole('status'), size).toBeVisible();
+    await expect(
+      legend.locator('.atlas-legend__mode:not(.atlas-legend__loading)'),
+      size,
+    ).toBeVisible();
+    // A line of its own above the row: the row keeps its ramp, its mode pill
+    // and its info trigger, and does not move (the legend grows upward).
+    const row = await legendRow(page);
+    expect(row.status, size).toEqual({ aboveRow: true, insideLegend: true });
+    expect(row.infoInRow, size).toBe(true);
+    expect(
+      Math.abs(row.rowTop - before[index]!.rowTop),
+      size,
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(row.rampWidth - before[index]!.rampWidth),
+      size,
+    ).toBeLessThanOrEqual(1);
+    expect(row.overflow, size).toBeLessThanOrEqual(0);
+  }
 });
 
 test('height exaggeration uses the available compact control width', async ({

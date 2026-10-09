@@ -9,6 +9,8 @@ import {
   dockedOutsideCentre,
   dockedStackInOrder,
   INSPECTOR_CAMERA,
+  legendRow,
+  markLegendLoading,
   panelSheet,
   PHONE_PROFILES,
   setSheetState,
@@ -1724,6 +1726,33 @@ for (const phone of PHONE_PROFILES) {
         await expect(summary).toBeFocused();
         await expect(inspector).toBeVisible();
       }
+    });
+
+    test('the legend strip keeps its row and shows the loading status during a cold reveal', async ({
+      page,
+    }) => {
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const before = await legendRow(page);
+      await markLegendLoading(page);
+      // Shown, and in the accessibility tree: getByRole skips hidden nodes.
+      const legend = page.getByRole('complementary', { name: 'Map legend' });
+      const status = legend.getByRole('status');
+      await expect(status).toHaveText('Loading map…');
+      await expect(status).toBeVisible();
+      // The strip grows upward on a line of its own; the row stays where it
+      // was, with the info trigger in it and the whole ramp (§A.1.7).
+      await expect(async () => {
+        const row = await legendRow(page);
+        expect(row.status).toEqual({ aboveRow: true, insideLegend: true });
+        expect(row.infoInRow).toBe(true);
+        expect(Math.abs(row.rowTop - before.rowTop)).toBeLessThanOrEqual(1);
+        expect(Math.abs(row.rampWidth - before.rampWidth)).toBeLessThanOrEqual(
+          1,
+        );
+        expect(row.rampWidth).toBeGreaterThanOrEqual(108);
+        expect(row.overflow).toBeLessThanOrEqual(0);
+      }).toPass({ timeout: 5_000 });
     });
 
     for (const basemap of ['dark-streets', 'stadia-smooth'] as const) {

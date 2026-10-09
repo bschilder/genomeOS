@@ -1644,6 +1644,22 @@ html.atlas-page .site-header--compact .site-header__inner {
   white-space: nowrap;
 }
 
+/*
+ * The cold reveal's loading status (fast-load design §B.6.8) takes a line of
+ * its own above the legend row, so the row keeps its ramp, mode and info
+ * trigger. The legend docks by its bottom edge: it grows upward and the row
+ * stays put when the status goes.
+ */
+.atlas-legend__loading {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.atlas-legend[data-atlas-legend-loading] .atlas-legend__compact {
+  row-gap: 0.4rem;
+}
+
 .atlas-color-scale {
   margin-top: 0;
   display: grid;
@@ -2674,6 +2690,16 @@ body:has(.atlas-explorer) .skip-link {
   .atlas-legend__compact {
     grid-template-columns: auto minmax(6rem, 1fr) auto;
     gap: 0.6rem;
+  }
+
+  /* The strip drops the mode pill but keeps the loading status (§B.6.8), on
+   * its line above [label | ramp | info]: inside that row it would squeeze
+   * a 360 px phone's ramp to 108 px and overflow the strip. */
+  .atlas-legend__mode.atlas-legend__loading {
+    padding: 0 0.4rem;
+    display: block;
+    font-size: 0.72rem;
+    line-height: 1.5;
   }
 
   .atlas-legend__compact > strong {
