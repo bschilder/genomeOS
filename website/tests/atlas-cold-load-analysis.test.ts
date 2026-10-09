@@ -1,4 +1,7 @@
 /** Unit tests for the cold-load analysis (fast-load design §B.1). */
+import { readFileSync, readdirSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -371,6 +374,142 @@ describe('long-animation-frame attribution', () => {
     ]);
     expect(summary.maxAtlasFrameMs).toBe(400);
     expect(summary.cesiumEvalMs).toBe(250);
+  });
+
+  it('reports Cesium evaluation that Chrome attributes to the scene chunk', () => {
+    // Chrome reports a dynamic import's whole module graph as one module-script
+    // entry on the imported root, with the root's URL as invoker. Cesium is
+    // imported through the scene chunk, so no entry names cesium.<hash>.js.
+    const SCENE = `${ORIGIN}/_astro/atlas-scene.CVF3dbcv.js`;
+    const evaluation = {
+      sourceURL: SCENE,
+      invoker: SCENE,
+      invokerType: 'module-script',
+      startTime: 1_500,
+      duration: 320,
+    };
+    expect(attributeScript(evaluation, CONTEXT, false)).toBe('cesium-eval');
+    expect(
+      attributeScript(
+        {
+          ...evaluation,
+          invoker: 'FrameRequestCallback',
+          invokerType: 'user-callback',
+        },
+        CONTEXT,
+        false,
+      ),
+    ).toBe('atlas');
+    expect(
+      attributeScript(
+        { ...evaluation, sourceURL: ISLAND, invoker: ISLAND },
+        CONTEXT,
+        false,
+      ),
+    ).toBe('atlas');
+    const summary = atlasLongFrames(
+      [
+        {
+          startTime: 1_500,
+          duration: 360,
+          renderStart: 1_850,
+          blockingDuration: 310,
+          scripts: [
+            evaluation,
+            {
+              sourceURL: ISLAND,
+              invoker: 'Worker.onmessage',
+              invokerType: 'event-listener',
+              startTime: 1_825,
+              duration: 20,
+            },
+          ],
+        },
+      ],
+      [],
+      { ...CONTEXT, windowEndMs: 5_000 },
+    );
+    expect(
+      summary.frames.map((f) => [
+        f.startTime,
+        f.atlasScriptMs,
+        f.cesiumEvalMs,
+        f.atlasFrameMs,
+      ]),
+    ).toEqual([[1_500, 20, 320, 40]]);
+    expect(summary.maxAtlasFrameMs).toBe(40);
+    expect(summary.cesiumEvalMs).toBe(320);
+  });
+
+  it('names the built chunk that imports Cesium as the root of its evaluation', () => {
+    const astro = path.resolve(import.meta.dirname, '../dist/_astro');
+    const importsCesium = readdirSync(astro)
+      .filter((name) => name.endsWith('.js'))
+      .filter((name) =>
+        /["']\.\/cesium\.[\w-]+\.js["']/.test(
+          readFileSync(path.join(astro, name), 'utf8'),
+        ),
+      );
+    expect(importsCesium).not.toEqual([]);
+    for (const name of importsCesium) {
+      const url = `${ORIGIN}/_astro/${name}`;
+      expect(
+        attributeScript(
+          {
+            sourceURL: url,
+            invoker: url,
+            invokerType: 'module-script',
+            startTime: 0,
+            duration: 10,
+          },
+          CONTEXT,
+          false,
+        ),
+        name,
+      ).toBe('cesium-eval');
+    }
+  });
+
+  it('charges an Atlas frame only with time no Cesium or other script claims', () => {
+    const summary = atlasLongFrames(
+      [
+        {
+          startTime: 4_000,
+          duration: 420,
+          renderStart: 4_400,
+          blockingDuration: 370,
+          scripts: [
+            {
+              sourceURL: CESIUM,
+              invoker: 'FrameRequestCallback',
+              invokerType: 'user-callback',
+              startTime: 4_000,
+              duration: 300,
+            },
+            {
+              sourceURL: ISLAND,
+              invoker: 'Worker.onmessage',
+              invokerType: 'event-listener',
+              startTime: 4_300,
+              duration: 40,
+            },
+            {
+              sourceURL: 'https://tile.openstreetmap.org/a.js',
+              invoker: 'x',
+              invokerType: 'classic-script',
+              startTime: 4_340,
+              duration: 50,
+            },
+          ],
+        },
+      ],
+      [],
+      { ...CONTEXT, windowEndMs: 5_000 },
+    );
+    expect(
+      summary.frames.map((f) => [f.startTime, f.atlasScriptMs, f.atlasFrameMs]),
+    ).toEqual([[4_000, 40, 70]]);
+    expect(summary.maxAtlasFrameMs).toBe(70);
   });
 });
 

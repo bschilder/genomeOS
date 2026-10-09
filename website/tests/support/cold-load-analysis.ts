@@ -3,6 +3,7 @@
  * §B.1): medians, long-animation-frame attribution, the worker-scaled critical
  * path and the bytes ledger. No Playwright or browser dependency.
  */
+import { CHUNK_FRAME_MEASURE } from '../../src/atlas/scene/chunk-scheduler';
 import type { NetworkConditions } from './cold-load-profiles';
 
 export interface TimingEntry {
@@ -64,7 +65,6 @@ export interface NetworkRecord {
 }
 
 export const WORKER_STEP_PREFIX = 'atlas:worker:';
-export const CHUNK_FRAME_MEASURE = 'atlas:chunk-frame';
 
 export function median(values: readonly number[]): number | null {
   if (values.length === 0) return null;
@@ -166,24 +166,52 @@ export interface AttributionContext {
   documentUrl: string;
 }
 
+/** Task 80 (B5.11)'s stable Cesium chunk. */
 const CESIUM_CHUNK = /\/_astro\/cesium\.[\w-]+\.js(?:[?#]|$)/;
+/**
+ * The lazy scene chunk (`src/atlas/scene/atlas-scene.ts`), which
+ * `loadAtlasSceneModule()` in `src/atlas/boot.ts` loads with `import()`. It is
+ * the only chunk that statically imports the Cesium chunk
+ * (tests/atlas-cold-load-analysis.test.ts checks this against the build).
+ */
+const SCENE_CHUNK = /\/_astro\/atlas-scene\.[\w-]+\.js(?:[?#]|$)/;
 const ASTRO_SCRIPT = /\/_astro\/[^/]+\.js(?:[?#]|$)/;
 const WORKER_MESSAGE_INVOKER = /Worker|MessagePort/;
 
 /**
- * Cesium-chunk work counts as Cesium, except `Primitive.update` work on frames
- * that add Atlas chunk primitives (`inChunkFrame`), which counts as Atlas.
- * Cesium module evaluation is reported separately.
+ * Attributes one long-animation-frame script by its source URL and invoker.
+ *
+ * - Cesium module evaluation is reported separately (`cesium-eval`). Chrome
+ *   reports the evaluation of a dynamic import's whole module graph as one
+ *   `module-script` entry whose `sourceURL` is the imported root. Cesium is
+ *   imported only through the scene chunk, so its evaluation arrives on
+ *   `atlas-scene.<hash>.js`, never on `cesium.<hash>.js`. That entry also
+ *   holds the scene chunk's own top-level evaluation, which is small next to
+ *   Cesium's and is counted as Cesium evaluation with it. A `module-script`
+ *   entry on the Cesium chunk itself, which Chrome produces only if Cesium is
+ *   imported directly, also counts as Cesium evaluation.
+ * - Other Cesium-chunk work counts as Cesium, except on frames that add Atlas
+ *   chunk primitives (`inChunkFrame`), where all of it counts as Atlas. The
+ *   spec charges only `Primitive.update` to Atlas there, but a script entry
+ *   names only its entry point (Cesium's render-loop callback), not the
+ *   functions it calls, so `Primitive.update` cannot be told apart from the
+ *   rest of that render. Charging the whole callback can over-report Atlas
+ *   on chunk frames, never under-report it.
+ * - Worker and `MessagePort` handlers, every other same-origin `/_astro/`
+ *   chunk and the document's own scripts count as Atlas; the rest is `other`.
  */
 export function attributeScript(
   script: LoafScriptRecord,
   context: AttributionContext,
   inChunkFrame: boolean,
 ): ScriptAttribution {
-  if (CESIUM_CHUNK.test(script.sourceURL)) {
-    if (script.invokerType === 'module-script') return 'cesium-eval';
+  if (
+    script.invokerType === 'module-script' &&
+    (SCENE_CHUNK.test(script.sourceURL) || CESIUM_CHUNK.test(script.sourceURL))
+  )
+    return 'cesium-eval';
+  if (CESIUM_CHUNK.test(script.sourceURL))
     return inChunkFrame ? 'atlas' : 'cesium';
-  }
   if (WORKER_MESSAGE_INVOKER.test(script.invoker)) return 'atlas';
   if (
     script.sourceURL.startsWith(context.origin) &&
@@ -199,7 +227,14 @@ export interface LongFrameReport {
   duration: number;
   atlasScriptMs: number;
   cesiumEvalMs: number;
-  /** Frame duration minus separately reported Cesium module evaluation. */
+  /**
+   * Frame duration minus every script attributed to something other than
+   * Atlas (in any frame): Cesium module evaluation, Cesium work outside chunk
+   * frames and `other` scripts. Time that no script entry claims (style,
+   * layout, paint, and scripts under the 5 ms reporting threshold) stays
+   * charged to Atlas, so against the attribution rules this can over-report
+   * an Atlas frame, never under-report it.
+   */
   atlasFrameMs: number;
   chunkFrame: boolean;
   scripts: {
@@ -248,12 +283,13 @@ export function atlasLongFrames(
     cesiumEvalMs += evaluationMs;
     const atlasScriptMs = total('atlas');
     if (atlasScriptMs === 0 && !chunkFrame) continue;
+    const notAtlasMs = evaluationMs + total('cesium') + total('other');
     frames.push({
       startTime: loaf.startTime,
       duration: loaf.duration,
       atlasScriptMs,
       cesiumEvalMs: evaluationMs,
-      atlasFrameMs: loaf.duration - evaluationMs,
+      atlasFrameMs: Math.max(0, loaf.duration - notAtlasMs),
       chunkFrame,
       scripts,
     });
