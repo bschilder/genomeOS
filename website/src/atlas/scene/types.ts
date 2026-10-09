@@ -104,5 +104,12 @@ export interface AtlasSceneController {
   onWarning(
     listener: (warnings: readonly ContextWarning[]) => void,
   ): () => void;
+  /**
+   * A frame threw, inside Scene.render or in any listener, tick or resize the Atlas render loop
+   * runs, and rendering stopped for good (Cesium globe design §12), so listeners offer a retry.
+   * The error is reported once, a late listener still hears it, and none is reported after
+   * destroy.
+   */
+  onRenderError(listener: (error: unknown) => void): () => void;
   destroy(): void;
 }

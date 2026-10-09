@@ -1522,6 +1522,84 @@ test('explorer reports unavailable WebGL with a retry action', async ({
   await page.goto('/app/');
   await expect(page.getByText('This globe needs WebGL')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Retry globe' })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Browser requirements' }),
+  ).toBeVisible();
+});
+
+test('explorer recovers from a render-loop error through Retry globe', async ({
+  context,
+  page,
+}) => {
+  test.setTimeout(120_000);
+  // Live failure: one transient worker-module fetch ("Failed to fetch dynamically imported
+  // module …/createPolygonGeometry.js") threw inside a Cesium frame, Cesium showed its raw error
+  // panel, and rendering stopped for good. The support layer's asynchronous PolygonGeometry is
+  // built by that module, so aborting only its first request reproduces the failure.
+  let polygonWorkerRequests = 0;
+  await context.route('**/cesium/Workers/createPolygonGeometry.js', (route) => {
+    polygonWorkerRequests += 1;
+    return polygonWorkerRequests === 1 ? route.abort() : route.continue();
+  });
+  // The binding and init script survive navigation, so a raw panel on any document is caught.
+  let rawPanelSeen = false;
+  await page.exposeFunction('reportRawCesiumErrorPanel', () => {
+    rawPanelSeen = true;
+  });
+  await page.addInitScript(() => {
+    const binding = window as Window & {
+      reportRawCesiumErrorPanel?: () => Promise<void>;
+    };
+    new MutationObserver((_, observer) => {
+      if (!document.querySelector('.cesium-widget-errorPanel')) return;
+      observer.disconnect();
+      void binding.reportRawCesiumErrorPanel?.();
+    }).observe(document, { childList: true, subtree: true });
+  });
+  // Retry reloads the page, so a non-default map, view and metric must come back from the URL.
+  await page.goto(
+    '/app/?entity=g6pd-deficiency&view=perspective&metric=post_sd',
+  );
+
+  const rawPanel = page.locator('.cesium-widget-errorPanel');
+  const explorer = page.locator('[data-atlas-explorer]');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'The globe stopped rendering' });
+  await expect(failure.or(rawPanel).first()).toBeVisible({ timeout: 60_000 });
+  await expect(rawPanel).toHaveCount(0);
+  await expect(failure).toContainText('network or graphics error');
+  await expect(failure).toContainText('Retry reloads the explorer');
+  await expect(
+    failure.getByRole('link', { name: 'Browser requirements' }),
+  ).toHaveCount(0);
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'false');
+  expect(polygonWorkerRequests).toBeGreaterThan(0);
+
+  await page.evaluate(() => {
+    (window as Window & { beforeRetry?: boolean }).beforeRetry = true;
+  });
+  await Promise.all([
+    page.waitForEvent('load'),
+    failure.getByRole('button', { name: 'Retry globe' }).click(),
+  ]);
+  expect(
+    await page.evaluate(
+      () => (window as Window & { beforeRetry?: boolean }).beforeRetry,
+    ),
+  ).toBeUndefined();
+  await expect(
+    page.locator(
+      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+    ),
+  ).toBeVisible({ timeout: 60_000 });
+  const restored = new URL(page.url()).searchParams;
+  expect(restored.get('entity')).toBe('g6pd-deficiency');
+  expect(restored.get('view')).toBe('perspective');
+  expect(restored.get('metric')).toBe('post_sd');
+  await expect(failure).toHaveCount(0);
+  await expect(rawPanel).toHaveCount(0);
+  expect(rawPanelSeen).toBe(false);
 });
 
 test('polygon map validates a selected model cell before loading Google Maps', async ({

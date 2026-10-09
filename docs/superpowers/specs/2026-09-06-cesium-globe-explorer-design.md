@@ -301,6 +301,7 @@ Cesium does not move scientific inference into the browser.
 | Failure                                | Required behavior                                                                                              |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | WebGL unavailable or context lost      | Show a plain-language failure panel, retry control, provenance link, and supported-browser guidance            |
+| Render loop throws                     | Plain-language failure panel and retry; Retry reloads the page, as Cesium's shared workers keep failed imports |
 | Artifact request fails                 | Keep the previous valid scene, identify the unavailable entity/version, and offer retry                        |
 | Artifact schema or checksum fails      | Render no replacement layer and report validation failure; never drop malformed cells                          |
 | Surface exists but observations do not | Surface remains visibly labeled inferred; observations control reports unavailable rather than empty           |

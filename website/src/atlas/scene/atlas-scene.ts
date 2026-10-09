@@ -27,6 +27,7 @@ import {
   type ObservationPrimitiveGroup,
 } from './observation-layer';
 import { bindAtlasPicking } from './picking';
+import { RenderLoop } from './render-loop';
 import {
   DEFAULT_LAYERS,
   DEFAULT_OBSERVATIONS,
@@ -94,9 +95,11 @@ class CesiumAtlasScene implements AtlasSceneController {
     (warnings: readonly ContextWarning[]) => void
   >();
   readonly #warnings = new Map<ContextWarning['id'], ContextWarning>();
+  readonly #renderLoop: RenderLoop;
   readonly #unbindKeyboard: () => void;
   readonly #unbindPicking: () => void;
   readonly #removeMoveEnd: () => void;
+  readonly #removeRenderError: () => void;
   #surfaceArtifact: SurfaceArtifact | null = null;
   #observationArtifact: ObservationArtifact | null = null;
   #surfaceGroup: ScientificPrimitiveGroup | null = null;
@@ -144,9 +147,20 @@ class CesiumAtlasScene implements AtlasSceneController {
       scene3DOnly: false,
       sceneModePicker: false,
       selectionIndicator: false,
+      // Cesium's own panel is a dead end, and its loop stops silently on errors outside
+      // Scene.render; the Atlas loop sends every render error to the explorer's retry instead.
+      showRenderLoopErrors: false,
       timeline: false,
+      useDefaultRenderLoop: false,
       vrButton: false,
     });
+    this.#renderLoop = new RenderLoop(() => {
+      this.#viewer.resize();
+      this.#viewer.render();
+    });
+    this.#removeRenderError = this.#viewer.scene.renderError.addEventListener(
+      (_scene, error: unknown) => this.#renderLoop.fail(error),
+    );
     this.#contextController = new ContextController(
       this.#viewer,
       options.cesiumToken ?? '',
@@ -182,6 +196,7 @@ class CesiumAtlasScene implements AtlasSceneController {
       .then((status) => {
         if (!this.#destroyed) this.#setContextStatus(status);
       });
+    this.#renderLoop.start();
   }
 
   #setContextStatus(status: ContextStatus): void {
@@ -668,15 +683,21 @@ class CesiumAtlasScene implements AtlasSceneController {
     return () => this.#warningListeners.delete(listener);
   }
 
+  onRenderError(listener: (error: unknown) => void): () => void {
+    return this.#renderLoop.onError(listener);
+  }
+
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
     this.#buildSequence += 1;
     this.#artifactSequence += 1;
     this.#elevationSequence += 1;
+    this.#renderLoop.stop();
     this.#unbindKeyboard();
     this.#unbindPicking();
     this.#removeMoveEnd();
+    this.#removeRenderError();
     this.#viewer.destroy();
   }
 }

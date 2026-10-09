@@ -15,7 +15,9 @@ import {
   artifactVersion,
   displayKey,
   errorMessage,
+  prefersReducedMotion,
   PUBLIC_SCENE_CAPABILITIES,
+  REDUCED_MOTION_QUERY,
   supportsWebGL,
 } from '../../atlas/explorer-runtime';
 import {
@@ -52,7 +54,7 @@ import {
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
 import { AtlasDataCredit } from './AtlasDataCredit';
 import { AtlasLegend } from './AtlasLegend';
-import { AtlasStatus } from './AtlasStatus';
+import { AtlasStatus, type SceneFailure } from './AtlasStatus';
 import { ExplorerControls } from './ExplorerControls';
 import { ControlsLoading } from './ExplorerHeading';
 import { HoverPreview } from './HoverPreview';
@@ -104,9 +106,9 @@ export default function AtlasExplorer({
   );
   const [corrections, setCorrections] = useState<StateCorrection[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [webglFailed, setWebglFailed] = useState(false);
+  const [sceneFailure, setSceneFailure] = useState<SceneFailure | null>(null);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [explorerNode, setExplorerNode] = useState<HTMLDivElement | null>(null);
   const [topSlot, setTopSlot] = useState<HTMLDivElement | null>(null);
   const {
@@ -153,7 +155,7 @@ export default function AtlasExplorer({
     return nearestPlaceContext(candidate.value, placeCatalog);
   };
   useEffect(() => {
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const media = window.matchMedia(REDUCED_MOTION_QUERY);
     const updatePreference = () => setReducedMotion(media.matches);
     updatePreference();
     media.addEventListener('change', updatePreference);
@@ -165,9 +167,9 @@ export default function AtlasExplorer({
     if (!element) return;
     cameraApplied.current = false;
     appliedDisplay.current = null;
-    setWebglFailed(false);
+    setSceneFailure(null);
     if (!supportsWebGL()) {
-      setWebglFailed(true);
+      setSceneFailure('webgl');
       return;
     }
     try {
@@ -216,17 +218,21 @@ export default function AtlasExplorer({
       });
       const removeContext = controller.onContextStatus(setContextStatus);
       const removeWarnings = controller.onWarning(setSceneWarnings);
+      const removeRenderError = controller.onRenderError(() =>
+        setSceneFailure('render'),
+      );
       return () => {
         removePick();
         removeHover();
         removeCamera();
         removeContext();
         removeWarnings();
+        removeRenderError();
         controller.destroy();
         scene.current = null;
       };
     } catch {
-      setWebglFailed(true);
+      setSceneFailure('webgl');
     }
   }, [cesiumToken, dataBaseUrl, reducedMotion, sceneAttempt]);
 
@@ -272,7 +278,7 @@ export default function AtlasExplorer({
   }, [provider, dataAttempt]);
 
   useEffect(() => {
-    if (!catalog || !state || !scene.current || webglFailed) return;
+    if (!catalog || !state || !scene.current || sceneFailure) return;
     const ref = catalog.artifacts.find(
       (candidate) => candidate.id === state.entityId,
     );
@@ -384,7 +390,7 @@ export default function AtlasExplorer({
     provider,
     state?.artifactVersion,
     state?.entityId,
-    webglFailed,
+    sceneFailure,
     dataAttempt,
     reducedMotion,
     sceneAttempt,
@@ -617,7 +623,9 @@ export default function AtlasExplorer({
           className="atlas-explorer"
           data-atlas-explorer="AtlasExplorer"
           data-atlas-active={activeArtifact?.id ?? ''}
-          data-atlas-ready={status === 'ready' ? 'true' : 'false'}
+          data-atlas-ready={
+            status === 'ready' && !sceneFailure ? 'true' : 'false'
+          }
           role="application"
           aria-label="genomeOS globe explorer"
           ref={setExplorerNode}
@@ -728,9 +736,11 @@ export default function AtlasExplorer({
             sceneWarnings={sceneWarnings}
             corrections={corrections}
             error={error}
-            webglFailed={webglFailed}
+            sceneFailure={sceneFailure}
             onRetry={() => {
-              if (webglFailed) setSceneAttempt((value) => value + 1);
+              // A new scene reuses Cesium's shared workers and their failed imports; reload instead.
+              if (sceneFailure === 'render') window.location.reload();
+              else if (sceneFailure) setSceneAttempt((value) => value + 1);
               else setDataAttempt((value) => value + 1);
             }}
           />
