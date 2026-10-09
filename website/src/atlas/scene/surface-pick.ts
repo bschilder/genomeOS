@@ -6,8 +6,9 @@
  * `pickTranslucentDepth` is scene-wide and also drives camera pivots. The
  * incoming group of an unfinished swap is hidden for that one pass so depth
  * always comes from the displayed surface. The pass also queries under a
- * cache key of its own, so its translucent hit never becomes a camera pivot
- * (§B.7).
+ * cache key of its own and is followed by one ordinary pick that puts the
+ * pointer's pick depth back, so its translucent hit never becomes a camera
+ * pivot (§B.7).
  */
 
 import {
@@ -40,7 +41,7 @@ export interface SurfacePickContext {
 
 type DepthPickScene = Pick<
   Scene,
-  'camera' | 'pickPosition' | 'pickTranslucentDepth'
+  'camera' | 'pick' | 'pickPosition' | 'pickTranslucentDepth'
 >;
 
 /**
@@ -79,6 +80,53 @@ export function pickDepthPosition(
   }
 }
 
+function drilledPrimitive(picked: unknown): { show: boolean } | null {
+  if (typeof picked !== 'object' || picked === null || !('primitive' in picked))
+    return null;
+  const { primitive } = picked;
+  return typeof primitive === 'object' &&
+    primitive !== null &&
+    'show' in primitive &&
+    typeof primitive.show === 'boolean'
+    ? (primitive as { show: boolean })
+    : null;
+}
+
+/**
+ * Puts back the pick depth `drillPick` left at the pointer. The translucent
+ * pass copies the surface's depth into the default view's pick-depth texture
+ * at the pointer and rebuilds that view's frustum list (@cesium/engine
+ * 26.3.0, Picking.js `renderTranslucentDepthForPick`, Scene.js
+ * `executeCommands`). On a cache miss, Cesium's opaque
+ * `pickPositionWorldCoordinates` reads both without rendering, and the camera
+ * controller takes its zoom and rotate pivots from it. Under
+ * `requestRenderMode` nothing re-renders until the scene changes, so a hover,
+ * a pause and a wheel at the same point would pivot on the surface. This
+ * repeats `drillPick`'s last pass instead: one ordinary pick over the same
+ * 3 × 3 pixels with every drilled primitive hidden. Pick passes write depth
+ * for translucent primitives too (DerivedCommand.js `getPickRenderState`),
+ * which is why they are hidden; what remains is what lay behind them, as
+ * before the depth pick.
+ */
+export function restorePickDepth(
+  scene: Pick<Scene, 'pick'>,
+  position: Cartesian2,
+  drilled: readonly unknown[],
+): void {
+  const shown = new Map<{ show: boolean }, boolean>();
+  for (const picked of drilled) {
+    const primitive = drilledPrimitive(picked);
+    if (primitive && !shown.has(primitive))
+      shown.set(primitive, primitive.show);
+  }
+  for (const primitive of shown.keys()) primitive.show = false;
+  try {
+    scene.pick(position);
+  } finally {
+    for (const [primitive, show] of shown) primitive.show = show;
+  }
+}
+
 export function createSurfacePickResolver(
   scene: DepthPickScene,
   context: SurfacePickContext,
@@ -104,6 +152,7 @@ export function createSurfacePickResolver(
       };
     } else {
       const hit = pickDepthPosition(scene, position, target.hidden);
+      restorePickDepth(scene, position, picks);
       if (!hit) return null;
       cartesian = [hit.x, hit.y, hit.z];
     }

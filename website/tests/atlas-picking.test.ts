@@ -16,6 +16,7 @@ import { surfaceChunkPickId } from '../src/atlas/scene/surface-chunk-layer';
 import { columnarHeightSource } from '../src/atlas/scene/surface-heights';
 import {
   createSurfacePickResolver,
+  restorePickDepth,
   type SurfacePickContext,
 } from '../src/atlas/scene/surface-pick';
 import type { SurfacePick } from '../src/atlas/scene/types';
@@ -101,6 +102,7 @@ describe('surface-chunk cell resolution', () => {
   it('uses the ellipsoid at elevation 0 and never renders a depth pass', () => {
     const scene = {
       camera: { pickEllipsoid: vi.fn(() => Cartesian3.fromDegrees(LON, LAT)) },
+      pick: vi.fn(),
       pickPosition: vi.fn(),
       pickTranslucentDepth: false,
     };
@@ -117,6 +119,7 @@ describe('surface-chunk cell resolution', () => {
       expect.anything(),
     );
     expect(scene.pickPosition).not.toHaveBeenCalled();
+    expect(scene.pick).not.toHaveBeenCalled();
     expect(scene.pickTranslucentDepth).toBe(false);
   });
 
@@ -125,6 +128,7 @@ describe('surface-chunk cell resolution', () => {
     const seen: { depth: boolean; incoming: boolean }[] = [];
     const scene = {
       camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn(),
       pickPosition: vi.fn(() => {
         seen.push({
           depth: scene.pickTranslucentDepth,
@@ -165,6 +169,7 @@ describe('surface-chunk cell resolution', () => {
     const queried: Cartesian2[] = [];
     const scene = {
       camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn(),
       pickPosition: vi.fn((position: Cartesian2) => {
         queried.push(position);
         const key = position.toString();
@@ -201,12 +206,15 @@ describe('surface-chunk cell resolution', () => {
     expect(scene.pickTranslucentDepth).toBe(false);
   });
 
-  it("misses the depth pick's entry in Cesium's own cache at the raw pointer", async () => {
+  it("misses the depth pick's cache entry and reads the pick-depth texture at the raw pointer", async () => {
     // Cesium's private Picking is exported at runtime but untyped. Running its
-    // real cache lookup pins the keying the depth pick relies on.
+    // real lookup pins the keying the depth pick relies on, and shows that a
+    // miss reads the default view's pick-depth texture at the pointer pixel
+    // without rendering: the texture the next case keeps on the globe.
     const { Picking } = (await import('cesium')) as unknown as {
       Picking: {
         prototype: {
+          getPickDepth(this: object, scene: object, index: number): object;
           pickPositionWorldCoordinates(
             this: object,
             scene: object,
@@ -220,6 +228,7 @@ describe('surface-chunk cell resolution', () => {
     const resolve = createSurfacePickResolver(
       {
         camera: { pickEllipsoid: vi.fn() },
+        pick: vi.fn(),
         pickPosition: (position: Cartesian2) => {
           queried.push(position);
           return surfaceTop;
@@ -230,12 +239,14 @@ describe('surface-chunk cell resolution', () => {
     );
     resolve([{ id: surfaceChunkPickId(KEY, 0) }], WINDOW.clone());
 
-    // The hover's translucent hit as Cesium stores it, and just enough scene
-    // for an opaque depth read that finds no depth.
+    // The hover's translucent hit as Cesium stores it, one rendered frustum,
+    // and a pick-depth texture that holds no depth at the pointer.
     const picking = {
       _pickPositionCache: { [queried[0].toString()]: surfaceTop },
       _pickPositionCacheDirty: false,
+      getPickDepth: Picking.prototype.getPickDepth,
     };
+    const pickDepth = { getDepth: vi.fn(() => undefined) };
     const scene = {
       camera: { frustum: { clone: () => ({}), fov: 1 } },
       canvas: { clientHeight: 480, clientWidth: 640 },
@@ -243,7 +254,10 @@ describe('surface-chunk cell resolution', () => {
         depthTexture: true,
         uniformState: { update() {}, updateFrustum() {} },
       },
-      defaultView: { frustumCommandsList: [] },
+      defaultView: {
+        frustumCommandsList: [{ far: 1e8, near: 1 }],
+        pickDepths: [pickDepth],
+      },
       drawingBufferHeight: 480,
       drawingBufferWidth: 640,
       frameState: {},
@@ -260,13 +274,98 @@ describe('surface-chunk cell resolution', () => {
       );
 
     expect(pickAt(queried[0])).toEqual(surfaceTop);
-    // The camera controller's pivot pick at the pointer reads depth afresh.
+    expect(pickDepth.getDepth).not.toHaveBeenCalled();
+    // The camera controller's pivot pick at the pointer reads the texture.
     expect(pickAt(WINDOW.clone())).toBeUndefined();
+    expect(pickDepth.getDepth).toHaveBeenCalledTimes(1);
+    expect(pickDepth.getDepth).toHaveBeenCalledWith(scene.context, 320, 240);
+  });
+
+  it("puts back the pointer's pick depth after the depth pick, so the camera pivot stays on the globe", () => {
+    // Cesium keeps a pick-depth texture for the default view. Every pick pass
+    // copies its depth at the pointer into it, translucent primitives
+    // included (DerivedCommand.js `getPickRenderState` sets `depthMask`), and
+    // the camera controller's pivot pick reads it back without rendering
+    // (previous case). drillPick's last pass ran with every drilled primitive
+    // hidden, so before the depth pick the texture held the globe.
+    const surfaceTop = Cartesian3.fromDegrees(LON, LAT, 40_650);
+    const globe = Cartesian3.fromDegrees(LON, LAT);
+    const chunk = { show: true };
+    const incomingObservation = { show: true };
+    const alreadyHidden = { show: false };
+    const incoming = { show: true };
+    const drilled = [
+      { id: surfaceChunkPickId(KEY, 0), primitive: chunk },
+      { id: surfaceChunkPickId(KEY, 0), primitive: chunk },
+      {
+        id: observationPickId('map-surveys:1', OTHER),
+        primitive: incomingObservation,
+      },
+      { id: 'context', primitive: alreadyHidden },
+      { id: 'no primitive' },
+    ];
+    let texture: 'globe' | 'surface' = 'globe';
+    const passes: string[] = [];
+    const scene = {
+      camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn((position: Cartesian2) => {
+        passes.push(
+          `pick at ${position.toString()}: translucent ${scene.pickTranslucentDepth}, ` +
+            `chunk ${chunk.show}, observation ${incomingObservation.show}, ` +
+            `context ${alreadyHidden.show}, incoming group ${incoming.show}`,
+        );
+        texture = chunk.show || incomingObservation.show ? 'surface' : 'globe';
+      }),
+      pickPosition: vi.fn(() => {
+        passes.push(`depth: translucent ${scene.pickTranslucentDepth}`);
+        texture = 'surface';
+        return surfaceTop;
+      }),
+      pickTranslucentDepth: false,
+    };
+    const pivot = () => (texture === 'surface' ? surfaceTop : globe);
+    const resolve = createSurfacePickResolver(
+      scene as never,
+      context(2, [incoming]),
+    );
+
+    expect(resolve(drilled, WINDOW.clone())).toMatchObject({
+      artifactKey: KEY,
+      h3Index: CELL,
+      kind: 'surface',
+    });
+    expect(passes).toEqual([
+      'depth: translucent true',
+      'pick at (320, 240): translucent false, chunk false, observation false, ' +
+        'context false, incoming group true',
+    ]);
+    expect(pivot()).toEqual(globe);
+    expect([
+      chunk.show,
+      incomingObservation.show,
+      alreadyHidden.show,
+      incoming.show,
+    ]).toEqual([true, true, false, true]);
+  });
+
+  it('shows every drilled primitive again when the restoring pick throws', () => {
+    const chunk = { show: true };
+    const scene = {
+      pick: vi.fn(() => {
+        throw new Error('context lost');
+      }),
+    };
+    expect(() =>
+      restorePickDepth(scene as never, WINDOW, [{ primitive: chunk }]),
+    ).toThrow('context lost');
+    expect(scene.pick).toHaveBeenCalledWith(WINDOW);
+    expect(chunk.show).toBe(true);
   });
 
   it('restores translucent depth even when the depth pick throws', () => {
     const scene = {
       camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn(),
       pickPosition: vi.fn(() => {
         throw new Error('context lost');
       }),
@@ -282,6 +381,7 @@ describe('surface-chunk cell resolution', () => {
   it('resolves cells only for chunk picks of the displayed artifact', () => {
     const scene = {
       camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn(),
       pickPosition: vi.fn(),
       pickTranslucentDepth: false,
     };
@@ -294,11 +394,13 @@ describe('surface-chunk cell resolution', () => {
     expect(resolve([{ id: 'context' }], WINDOW)).toBeNull();
     expect(scene.camera.pickEllipsoid).not.toHaveBeenCalled();
     expect(scene.pickPosition).not.toHaveBeenCalled();
+    expect(scene.pick).not.toHaveBeenCalled();
   });
 
   it('resolves nothing while no artifact is pickable', () => {
     const scene = {
       camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn(),
       pickPosition: vi.fn(),
       pickTranslucentDepth: false,
     };
@@ -342,6 +444,7 @@ describe('surface-chunk cell resolution', () => {
     );
     const scene = {
       camera: { pickEllipsoid: vi.fn() },
+      pick: vi.fn(),
       pickPosition: vi.fn(() => hit),
       pickTranslucentDepth: false,
     };
