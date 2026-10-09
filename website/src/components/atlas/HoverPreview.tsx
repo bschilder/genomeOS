@@ -13,7 +13,6 @@ import {
   CELL_VALUES_UNAVAILABLE,
   LOADING_CELL_VALUES,
   surfaceCellView,
-  valuesView,
   type DetailStatus,
 } from './surface-cell-view';
 
@@ -55,10 +54,7 @@ export function HoverPreview({
   } as CSSProperties;
 
   if (selection.kind === 'surface') {
-    const view =
-      'value' in selection
-        ? valuesView(selection.value)
-        : surfaceCellView(surface, selection, detail);
+    const view = surfaceCellView(surface, selection, detail);
     if (!view) return null;
     return (
       <div className="atlas-hover-preview" style={style} aria-hidden="true">

@@ -1,9 +1,7 @@
-/** Cesium lifecycle and scientific-layer orchestration for Atlas design §11. */
+/** Cesium lifecycle and scientific-layer orchestration for Atlas design §11 (spec 2026-10-07 §B.6). */
 
 import { SceneMode, Viewer } from 'cesium';
 
-import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
-import type { Metric, PaletteId } from '../visual-encoding';
 import type {
   BasemapId,
   CameraState,
@@ -13,43 +11,40 @@ import type {
   SurfaceGeometry,
   TerrainId,
 } from '../url-state';
+import type { Metric, PaletteId } from '../visual-encoding';
 import { bindKeyboardCamera, cameraState, setCameraState } from './camera';
+import { revealFrameBudgetMs } from './chunk-scheduler';
 import {
   ContextController,
   type ContextWarning,
   type ContextWarningUpdate,
 } from './context-controller';
-import { LayerCache } from './layer-cache';
+import { ContextOverlay } from './context-overlay';
 import { HighlightLayer } from './highlight-layer';
-import { GeographicOverlay } from './geographic-overlay';
-import {
-  buildObservationLayer,
-  type ObservationPrimitiveGroup,
-} from './observation-layer';
-import { legacyObservationHeights } from './observation-symbols';
 import { bindAtlasPicking } from './picking';
 import { RenderLoop } from './render-loop';
+import { createMarkTracker, type MarkTracker } from './scene-marks';
 import {
   DEFAULT_LAYERS,
   DEFAULT_OBSERVATIONS,
   HOME_CAMERA,
   applyEarthOpacity,
   applyOceanColor,
+  hideSkyUntilReady,
   styleAtlasScene,
 } from './scene-policy';
-import {
-  buildSurfaceLayer,
-  type ScientificPrimitiveGroup,
-} from './surface-layer';
-import { animateSwap, animateValue, waitForReady } from './scene-transition';
-import { raiseScientificOverlays } from './scientific-layers';
-import { legacyHeightSource } from './surface-heights';
+import { animateValue } from './scene-transition';
+import { ScientificLayers, type ScientificStyle } from './scientific-layers';
+import { createSurfacePickResolver } from './surface-pick';
 import type {
-  AtlasPick,
+  ArtifactLoad,
   AtlasHover,
+  AtlasMark,
+  AtlasPick,
   AtlasSceneController,
   AtlasSceneOptions,
   ContextStatus,
+  DisplayedLayer,
   ObservationPresentation,
   SceneCapabilities,
   SceneProgressListener,
@@ -59,26 +54,26 @@ export { preferredAtlasPick } from './picking';
 export { applyEarthOpacity } from './scene-policy';
 export { applyOceanColor } from './scene-policy';
 export { resolveElevationView } from './scene-policy';
+export { raiseScientificOverlays } from './scientific-layers';
 export { transitionProgress } from './scene-transition';
 export type {
+  ArtifactLoad,
   AtlasHover,
+  AtlasMark,
   AtlasPick,
   AtlasSceneController,
   AtlasSceneOptions,
   ContextStatus,
+  DisplayedLayer,
   ObservationPresentation,
   SceneCapabilities,
   SceneProgress,
   SceneProgressListener,
 } from './types';
 
-interface PreparedSurfaceSwap {
-  incoming: ScientificPrimitiveGroup;
-  outgoing: ScientificPrimitiveGroup | null;
-  sequence: number;
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
 }
-
-export { raiseScientificOverlays } from './scientific-layers';
 
 class CesiumAtlasScene implements AtlasSceneController {
   readonly #viewer: Viewer;
@@ -86,6 +81,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   readonly #hoverListeners = new Set<(hover: AtlasHover | null) => void>();
   readonly #cameraListeners = new Set<(camera: CameraState) => void>();
   readonly #contextListeners = new Set<(status: ContextStatus) => void>();
+  readonly #commitListeners = new Set<(artifactKey: string) => void>();
   readonly #warningListeners = new Set<
     (warnings: readonly ContextWarning[]) => void
   >();
@@ -95,15 +91,14 @@ class CesiumAtlasScene implements AtlasSceneController {
   readonly #unbindPicking: () => void;
   readonly #removeMoveEnd: () => void;
   readonly #removeRenderError: () => void;
-  #surfaceArtifact: SurfaceArtifact | null = null;
-  #observationArtifact: ObservationArtifact | null = null;
-  #surfaceGroup: ScientificPrimitiveGroup | null = null;
-  #observationGroup: ObservationPrimitiveGroup | null = null;
-  readonly #surfaceCache = new LayerCache<ScientificPrimitiveGroup>(4);
-  readonly #observationCache = new LayerCache<ObservationPrimitiveGroup>(3);
+  readonly #removeMarks: () => void;
   readonly #contextController: ContextController;
-  readonly #geographicOverlay: GeographicOverlay;
+  readonly #overlay: ContextOverlay;
   readonly #highlightLayer: HighlightLayer;
+  readonly #marks: MarkTracker;
+  readonly #layers: ScientificLayers;
+  readonly #revealSky: () => void;
+  readonly #naturalEarthUrl: string;
   #metric: Metric = 'post_mean';
   #palette: PaletteId = 'rainbow';
   #surfaceOpacity = 0.58;
@@ -113,16 +108,14 @@ class CesiumAtlasScene implements AtlasSceneController {
   #edgeColorMode: EdgeColorMode = 'matched';
   #edgeFixedColor = '#b9f5ff';
   #observationStyle = { ...DEFAULT_OBSERVATIONS };
-  #layers = { ...DEFAULT_LAYERS };
+  #layerVisibility = { ...DEFAULT_LAYERS };
   #elevation = false;
   #exaggeration = 1;
   #elevationFactor = 0;
   #elevationSequence = 0;
   #mode: ExplorerSceneMode = 'globe';
-  #buildSequence = 0;
-  #artifactSequence = 0;
-  #artifactIdentity = '';
   #destroyed = false;
+  #contextStarted = false;
   #contextStatus: ContextStatus = 'loading';
   #reducedMotion: boolean;
 
@@ -156,6 +149,11 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#removeRenderError = this.#viewer.scene.renderError.addEventListener(
       (_scene, error: unknown) => this.#renderLoop.fail(error),
     );
+    this.#revealSky = hideSkyUntilReady(this.#viewer.scene);
+    this.#marks = createMarkTracker(
+      this.#viewer.scene,
+      options.markTarget ?? null,
+    );
     this.#contextController = new ContextController(
       this.#viewer,
       options.cesiumToken ?? '',
@@ -163,10 +161,30 @@ class CesiumAtlasScene implements AtlasSceneController {
         'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
       (warning) => this.#setWarning(warning),
     );
-    this.#geographicOverlay = new GeographicOverlay(this.#viewer);
+    this.#overlay = new ContextOverlay({
+      addCredit: (credit) => this.#viewer.creditDisplay.addStaticCredit(credit),
+      scene: this.#viewer.scene,
+      worker: options.worker,
+    });
+    this.#naturalEarthUrl = options.naturalEarthUrl;
     styleAtlasScene(this.#viewer);
     this.#highlightLayer = new HighlightLayer(this.#viewer.scene);
     this.#viewer.scene.primitives.add(this.#highlightLayer.collection);
+    this.#layers = new ScientificLayers({
+      frameBudgetMs:
+        options.frameBudgetMs ??
+        revealFrameBudgetMs(window.matchMedia('(pointer: coarse)').matches),
+      highlight: this.#highlightLayer,
+      marks: this.#marks,
+      onCommit: (artifactKey) => this.#commit(artifactKey),
+      scene: this.#viewer.scene,
+      style: () => this.#scientificStyle(),
+      worker: options.worker,
+    });
+    this.#removeMarks = this.#marks.onMark((mark) => {
+      if (mark === 'ready') this.#revealSky();
+      if (mark === 'surface-visible') this.#startContext();
+    });
     this.#unbindKeyboard = bindKeyboardCamera(this.#viewer, container);
     this.#removeMoveEnd = this.#viewer.camera.moveEnd.addEventListener(() => {
       const state = cameraState(this.#viewer);
@@ -183,15 +201,54 @@ class CesiumAtlasScene implements AtlasSceneController {
         this.#highlightLayer.setHover(value?.pick ?? null, this.#reducedMotion);
         for (const listener of this.#hoverListeners) listener(value);
       },
+      createSurfacePickResolver(this.#viewer.scene, {
+        factor: () => this.#elevationFactor,
+        geometry: () =>
+          this.#layers.displayedLayer()?.geometry ?? this.#surfaceGeometry,
+        metric: () => this.#layers.displayedLayer()?.metric ?? this.#metric,
+        target: () => this.#layers.pickTarget(),
+      }),
     );
     this.setCamera(HOME_CAMERA, false);
     void this.#contextController.setBasemap('dark-streets');
-    void this.#geographicOverlay
-      .load(options.naturalEarthUrl)
-      .then((status) => {
-        if (!this.#destroyed) this.#setContextStatus(status);
-      });
     this.#renderLoop.start();
+  }
+
+  #scientificStyle(): ScientificStyle {
+    return {
+      cellEdges: this.#cellEdges,
+      earthOpacity: this.#earthOpacity,
+      edgeColorMode: this.#edgeColorMode,
+      edgeFixedColor: this.#edgeFixedColor,
+      elevationFactor: this.#elevationFactor,
+      geometry: this.#surfaceGeometry,
+      layers: this.#layerVisibility,
+      metric: this.#metric,
+      mode: this.#mode,
+      observationStyle: this.#observationStyle,
+      palette: this.#palette,
+      reducedMotion: this.#reducedMotion,
+      surfaceOpacity: this.#surfaceOpacity,
+    };
+  }
+
+  #commit(artifactKey: string): void {
+    this.#overlay.setSurface(
+      artifactKey,
+      this.#layers.displayedLayer()?.metric ?? this.#metric,
+    );
+    this.#overlay.setElevationFactor(this.#elevationFactor, true);
+    for (const listener of this.#commitListeners) listener(artifactKey);
+  }
+
+  #startContext(): void {
+    if (this.#contextStarted || this.#destroyed) return;
+    this.#contextStarted = true;
+    void this.#overlay.load(this.#naturalEarthUrl).then((status) => {
+      if (this.#destroyed) return;
+      if (status === 'ready') this.#marks.queue('context-ready');
+      this.#setContextStatus(status);
+    });
   }
 
   #setContextStatus(status: ContextStatus): void {
@@ -210,243 +267,19 @@ class CesiumAtlasScene implements AtlasSceneController {
     return this.#elevation && this.#mode !== 'map' ? this.#exaggeration : 0;
   }
 
-  async #prepareSurface(
-    progress?: SceneProgressListener,
-  ): Promise<PreparedSurfaceSwap | null> {
-    if (this.#surfaceArtifact === null) return null;
-    progress?.({ detail: 'Building surface geometry', progress: null });
-    const sequence = ++this.#buildSequence;
-    const elevationFactor = this.#targetElevationFactor();
-    const identity = this.#surfaceArtifact.artifact;
-    const key = [
-      identity.id,
-      identity.model_version,
-      identity.data_version,
-      this.#metric,
-      this.#palette,
-      this.#edgeColorMode,
-      this.#edgeFixedColor,
-      this.#surfaceGeometry,
-    ].join(':');
-    let incoming = this.#surfaceCache.get(key);
-    if (!incoming) {
-      incoming = buildSurfaceLayer(this.#surfaceArtifact, {
-        elevation: elevationFactor > 0,
-        exaggeration: elevationFactor,
-        cellEdges: this.#cellEdges,
-        edgeColorMode: this.#edgeColorMode,
-        edgeFixedColor: this.#edgeFixedColor,
-        geometry: this.#surfaceGeometry,
-        metric: this.#metric,
-        mode: this.#mode,
-        opacity: this.#surfaceOpacity,
-        palette: this.#palette,
-      });
-      this.#surfaceCache.set(key, incoming);
-      this.#viewer.scene.primitives.add(incoming.collection);
-    }
-    incoming.collection.show = true;
-    await incoming.setSceneMode(this.#mode);
-    await incoming.setCellEdges(this.#cellEdges);
-    incoming.setSurfaceOpacity(this.#surfaceOpacity);
-    incoming.setOpacity(0);
-    await waitForReady(this.#viewer, incoming, (value) =>
-      progress?.({
-        detail: 'Preparing surface geometry',
-        progress: value,
-      }),
-    );
-    incoming.setElevationFactor(elevationFactor);
-    if (sequence !== this.#buildSequence || this.#destroyed) {
-      if (incoming !== this.#surfaceGroup) incoming.collection.show = false;
-      return null;
-    }
-    return { incoming, outgoing: this.#surfaceGroup, sequence };
-  }
-
-  async #activateSurface(
-    swap: PreparedSurfaceSwap,
-    progress?: SceneProgressListener,
-  ): Promise<void> {
-    const { incoming, outgoing, sequence } = swap;
-    if (sequence !== this.#buildSequence || this.#destroyed) {
-      if (incoming !== this.#surfaceGroup) incoming.collection.show = false;
-      return;
-    }
-    if (outgoing === incoming) {
-      incoming.setVisibility(this.#layers.surface, this.#layers.support);
-      incoming.setOpacity(1);
-      return;
-    }
-    this.#surfaceGroup = incoming;
-    incoming.setVisibility(this.#layers.surface, this.#layers.support);
-    await animateSwap(
-      this.#viewer,
-      incoming,
-      outgoing,
-      this.#reducedMotion,
-      true,
-      (value) =>
-        progress?.({ detail: 'Blending the new surface', progress: value }),
-    );
-    this.#surfaceCache.prune(incoming, (group) => {
-      this.#viewer.scene.primitives.remove(group.collection);
-    });
-  }
-
-  async #replaceSurface(progress?: SceneProgressListener): Promise<void> {
-    const swap = await this.#prepareSurface(progress);
-    if (swap) await this.#activateSurface(swap, progress);
-  }
-
-  async #replaceScientificLayers(
-    progress?: SceneProgressListener,
-  ): Promise<void> {
-    if (this.#surfaceArtifact)
-      await this.setArtifact(
-        this.#surfaceArtifact,
-        this.#observationArtifact,
-        progress,
-      );
-  }
-
   async setArtifact(
-    surface: SurfaceArtifact,
-    observations: ObservationArtifact | null,
+    load: ArtifactLoad,
     progress?: SceneProgressListener,
   ): Promise<void> {
-    const sequence = ++this.#artifactSequence;
-    const artifactIdentity = [
-      surface.artifact.id,
-      surface.artifact.model_version,
-      surface.artifact.data_version,
-    ].join(':');
-    if (this.#artifactIdentity && this.#artifactIdentity !== artifactIdentity)
-      this.setSelection(null);
-    this.#artifactIdentity = artifactIdentity;
-    this.#surfaceArtifact = surface;
-    this.#observationArtifact = observations;
-    this.#geographicOverlay.setSurface(surface, this.#metric);
-    let incomingObservations: ObservationPrimitiveGroup | null = null;
-    if (observations) {
-      progress?.({ detail: 'Building measured points', progress: null });
-      const identity = observations.artifact;
-      const observationKey = [
-        identity.id,
-        identity.model_version,
-        identity.data_version,
-        this.#metric,
-        this.#surfaceGeometry,
-        this.#observationStyle.shape,
-        this.#observationStyle.colorVariable,
-        this.#observationStyle.solidColor,
-        ...this.#observationStyle.gradient,
-        this.#observationStyle.sizeVariable,
-      ].join(':');
-      incomingObservations = this.#observationCache.get(observationKey) ?? null;
-      if (!incomingObservations) {
-        incomingObservations = buildObservationLayer(observations, {
-          artifactKey: artifactIdentity,
-          colorVariable: this.#observationStyle.colorVariable,
-          elevation: this.#targetElevationFactor() > 0,
-          exaggeration: this.#targetElevationFactor(),
-          gradient: this.#observationStyle.gradient,
-          heights: legacyObservationHeights(
-            observations.observations,
-            surface,
-            this.#metric,
-            this.#surfaceGeometry,
-          ),
-          opacity: this.#observationStyle.opacity,
-          samplingAreaColor: this.#observationStyle.samplingAreaColor,
-          sizeRange: this.#observationStyle.sizeRange,
-          samplingAreas: this.#observationStyle.samplingAreas,
-          shape: this.#observationStyle.shape,
-          sizeVariable: this.#observationStyle.sizeVariable,
-          solidColor: this.#observationStyle.solidColor,
-        });
-        this.#observationCache.set(observationKey, incomingObservations);
-        this.#viewer.scene.primitives.add(incomingObservations.collection);
+    try {
+      await this.#layers.setArtifact(load, progress);
+    } catch (error) {
+      if (!isAbortError(error)) {
+        this.#revealSky();
+        this.#startContext();
       }
-      incomingObservations.collection.show = true;
-      incomingObservations.setSizeRange(this.#observationStyle.sizeRange);
-      incomingObservations.setSamplingAreaColor(
-        this.#observationStyle.samplingAreaColor,
-      );
-      incomingObservations.setElevationFactor(this.#targetElevationFactor());
-      incomingObservations.setEarthOpacity(this.#earthOpacity);
-      incomingObservations.setStyleOpacity(this.#observationStyle.opacity);
-      incomingObservations.setOpacity(0);
+      throw error;
     }
-    const oldObservations = this.#observationGroup;
-    const [surfaceSwap] = await Promise.all([
-      this.#prepareSurface(progress),
-      incomingObservations
-        ? waitForReady(this.#viewer, incomingObservations)
-        : Promise.resolve(),
-    ]);
-    if (
-      !surfaceSwap ||
-      this.#destroyed ||
-      sequence !== this.#artifactSequence
-    ) {
-      if (
-        incomingObservations &&
-        incomingObservations !== this.#observationGroup
-      )
-        incomingObservations.collection.show = false;
-      return;
-    }
-    let observationTransition = Promise.resolve();
-    if (!incomingObservations) {
-      this.#observationGroup = null;
-      if (oldObservations) oldObservations.collection.show = false;
-    } else if (oldObservations === incomingObservations) {
-      incomingObservations.setVisibility(
-        this.#layers.observations,
-        this.#observationStyle.samplingAreas,
-      );
-      incomingObservations.setOpacity(1);
-    } else if (this.#layers.observations) {
-      this.#observationGroup = incomingObservations;
-      observationTransition = animateSwap(
-        this.#viewer,
-        incomingObservations,
-        oldObservations,
-        this.#reducedMotion,
-        true,
-      );
-    } else {
-      this.#observationGroup = incomingObservations;
-      incomingObservations.collection.show = false;
-      incomingObservations.setOpacity(1);
-      if (oldObservations) oldObservations.collection.show = false;
-    }
-    incomingObservations?.setVisibility(
-      this.#layers.observations,
-      this.#observationStyle.samplingAreas,
-    );
-    await Promise.all([
-      this.#activateSurface(surfaceSwap, progress),
-      observationTransition,
-    ]);
-    if (incomingObservations) {
-      this.#observationCache.prune(incomingObservations, (group) => {
-        this.#viewer.scene.primitives.remove(group.collection);
-      });
-    }
-    this.#highlightLayer.setArtifacts(
-      legacyHeightSource(surface),
-      observations,
-      this.#metric,
-      this.#targetElevationFactor() > 0,
-      this.#targetElevationFactor(),
-    );
-    raiseScientificOverlays(
-      this.#viewer.scene.primitives,
-      this.#observationGroup?.collection ?? null,
-      this.#highlightLayer.collection,
-    );
   }
 
   async setMetric(
@@ -455,9 +288,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   ): Promise<void> {
     if (this.#metric === metric) return;
     this.#metric = metric;
-    if (this.#surfaceArtifact)
-      this.#geographicOverlay.setSurface(this.#surfaceArtifact, metric);
-    await this.#replaceScientificLayers(progress);
+    await this.#layers.rebuild(progress);
   }
 
   async setSurfaceStyle(
@@ -469,25 +300,21 @@ class CesiumAtlasScene implements AtlasSceneController {
     geometry: SurfaceGeometry,
     progress?: SceneProgressListener,
   ): Promise<void> {
-    const paletteChanged = this.#palette !== palette;
+    const rebuild =
+      this.#palette !== palette || this.#surfaceGeometry !== geometry;
     const edgeStyleChanged =
       this.#edgeColorMode !== edgeColorMode ||
       this.#edgeFixedColor !== edgeFixedColor;
-    const geometryChanged = this.#surfaceGeometry !== geometry;
     this.#palette = palette;
     this.#surfaceOpacity = opacity;
     this.#cellEdges = cellEdges;
     this.#edgeColorMode = edgeColorMode;
     this.#edgeFixedColor = edgeFixedColor;
     this.#surfaceGeometry = geometry;
-    this.#surfaceGroup?.setSurfaceOpacity(opacity);
-    if (geometryChanged) {
-      await this.#replaceScientificLayers(progress);
-    } else if (paletteChanged || edgeStyleChanged) {
-      await this.#replaceSurface(progress);
-    } else {
-      await this.#surfaceGroup?.setCellEdges(cellEdges);
-    }
+    this.#layers.setSurfaceOpacity(opacity);
+    if (rebuild) await this.#layers.rebuild(progress);
+    else if (edgeStyleChanged) await this.#layers.setEdgeStyle();
+    else await this.#layers.setCellEdges(cellEdges);
     this.#viewer.scene.requestRender();
   }
 
@@ -495,11 +322,6 @@ class CesiumAtlasScene implements AtlasSceneController {
     style: ObservationPresentation,
     progress?: SceneProgressListener,
   ): Promise<void> {
-    const opacityChanged = this.#observationStyle.opacity !== style.opacity;
-    const sizeRangeChanged =
-      this.#observationStyle.sizeRange.join(':') !== style.sizeRange.join(':');
-    const samplingAreaColorChanged =
-      this.#observationStyle.samplingAreaColor !== style.samplingAreaColor;
     const renderingChanged =
       this.#observationStyle.colorVariable !== style.colorVariable ||
       this.#observationStyle.solidColor !== style.solidColor ||
@@ -507,18 +329,8 @@ class CesiumAtlasScene implements AtlasSceneController {
       this.#observationStyle.shape !== style.shape ||
       this.#observationStyle.sizeVariable !== style.sizeVariable;
     this.#observationStyle = { ...style };
-    if (opacityChanged) this.#observationGroup?.setStyleOpacity(style.opacity);
-    if (samplingAreaColorChanged)
-      this.#observationGroup?.setSamplingAreaColor(style.samplingAreaColor);
-    if (renderingChanged) await this.#replaceScientificLayers(progress);
-    else {
-      if (sizeRangeChanged)
-        this.#observationGroup?.setSizeRange(style.sizeRange);
-      this.#observationGroup?.setVisibility(
-        this.#layers.observations,
-        style.samplingAreas,
-      );
-    }
+    if (renderingChanged) await this.#layers.rebuild(progress);
+    else this.#layers.setObservationAppearance(style, this.#layerVisibility);
     this.#viewer.scene.requestRender();
   }
 
@@ -535,15 +347,10 @@ class CesiumAtlasScene implements AtlasSceneController {
   }
 
   setLayerVisibility(layers: LayerVisibility): void {
-    this.#layers = { ...layers };
-    this.#surfaceGroup?.setVisibility(layers.surface, layers.support);
-    if (this.#observationGroup)
-      this.#observationGroup.setVisibility(
-        layers.observations,
-        this.#observationStyle.samplingAreas,
-      );
+    this.#layerVisibility = { ...layers };
+    this.#layers.setVisibility(layers, this.#observationStyle.samplingAreas);
     this.#contextController.setVisible(layers.context);
-    this.#geographicOverlay.setVisible(layers.countries);
+    this.#overlay.setVisible(layers.countries);
     this.#viewer.scene.requestRender();
   }
 
@@ -560,7 +367,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   setEarthOpacity(opacity: number): void {
     this.#earthOpacity = Math.min(1, Math.max(0.15, opacity));
     applyEarthOpacity(this.#viewer.scene.globe, this.#earthOpacity);
-    this.#observationGroup?.setEarthOpacity(this.#earthOpacity);
+    this.#layers.setEarthOpacity(this.#earthOpacity);
     this.#highlightLayer.setEarthOpacity(this.#earthOpacity);
     this.#viewer.scene.requestRender();
   }
@@ -571,7 +378,7 @@ class CesiumAtlasScene implements AtlasSceneController {
   }
 
   setCountryBorderStyle(color: string, opacity: number): void {
-    this.#geographicOverlay.setBorderStyle(color, opacity);
+    this.#overlay.setBorderStyle(color, opacity);
   }
 
   async setElevation(enabled: boolean, exaggeration: number): Promise<void> {
@@ -586,19 +393,17 @@ class CesiumAtlasScene implements AtlasSceneController {
       this.#reducedMotion,
       (factor) => {
         this.#elevationFactor = factor;
-        this.#surfaceGroup?.setElevationFactor(factor);
-        this.#observationGroup?.setElevationFactor(factor);
+        this.#layers.setElevationFactor(factor);
         this.#highlightLayer.setElevationStyle(factor > 0, factor);
-        this.#geographicOverlay.setElevationFactor(factor);
+        this.#overlay.setElevationFactor(factor);
       },
       () => sequence === this.#elevationSequence && !this.#destroyed,
     );
     if (sequence === this.#elevationSequence && !this.#destroyed) {
       this.#elevationFactor = target;
-      this.#surfaceGroup?.setElevationFactor(target, true);
-      this.#observationGroup?.setElevationFactor(target, true);
+      this.#layers.setElevationFactor(target, true);
       this.#highlightLayer.setElevationStyle(target > 0, target);
-      this.#geographicOverlay.setElevationFactor(target);
+      this.#overlay.setElevationFactor(target, true);
       this.#viewer.scene.requestRender();
     }
   }
@@ -616,7 +421,8 @@ class CesiumAtlasScene implements AtlasSceneController {
     this.#mode = mode;
     if (this.#viewer.scene.mode !== target) {
       this.#viewer.camera.cancelFlight();
-      await this.#surfaceGroup?.setSceneMode('perspective');
+      await this.#layers.setSceneMode('perspective');
+      await this.#overlay.setSceneMode('perspective');
       await new Promise<void>((resolve) => {
         const remove = this.#viewer.scene.morphComplete.addEventListener(() => {
           remove();
@@ -628,7 +434,8 @@ class CesiumAtlasScene implements AtlasSceneController {
         else this.#viewer.scene.morphToColumbusView(duration);
       });
     }
-    await this.#surfaceGroup?.setSceneMode(mode);
+    await this.#layers.setSceneMode(mode);
+    await this.#overlay.setSceneMode(mode);
     await this.setElevation(this.#elevation, this.#exaggeration);
   }
 
@@ -651,6 +458,27 @@ class CesiumAtlasScene implements AtlasSceneController {
     );
     if (direction === 'in') this.#viewer.camera.zoomIn(distance);
     else this.#viewer.camera.zoomOut(distance);
+  }
+
+  displayedLayer(): DisplayedLayer | null {
+    return this.#layers.displayedLayer();
+  }
+
+  markValuesReady(artifactKey: string): void {
+    this.#layers.markValuesReady(artifactKey);
+  }
+
+  removeSurface(artifactKey: string): void {
+    this.#layers.removeSurface(artifactKey);
+  }
+
+  onCommit(listener: (artifactKey: string) => void): () => void {
+    this.#commitListeners.add(listener);
+    return () => this.#commitListeners.delete(listener);
+  }
+
+  onMark(listener: (mark: AtlasMark) => void): () => void {
+    return this.#marks.onMark(listener);
   }
 
   onPick(listener: (pick: AtlasPick | null) => void): () => void {
@@ -689,10 +517,11 @@ class CesiumAtlasScene implements AtlasSceneController {
   destroy(): void {
     if (this.#destroyed) return;
     this.#destroyed = true;
-    this.#buildSequence += 1;
-    this.#artifactSequence += 1;
     this.#elevationSequence += 1;
     this.#renderLoop.stop();
+    this.#layers.destroy();
+    this.#removeMarks();
+    this.#marks.destroy();
     this.#unbindKeyboard();
     this.#unbindPicking();
     this.#removeMoveEnd();

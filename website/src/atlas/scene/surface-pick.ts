@@ -2,24 +2,27 @@
  *
  * Surface and support primitives pick as a whole chunk. The cell under the
  * pointer comes from the ellipsoid at elevation 0 (no extra render pass) or
- * from a translucent depth pick otherwise, scoped to this call because
- * `pickTranslucentDepth` is scene-wide and also drives camera pivots. The
- * incoming group of an unfinished swap is hidden for that one pass so depth
- * always comes from the displayed surface. The pass also queries under a
- * cache key of its own and is followed by one ordinary pick that puts the
- * pointer's pick depth back, so its translucent hit never becomes a camera
- * pivot (§B.7).
+ * from a translucent depth pick otherwise; on the globe, `extruded` also
+ * passes the camera's pick ray so the resolver can ray-test the prisms around
+ * the depth hit instead of trusting its noisy altitude. The depth pick is
+ * scoped to this call because `pickTranslucentDepth` is scene-wide and also
+ * drives camera pivots. The incoming group of an unfinished swap is hidden
+ * for that one pass so depth always comes from the displayed surface. The
+ * pass also queries under a cache key of its own and is followed by one
+ * ordinary pick that puts the pointer's pick depth back, so its translucent
+ * hit never becomes a camera pivot (§B.7).
  */
 
 import {
   Cartesian2,
   Ellipsoid,
   Math as CesiumMath,
+  SceneMode,
   type Cartesian3,
   type Scene,
 } from 'cesium';
 
-import { resolveSurfaceRow } from '../geometry/pick-resolver';
+import { resolveSurfaceRow, type PickRay } from '../geometry/pick-resolver';
 import { h3At, renderAt, type SurfaceArtifact } from '../surface-columns';
 import type { SurfaceGeometry } from '../url-state';
 import { heightFor, type Metric } from '../visual-encoding';
@@ -41,8 +44,23 @@ export interface SurfacePickContext {
 
 type DepthPickScene = Pick<
   Scene,
-  'camera' | 'pick' | 'pickPosition' | 'pickTranslucentDepth'
+  'camera' | 'mode' | 'pick' | 'pickPosition' | 'pickTranslucentDepth'
 >;
+
+/** The pointer's ray in ECEF metres; only the globe's camera works in those coordinates. */
+function globePickRay(
+  scene: Pick<Scene, 'camera' | 'mode'>,
+  position: Cartesian2,
+): PickRay | null {
+  if (scene.mode !== SceneMode.SCENE3D) return null;
+  const ray = scene.camera.getPickRay(position);
+  return ray
+    ? {
+        direction: [ray.direction.x, ray.direction.y, ray.direction.z],
+        origin: [ray.origin.x, ray.origin.y, ray.origin.z],
+      }
+    : null;
+}
 
 /**
  * The pointer's own coordinates (so the same drawing-buffer pixel) under a
@@ -134,12 +152,14 @@ export function createSurfacePickResolver(
   return (picks, position) => {
     const target = context.target();
     const chosen = preferredAtlasPick(picks, target?.artifactKey ?? null);
-    if (!chosen || chosen.kind === 'surface') return null;
+    if (!chosen) return null;
     if (chosen.kind === 'observation') return chosen;
     if (!target) return null;
     const factor = context.factor();
+    const geometry = context.geometry();
     let cartesian: [number, number, number] | null = null;
     let ellipsoidHit: { lat: number; lon: number } | null = null;
+    let ray: PickRay | null = null;
     if (factor === 0) {
       const hit = scene.camera.pickEllipsoid(position, Ellipsoid.WGS84);
       const cartographic = hit
@@ -155,6 +175,7 @@ export function createSurfacePickResolver(
       restorePickDepth(scene, position, picks);
       if (!hit) return null;
       cartesian = [hit.x, hit.y, hit.z];
+      if (geometry === 'extruded') ray = globePickRay(scene, position);
     }
     const metric = context.metric();
     const domain = target.surface.artifact.metric_domains[metric];
@@ -164,7 +185,8 @@ export function createSurfacePickResolver(
         clearance: SURFACE_CLEARANCE_METRES,
         ellipsoidHit,
         factor,
-        geometry: context.geometry(),
+        geometry,
+        ray,
       },
       target.surface,
       // Heights at exaggeration 1: the resolver applies `factor` itself.

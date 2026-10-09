@@ -7,6 +7,8 @@ import {
   expandExplorerSheet,
   legendRow,
   markLegendLoading,
+  recordedLegendLoading,
+  recordLegendLoading,
   type LegendRow,
 } from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
@@ -1157,6 +1159,32 @@ test('the legend keeps its row while it shows the loading status', async ({
   }
 });
 
+test('the explorer shows the legend loading status in its row during the cold reveal', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'atlas-mobile.spec.ts checks the phone strip',
+  );
+  await recordLegendLoading(page);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const loading = await recordedLegendLoading(page);
+  expect(loading, 'the legend rendered its cold-reveal state').not.toBeNull();
+  expect(loading!.statusText).toBe('Loading map…');
+  expect(loading!.statusShown).toBe(true);
+  expect(loading!.status).toEqual({ aboveRow: true, insideLegend: true });
+  expect(loading!.infoBesideLabel).toBe(true);
+  expect(loading!.infoInRow).toBe(true);
+  expect(loading!.overflow).toBeLessThanOrEqual(0);
+  // The commit ends the reveal and takes the status away.
+  const legend = page.getByRole('complementary', { name: 'Map legend' });
+  await expect(legend).not.toHaveAttribute('data-atlas-legend-loading', 'true');
+  await expect(legend.getByRole('status')).toHaveCount(0);
+});
+
 test('height exaggeration uses the available compact control width', async ({
   page,
 }, testInfo) => {
@@ -1396,6 +1424,9 @@ test('explorer previews and opens separate surface and observation inspectors', 
   });
   await page.goto(`/app/?${query}`);
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('[data-atlas-values-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
   const canvas = page.locator('.atlas-scene canvas').first();

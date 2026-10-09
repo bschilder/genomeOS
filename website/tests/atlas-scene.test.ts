@@ -21,7 +21,11 @@ import type {
   SurfaceCell,
 } from '../src/atlas/contracts';
 import type { ObservationShape } from '../src/atlas/observation-encoding';
-import type { AtlasHover, AtlasPick } from '../src/atlas/scene/types';
+import type {
+  AtlasHover,
+  AtlasPick,
+  SurfacePick,
+} from '../src/atlas/scene/types';
 import { cameraState, keyboardCommandFor } from '../src/atlas/scene/camera';
 import {
   applyBasemapAppearance,
@@ -43,7 +47,6 @@ import {
   samplingRingSamples,
 } from '../src/atlas/scene/observation-layer';
 import {
-  atlasHoverForPicks,
   createDragTracker,
   createFrameThrottle,
   createStableHover,
@@ -55,6 +58,7 @@ import {
   animateValue,
   waitForReady,
 } from '../src/atlas/scene/scene-transition';
+import { surfaceChunkPickId } from '../src/atlas/scene/surface-chunk-layer';
 import {
   brighterEdgeColor,
   buildSurfaceLayer,
@@ -1265,14 +1269,22 @@ describe('Cesium scene policy', () => {
     });
   });
 
+  const PICK_KEY = 'fixture:v1:map-2026-08';
+  const surfaceCellPick: SurfacePick = {
+    artifactKey: PICK_KEY,
+    h3Index: baseCell.h3_index,
+    kind: 'surface',
+    row: 0,
+  };
+
   it('prefers a measured point when it overlaps a modeled cell', () => {
-    const surface = { id: surfacePickId(baseCell) };
-    const observation = {
-      id: observationPickId('map-surveys:1', 'fixture:v1:map-2026-08'),
-    };
-    expect(preferredAtlasPick([surface, observation])).toEqual(observation.id);
-    expect(preferredAtlasPick([surface])).toEqual(surface.id);
-    expect(preferredAtlasPick([{ id: 'context' }])).toBeNull();
+    const surface = { id: surfaceChunkPickId(PICK_KEY, 0) };
+    const observation = { id: observationPickId('map-surveys:1', PICK_KEY) };
+    expect(preferredAtlasPick([surface, observation], PICK_KEY)).toEqual(
+      observation.id,
+    );
+    expect(preferredAtlasPick([surface], PICK_KEY)).toEqual(surface.id);
+    expect(preferredAtlasPick([{ id: 'context' }], PICK_KEY)).toBeNull();
   });
 
   it('coalesces hover work to the newest pointer position per frame', () => {
@@ -1316,7 +1328,6 @@ describe('Cesium scene policy', () => {
   it('deduplicates hover picks and tolerates brief misses', () => {
     vi.useFakeTimers();
     try {
-      const first = surfacePickId(baseCell);
       const updates: (AtlasPick | null)[] = [];
       const hover = createStableHover(
         (pick) => updates.push(pick),
@@ -1324,17 +1335,17 @@ describe('Cesium scene policy', () => {
         90,
       );
 
-      hover.update(first);
-      hover.update({ ...first });
+      hover.update(surfaceCellPick);
+      hover.update({ ...surfaceCellPick });
       hover.update(null);
       vi.advanceTimersByTime(60);
-      hover.update(first);
+      hover.update(surfaceCellPick);
       vi.advanceTimersByTime(60);
-      expect(updates).toEqual([first]);
+      expect(updates).toEqual([surfaceCellPick]);
 
       hover.update(null);
       vi.advanceTimersByTime(90);
-      expect(updates).toEqual([first, null]);
+      expect(updates).toEqual([surfaceCellPick, null]);
       hover.cancel();
     } finally {
       vi.useRealTimers();
@@ -1343,24 +1354,24 @@ describe('Cesium scene policy', () => {
 
   it('keeps a hover preview stable while the pointer moves within one feature', () => {
     const first: AtlasHover = {
-      pick: surfacePickId(baseCell),
+      pick: surfaceCellPick,
       screenPosition: { x: 300, y: 220 },
     };
     const moved: AtlasHover = {
-      pick: surfacePickId(baseCell),
+      pick: { ...surfaceCellPick },
       screenPosition: { x: 340, y: 250 },
     };
     expect(sameAtlasHover(first, moved)).toBe(true);
     expect(
       sameAtlasHover(first, {
-        pick: observationPickId('map-surveys:1', 'fixture:v1:map-2026-08'),
+        pick: observationPickId('map-surveys:1', PICK_KEY),
         screenPosition: moved.screenPosition,
       }),
     ).toBe(false);
   });
 
   it('resolves empty canvas picks as no active hover', () => {
-    expect(atlasHoverForPicks([], new Cartesian2(640, 360))).toBeNull();
+    expect(preferredAtlasPick([], PICK_KEY)).toBeNull();
   });
 
   it('moves elevation out of 2D while preserving other view choices', () => {

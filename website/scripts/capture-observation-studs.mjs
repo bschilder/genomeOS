@@ -59,12 +59,7 @@ try {
     deviceScaleFactor: 1,
     viewport: { height: 1100, width: 1800 },
   });
-  await installAtlasBrowserFixture(page, {
-    focus: { lat: 8, lon: 0 },
-    observationBudget: 48,
-    surfaceBudget: 320,
-    surfaceScope: 'regional',
-  });
+  await installAtlasBrowserFixture(page, { appUrl: `${baseUrl}/app/` });
   const query = new URLSearchParams({
     elevation: 'true',
     entity: 'hbs-rs334',

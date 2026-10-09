@@ -36,8 +36,13 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe('selection highlight from the render tier', () => {
   it('outlines a selected cell at its render-tier top', () => {
-    const { layer, lines, source } = setup();
-    layer.setSelection({ h3Index: CELL, kind: 'surface' });
+    const { layer, lines, source, surface } = setup();
+    layer.setSelection({
+      artifactKey: surface.artifactKey,
+      h3Index: CELL,
+      kind: 'surface',
+      row: 0,
+    });
 
     const selection = lines.get(1);
     expect(selection.show).toBe(true);
@@ -50,8 +55,13 @@ describe('selection highlight from the render tier', () => {
   });
 
   it('hides the outline for a cell outside the surface', () => {
-    const { layer, lines } = setup();
-    layer.setSelection({ h3Index: '83754bfffffffff', kind: 'surface' });
+    const { layer, lines, surface } = setup();
+    layer.setSelection({
+      artifactKey: surface.artifactKey,
+      h3Index: '83754bfffffffff',
+      kind: 'surface',
+      row: 0,
+    });
     expect(lines.get(1).show).toBe(false);
   });
 
@@ -73,10 +83,15 @@ describe('selection highlight from the render tier', () => {
   });
 
   it('outlines a selected cell flat on the globe when elevation is off', () => {
-    const { layer, lines, observations, source } = setup();
+    const { layer, lines, observations, source, surface } = setup();
     expect(source.cellHeight(CELL, 'post_mean')).toBeGreaterThan(0);
     layer.setArtifacts(source, observations, 'post_mean', false, 2);
-    layer.setSelection({ h3Index: CELL, kind: 'surface' });
+    layer.setSelection({
+      artifactKey: surface.artifactKey,
+      h3Index: CELL,
+      kind: 'surface',
+      row: 0,
+    });
 
     const selection = lines.get(1);
     expect(selection.show).toBe(true);
@@ -87,7 +102,15 @@ describe('selection highlight from the render tier', () => {
 
   it('hides both highlights when the surface is withdrawn', () => {
     const { layer, lines, observations, points, surface } = setup();
-    layer.setHover({ h3Index: CELL, kind: 'surface' }, true);
+    layer.setHover(
+      {
+        artifactKey: surface.artifactKey,
+        h3Index: CELL,
+        kind: 'surface',
+        row: 0,
+      },
+      true,
+    );
     layer.setSelection({
       artifactKey: surface.artifactKey,
       kind: 'observation',

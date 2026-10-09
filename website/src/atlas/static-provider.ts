@@ -8,13 +8,11 @@ import {
   atlasCatalogSchema,
   externalInfoSchema,
   observationArtifactSchema,
-  surfaceArtifactSchema,
   type ArtifactRef,
   type AtlasCatalog,
   type ExternalInfo,
   type GridEntry,
   type ObservationArtifact,
-  type SurfaceArtifact as SurfaceJsonArtifact,
 } from './contracts';
 import { contextSourceKey } from './context-sources';
 import type { DecodedDetail, DecodedGrid } from './gosa/types';
@@ -141,7 +139,6 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   #catalog: AtlasCatalog | null = null;
   readonly #external = new Map<string, ExternalInfo>();
   readonly #grids = new Map<string, SharedGrid>();
-  readonly #legacySurfaces = new Map<string, SurfaceJsonArtifact>();
   readonly #observations = new Map<string, ObservationArtifact>();
   readonly #surfaces = new Map<string, SurfaceArtifact>();
 
@@ -418,43 +415,6 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     const detail = await this.#worker.loadDetail(buffer, ref, signal);
     surface.detail = detail;
     return detail;
-  }
-
-  /**
-   * @deprecated Transitional full-precision JSON surface for the pre-columnar scene (fast-load
-   * design §B.6.4). Removed with its last caller when the scene consumes `getSurface`.
-   */
-  async getSurfaceJson(
-    ref: ArtifactRef,
-    signal?: AbortSignal,
-    progress?: TransferProgressListener,
-  ): Promise<SurfaceJsonArtifact> {
-    const key = artifactKeyFor(ref);
-    const cached = this.#legacySurfaces.get(key);
-    if (cached) {
-      progress?.({ loadedBytes: 1, totalBytes: 1 });
-      return cached;
-    }
-    const artifact = surfaceArtifactSchema.parse(
-      await this.#fetchJson(
-        this.#artifactUrl(ref.surface_url),
-        ref.surface_url,
-        {
-          declaredBytes: null,
-          progress,
-          signal,
-        },
-      ),
-    );
-    assertIdentity(ref, artifact.artifact);
-    if (artifact.cells.length !== ref.n_cells) {
-      throw new Error(
-        `Atlas artifact row-count mismatch: expected ${ref.n_cells}, ` +
-          `received ${artifact.cells.length}`,
-      );
-    }
-    this.#legacySurfaces.set(key, artifact);
-    return artifact;
   }
 
   async getObservations(

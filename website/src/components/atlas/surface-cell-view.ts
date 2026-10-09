@@ -58,13 +58,3 @@ export function surfaceCellView(
     support,
   };
 }
-
-/** Interim: a cell from the main-thread builder's JSON surface (removed in B4.15). */
-export function valuesView(cell: SurfaceCell): SurfaceCellView {
-  return {
-    cell,
-    h3Index: cell.h3_index,
-    state: 'values',
-    support: cell.support,
-  };
-}

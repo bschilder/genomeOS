@@ -2,7 +2,7 @@
 
 import type { Primitive, PrimitiveCollection } from 'cesium';
 
-import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
+import type { ObservationArtifact } from '../contracts';
 import type { SurfaceArtifact as SurfaceColumns } from '../surface-columns';
 import type {
   ObservationColorVariable,
@@ -20,6 +20,7 @@ import type {
   SurfaceGeometry,
   TerrainId,
 } from '../url-state';
+import type { AtlasWorkerClient } from '../worker/client';
 import type { ContextWarning } from './context-controller';
 import type { ObservationPick } from './observation-layer';
 
@@ -30,16 +31,8 @@ export type SurfacePick = {
   row: number;
   h3Index: string;
 };
-/** Pick ids of the main-thread builder; removed when the scene switches (B4.15). */
-export type LegacySurfacePick = {
-  kind: 'surface';
-  h3Index: string;
-  artifactKey?: undefined;
-  row?: undefined;
-};
-export type AtlasPick = SurfacePick | LegacySurfacePick | ObservationPick;
-export type AtlasPickId =
-  SurfaceChunkPick | LegacySurfacePick | ObservationPick;
+export type AtlasPick = SurfacePick | ObservationPick;
+export type AtlasPickId = SurfaceChunkPick | ObservationPick;
 export interface AtlasHover {
   pick: AtlasPick;
   screenPosition: { x: number; y: number };
@@ -131,14 +124,14 @@ export interface AtlasSceneOptions {
   contextImageryUrl?: string;
   naturalEarthUrl: string;
   reducedMotion?: boolean;
+  /** The provider's worker: it already holds each artifact's decoded grid and render tier. */
+  worker: AtlasWorkerClient;
+  /** `.atlas-explorer`, which receives the readiness attributes. */
+  markTarget?: { setAttribute(name: string, value: string): void } | null;
+  frameBudgetMs?: number;
 }
 
-export interface AtlasSceneController {
-  setArtifact(
-    surface: SurfaceArtifact,
-    observations: ObservationArtifact | null,
-    progress?: SceneProgressListener,
-  ): Promise<void>;
+export interface AtlasSceneController extends ArtifactSceneApi {
   setMetric(metric: Metric, progress?: SceneProgressListener): Promise<void>;
   setSurfaceStyle(
     palette: PaletteId,

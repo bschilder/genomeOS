@@ -5,13 +5,8 @@ import '../../styles/atlas.css';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type {
-  ArtifactRef,
-  AtlasCatalog,
-  Observation,
-  SurfaceCell,
-} from '../../atlas/contracts';
-import { bootAtlas } from '../../atlas/boot';
+import type { AtlasCatalog } from '../../atlas/contracts';
+import { atlasWorker, bootAtlas } from '../../atlas/boot';
 import { resolveElevationView } from '../../atlas/earth-style-catalog';
 import {
   artifactVersion,
@@ -30,10 +25,7 @@ import {
   nearestPlaceContext,
   type ObservationPlaceContext,
 } from '../../atlas/place-context';
-import {
-  aggregateTransferProgress,
-  createTransferProgressTracker,
-} from '../../atlas/progress';
+import { aggregateTransferProgress } from '../../atlas/progress';
 import type {
   AtlasSceneController,
   ContextStatus,
@@ -59,6 +51,7 @@ import { ControlsLoading } from './ExplorerHeading';
 import { HoverPreview } from './HoverPreview';
 import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 import { PanelSheet } from './PanelSheet';
+import { useArtifactPipeline } from './useArtifactPipeline';
 import { nextPaint, useAtlasActivity } from './useAtlasActivity';
 import { EscapeStackProvider } from './useEscapeStack';
 import { ExplorerPanelsProvider } from './useExplorerPanels';
@@ -87,19 +80,15 @@ export default function AtlasExplorer({
   const provider = useAtlasDataProvider(artifactDataBase, siteDataBase);
   const sceneElement = useRef<HTMLDivElement>(null);
   const scene = useRef<AtlasSceneController | null>(null);
-  const surfaceCells = useRef<Map<string, SurfaceCell>>(new Map());
-  const observations = useRef<Map<string, Observation>>(new Map());
-  const requestSequence = useRef(0);
   const cameraApplied = useRef(false);
   const appliedDisplay = useRef<string | null>(null);
   const [sceneAttempt, setSceneAttempt] = useState(0);
+  const [sceneController, setSceneController] =
+    useState<AtlasSceneController | null>(null);
   const [dataAttempt, setDataAttempt] = useState(0);
   const [catalog, setCatalog] = useState<AtlasCatalog | null>(null);
   const contextUrls = useContextSourceUrls(provider, catalog);
   const [state, setState] = useState<ExplorerState | null>(null);
-  const [activeArtifact, setActiveArtifact] = useState<ArtifactRef | null>(
-    null,
-  );
   const [selection, setSelection] = useState<InspectorSelection | null>(null);
   const [hover, setHover] = useState<{
     position: { x: number; y: number };
@@ -128,10 +117,44 @@ export default function AtlasExplorer({
     status,
     update: updateActivity,
   } = useAtlasActivity(scene, (caught) => setError(errorMessage(caught)));
-  const activeObservationDomains = useMemo(() => {
-    if (!activeArtifact || observations.current.size === 0) return null;
-    return observationDomains([...observations.current.values()]);
-  }, [activeArtifact]);
+  const pipeline = useArtifactPipeline({
+    activity: {
+      begin: beginActivity,
+      fail: failActivity,
+      finish: finishActivity,
+      update: updateActivity,
+    },
+    appliedDisplay,
+    cameraApplied,
+    catalog,
+    controller: sceneController,
+    dataAttempt,
+    onArtifactChange: () => {
+      scene.current?.setSelection(null);
+      setSelection(null);
+      setHover(null);
+    },
+    provider,
+    reducedMotion,
+    setError,
+    state,
+  });
+  const activeArtifact = pipeline.displayed?.ref ?? null;
+  const pickTarget = pipeline.displayed ?? pipeline.revealing;
+  const inspectorArtifact = activeArtifact ?? pickTarget?.ref ?? null;
+  const legendArtifact =
+    activeArtifact ??
+    (pipeline.revealLegend ? (pipeline.revealing?.ref ?? null) : null);
+  const sceneHasArtifact = () =>
+    Boolean(activeArtifact && scene.current?.displayedLayer());
+  const activeObservations = pipeline.displayed?.observations ?? null;
+  const activeObservationDomains = useMemo(
+    () =>
+      activeObservations && activeObservations.observations.length > 0
+        ? observationDomains(activeObservations.observations)
+        : null,
+    [activeObservations],
+  );
   const colorEncodingFor = (
     candidate: InspectorSelection | null,
   ): ObservationColorEncoding | null => {
@@ -176,29 +199,50 @@ export default function AtlasExplorer({
   const sceneGeneration = useAtlasSceneLifecycle({
     attempt: sceneAttempt,
     bind: (controller) => {
+      setSceneController(controller);
       setCapabilities(controller.capabilities());
       const removePick = controller.onPick((pick) => {
+        const target = pipeline.targetRef.current;
         if (pick?.kind === 'surface') {
-          const value = surfaceCells.current.get(pick.h3Index);
-          setSelection(value ? { kind: 'surface', value } : null);
+          setSelection(
+            target?.artifactKey === pick.artifactKey
+              ? {
+                  artifactKey: pick.artifactKey,
+                  kind: 'surface',
+                  row: pick.row,
+                }
+              : null,
+          );
         } else if (pick?.kind === 'observation') {
-          const value = observations.current.get(pick.sourceRecordId);
+          const value =
+            target?.artifactKey === pick.artifactKey
+              ? target.observationMap.get(pick.sourceRecordId)
+              : undefined;
           setSelection(value ? { kind: 'observation', value } : null);
         } else setSelection(null);
       });
       const removeHover = controller.onHover((hovered) => {
-        if (hovered?.pick.kind === 'surface') {
-          const value = surfaceCells.current.get(hovered.pick.h3Index);
-          setHover(
-            value
-              ? {
-                  position: hovered.screenPosition,
-                  selection: { kind: 'surface', value },
-                }
-              : null,
-          );
-        } else if (hovered?.pick.kind === 'observation') {
-          const value = observations.current.get(hovered.pick.sourceRecordId);
+        const target = pipeline.targetRef.current;
+        const pick = hovered?.pick;
+        if (
+          hovered &&
+          pick?.kind === 'surface' &&
+          target?.artifactKey === pick.artifactKey
+        ) {
+          setHover({
+            position: hovered.screenPosition,
+            selection: {
+              artifactKey: pick.artifactKey,
+              kind: 'surface',
+              row: pick.row,
+            },
+          });
+        } else if (
+          hovered &&
+          pick?.kind === 'observation' &&
+          target?.artifactKey === pick.artifactKey
+        ) {
+          const value = target.observationMap.get(pick.sourceRecordId);
           setHover(
             value
               ? {
@@ -219,6 +263,7 @@ export default function AtlasExplorer({
         setSceneFailure('render'),
       );
       return () => {
+        setSceneController(null);
         removePick();
         removeHover();
         removeCamera();
@@ -229,6 +274,7 @@ export default function AtlasExplorer({
     },
     cesiumToken,
     element: sceneElement,
+    markTarget: explorerNode,
     naturalEarthUrl: contextUrls?.borders ?? null,
     onReset: () => {
       cameraApplied.current = false;
@@ -238,6 +284,7 @@ export default function AtlasExplorer({
     onUnavailable: setSceneFailure,
     reducedMotion,
     scene,
+    worker: atlasWorker(),
   });
 
   useEffect(() => {
@@ -289,130 +336,6 @@ export default function AtlasExplorer({
   }, [provider, dataAttempt]);
 
   useEffect(() => {
-    if (!provider || !catalog || !state || !scene.current || sceneFailure)
-      return;
-    const ref = catalog.artifacts.find(
-      (candidate) => candidate.id === state.entityId,
-    );
-    if (!ref || artifactVersion(ref) !== state.artifactVersion) {
-      setError(
-        `The requested map “${state.entityId}” at version “${state.artifactVersion || 'unspecified'}” is unavailable. Choose an available map to continue.`,
-      );
-      return;
-    }
-
-    const controller = new AbortController();
-    const sequence = ++requestSequence.current;
-    const activityId = beginActivity('loading artifact', {
-      detail: 'Waiting for scientific artifact responses',
-      label: `Loading ${ref.label}`,
-      progress: null,
-    });
-    const transferKeys: readonly ('observations' | 'surface')[] =
-      ref.observations_available ? ['surface', 'observations'] : ['surface'];
-    const reportTransfer = createTransferProgressTracker(
-      transferKeys,
-      (progress) => {
-        if (sequence !== requestSequence.current) return;
-        updateActivity(activityId, {
-          detail: 'Downloading surface and measured observations',
-          label: `Loading ${ref.label}`,
-          progress,
-        });
-      },
-    );
-    setError(null);
-    Promise.all([
-      provider.getSurfaceJson(
-        ref,
-        controller.signal,
-        reportTransfer('surface'),
-      ),
-      provider.getObservations(
-        ref,
-        controller.signal,
-        reportTransfer('observations'),
-      ),
-    ])
-      .then(async ([surface, measured]) => {
-        if (sequence !== requestSequence.current) return;
-        surfaceCells.current = new Map(
-          surface.cells.map((cell) => [cell.h3_index, cell]),
-        );
-        observations.current = new Map(
-          (measured?.observations ?? []).map((observation) => [
-            observation.source_record_id,
-            observation,
-          ]),
-        );
-        updateActivity(activityId, {
-          detail: 'Preparing the scene renderer',
-          label: `Rendering ${ref.label}`,
-          progress: null,
-        });
-        const controller = scene.current;
-        if (!controller) {
-          failActivity(activityId);
-          return;
-        }
-        await nextPaint();
-        await controller.setSceneMode(state.view, reducedMotion);
-        if (
-          sequence !== requestSequence.current ||
-          controller !== scene.current
-        )
-          return;
-        await controller.setElevation(state.elevation, state.exaggeration);
-        if (
-          sequence !== requestSequence.current ||
-          controller !== scene.current
-        )
-          return;
-        appliedDisplay.current = displayKey(state, reducedMotion);
-        await controller.setArtifact(surface, measured, (renderProgress) => {
-          if (sequence !== requestSequence.current) return;
-          updateActivity(activityId, {
-            detail: renderProgress.detail,
-            label: `Rendering ${ref.label}`,
-            progress: renderProgress.progress,
-          });
-        });
-        if (
-          sequence !== requestSequence.current ||
-          controller !== scene.current
-        )
-          return;
-        if (!cameraApplied.current) {
-          controller.setCamera(state.camera, !reducedMotion);
-          cameraApplied.current = true;
-        }
-        setSelection(null);
-        setHover(null);
-        setActiveArtifact(ref);
-        finishActivity(activityId);
-      })
-      .catch((caught) => {
-        if (
-          (caught as Error).name !== 'AbortError' &&
-          sequence === requestSequence.current
-        ) {
-          failActivity(activityId);
-          setError(`${state.entityId}: ${errorMessage(caught)}`);
-        }
-      });
-    return () => controller.abort();
-  }, [
-    catalog,
-    provider,
-    state?.artifactVersion,
-    state?.entityId,
-    sceneFailure,
-    dataAttempt,
-    reducedMotion,
-    sceneGeneration,
-  ]);
-
-  useEffect(() => {
     if (!state) return;
     const query = serializeExplorerState(state);
     window.history.replaceState(
@@ -424,7 +347,7 @@ export default function AtlasExplorer({
 
   useEffect(() => {
     if (!state) return;
-    if (!activeArtifact) {
+    if (!sceneHasArtifact()) {
       void scene.current?.setMetric(state.metric);
       return;
     }
@@ -433,7 +356,7 @@ export default function AtlasExplorer({
       'Changing the displayed metric',
       (controller, progress) => controller.setMetric(state.metric, progress),
     );
-  }, [state?.metric]);
+  }, [state?.metric, sceneController]);
 
   useEffect(() => {
     if (!state) return;
@@ -450,7 +373,7 @@ export default function AtlasExplorer({
         state.surfaceGeometry,
         progress,
       );
-    if (!activeArtifact) {
+    if (!sceneHasArtifact()) {
       void (scene.current && apply(scene.current));
       return;
     }
@@ -466,12 +389,13 @@ export default function AtlasExplorer({
     state?.edgeColorMode,
     state?.edgeFixedColor,
     state?.surfaceGeometry,
+    sceneController,
   ]);
 
   useEffect(() => {
     if (!state) return;
     const style = observationStyleFor(state);
-    if (!activeArtifact) {
+    if (!sceneHasArtifact()) {
       void scene.current?.setObservationStyle(style);
       return;
     }
@@ -490,11 +414,12 @@ export default function AtlasExplorer({
     state?.observationSize,
     state?.observationSolidColor,
     state?.samplingAreas,
+    sceneController,
   ]);
 
   useEffect(() => {
     if (!state) return;
-    if (!activeArtifact) {
+    if (!sceneHasArtifact()) {
       void scene.current?.setBasemap(state.basemap);
       return;
     }
@@ -503,7 +428,7 @@ export default function AtlasExplorer({
       'Waiting for imagery services',
       (controller) => controller.setBasemap(state.basemap),
     );
-  }, [state?.basemap, sceneAttempt]);
+  }, [state?.basemap, sceneAttempt, sceneController]);
 
   useEffect(() => {
     if (state)
@@ -517,11 +442,12 @@ export default function AtlasExplorer({
     state?.basemapBrightness,
     state?.dayNightLighting,
     sceneAttempt,
+    sceneController,
   ]);
 
   useEffect(() => {
     if (!state) return;
-    if (!activeArtifact) {
+    if (!sceneHasArtifact()) {
       void scene.current?.setTerrain(state.terrain);
       return;
     }
@@ -530,19 +456,19 @@ export default function AtlasExplorer({
       'Waiting for terrain services',
       (controller) => controller.setTerrain(state.terrain),
     );
-  }, [state?.terrain, sceneAttempt]);
+  }, [state?.terrain, sceneAttempt, sceneController]);
 
   useEffect(() => {
     if (state) scene.current?.setLayerVisibility(state.layers);
-  }, [state?.layers]);
+  }, [state?.layers, sceneController]);
 
   useEffect(() => {
     if (state) scene.current?.setEarthOpacity(state.earthOpacity);
-  }, [state?.earthOpacity, sceneAttempt]);
+  }, [state?.earthOpacity, sceneAttempt, sceneController]);
 
   useEffect(() => {
     if (state) scene.current?.setOceanColor(state.oceanColor);
-  }, [state?.oceanColor, sceneAttempt]);
+  }, [state?.oceanColor, sceneAttempt, sceneController]);
 
   useEffect(() => {
     if (state)
@@ -550,7 +476,12 @@ export default function AtlasExplorer({
         state.countryBorderColor,
         state.countryBorderOpacity,
       );
-  }, [state?.countryBorderColor, state?.countryBorderOpacity, sceneAttempt]);
+  }, [
+    state?.countryBorderColor,
+    state?.countryBorderOpacity,
+    sceneAttempt,
+    sceneController,
+  ]);
 
   useEffect(() => {
     if (!state || !activeArtifact || !scene.current) return;
@@ -761,28 +692,38 @@ export default function AtlasExplorer({
               {viewNotice}
             </p>
           )}
-          {activeArtifact && state && (
-            <AtlasLegend artifact={activeArtifact} state={state} />
+          {legendArtifact && state && (
+            <AtlasLegend
+              artifact={legendArtifact}
+              layer={activeArtifact ? pipeline.legendLayer : null}
+              loading={!activeArtifact}
+              state={state}
+            />
           )}
           {state && hover && (
             <HoverPreview
               colorEncoding={colorEncodingFor(hover.selection)}
+              detail={pipeline.detailStatus}
               placeContext={placeContextFor(hover.selection)}
               position={hover.position}
               selection={hover.selection}
+              surface={pickTarget?.surface ?? null}
             />
           )}
           <PanelSheet explorer={explorerNode}>
-            {activeArtifact && selection && (
+            {inspectorArtifact && selection && (
               <InspectorPanel
-                artifact={activeArtifact}
+                artifact={inspectorArtifact}
                 colorEncoding={colorEncodingFor(selection)}
+                detail={pipeline.detailStatus}
                 placeContext={placeContextFor(selection)}
                 selection={selection}
+                surface={pickTarget?.surface ?? null}
                 onClose={() => {
                   scene.current?.setSelection(null);
                   setSelection(null);
                 }}
+                onRetryDetail={pipeline.retryDetail}
               />
             )}
           </PanelSheet>

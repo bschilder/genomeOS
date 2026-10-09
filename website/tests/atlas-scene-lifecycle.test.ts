@@ -23,6 +23,7 @@ vi.mock('../src/atlas/explorer-runtime', () => ({
   supportsWebGL: () => mocks.webgl.supported,
 }));
 
+import type { AtlasWorkerClient } from '../src/atlas/worker/client';
 import {
   useAtlasSceneLifecycle,
   type SceneFailure,
@@ -36,11 +37,14 @@ function runLifecycle(sceneModule: Promise<unknown>) {
     bind: () => () => undefined,
     cesiumToken: '',
     element: { current: {} as HTMLDivElement },
+    markTarget: null,
     naturalEarthUrl: '/data/atlas/ne-50m-admin-0.geojson',
     onReset: () => undefined,
     onUnavailable,
     reducedMotion: false,
     scene: { current: null },
+    // No test here builds a scene that reads it.
+    worker: {} as AtlasWorkerClient,
   });
   const cleanup = mocks.effects.pop()!();
   return { cleanup: cleanup ?? (() => undefined), onUnavailable };

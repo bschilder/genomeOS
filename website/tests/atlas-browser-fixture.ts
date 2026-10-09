@@ -1,204 +1,315 @@
-import { gridDisk, latLngToCell } from 'h3-js';
-import type { Page } from '@playwright/test';
+/**
+ * Browser-test fixture for the Atlas explorer (fast-load design §B.8).
+ *
+ * `npm run build:e2e` inlines the committed compact catalog
+ * (`tests/fixtures/atlas/e2e/catalog.json`) into `/app/`. This fixture fulfils
+ * exactly that catalog's fetched object keys (grid, render, detail,
+ * observations) from the committed e2e tree. It never re-encodes, never
+ * `route.fetch()`es production files and never touches the inline catalog.
+ *
+ * It imports no app modules: `scripts/capture-*.mjs` load it under plain Node
+ * type stripping, which cannot resolve the app's extensionless imports.
+ */
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
-interface BrowserSurfaceCell {
-  h3_index: string;
-  support: string;
-}
+import type { Page, Route } from '@playwright/test';
 
-interface BrowserSurfaceArtifact {
-  artifact: { resolution: number };
-  cells: BrowserSurfaceCell[];
-}
+export type ArtifactTier = 'grid' | 'render' | 'detail' | 'observations';
 
-interface BrowserCatalog {
+/** The catalog fields browser tests read (a structural subset of `atlasCatalogSchema`). */
+export interface FixtureCatalog {
+  grids: Record<string, { url: string }>;
   artifacts: {
-    n_cells: number;
-    n_observations: number;
-    observations_url?: string;
-    surface_url?: string;
+    id: string;
+    model_version: string;
+    data_version: string;
+    surface_url: string;
+    observations_url: string | null;
+    downloads: {
+      manifest: { url: string };
+      observations: { url: string } | null;
+      surface: { url: string };
+    };
+    web: {
+      grid_sha256: string;
+      render: { url: string };
+      detail: { url: string };
+    };
   }[];
 }
 
-interface BrowserObservation {
-  lat: number;
-  lon: number;
+export interface AtlasBrowserFixtureOptions {
+  /** The served `/app/` page; relative to the test `baseURL` unless absolute. */
+  appUrl?: string;
 }
 
-interface BrowserObservationArtifact {
-  observations: BrowserObservation[];
+export interface TierDelay {
+  hits(): number;
+  release(): void;
 }
 
-interface AtlasBrowserFixtureOptions {
-  focus?: { lat: number; lon: number };
-  observationBudget?: number;
-  surfaceBudget?: number;
-  surfaceScope?: 'distributed' | 'regional';
+export interface TierOverride {
+  hits(): number;
+  restore(): Promise<void>;
 }
 
-const RENDER_CELL_BUDGET = 256;
-const RENDER_OBSERVATION_BUDGET = 64;
-const INSPECTOR_TARGET = { lat: 40.4407, lon: -3.7201 };
+/** Committed compact export (fast-load design §B.5 "E2E fixture tree"). */
+export const E2E_FIXTURE_DIR = path.resolve(
+  import.meta.dirname,
+  'fixtures',
+  'atlas',
+  'e2e',
+);
+export const E2E_CATALOG_PATH = path.join(E2E_FIXTURE_DIR, 'catalog.json');
+/** `artifactDataBase` of an e2e build (BASE_PATH `/`; same-origin data in Part B). */
+export const E2E_ARTIFACT_DATA_BASE = '/data/atlas/';
 
-function compactSurface(
-  payload: BrowserSurfaceArtifact,
-  options: AtlasBrowserFixtureOptions,
-): BrowserSurfaceArtifact {
-  const budget = options.surfaceBudget ?? RENDER_CELL_BUDGET;
-  if (payload.cells.length <= budget) return payload;
-  const focus = options.focus ?? INSPECTOR_TARGET;
-  if (options.surfaceScope === 'regional') {
-    const available = new Map(
-      payload.cells.map((cell) => [cell.h3_index, cell] as const),
+const DEFAULT_APP_URL = '/app/';
+const INLINE_CATALOG =
+  /<script\b[^>]*\bid="atlas-catalog"[^>]*>([\s\S]*?)<\/script>/;
+const inlineCatalogs = new Map<string, Promise<FixtureCatalog>>();
+let e2eObjects: Map<string, Buffer> | null = null;
+
+export function extractInlineCatalog(html: string): FixtureCatalog {
+  const match = INLINE_CATALOG.exec(html);
+  if (match === null)
+    throw new Error(
+      'The /app/ page has no inline <script id="atlas-catalog"> element.',
     );
-    const center = latLngToCell(
-      focus.lat,
-      focus.lon,
-      payload.artifact.resolution,
+  return JSON.parse(match[1]) as FixtureCatalog;
+}
+
+export function artifactTierKey(
+  catalog: FixtureCatalog,
+  id: string,
+  tier: ArtifactTier,
+): string {
+  const matches = catalog.artifacts.filter((artifact) => artifact.id === id);
+  if (matches.length !== 1)
+    throw new Error(
+      `Expected exactly one catalog artifact "${id}", found ${matches.length}.`,
     );
-    const selected = new Set<string>();
-    for (let radius = 0; selected.size < budget && radius <= 30; radius += 1) {
-      for (const h3Index of gridDisk(center, radius)) {
-        if (available.has(h3Index)) selected.add(h3Index);
-        if (selected.size === budget) break;
-      }
-    }
-    if (selected.size < budget) {
-      for (const cell of payload.cells) {
-        selected.add(cell.h3_index);
-        if (selected.size === budget) break;
-      }
-    }
-    const cells = [...selected].map((h3Index) => available.get(h3Index)!);
-    return { ...payload, cells };
+  const artifact = matches[0];
+  if (tier === 'grid') {
+    const grid = catalog.grids[artifact.web.grid_sha256];
+    if (grid === undefined)
+      throw new Error(
+        `The catalog has no grid ${artifact.web.grid_sha256} for "${id}".`,
+      );
+    return grid.url;
   }
-  const inspectorCells = new Set(
-    gridDisk(
-      latLngToCell(focus.lat, focus.lon, payload.artifact.resolution),
-      2,
+  if (tier === 'render') return artifact.web.render.url;
+  if (tier === 'detail') return artifact.web.detail.url;
+  if (artifact.observations_url === null)
+    throw new Error(`"${id}" has no observations.`);
+  return artifact.observations_url;
+}
+
+/** Every key the client fetches for some artifact, sorted. */
+export function fetchedKeys(catalog: FixtureCatalog): string[] {
+  const keys = new Set<string>();
+  for (const grid of Object.values(catalog.grids)) keys.add(grid.url);
+  for (const artifact of catalog.artifacts) {
+    keys.add(artifact.web.render.url);
+    keys.add(artifact.web.detail.url);
+    if (artifact.observations_url !== null) keys.add(artifact.observations_url);
+  }
+  return [...keys].sort();
+}
+
+/** Keys are unique relative paths, so a suffix match works for any data base. */
+export function urlMatchesKey(url: URL, key: string): boolean {
+  return url.pathname.endsWith(`/${key}`);
+}
+
+export function readE2eCatalog(): FixtureCatalog {
+  return JSON.parse(readFileSync(E2E_CATALOG_PATH, 'utf8')) as FixtureCatalog;
+}
+
+export function readE2eObject(key: string): Buffer {
+  const file = path.join(E2E_FIXTURE_DIR, key);
+  if (!existsSync(file))
+    throw new Error(
+      `The e2e fixture tree has no object for catalog key "${key}" (${file}).`,
+    );
+  return readFileSync(file);
+}
+
+/** The catalog the served `/app/` page inlines (cached per `appUrl`). */
+export function readInlineCatalog(
+  page: Page,
+  appUrl: string = DEFAULT_APP_URL,
+): Promise<FixtureCatalog> {
+  const cached = inlineCatalogs.get(appUrl);
+  if (cached !== undefined) return cached;
+  const loading = (async () => {
+    const response = await page.request.get(appUrl);
+    if (!response.ok())
+      throw new Error(`GET ${appUrl} returned HTTP ${response.status()}.`);
+    return extractInlineCatalog(await response.text());
+  })();
+  inlineCatalogs.set(appUrl, loading);
+  loading.catch(() => inlineCatalogs.delete(appUrl));
+  return loading;
+}
+
+function contentTypeFor(key: string): string {
+  return key.endsWith('.json')
+    ? 'application/json'
+    : 'application/octet-stream';
+}
+
+function e2eObjectMap(): Map<string, Buffer> {
+  e2eObjects ??= new Map(
+    fetchedKeys(readE2eCatalog()).map(
+      (key) => [key, readE2eObject(key)] as const,
     ),
   );
-  const pinned = payload.cells
-    .filter((cell) => inspectorCells.has(cell.h3_index))
-    .slice(0, budget);
-  const remaining = payload.cells.filter(
-    (cell) => !inspectorCells.has(cell.h3_index),
-  );
-  const slots = budget - pinned.length;
-  const sampled = Array.from(
-    { length: slots },
-    (_, index) => remaining[Math.floor((index * remaining.length) / slots)],
-  );
-  const cells = [...pinned, ...sampled];
-  return { ...payload, cells };
+  return e2eObjects;
 }
 
-function compactObservations(
-  payload: BrowserObservationArtifact,
-  options: AtlasBrowserFixtureOptions,
-): BrowserObservationArtifact {
-  const budget = options.observationBudget ?? RENDER_OBSERVATION_BUDGET;
-  if (payload.observations.length <= budget) return payload;
-  const focus = options.focus ?? INSPECTOR_TARGET;
-  const ordered = [...payload.observations].sort((left, right) => {
-    const leftDistance =
-      (left.lat - focus.lat) ** 2 + (left.lon - focus.lon) ** 2;
-    const rightDistance =
-      (right.lat - focus.lat) ** 2 + (right.lon - focus.lon) ** 2;
-    return leftDistance - rightDistance;
-  });
-  const nearest = ordered.slice(0, Math.min(8, budget));
-  const remaining = ordered.slice(8);
-  const slots = budget - nearest.length;
-  const sampled = Array.from(
-    { length: slots },
-    (_, index) => remaining[Math.floor((index * remaining.length) / slots)],
-  );
-  return { ...payload, observations: [...nearest, ...sampled] };
+function gridIds(catalog: FixtureCatalog): string {
+  return JSON.stringify(Object.keys(catalog.grids).sort());
 }
 
 /**
- * Keep deterministic interaction/accessibility tests within a software-WebGL
- * geometry budget. APIRequestContext calls bypass these page routes, so tests
- * can and do assert the complete production artifact separately.
+ * Serve the committed e2e objects for the e2e build's inline catalog and keep
+ * map tiles offline. Fails loudly when `dist/` is not an e2e build.
  */
 export async function installAtlasBrowserFixture(
   page: Page,
   options: AtlasBrowserFixtureOptions = {},
 ): Promise<void> {
-  const surfaceBudget = options.surfaceBudget ?? RENDER_CELL_BUDGET;
-  const observationBudget =
-    options.observationBudget ?? RENDER_OBSERVATION_BUDGET;
-  // The row count the page's catalog states for each surface or observation file. The data routes
-  // serve exactly that many rows, so they agree with the provider's row-count check whichever
-  // catalog the build inlined: production's full counts, or the e2e catalog's 256 / 64.
-  const statedRows = new Map<string, number>();
-  const fileName = (url: string) => url.slice(url.lastIndexOf('/') + 1);
-  const capCounts = (payload: BrowserCatalog): BrowserCatalog => ({
-    ...payload,
-    artifacts: payload.artifacts.map((artifact) => {
-      const n_cells = Math.min(artifact.n_cells, surfaceBudget);
-      const n_observations = Math.min(
-        artifact.n_observations,
-        observationBudget,
-      );
-      if (artifact.surface_url)
-        statedRows.set(fileName(artifact.surface_url), n_cells);
-      if (artifact.observations_url)
-        statedRows.set(fileName(artifact.observations_url), n_observations);
-      return { ...artifact, n_cells, n_observations };
-    }),
-  });
-  const rowBudget = (requestUrl: string, budget: number) =>
-    statedRows.get(fileName(new URL(requestUrl).pathname)) ?? budget;
+  const served = await readInlineCatalog(page, options.appUrl);
+  if (gridIds(served) !== gridIds(readE2eCatalog()))
+    throw new Error(
+      'The served /app/ page does not inline tests/fixtures/atlas/e2e/catalog.json. Build it with `npm run build:e2e` before running browser tests.',
+    );
+  const objects = e2eObjectMap();
+  const keyFor = (url: URL): string | undefined =>
+    [...objects.keys()].find((key) => urlMatchesKey(url, key));
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
   );
-  // Transitional (fast-load design §B.6.1): the catalog is inlined into /app/, so its counts are
-  // rewritten in the document. The e2e fixture rewrite replaces this with ATLAS_CATALOG_PATH.
   await page.route(
-    (url) => url.pathname.endsWith('/app/'),
+    (url) => keyFor(url) !== undefined,
     async (route) => {
-      if (route.request().resourceType() !== 'document') {
-        await route.continue();
-        return;
-      }
-      const response = await route.fetch();
-      const html = await response.text();
-      const body = html.replace(
-        /(<script\b[^>]*\bid="atlas-catalog"[^>]*>)([\s\S]*?)(<\/script>)/,
-        (_match, open: string, json: string, close: string) => {
-          const payload = capCounts(JSON.parse(json) as BrowserCatalog);
-          return `${open}${JSON.stringify(payload).replace(/</g, '\\u003c')}${close}`;
-        },
-      );
-      await route.fulfill({ body, response });
+      const key = keyFor(new URL(route.request().url()));
+      if (key === undefined) return route.fallback();
+      await route.fulfill({
+        body: objects.get(key),
+        contentType: contentTypeFor(key),
+        status: 200,
+      });
     },
   );
-  await page.route('**/data/atlas/catalog.json', async (route) => {
-    const response = await route.fetch();
-    const payload = (await response.json()) as BrowserCatalog;
-    await route.fulfill({ response, json: capCounts(payload) });
-  });
-  await page.route('**/data/atlas/*.surface.json', async (route) => {
-    const response = await route.fetch();
-    const payload = (await response.json()) as BrowserSurfaceArtifact;
-    const budget = rowBudget(route.request().url(), surfaceBudget);
+}
+
+/**
+ * Hold one artifact tier for `ms` (or until `release()` when `ms` is
+ * `Number.POSITIVE_INFINITY`), then hand it to the next route handler.
+ */
+export async function delayArtifactTier(
+  page: Page,
+  id: string,
+  tier: ArtifactTier,
+  ms: number,
+  options: AtlasBrowserFixtureOptions = {},
+): Promise<TierDelay> {
+  const key = artifactTierKey(
+    await readInlineCatalog(page, options.appUrl),
+    id,
+    tier,
+  );
+  let hits = 0;
+  let released = false;
+  const waiting = new Set<() => void>();
+  await page.route(
+    (url) => urlMatchesKey(url, key),
+    async (route) => {
+      hits += 1;
+      if (!released) {
+        await new Promise<void>((resolve) => {
+          const finish = (): void => {
+            clearTimeout(timer);
+            waiting.delete(finish);
+            resolve();
+          };
+          const timer = Number.isFinite(ms)
+            ? setTimeout(finish, ms)
+            : undefined;
+          waiting.add(finish);
+        });
+      }
+      await route.fallback();
+    },
+  );
+  return {
+    hits: () => hits,
+    release: () => {
+      released = true;
+      for (const finish of [...waiting]) finish();
+    },
+  };
+}
+
+async function overrideArtifactTier(
+  page: Page,
+  id: string,
+  tier: ArtifactTier,
+  options: AtlasBrowserFixtureOptions,
+  respond: (route: Route, key: string) => Promise<void>,
+): Promise<TierOverride> {
+  const key = artifactTierKey(
+    await readInlineCatalog(page, options.appUrl),
+    id,
+    tier,
+  );
+  let hits = 0;
+  const matcher = (url: URL): boolean => urlMatchesKey(url, key);
+  const handler = async (route: Route): Promise<void> => {
+    hits += 1;
+    await respond(route, key);
+  };
+  await page.route(matcher, handler);
+  return { hits: () => hits, restore: () => page.unroute(matcher, handler) };
+}
+
+/** Serve the e2e object with its last byte flipped (a checksum failure). */
+export function corruptArtifactTier(
+  page: Page,
+  id: string,
+  tier: ArtifactTier,
+  options: AtlasBrowserFixtureOptions = {},
+): Promise<TierOverride> {
+  return overrideArtifactTier(page, id, tier, options, async (route, key) => {
+    const body = Buffer.from(readE2eObject(key));
+    body[body.length - 1] ^= 0xff;
     await route.fulfill({
-      response,
-      json: compactSurface(payload, { ...options, surfaceBudget: budget }),
+      body,
+      contentType: contentTypeFor(key),
+      status: 200,
     });
   });
-  await page.route('**/data/atlas/*.observations.json', async (route) => {
-    const response = await route.fetch();
-    const payload = (await response.json()) as BrowserObservationArtifact;
-    const budget = rowBudget(route.request().url(), observationBudget);
-    await route.fulfill({
-      response,
-      json: compactObservations(payload, {
-        ...options,
-        observationBudget: budget,
-      }),
-    });
-  });
+}
+
+/** Fail every request for one artifact tier at the network layer. */
+export function failArtifactTier(
+  page: Page,
+  id: string,
+  tier: ArtifactTier,
+  options: AtlasBrowserFixtureOptions = {},
+): Promise<TierOverride> {
+  return overrideArtifactTier(page, id, tier, options, (route) =>
+    route.abort('failed'),
+  );
+}
+
+/** Distinct artifact ids in `data-atlas-displayed`, sorted. */
+export async function displayedArtifactIds(page: Page): Promise<string[]> {
+  const value = await page
+    .locator('.atlas-explorer')
+    .getAttribute('data-atlas-displayed');
+  return [...new Set((value ?? '').split(/\s+/).filter(Boolean))].sort();
 }

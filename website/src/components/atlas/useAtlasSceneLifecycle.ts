@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
 import { loadAtlasSceneModule } from '../../atlas/boot';
 import { supportsWebGL } from '../../atlas/explorer-runtime';
 import type { AtlasSceneController } from '../../atlas/scene/types';
+import type { AtlasWorkerClient } from '../../atlas/worker/client';
 
 /**
  * Why the globe is unavailable (Cesium globe design §12). `webgl`: no WebGL, or Cesium failed to
@@ -28,6 +29,10 @@ export interface AtlasSceneLifecycleOptions {
   onUnavailable: (failure: Exclude<SceneFailure, 'render'>) => void;
   reducedMotion: boolean;
   scene: RefObject<AtlasSceneController | null>;
+  /** `.atlas-explorer`, which receives the readiness attributes (fast-load design §B.1). */
+  markTarget: HTMLElement | null;
+  /** The worker the provider was built with: it already holds each decoded grid and render tier. */
+  worker: AtlasWorkerClient;
 }
 
 /** Returns a counter that increments every time a new scene controller becomes available. */
@@ -57,8 +62,10 @@ export function useAtlasSceneLifecycle(
         try {
           const controller = createAtlasScene(container, {
             cesiumToken,
+            markTarget: latest.current.markTarget,
             naturalEarthUrl,
             reducedMotion,
+            worker: latest.current.worker,
           });
           scene.current = controller;
           const unbind = bind(controller);

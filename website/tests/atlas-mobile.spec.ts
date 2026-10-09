@@ -13,6 +13,8 @@ import {
   markLegendLoading,
   panelSheet,
   PHONE_PROFILES,
+  recordedLegendLoading,
+  recordLegendLoading,
   setSheetState,
   sheetGeometry,
   skipUnlessProject,
@@ -1753,6 +1755,31 @@ for (const phone of PHONE_PROFILES) {
         expect(row.rampWidth).toBeGreaterThanOrEqual(108);
         expect(row.overflow).toBeLessThanOrEqual(0);
       }).toPass({ timeout: 5_000 });
+    });
+
+    test('the explorer shows the legend loading status on the strip during the cold reveal', async ({
+      page,
+    }) => {
+      await recordLegendLoading(page);
+      await page.goto('/app/');
+      await waitForAtlasReady(page);
+      const loading = await recordedLegendLoading(page);
+      expect(
+        loading,
+        'the legend rendered its cold-reveal state',
+      ).not.toBeNull();
+      expect(loading!.statusText).toBe('Loading map…');
+      expect(loading!.statusShown).toBe(true);
+      expect(loading!.status).toEqual({ aboveRow: true, insideLegend: true });
+      expect(loading!.infoInRow).toBe(true);
+      expect(loading!.rampWidth).toBeGreaterThanOrEqual(108);
+      expect(loading!.overflow).toBeLessThanOrEqual(0);
+      const legend = page.getByRole('complementary', { name: 'Map legend' });
+      await expect(legend).not.toHaveAttribute(
+        'data-atlas-legend-loading',
+        'true',
+      );
+      await expect(legend.getByRole('status')).toHaveCount(0);
     });
 
     for (const basemap of ['dark-streets', 'stadia-smooth'] as const) {

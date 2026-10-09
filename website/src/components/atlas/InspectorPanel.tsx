@@ -17,7 +17,6 @@ import {
   LOADING_CELL_VALUES,
   RETRY_CELL_VALUES,
   surfaceCellView,
-  valuesView,
   type DetailStatus,
   type SurfaceSelection,
 } from './surface-cell-view';
@@ -29,9 +28,7 @@ import {
 } from './useExplorerPanels';
 
 export type InspectorSelection =
-  | { kind: 'surface'; value: SurfaceCell }
-  | SurfaceSelection
-  | { kind: 'observation'; value: Observation };
+  SurfaceSelection | { kind: 'observation'; value: Observation };
 
 interface InspectorPanelProps {
   artifact: ArtifactRef;
@@ -127,11 +124,9 @@ export function InspectorPanel({
   onRetryDetail,
 }: InspectorPanelProps) {
   const view =
-    selection.kind !== 'surface'
-      ? null
-      : 'value' in selection
-        ? valuesView(selection.value)
-        : surfaceCellView(surface, selection, detail);
+    selection.kind === 'surface'
+      ? surfaceCellView(surface, selection, detail)
+      : null;
   // A panel that renders nothing must not hold the Escape stack or the phone panel sheet.
   const shown = selection.kind !== 'surface' || view !== null;
   useEscapeLayer(shown, onClose, 'inspector');

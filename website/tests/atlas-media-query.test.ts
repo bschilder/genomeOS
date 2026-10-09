@@ -32,6 +32,13 @@ function fakeMatchMedia(initial: boolean) {
       matches = next;
       for (const listener of listeners) listener();
     },
+    /** The viewport changes; the browser dispatches `change` later, in its rendering steps. */
+    resize(next: boolean) {
+      matches = next;
+    },
+    dispatch() {
+      for (const listener of listeners) listener();
+    },
   };
 }
 
@@ -52,6 +59,33 @@ describe('phone breakpoint hook (mobile sheets design §A.1.4)', () => {
     expect(store.getSnapshot()).toBe(false);
     unsubscribe();
     expect(media.listeners.size).toBe(0);
+  });
+
+  it('changes only when its own change event fires', () => {
+    // Read live, a render between a resize and this query's event would
+    // switch some components a commit early, so the dataset picker could move
+    // in the same commit as the sheet and take focus from its handle.
+    const media = fakeMatchMedia(false);
+    const store = createMediaQueryStore(MOBILE_QUERY, () => media.matchMedia);
+    const onChange = vi.fn();
+    store.subscribe(onChange);
+    expect(store.getSnapshot()).toBe(false);
+    media.resize(true);
+    expect(store.getSnapshot()).toBe(false);
+    media.dispatch();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()).toBe(true);
+  });
+
+  it('catches up with a change made before it subscribed', () => {
+    const media = fakeMatchMedia(false);
+    const store = createMediaQueryStore(MOBILE_QUERY, () => media.matchMedia);
+    expect(store.getSnapshot()).toBe(false);
+    media.resize(true);
+    const onChange = vi.fn();
+    store.subscribe(onChange);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot()).toBe(true);
   });
 
   it('renders the desktop layout on the server', () => {

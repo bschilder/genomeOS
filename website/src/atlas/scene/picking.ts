@@ -137,9 +137,7 @@ function pickIdOf(picked: unknown): AtlasPickId | null {
       : null;
   if (typeof value !== 'object' || value === null || !('kind' in value))
     return null;
-  return value.kind === 'surface' ||
-    value.kind === 'surface-chunk' ||
-    value.kind === 'observation'
+  return value.kind === 'surface-chunk' || value.kind === 'observation'
     ? (value as AtlasPickId)
     : null;
 }
@@ -164,21 +162,18 @@ export function sameAtlasHover(first: AtlasHover, second: AtlasHover): boolean {
 }
 
 /**
- * Observations win over surface cells. With a displayed artifact key (the
- * chunk pipeline), picks of any other artifact are dropped before choosing,
- * so an incoming group shown at opacity 0 during a swap can never answer for
- * the displayed one (spec 2026-10-07 §B.6.6).
+ * Observations win over surface cells. Picks of any artifact other than the
+ * displayed one are dropped before choosing, so an incoming group shown at
+ * opacity 0 during a swap can never answer for the displayed one (spec
+ * 2026-10-07 §B.6.6).
  */
 export function preferredAtlasPick(
   picks: readonly unknown[],
-  displayedKey?: string | null,
+  displayedKey: string | null,
 ): AtlasPickId | null {
-  const candidates = picks.flatMap((picked): AtlasPickId[] => {
+  const candidates = picks.flatMap((picked) => {
     const id = pickIdOf(picked);
-    if (!id) return [];
-    if (displayedKey === undefined)
-      return id.kind === 'surface-chunk' ? [] : [id];
-    return id.kind !== 'surface' && id.artifactKey === displayedKey ? [id] : [];
+    return id && id.artifactKey === displayedKey ? [id] : [];
   });
   return (
     candidates.find(({ kind }) => kind === 'observation') ??
@@ -187,26 +182,11 @@ export function preferredAtlasPick(
   );
 }
 
-export const legacyPickResolver: PickResolver = (picks) => {
-  const pick = preferredAtlasPick(picks);
-  return pick && pick.kind !== 'surface-chunk' ? pick : null;
-};
-
-export function atlasHoverForPicks(
-  picks: readonly unknown[],
-  position: Cartesian2,
-): AtlasHover | null {
-  const pick = legacyPickResolver(picks, position);
-  return pick
-    ? { pick, screenPosition: { x: position.x, y: position.y } }
-    : null;
-}
-
 export function bindAtlasPicking(
   scene: Scene,
   onSelect: (pick: AtlasPick | null) => void,
   onHover: (hover: AtlasHover | null) => void,
-  resolve: PickResolver = legacyPickResolver,
+  resolve: PickResolver,
 ): () => void {
   const handler = new ScreenSpaceEventHandler(scene.canvas);
   handler.setInputAction(

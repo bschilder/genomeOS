@@ -39,9 +39,6 @@ const { entry, gridSha256 } = onlyGrid(catalog);
 const ref = catalog.artifacts[0];
 // A second artifact on the same shared grid.
 const sibling = catalog.artifacts[1];
-const formatTwo = catalog.artifacts.find(
-  (artifact) => artifact.artifact_format >= 2,
-)!;
 const STALL_MESSAGE = 'Atlas request stall timeout must be positive and finite';
 
 afterEach(() => {
@@ -889,35 +886,5 @@ describe('StaticAtlasDataProvider observations', () => {
       createProvider().getObservations(surfaceOnly),
     ).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
-  });
-});
-
-describe('StaticAtlasDataProvider transitional JSON surface', () => {
-  it('loads and validates the canonical JSON surface from the artifact base', async () => {
-    const fetchMock = goldenFetch();
-    const provider = createProvider();
-    const surface = await provider.getSurfaceJson(ref);
-    expect(surface.cells).toHaveLength(ref.n_cells);
-    await expect(provider.getSurfaceJson(ref)).resolves.toBe(surface);
-    expect(callsTo(fetchMock, ref.surface_url)).toBe(1);
-  });
-
-  it('keeps the identity and target-grid checks', async () => {
-    const json = goldenSurfaceJson(formatTwo);
-    goldenFetch({
-      [formatTwo.surface_url]: () =>
-        new Response(
-          JSON.stringify({
-            ...json,
-            artifact: {
-              ...json.artifact,
-              target_grid_version: 'wrong-grid-version',
-            },
-          }),
-        ),
-    });
-    await expect(createProvider().getSurfaceJson(formatTwo)).rejects.toThrow(
-      /target_grid_version/,
-    );
   });
 });

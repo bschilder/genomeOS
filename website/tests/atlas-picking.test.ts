@@ -5,7 +5,12 @@ import {
   gridDisk,
   latLngToCell,
 } from 'h3-js';
-import { Cartesian2, Cartesian3, type PolylineCollection } from 'cesium';
+import {
+  Cartesian2,
+  Cartesian3,
+  SceneMode,
+  type PolylineCollection,
+} from 'cesium';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HighlightLayer } from '../src/atlas/scene/highlight-layer';
@@ -21,6 +26,7 @@ import {
 } from '../src/atlas/scene/surface-pick';
 import type { SurfacePick } from '../src/atlas/scene/types';
 import { rowForH3 } from '../src/atlas/surface-columns';
+import type { SurfaceGeometry } from '../src/atlas/url-state';
 import { heightFor } from '../src/atlas/visual-encoding';
 import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
 import { columnarSurface } from './helpers/columnar-surface';
@@ -67,12 +73,6 @@ describe('keyed pick arbitration', () => {
     expect(preferredAtlasPick(picks, KEY)).toEqual(
       observationPickId('map-surveys:2', KEY),
     );
-  });
-
-  it('keeps legacy arbitration when no displayed key is given', () => {
-    const legacy = { h3Index: CELL, kind: 'surface' as const };
-    expect(preferredAtlasPick([{ id: legacy }])).toEqual(legacy);
-    expect(preferredAtlasPick([{ id: surfaceChunkPickId(KEY, 0) }])).toBeNull();
   });
 
   it('compares artifact and row when de-duplicating hover', () => {
@@ -466,6 +466,81 @@ describe('surface-chunk cell resolution', () => {
       kind: 'surface',
       row: rowForH3(disk, CELL),
     });
+  });
+});
+
+describe('extruded picks along the camera ray', () => {
+  // A short cell beside a tall one, and a depth hit over the short cell's top
+  // lifted 2 km by depth-buffer noise along the camera's straight-down ray.
+  const [short] = gridDisk(CELL, 1).filter((h3) => h3 !== CELL);
+  const disk = columnarSurface(
+    gridDisk(CELL, 1).map((h3) => ({
+      h3,
+      post_mean: h3 === CELL ? 0.9 : 0.2,
+      post_sd: 0.1,
+      support: 'interpolated' as const,
+    })),
+  );
+  const [[firstLat, firstLon], [secondLat, secondLon]] = directedEdgeToBoundary(
+    cellsToDirectedEdge(short, CELL),
+  );
+  const [shortLat, shortLon] = cellToLatLng(short);
+  const lat = shortLat + ((firstLat + secondLat) / 2 - shortLat) * 0.97;
+  const lon = shortLon + ((firstLon + secondLon) / 2 - shortLon) * 0.97;
+  const radial = (altitude: number) => {
+    const ground = Cartesian3.fromDegrees(lon, lat);
+    return Cartesian3.multiplyByScalar(
+      ground,
+      1 + (SURFACE_CLEARANCE_METRES + altitude) / Cartesian3.magnitude(ground),
+      new Cartesian3(),
+    );
+  };
+  const noisyHit = radial(heightFor('interpolated', 0.2, [0, 1], 5) + 2_000);
+  const camera = radial(3_000_000);
+  const down = Cartesian3.normalize(
+    Cartesian3.subtract(radial(0), camera, new Cartesian3()),
+    new Cartesian3(),
+  );
+
+  function resolveIn(mode: SceneMode, geometry: SurfaceGeometry = 'extruded') {
+    const scene = {
+      camera: {
+        getPickRay: vi.fn(() => ({ direction: down, origin: camera })),
+        pickEllipsoid: vi.fn(),
+      },
+      mode,
+      pick: vi.fn(),
+      pickPosition: vi.fn(() => noisyHit),
+      pickTranslucentDepth: false,
+    };
+    const resolve = createSurfacePickResolver(scene as never, {
+      ...context(5),
+      geometry: () => geometry,
+      target: () => ({
+        artifactKey: disk.artifactKey,
+        hidden: [],
+        surface: disk,
+      }),
+    });
+    const pick = resolve(
+      [{ id: surfaceChunkPickId(disk.artifactKey, 0) }],
+      WINDOW,
+    );
+    return { pick, rays: scene.camera.getPickRay.mock.calls };
+  }
+
+  it('keeps the short cell whose top the camera ray meets on the globe', () => {
+    const { pick, rays } = resolveIn(SceneMode.SCENE3D);
+    expect(pick).toMatchObject({ h3Index: short, row: rowForH3(disk, short) });
+    expect(rays).toEqual([[WINDOW]]);
+  });
+
+  it('keeps the altitude test where the camera ray is not in globe coordinates', () => {
+    // Columbus view's camera works in projected coordinates, so no ray is cast.
+    const { pick, rays } = resolveIn(SceneMode.COLUMBUS_VIEW);
+    expect(pick).toMatchObject({ h3Index: CELL });
+    expect(rays).toEqual([]);
+    expect(resolveIn(SceneMode.SCENE3D, 'hexagons').rays).toEqual([]);
   });
 });
 

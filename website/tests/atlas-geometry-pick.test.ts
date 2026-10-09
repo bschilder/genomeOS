@@ -10,7 +10,10 @@ import {
 } from 'h3-js';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveSurfaceRow } from '../src/atlas/geometry/pick-resolver';
+import {
+  resolveSurfaceRow,
+  type PickRay,
+} from '../src/atlas/geometry/pick-resolver';
 import {
   buildSurfaceChunk,
   SURFACE_CLEARANCE_METRES,
@@ -547,5 +550,228 @@ describe('surface pick resolution (fast-load §B.6.6)', () => {
     } finally {
       spy.mockImplementation(realCellToLatLng);
     }
+  });
+});
+
+/** A ray from `from` metres above `ground` straight down its geocentric radial. */
+function nadirRay(ground: Degrees, from: number): PickRay {
+  const origin = lifted(ground, from);
+  const below = lifted(ground, 0);
+  const length = Math.hypot(
+    ...[0, 1, 2].map((axis) => below[axis] - origin[axis]),
+  );
+  return {
+    direction: [0, 1, 2].map(
+      (axis) => (below[axis] - origin[axis]) / length,
+    ) as Cartesian,
+    origin,
+  };
+}
+
+describe('extruded picks along the pick ray (fast-load §B.6.6 prism test)', () => {
+  function resolverFor(
+    surface: SurfaceArtifact,
+    heights: (row: number) => number,
+    factor: number,
+  ) {
+    return (cartesian: Cartesian, ray: PickRay | null) =>
+      resolveSurfaceRow(
+        {
+          cartesian,
+          clearance: SURFACE_CLEARANCE_METRES,
+          ellipsoidHit: null,
+          factor,
+          geometry: 'extruded',
+          ray,
+        },
+        surface,
+        heights,
+      );
+  }
+
+  it.each([1, 5])(
+    'keeps a top-face hit on a short or masked cell whose depth reads above the slack at exaggeration %d',
+    (factor) => {
+      const ring = DISK.filter((cell) => cell !== CENTRE);
+      const [masked, , , short] = ring;
+      const { surface, heights } = setup('extruded', CENTRE, (h3) => ({
+        support: h3 === masked ? 'unknown' : 'interpolated',
+        value: h3 === CENTRE ? TALL : SHORT,
+      }));
+      const resolve = resolverFor(surface, heights, factor);
+      for (const cell of [short, masked]) {
+        const row = DISK.indexOf(cell);
+        const ground = besideEdge(cell, CENTRE);
+        // Depth-buffer noise lifts the hit 2 km over the top along the view
+        // ray (Task 69's probe measured up to about 16 km in a world view).
+        const noisy = lifted(ground, heights(row) * factor + 2_000);
+        expect(resolve(noisy, null), `${cell}: the altitude test alone`).toBe(
+          DISK.indexOf(CENTRE),
+        );
+        expect(resolve(noisy, nadirRay(ground, 3_000_000)), cell).toBe(row);
+      }
+    },
+  );
+
+  it.each([1, 5])(
+    'gives an oblique ray that meets the tall wall first to the tall cell at exaggeration %d',
+    (factor) => {
+      const { surface, heights } = setup('extruded');
+      const resolve = resolverFor(surface, heights, factor);
+      const centreRow = DISK.indexOf(CENTRE);
+      const tallTop = heights(centreRow) * factor;
+      for (const neighbour of DISK.filter((cell) => cell !== CENTRE)) {
+        const shortTop = heights(DISK.indexOf(neighbour)) * factor;
+        const [first, second] = directedEdgeToBoundary(
+          cellsToDirectedEdge(neighbour, CENTRE),
+        ).map(([lat, lon]) => {
+          const point = [0, 0, 0];
+          geodeticToEcef(lon, lat, SURFACE_CLEARANCE_METRES, point);
+          return point;
+        });
+        // Halfway up the shared wall, which lies in the plane through the
+        // Earth's centre and the edge's two corners.
+        const middle = [0, 1, 2].map(
+          (axis) => (first[axis] + second[axis]) / 2,
+        );
+        const lift = 1 + (shortTop + tallTop) / 2;
+        const wall = middle.map(
+          (axis) => axis * (1 + lift / magnitude(middle)),
+        ) as Cartesian;
+        const origin = lifted(cellToLatLng(neighbour), tallTop + 400_000);
+        const length = Math.hypot(
+          ...[0, 1, 2].map((axis) => wall[axis] - origin[axis]),
+        );
+        const direction = [0, 1, 2].map(
+          (axis) => (wall[axis] - origin[axis]) / length,
+        ) as Cartesian;
+        // The depth hit lands 300 m short of the wall, over the short cell.
+        const noisy = [0, 1, 2].map(
+          (axis) => wall[axis] - direction[axis] * 300,
+        ) as Cartesian;
+        expect(resolve(noisy, { direction, origin }), neighbour).toBe(
+          centreRow,
+        );
+      }
+    },
+  );
+
+  it.each([1, 5])(
+    'agrees with rays cast at the extruded mesh itself at exaggeration %d',
+    (factor) => {
+      // Rising heights so most rays meet a wall before or instead of a top.
+      const ring = DISK.filter((cell) => cell !== CENTRE);
+      const { surface, buffers, heights, input } = setup(
+        'extruded',
+        CENTRE,
+        (h3) => ({
+          support: 'interpolated',
+          value: h3 === CENTRE ? 0.95 : 0.1 + 0.12 * ring.indexOf(h3),
+        }),
+      );
+      const resolve = resolverFor(surface, heights, factor);
+      // Each row owns its fan triangles and then two triangles per wall.
+      const owners: number[] = [];
+      DISK.forEach((_, row) => {
+        const corners =
+          input.topology.cornerOffsets[row + 1] -
+          input.topology.cornerOffsets[row];
+        for (let index = 0; index < corners * 3; index += 1) owners.push(row);
+      });
+      expect(owners).toHaveLength(buffers.indices.length / 3);
+      const triangles = owners.map((_, triangle) =>
+        [0, 1, 2].map((offset) =>
+          displaced(buffers, buffers.indices[triangle * 3 + offset], factor),
+        ),
+      );
+      const [centreLat, centreLon] = cellToLatLng(CENTRE);
+      const tallest = Math.max(...DISK.map((_, row) => heights(row))) * factor;
+      let checked = 0;
+      for (const [northing, easting] of [
+        [1.4, 0],
+        [-1.4, 0.3],
+        [0.2, 1.5],
+        [-0.5, -1.4],
+      ]) {
+        const origin = lifted(
+          [centreLat + northing, centreLon + easting],
+          tallest + 150_000,
+        );
+        for (let step = 0; step < 49; step += 1) {
+          const target = lifted(
+            [
+              centreLat + ((step % 7) - 3) * 0.17 + 0.013,
+              centreLon + (Math.floor(step / 7) - 3) * 0.17 + 0.007,
+            ],
+            0,
+          );
+          const length = Math.hypot(
+            ...[0, 1, 2].map((axis) => target[axis] - origin[axis]),
+          );
+          const direction = [0, 1, 2].map(
+            (axis) => (target[axis] - origin[axis]) / length,
+          ) as Cartesian;
+          // The first mesh triangle along the ray (Moller-Trumbore).
+          let nearest = Number.POSITIVE_INFINITY;
+          let owner: number | null = null;
+          triangles.forEach(([a, b, c], triangle) => {
+            const e1 = [0, 1, 2].map((axis) => b[axis] - a[axis]);
+            const e2 = [0, 1, 2].map((axis) => c[axis] - a[axis]);
+            const p = [
+              direction[1] * e2[2] - direction[2] * e2[1],
+              direction[2] * e2[0] - direction[0] * e2[2],
+              direction[0] * e2[1] - direction[1] * e2[0],
+            ];
+            const det = e1[0] * p[0] + e1[1] * p[1] + e1[2] * p[2];
+            if (Math.abs(det) < 1e-9) return;
+            const s = [0, 1, 2].map((axis) => origin[axis] - a[axis]);
+            const u = (s[0] * p[0] + s[1] * p[1] + s[2] * p[2]) / det;
+            const q = [
+              s[1] * e1[2] - s[2] * e1[1],
+              s[2] * e1[0] - s[0] * e1[2],
+              s[0] * e1[1] - s[1] * e1[0],
+            ];
+            const v =
+              (direction[0] * q[0] +
+                direction[1] * q[1] +
+                direction[2] * q[2]) /
+              det;
+            const t = (e2[0] * q[0] + e2[1] * q[1] + e2[2] * q[2]) / det;
+            // Keep clear of shared edges, where either owner is right.
+            if (u < 1e-4 || v < 1e-4 || u + v > 1 - 1e-4 || t <= 0) return;
+            if (t < nearest) {
+              nearest = t;
+              owner = owners[triangle];
+            }
+          });
+          if (owner === null) continue;
+          for (const noise of [-2_000, 0, 2_000]) {
+            const cartesian = [0, 1, 2].map(
+              (axis) => origin[axis] + direction[axis] * (nearest + noise),
+            ) as Cartesian;
+            expect(
+              resolve(cartesian, { direction, origin }),
+              `${northing},${easting} step ${step} noise ${noise}`,
+            ).toBe(owner);
+          }
+          checked += 1;
+        }
+      }
+      expect(checked, 'rays that meet the mesh').toBeGreaterThan(80);
+    },
+  );
+
+  it('falls back to the altitude test when the ray enters no candidate prism', () => {
+    const { surface, heights } = setup('extruded');
+    const resolve = resolverFor(surface, heights, 5);
+    const short = DISK.find((cell) => cell !== CENTRE)!;
+    const ground = besideEdge(short, CENTRE);
+    const noisy = lifted(ground, heights(DISK.indexOf(short)) * 5 + 2_000);
+    const down = nadirRay(ground, 3_000_000);
+    const away: PickRay = {
+      direction: down.direction.map((axis) => -axis) as Cartesian,
+      origin: down.origin,
+    };
+    expect(resolve(noisy, away)).toBe(resolve(noisy, null));
   });
 });
