@@ -5,6 +5,7 @@ import { cellToLatLng } from 'h3-js';
 import { installAtlasBrowserFixture } from './atlas-browser-fixture';
 import {
   expandExplorerSheet,
+  INSPECTOR_CAMERA,
   legendRow,
   markLegendLoading,
   recordedLegendLoading,
@@ -1726,4 +1727,121 @@ test('polygon map validates a selected model cell before loading Google Maps', a
   await expect(page.getByRole('status')).toContainText(
     'domain-restricted Google Maps browser key',
   );
+});
+
+test('cold load shows observations, then the surface, then outlines and borders', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  for (const attribute of [
+    'data-atlas-observations-visible',
+    'data-atlas-surface-visible',
+    'data-atlas-ready',
+    'data-atlas-edges-ready',
+    'data-atlas-context-ready',
+  ])
+    await expect(explorer).toHaveAttribute(attribute, 'true', {
+      timeout: 45_000,
+    });
+  await expect(explorer).toHaveAttribute('data-atlas-displayed', 'hbs-rs334');
+
+  const marks = await page.evaluate(() =>
+    Object.fromEntries(
+      [
+        'observations-visible',
+        'surface-first-chunk',
+        'surface-visible',
+        'ready',
+        'edges-ready',
+        'context-ready',
+      ].map((name) => [
+        name,
+        performance.getEntriesByName(`atlas:${name}`)[0]?.startTime ?? null,
+      ]),
+    ),
+  );
+  for (const value of Object.values(marks)) expect(value).not.toBeNull();
+  expect(marks['observations-visible']!).toBeLessThanOrEqual(
+    marks['surface-visible']!,
+  );
+  expect(marks['surface-first-chunk']!).toBeLessThanOrEqual(
+    marks['surface-visible']!,
+  );
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['edges-ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(
+    marks['context-ready']!,
+  );
+  const reveal = JSON.parse(
+    (await explorer.getAttribute('data-atlas-reveal')) ?? '{}',
+  );
+  expect(reveal.frames).toBeGreaterThan(0);
+  expect(reveal.longestFrameMs).toBeGreaterThanOrEqual(0);
+});
+
+test('style choices in the URL reach the scene that renders them', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/?metric=post_sd');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(
+    page.getByRole('complementary', { name: 'Map legend' }),
+  ).toContainText('Model uncertainty');
+});
+
+// An open inspector never shows the previous artifact's numbers after a dataset switch.
+test('switching dataset closes the inspector instead of keeping the old artifact’s cell', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered on desktop',
+  );
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  const box = await page.locator('.atlas-scene canvas').first().boundingBox();
+  if (box === null) throw new Error('the globe canvas has no box');
+  for (const [dx, dy] of [
+    [0, 0],
+    [-18, 0],
+    [18, 0],
+    [0, -18],
+    [0, 18],
+  ]) {
+    await page.mouse.click(
+      box.x + box.width / 2 + dx,
+      box.y + box.height / 2 + dy,
+    );
+    if (await inspector.isVisible()) break;
+  }
+  await expect(inspector).toBeVisible();
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await expect(explorer).toHaveAttribute(
+    'data-atlas-active',
+    'g6pd-deficiency',
+    {
+      timeout: 45_000,
+    },
+  );
+  await expect(inspector).toBeHidden();
 });
