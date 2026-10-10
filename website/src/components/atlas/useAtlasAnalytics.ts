@@ -26,7 +26,8 @@ interface AtlasAnalyticsInput {
  *
  * - A dataset counts when the requested dataset changes, the first one included, and never again
  *   for a re-render or a data retry. Only an id the catalog lists counts, so a mistyped `?entity=`
- *   never reaches analytics.
+ *   never reaches analytics. It is sent only after an explicit opt-in (`analytics.ts`); an open
+ *   dropped for want of one is not replayed after a later Accept.
  * - A view counts when it changes from the one before, whether the view control chose it or
  *   turning on elevation moved Map to Perspective. The view the page opened with is not a switch.
  * - An inspector counts when one opens or changes kind, not when another cell is picked in an open

@@ -25,8 +25,8 @@ export default defineConfig({
   use: {
     baseURL,
     // The e2e build loads analytics (#422), whose cookie control opens by itself as an opt-in
-    // prompt in EEA, UK and Swiss time zones. UTC keeps it collapsed whatever the host's zone;
-    // tests/analytics.spec.ts sets the zones it needs.
+    // prompt in the opt-in regions' time zones (src/lib/consent-policy.mjs). UTC keeps it
+    // collapsed whatever the host's zone; tests/analytics.spec.ts sets the zones it needs.
     timezoneId: 'UTC',
     trace: 'on-first-retry',
   },

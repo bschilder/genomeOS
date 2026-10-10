@@ -3,8 +3,8 @@
  * cookie icon on every page that expands into a panel with the visitor's analytics setting.
  *
  * - Everyone sees the panel's on/off switch for analytics cookies, showing the current state
- *   (`resolveConsent`): their choice, Global Privacy Control, the opt-in default of an EEA, UK or
- *   Swiss time zone, or the opt-out default elsewhere.
+ *   (`resolveConsent`): their choice, Global Privacy Control, the opt-in default of a time zone
+ *   in an opt-in region, or the opt-out default elsewhere.
  * - An undecided visitor in an opt-in time zone sees Accept and Decline instead, and the panel opens
  *   by itself on the first page of a visit, without taking focus.
  * - Every `[data-cookie-settings]` control opens the same panel: the footer's Cookie settings link

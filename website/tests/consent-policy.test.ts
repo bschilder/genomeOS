@@ -1,4 +1,7 @@
-/** Where analytics is opt-in (#422, consent model refined by the owner on 2026-10-10). */
+/**
+ * Where analytics is opt-in (#422, consent model refined by the owner on 2026-10-10; Quebec and
+ * Turkey added at review).
+ */
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -47,6 +50,20 @@ const EU = [
  */
 const SEPARATELY_GEOLOCATED = ['GP', 'MQ', 'GF', 'RE', 'YT', 'MF', 'AX'];
 const BRITISH_ISLES_GDPR_EQUIVALENT = ['JE', 'GG', 'IM', 'GI'];
+/** Beyond Europe's GDPR area: Turkey (KVKK) and Quebec (Law 25), by its ISO 3166-2 code. */
+const BEYOND_GDPR_AREA = ['TR', 'CA-QC'];
+
+/**
+ * Quebec's and Turkey's zones. Browsers in Quebec report America/Toronto, which Ontario shares, so
+ * Ontario is asked too; Turkey's are the only `Europe/*` zones of a country outside the GDPR area
+ * that is opt-in.
+ */
+const QUEBEC_ZONES = [
+  'America/Toronto',
+  'America/Montreal',
+  'America/Blanc-Sablon',
+];
+const TURKEY_ZONES = ['Europe/Istanbul', 'Asia/Istanbul'];
 
 /**
  * Their time zones, outside `Europe/*` for the outermost regions, so the Europe-wide
@@ -69,16 +86,15 @@ const GDPR_EQUIVALENT_EUROPE = [
 ];
 
 /**
- * Every `Europe/*` zone of a country outside the EEA, the UK, Switzerland, the Crown dependencies
- * and Gibraltar, under each name a browser may report. A zone the runtime knows must be listed
- * either here or in CONSENT_TIME_ZONES, so new tz data cannot slip through unclassified.
+ * Every `Europe/*` zone of a country outside the EEA, the UK, Switzerland, the Crown dependencies,
+ * Gibraltar and Turkey, under each name a browser may report. A zone the runtime knows must be
+ * listed either here or in CONSENT_TIME_ZONES, so new tz data cannot slip through unclassified.
  */
 const NON_CONSENT_EUROPE = [
   'Europe/Andorra',
   'Europe/Astrakhan', // RU
   'Europe/Belgrade', // RS
   'Europe/Chisinau', // MD
-  'Europe/Istanbul', // TR
   'Europe/Kaliningrad', // RU
   'Europe/Kiev', // UA
   'Europe/Kirov', // RU
@@ -109,7 +125,7 @@ function reportedName(timeZone: string): string {
 }
 
 describe('consent regions', () => {
-  it('denies by default in the EEA, the UK and Switzerland, each once', () => {
+  it('denies by default in the EEA, the UK, Switzerland, Quebec and Turkey, each once', () => {
     expect([...CONSENT_COUNTRIES].sort()).toEqual(
       [
         ...EU,
@@ -120,10 +136,20 @@ describe('consent regions', () => {
         'CH',
         ...SEPARATELY_GEOLOCATED,
         ...BRITISH_ISLES_GDPR_EQUIVALENT,
+        ...BEYOND_GDPR_AREA,
       ].sort(),
     );
     expect(new Set(CONSENT_COUNTRIES).size).toBe(CONSENT_COUNTRIES.length);
-    for (const code of CONSENT_COUNTRIES) expect(code).toMatch(/^[A-Z]{2}$/);
+    // ISO 3166-1 alpha-2, or an ISO 3166-2 subdivision such as CA-QC: the forms Consent Mode's
+    // `region` accepts.
+    for (const code of CONSENT_COUNTRIES)
+      expect(code).toMatch(/^[A-Z]{2}(?:-[A-Z0-9]{1,3})?$/);
+  });
+
+  it('names Quebec as a subdivision, never all of Canada', () => {
+    expect(CONSENT_COUNTRIES).toContain('CA-QC');
+    expect(CONSENT_COUNTRIES).not.toContain('CA');
+    expect(CONSENT_COUNTRIES).toContain('TR');
   });
 
   it('stores the choice and the prompt dismissal under documented keys', () => {
@@ -154,6 +180,11 @@ describe('consent time zones', () => {
       expect(isConsentTimeZone(zone), zone).toBe(true);
   });
 
+  it('is opt-in in Quebec and Turkey, and in Ontario because it shares Quebec’s zone', () => {
+    for (const zone of [...QUEBEC_ZONES, ...TURKEY_ZONES])
+      expect(isConsentTimeZone(zone), zone).toBe(true);
+  });
+
   it('is opt-in in the EU outermost regions, Åland, the Crown dependencies and Gibraltar', () => {
     // A visitor in Réunion or Guadeloupe is in the EU: the browser asks before any cookie.
     for (const zone of [
@@ -167,6 +198,9 @@ describe('consent time zones', () => {
     for (const zone of [
       ...NON_CONSENT_EUROPE,
       'America/New_York',
+      'America/Vancouver',
+      'America/Winnipeg',
+      'America/Halifax',
       'America/Sao_Paulo',
       'Asia/Tokyo',
       'Africa/Lagos',
@@ -189,6 +223,8 @@ describe('consent time zones', () => {
       ...NON_CONSENT_EUROPE,
       ...GDPR_ZONES_OUTSIDE_EUROPE,
       ...GDPR_EQUIVALENT_EUROPE,
+      ...QUEBEC_ZONES,
+      ...TURKEY_ZONES,
     ])
       expect(() => reportedName(zone), zone).not.toThrow();
   });
