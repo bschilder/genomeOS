@@ -158,7 +158,9 @@ const logo = isAtlasPage
               /* Shown only when the row is too narrow for the action itself (global.css). */
               !isAtlasPage && (
                 <li class="mobile-nav__launch">
-                  <a href={sitePath('/app/')}>genomeOS Atlas</a>
+                  <a href={sitePath('/app/')}>
+                    <span class="brand-name">genomeOS</span> Atlas
+                  </a>
                 </li>
               )
             }
