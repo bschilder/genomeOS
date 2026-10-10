@@ -1722,13 +1722,20 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
   test.setTimeout(120_000);
   // Live failure: one transient worker-module fetch ("Failed to fetch dynamically imported
   // module …/createPolygonGeometry.js") threw inside a Cesium frame, Cesium showed its raw error
-  // panel, and rendering stopped for good. The support layer's asynchronous PolygonGeometry is
-  // built by that module, so aborting only its first request reproduces the failure.
-  let polygonWorkerRequests = 0;
-  await context.route('**/cesium/Workers/createPolygonGeometry.js', (route) => {
-    polygonWorkerRequests += 1;
-    return polygonWorkerRequests === 1 ? route.abort() : route.continue();
-  });
+  // panel, and rendering stopped for good. The fast-load scene builds no Cesium PolygonGeometry,
+  // so it never requests that module, and a failed terrain worker fetch fails only its tile. The
+  // sky box is the same failure class: its cube-map faces are fetched from inside Scene.render once
+  // the map is ready (fast-load design §B.6.9), and Cesium rethrows a failed face load on the next
+  // frame. Aborting only the first request for one face reproduces the raw panel without the
+  // Atlas render loop, and the sky box draws only in the 3-D globe view.
+  let skyFaceRequests = 0;
+  await context.route(
+    '**/cesium/Assets/Textures/SkyBox/tycho2t3_80_px.jpg',
+    (route) => {
+      skyFaceRequests += 1;
+      return skyFaceRequests === 1 ? route.abort() : route.continue();
+    },
+  );
   // The binding and init script survive navigation, so a raw panel on any document is caught.
   let rawPanelSeen = false;
   await page.exposeFunction('reportRawCesiumErrorPanel', () => {
@@ -1744,10 +1751,8 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
       void binding.reportRawCesiumErrorPanel?.();
     }).observe(document, { childList: true, subtree: true });
   });
-  // Retry reloads the page, so a non-default map, view and metric must come back from the URL.
-  await page.goto(
-    '/app/?entity=g6pd-deficiency&view=perspective&metric=post_sd',
-  );
+  // Retry reloads the page, so a non-default map, metric and opacity must come back from the URL.
+  await page.goto('/app/?entity=g6pd-deficiency&metric=post_sd&opacity=0.4');
 
   const rawPanel = page.locator('.cesium-widget-errorPanel');
   const explorer = page.locator('[data-atlas-explorer]');
@@ -1762,7 +1767,7 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
     failure.getByRole('link', { name: 'Browser requirements' }),
   ).toHaveCount(0);
   await expect(explorer).toHaveAttribute('data-atlas-ready', 'false');
-  expect(polygonWorkerRequests).toBeGreaterThan(0);
+  expect(skyFaceRequests).toBeGreaterThan(0);
 
   await page.evaluate(() => {
     (window as Window & { beforeRetry?: boolean }).beforeRetry = true;
@@ -1783,8 +1788,8 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
   ).toBeVisible({ timeout: 60_000 });
   const restored = new URL(page.url()).searchParams;
   expect(restored.get('entity')).toBe('g6pd-deficiency');
-  expect(restored.get('view')).toBe('perspective');
   expect(restored.get('metric')).toBe('post_sd');
+  expect(restored.get('opacity')).toBe('0.4');
   await expect(failure).toHaveCount(0);
   await expect(rawPanel).toHaveCount(0);
   expect(rawPanelSeen).toBe(false);
