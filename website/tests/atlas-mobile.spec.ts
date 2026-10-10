@@ -236,7 +236,7 @@ for (const phone of PHONE_PROFILES) {
       });
     }
 
-    test('the site header fits the FOUNDATION lockup beside Launch Atlas and Menu', async ({
+    test('the site header fits the FOUNDATION lockup beside genomeOS Atlas and Menu', async ({
       page,
     }) => {
       await page.goto('/');
@@ -260,7 +260,7 @@ for (const phone of PHONE_PROFILES) {
         });
       const fits = (row: Awaited<ReturnType<typeof measure>>) => {
         expect(row.scrollWidth).toBeLessThanOrEqual(row.clientWidth);
-        // At least the 1rem (18 px) gap before Launch Atlas.
+        // At least the 1rem (18 px) gap before genomeOS Atlas.
         expect(row.ctaLeft - row.logoRight).toBeGreaterThanOrEqual(17.5);
         expect(row.menuRight).toBeLessThanOrEqual(row.innerRight + 0.5);
       };
@@ -280,6 +280,39 @@ for (const phone of PHONE_PROFILES) {
         .poll(async () => (await measure()).logoHeight)
         .toBeCloseTo(landing.logoHeight * 0.9, 0);
       fits(await measure());
+    });
+
+    test('the header shows genomeOS Atlas as its globe mark alone, still named, with no caption', async ({
+      page,
+    }) => {
+      await page.goto('/');
+      const atlas = page
+        .locator('[data-site-header]')
+        .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+      await expect(atlas).toBeVisible();
+      await expect(atlas).toHaveAttribute('href', '/app/');
+      await expect(atlas).toHaveAccessibleDescription(
+        'Explore the interactive app',
+      );
+      await expect(atlas.locator('.launch-atlas-cta__mark')).toBeVisible();
+      await expect(atlas.locator('.launch-atlas-cta__arrow')).toBeHidden();
+      // The name is kept for screen readers in a clipped 1 px box, so the
+      // button is about as wide as it is tall.
+      const name = (await atlas
+        .locator('.launch-atlas-cta__label')
+        .boundingBox())!;
+      expect(name.width).toBeLessThanOrEqual(1);
+      const button = (await atlas.boundingBox())!;
+      expect(button.width).toBeLessThan(button.height * 1.2);
+
+      // No caption, from the keyboard or under a pointer.
+      const caption = atlas.locator('.launch-atlas-cta__caption');
+      await page.locator('.wordmark').focus();
+      await page.keyboard.press('Tab');
+      await expect(atlas).toBeFocused();
+      await expect(caption).toBeHidden();
+      await atlas.hover();
+      await expect(caption).toBeHidden();
     });
 
     test('the Atlas header keeps the status chip beside a 44 px menu', async ({

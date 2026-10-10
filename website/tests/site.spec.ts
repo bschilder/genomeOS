@@ -76,8 +76,14 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
 }) => {
   await page.goto('/');
   const header = page.locator('.site-header');
-  const launchAtlas = header.getByRole('link', { name: 'Launch Atlas' });
-  await expect(launchAtlas).toHaveAttribute('href', '/app/');
+  const atlas = header.getByRole('link', {
+    name: 'genomeOS Atlas',
+    exact: true,
+  });
+  await expect(atlas).toHaveAttribute('href', '/app/');
+  await expect(atlas).toHaveAccessibleDescription(
+    'Explore the interactive app',
+  );
   await expect(header.getByRole('link', { name: 'Preview' })).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'View genomeOS on GitHub' }).first(),
@@ -85,28 +91,37 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
 
   if (isMobile) {
     await page.getByText('Menu', { exact: true }).click();
-    await expect(launchAtlas).toBeVisible();
+    await expect(atlas).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Mobile navigation' })
       .getByRole('link', { name: 'Working groups' })
       .click();
   } else {
-    const headerLinks = await header.locator('a').allInnerTexts();
-    expect(headerLinks.indexOf('Technical docs')).toBeLessThan(
-      headerLinks.indexOf('Launch Atlas'),
-    );
-    expect(headerLinks.indexOf('Launch Atlas')).toBeLessThan(
-      headerLinks.indexOf('GitHub'),
-    );
-    await launchAtlas.hover();
-    await expect(launchAtlas.locator('svg')).toHaveCSS(
-      'animation-name',
-      'launch-rocket',
-    );
-    await page
-      .getByRole('navigation', { name: 'Primary navigation' })
-      .getByRole('link', { name: 'Working groups' })
-      .click();
+    // GitHub is the nav's last link, right after Technical docs; genomeOS
+    // Atlas stands outside the nav.
+    const primary = page.getByRole('navigation', {
+      name: 'Primary navigation',
+    });
+    expect(
+      await primary
+        .getByRole('link')
+        .evaluateAll((links) =>
+          links.map(
+            (link) =>
+              link.getAttribute('aria-label') ?? link.textContent!.trim(),
+          ),
+        ),
+    ).toEqual([
+      'Project',
+      'Working groups',
+      'Contribute',
+      'Technical docs',
+      'View genomeOS on GitHub',
+    ]);
+    await expect(
+      primary.getByRole('link', { name: 'genomeOS Atlas' }),
+    ).toHaveCount(0);
+    await primary.getByRole('link', { name: 'Working groups' }).click();
   }
 
   await expect(page).toHaveURL(/\/working-groups\/$/);
@@ -121,7 +136,7 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   await page.goto('/app/');
   const header = page.locator('.site-header');
   await expect(
-    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+    header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
   ).toHaveCount(0);
   await expect(header.getByLabel('Atlas status')).toContainText(
     /loading|validating|rendering|revealing|Atlas ready/i,
@@ -130,8 +145,416 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   await page.goto('/project/');
   await expect(header.getByLabel('Atlas status')).toHaveCount(0);
   await expect(
-    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+    header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
   ).toBeVisible();
+});
+
+/** The header's genomeOS Atlas link on the lockup pages. */
+function atlasLink(page: Page): Locator {
+  return page
+    .locator('[data-site-header]')
+    .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+}
+
+/** The caption's vertical offset from its resting place (its slide). */
+function captionSlide(caption: Locator): Promise<number> {
+  return caption.evaluate(
+    (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+  );
+}
+
+/** Its transition durations, in seconds. */
+function captionDurations(caption: Locator): Promise<number[]> {
+  return caption.evaluate((element) =>
+    getComputedStyle(element)
+      .transitionDuration.split(',')
+      .map((duration) => Number.parseFloat(duration)),
+  );
+}
+
+/** Where the shown caption lies against its button, the row and the screen. */
+function measureAtlasCaption(page: Page) {
+  return page.evaluate(() => {
+    const cta = document
+      .querySelector('.launch-atlas-cta')!
+      .getBoundingClientRect();
+    const caption = document.querySelector('.launch-atlas-cta__caption')!;
+    const box = caption.getBoundingClientRect();
+    const inner = document.querySelector('.site-header__inner')!;
+    const hit = document.elementFromPoint(
+      (box.left + box.right) / 2,
+      (box.top + box.bottom) / 2,
+    );
+    return {
+      belowButton: box.top - cta.bottom,
+      bottom: box.bottom,
+      centreOffset: (box.left + box.right) / 2 - (cta.left + cta.right) / 2,
+      innerOverflow: inner.scrollWidth - inner.clientWidth,
+      left: box.left,
+      pageOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+      // A press there reaches the page under it, not the link.
+      passesThrough: hit !== null && !hit.closest('.launch-atlas-cta'),
+      pointerEvents: getComputedStyle(caption).pointerEvents,
+      right: box.right,
+      screenHeight: window.innerHeight,
+      screenWidth: document.documentElement.clientWidth,
+    };
+  });
+}
+
+/** Settles a compact header: its 200 ms height transition has run. */
+async function scrollToCompact(page: Page, top: number): Promise<void> {
+  await page.evaluate(
+    (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+    top,
+  );
+  const header = page.locator('[data-site-header]');
+  await expect(header).toHaveClass(/site-header--compact/);
+  await expect
+    .poll(async () => (await header.boundingBox())!.height)
+    .toBeCloseTo(71.2, 0);
+}
+
+test(
+  'hovering or keyboard-focusing genomeOS Atlas reveals "Explore the interactive app" under it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const header = page.locator('[data-site-header]');
+    const atlas = atlasLink(page);
+    const caption = header.locator('.launch-atlas-cta__caption');
+
+    // 1153 px: the narrower button beside the full nav; 737 px: the narrowest
+    // row where the button shows its name (beside Menu).
+    for (const [width, scrollY] of [
+      [1440, 0],
+      [1440, 600],
+      [1153, 0],
+      [737, 0],
+    ] as const) {
+      const label = `${width} px, scrolled ${scrollY}`;
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      if (scrollY) await scrollToCompact(page, scrollY);
+      await expect(caption, label).toHaveText('Explore the interactive app');
+      await expect(caption, label).toBeHidden();
+      // It waits above its resting place, to slide down into it.
+      expect(await captionSlide(caption), label).toBeLessThan(-4);
+      expect(
+        Math.max(...(await captionDurations(caption))),
+        label,
+      ).toBeGreaterThan(0);
+      const row = await header.boundingBox();
+
+      await atlas.hover();
+      await expect(caption, label).toBeVisible();
+      await expect(caption, label).toHaveCSS('opacity', '1');
+      await expect
+        .poll(() => captionSlide(caption), { message: label })
+        .toBe(0);
+      const shown = await measureAtlasCaption(page);
+      expect(shown.belowButton, label).toBeGreaterThanOrEqual(4);
+      expect(Math.abs(shown.centreOffset), label).toBeLessThanOrEqual(1);
+      expect(shown.left, label).toBeGreaterThanOrEqual(0);
+      expect(shown.right, label).toBeLessThanOrEqual(shown.screenWidth);
+      expect(shown.bottom, label).toBeLessThanOrEqual(shown.screenHeight);
+      expect(shown.innerOverflow, label).toBeLessThanOrEqual(0);
+      expect(shown.pageOverflow, label).toBeLessThanOrEqual(0);
+      expect(shown.pointerEvents, label).toBe('none');
+      expect(shown.passesThrough, label).toBe(true);
+      // It floats over the page: the header keeps its size.
+      expect(await header.boundingBox(), label).toEqual(row);
+
+      await page.mouse.move(8, 400);
+      await expect(caption, label).toBeHidden();
+    }
+
+    // Keyboard focus shows it too: Tab on from GitHub, the nav's last link.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'View genomeOS on GitHub' })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(atlas).toBeFocused();
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Shift+Tab');
+    await expect(caption).toBeHidden();
+  },
+);
+
+test(
+  'the aurora drifts and the caption slides, except under reduced motion',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const curtains = page.locator('.launch-atlas-cta__lights i');
+    const caption = page.locator('.launch-atlas-cta__caption');
+    const names = ['launch-aurora-a', 'launch-aurora-b', 'launch-aurora-c'];
+    await page.goto('/');
+    await expect(curtains).toHaveCount(3);
+    for (const [index, name] of names.entries())
+      await expect(curtains.nth(index)).toHaveCSS('animation-name', name);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const index of names.keys())
+      await expect(curtains.nth(index)).toHaveCSS('animation-name', 'none');
+    await expect(caption).toBeHidden();
+    expect(await captionSlide(caption)).toBe(0);
+    await atlasLink(page).hover();
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('opacity', '1');
+    expect(await captionSlide(caption)).toBe(0);
+    expect(Math.max(...(await captionDurations(caption)))).toBe(0);
+  },
+);
+
+test(
+  'in forced colours genomeOS Atlas keeps a system border and drops the aurora',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.goto('/');
+    const atlas = atlasLink(page);
+    const lights = atlas.locator('.launch-atlas-cta__lights');
+    await expect(lights).toBeVisible();
+    await page.emulateMedia({ forcedColors: 'active' });
+    await expect(atlas).toHaveCSS('border-top-style', 'solid');
+    await expect(atlas).toHaveCSS('border-top-width', '1px');
+    await expect(lights).toBeHidden();
+  },
+);
+
+test(
+  'touch screens and phone-width windows do without the caption',
+  { tag: '@desktop-chromium' },
+  async ({ browser, page }) => {
+    const expectNoCaption = async (on: Page, label: string) => {
+      await on.goto('/');
+      const atlas = atlasLink(on);
+      const caption = atlas.locator('.launch-atlas-cta__caption');
+      await expect(atlas, label).toHaveAccessibleDescription(
+        'Explore the interactive app',
+      );
+      await atlas.focus();
+      await expect(atlas, label).toBeFocused();
+      expect(
+        await atlas.evaluate((element) => element.matches(':focus-visible')),
+        label,
+      ).toBe(true);
+      await expect(caption, label).toBeHidden();
+      await atlas.hover();
+      await expect(caption, label).toBeHidden();
+    };
+
+    // A touch screen as wide as a laptop: it shows the button's name, but a
+    // tap would only flash the caption on the way to the Atlas.
+    const touch = await browser.newContext({
+      hasTouch: true,
+      viewport: { width: 1280, height: 800 },
+    });
+    const tablet = await touch.newPage();
+    await expectNoCaption(tablet, 'touch screen at 1280 px');
+    expect(
+      await tablet.evaluate(() => matchMedia('(hover: none)').matches),
+    ).toBe(true);
+    await touch.close();
+
+    // A window with a mouse at phone width, where the button is the globe
+    // mark alone.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectNoCaption(page, 'mouse at 390 px');
+  },
+);
+
+test(
+  'GitHub sits in the primary nav right after Technical docs, set exactly like it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const compare = () =>
+      page.evaluate(() => {
+        const nav = document.querySelector('nav.desktop-nav')!;
+        const links = [...nav.querySelectorAll('a')];
+        const docs = links.find(
+          (link) => link.textContent!.trim() === 'Technical docs',
+        )!;
+        const github = nav.querySelector<HTMLAnchorElement>('.github-link')!;
+        const githubText = github.querySelector('span')!;
+        const type = (element: Element) => {
+          const style = getComputedStyle(element);
+          return {
+            colour: style.color,
+            family: style.fontFamily,
+            lineHeight: style.lineHeight,
+            size: style.fontSize,
+            weight: style.fontWeight,
+          };
+        };
+        const text = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const { top, bottom } = range.getBoundingClientRect();
+          return { top, bottom };
+        };
+        return {
+          after: links.indexOf(github) - links.indexOf(docs),
+          docs: { text: text(docs), type: type(docs) },
+          github: { text: text(githubText), type: type(githubText) },
+          last: links[links.length - 1] === github,
+        };
+      });
+    const expectAligned = async (label: string) => {
+      const measured = await compare();
+      expect(measured.after, label).toBe(1);
+      expect(measured.last, label).toBe(true);
+      expect(measured.github.type, label).toEqual(measured.docs.type);
+      for (const edge of ['top', 'bottom'] as const)
+        expect(
+          Math.abs(measured.github.text[edge] - measured.docs.text[edge]),
+          `${label}: text ${edge}`,
+        ).toBeLessThanOrEqual(0.5);
+    };
+
+    for (const width of [1153, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of ['/', '/project/']) {
+        await page.goto(route);
+        await page.evaluate(() => document.fonts.ready);
+        await expectAligned(`${route} at ${width} px, landing`);
+        await scrollToCompact(page, 600);
+        await expectAligned(`${route} at ${width} px, compact`);
+      }
+    }
+    // The Atlas page's nav, beside its status chip.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/app/');
+    await page.evaluate(() => document.fonts.ready);
+    await expectAligned('/app/ at 1440 px');
+  },
+);
+
+test(
+  'genomeOS Atlas stands alone, centred right of the nav, and beside Menu up to 72rem',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const layout = () =>
+      page.evaluate(() => {
+        const edges = (element: Element | null) => {
+          if (!element || element.getClientRects().length === 0) return null;
+          const { left, right } = element.getBoundingClientRect();
+          return { left, right };
+        };
+        const cta = document.querySelector('.launch-atlas-cta')!;
+        return {
+          beforeMenu:
+            cta.nextElementSibling?.matches('details.mobile-nav') ?? false,
+          cta: edges(cta)!,
+          inNav: cta.closest('nav') !== null,
+          inner: edges(document.querySelector('.site-header__inner'))!,
+          menu: edges(document.querySelector('.mobile-nav summary')),
+          nav: edges(
+            document.querySelector('.site-header__inner > nav.desktop-nav'),
+          ),
+        };
+      });
+
+    for (const width of [1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      for (const state of ['landing', 'compact'] as const) {
+        if (state === 'compact') await scrollToCompact(page, 600);
+        const label = `${width} px, ${state}`;
+        const row = await layout();
+        expect(row.inNav, label).toBe(false);
+        expect(row.menu, label).toBeNull();
+        const centre = (row.cta.left + row.cta.right) / 2;
+        const room = (row.nav!.right + row.inner.right) / 2;
+        expect(Math.abs(centre - room), label).toBeLessThanOrEqual(2);
+      }
+    }
+
+    for (const width of [737, 1100, 1152]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      const label = `${width} px`;
+      const row = await layout();
+      expect(row.nav, label).toBeNull();
+      expect(row.beforeMenu, label).toBe(true);
+      // One 0.8rem gap (14.4 px) before the Menu, at the row's end.
+      expect(row.menu!.left - row.cta.right, label).toBeCloseTo(14.4, 0);
+      expect(row.menu!.right, label).toBeLessThanOrEqual(row.inner.right + 0.5);
+    }
+  },
+);
+
+test('the aurora around genomeOS Atlas never widens the page, is not clipped, and takes no pointer events', async ({
+  page,
+  isMobile,
+}) => {
+  const widths = isMobile
+    ? [320, 360, 412]
+    : [737, 1100, 1152, 1153, 1280, 1328, 1329, 1440, 1920];
+  const measure = () =>
+    page.evaluate(() => {
+      const cta = document.querySelector('.launch-atlas-cta')!;
+      const lights = cta.querySelector('.launch-atlas-cta__lights')!;
+      const ctaBox = cta.getBoundingClientRect();
+      const lightsBox = lights.getBoundingClientRect();
+      const inner = document.querySelector('.site-header__inner')!;
+      // Nothing between the lights and the page clips them.
+      const clippedBy: string[] = [];
+      for (
+        let element: Element | null = lights;
+        element && element !== document.documentElement;
+        element = element.parentElement
+      ) {
+        const style = getComputedStyle(element);
+        if (
+          style.overflowX !== 'visible' ||
+          style.overflowY !== 'visible' ||
+          style.clipPath !== 'none' ||
+          /paint|strict|content/.test(style.contain)
+        )
+          clippedBy.push(element.className || element.tagName);
+      }
+      // A point in the spill beside the button, at its vertical centre.
+      const hit = document.elementFromPoint(
+        ctaBox.left - 6,
+        (ctaBox.top + ctaBox.bottom) / 2,
+      );
+      return {
+        clippedBy,
+        innerOverflow: inner.scrollWidth - inner.clientWidth,
+        pageOverflow:
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+        pointerEvents: [lights, ...lights.children].map(
+          (element) => getComputedStyle(element).pointerEvents,
+        ),
+        spillLeft: ctaBox.left - lightsBox.left,
+        spillReachesHit: lightsBox.left < ctaBox.left - 6,
+        hitsLink: hit !== null && cta.contains(hit),
+      };
+    });
+
+  for (const width of widths) {
+    const label = `${width} px`;
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/');
+    // Hovered, the lights spill their widest: 1.25rem (22.5 px) each side.
+    await atlasLink(page).hover();
+    await expect
+      .poll(async () => (await measure()).spillLeft, { message: label })
+      .toBeCloseTo(22.5, 0);
+    const lit = await measure();
+    expect(lit.pageOverflow, label).toBeLessThanOrEqual(0);
+    expect(lit.innerOverflow, label).toBeLessThanOrEqual(0);
+    expect(lit.clippedBy, label).toEqual([]);
+    expect(lit.pointerEvents, label).toEqual(['none', 'none', 'none', 'none']);
+    expect(lit.spillReachesHit, label).toBe(true);
+    expect(lit.hitsLink, label).toBe(false);
+  }
 });
 
 test('Atlas fills the viewport below the header without page scroll', async ({
@@ -440,7 +863,7 @@ test('the header home link is the FOUNDATION lockup, large at the top of the pag
     1,
   );
   if (isMobile) {
-    // Pixel 7 (412 px): the width left beside Launch Atlas and Menu.
+    // Pixel 7 (412 px): the width left beside genomeOS Atlas and Menu.
     expect(landing.height).toBeGreaterThanOrEqual(40);
     expect(landing.height).toBeLessThanOrEqual(50);
     expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(5);
@@ -726,8 +1149,10 @@ test(
     // width above the phone layout (46rem). 1025 px: the first above 64rem,
     // where the desktop nav used to start. 1152 px: the last Menu width
     // (72rem). 1153 px: the first desktop-nav width, the tightest row.
+    // 1280 px: a common laptop width. 1328 and 1329 px: the last width with
+    // the narrower genomeOS Atlas (83rem) and the first with the full one.
     const desktopNavFrom = 1153;
-    for (const width of [737, 1025, 1152, 1153]) {
+    for (const width of [737, 1025, 1152, 1153, 1280, 1328, 1329]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto('/project/');
       const row = await page.evaluate(() => {
@@ -1307,6 +1732,30 @@ test('the Menu closes on a click or focus anywhere outside it', async ({
   await expect(menu).toHaveAttribute('open', '');
   await page.locator('main a').first().focus();
   await expect(menu).not.toHaveAttribute('open');
+
+  // A press on the panel's own padding is inside the Menu, so it stays open.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  const panel = page.getByRole('navigation', { name: 'Mobile navigation' });
+  const padding = await panel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = box.left + 6;
+    const y = box.top + 6;
+    return { x, y, onPanel: document.elementFromPoint(x, y) === element };
+  });
+  expect(padding.onPanel).toBe(true);
+  if (isMobile) await page.touchscreen.tap(padding.x, padding.y);
+  else await page.mouse.click(padding.x, padding.y);
+  await expect(menu).toHaveAttribute('open', '');
+
+  // And a press on one of its links still follows the link.
+  const link = panel.getByRole('link', { name: 'Working groups' });
+  if (isMobile) await link.tap();
+  else await link.click();
+  await expect(page).toHaveURL(/\/working-groups\/$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Choose the part of the problem',
+  );
 });
 
 test(
@@ -1389,70 +1838,87 @@ test(
   },
 );
 
+/**
+ * The Menu opened from the keyboard over the Atlas catalog picker, which is
+ * not modal: the Menu paints above the picker and Escape closes it first.
+ */
+async function expectMenuOverCatalogPicker(page: Page): Promise<void> {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+  const trigger = page.getByRole('button', {
+    name: /Select dataset\. Current dataset:/,
+  });
+  const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+
+  await trigger.click();
+  await expect(
+    catalog.getByRole('searchbox', { name: 'Search maps' }),
+  ).toBeFocused();
+  // The picker is not modal, so the keyboard can leave it open for the Menu.
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  await expect(catalog).toBeVisible();
+
+  // The portaled picker (z-index 1003) painted over the Menu's panel.
+  const overlap = await page.evaluate(() => {
+    const panel = document
+      .querySelector('.mobile-nav nav')!
+      .getBoundingClientRect();
+    const picker = document
+      .querySelector('.atlas-map-picker')!
+      .getBoundingClientRect();
+    const left = Math.max(panel.left, picker.left);
+    const right = Math.min(panel.right, picker.right);
+    const top = Math.max(panel.top, picker.top);
+    const bottom = Math.min(panel.bottom, picker.bottom);
+    const hit = document.elementFromPoint(
+      (left + right) / 2,
+      (top + bottom) / 2,
+    );
+    return {
+      height: bottom - top,
+      menuOnTop: hit?.closest('details.mobile-nav') != null,
+      width: right - left,
+    };
+  });
+  expect(overlap.width).toBeGreaterThan(0);
+  expect(overlap.height).toBeGreaterThan(0);
+  expect(overlap.menuOnTop).toBe(true);
+
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(catalog).toBeVisible();
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(catalog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+}
+
 test(
   'a Menu opened from the keyboard over the catalog picker paints above it and closes first',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
     test.setTimeout(90_000);
     await page.setViewportSize({ width: 1100, height: 800 });
-    await page.goto('/app/');
-    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
-      timeout: 45_000,
-    });
-    const menu = page.locator('details.mobile-nav');
-    const summary = menu.locator('summary');
-    const trigger = page.getByRole('button', {
-      name: /Select dataset\. Current dataset:/,
-    });
-    const catalog = page.getByRole('dialog', { name: 'Select dataset' });
-
-    await trigger.click();
-    await expect(
-      catalog.getByRole('searchbox', { name: 'Search maps' }),
-    ).toBeFocused();
-    // The picker is not modal, so the keyboard can leave it open for the Menu.
-    await summary.focus();
-    await page.keyboard.press('Enter');
-    await expect(menu).toHaveAttribute('open', '');
-    await expect(catalog).toBeVisible();
-
-    // The portaled picker (z-index 1003) painted over the Menu's panel.
-    const overlap = await page.evaluate(() => {
-      const panel = document
-        .querySelector('.mobile-nav nav')!
-        .getBoundingClientRect();
-      const picker = document
-        .querySelector('.atlas-map-picker')!
-        .getBoundingClientRect();
-      const left = Math.max(panel.left, picker.left);
-      const right = Math.min(panel.right, picker.right);
-      const top = Math.max(panel.top, picker.top);
-      const bottom = Math.min(panel.bottom, picker.bottom);
-      const hit = document.elementFromPoint(
-        (left + right) / 2,
-        (top + bottom) / 2,
-      );
-      return {
-        height: bottom - top,
-        menuOnTop: hit?.closest('details.mobile-nav') != null,
-        width: right - left,
-      };
-    });
-    expect(overlap.width).toBeGreaterThan(0);
-    expect(overlap.height).toBeGreaterThan(0);
-    expect(overlap.menuOnTop).toBe(true);
-
-    await page.keyboard.press('Escape');
-    await expect(menu).not.toHaveAttribute('open');
-    await expect(catalog).toBeVisible();
-    await expect(summary).toBeFocused();
-    await page.keyboard.press('Escape');
-    await expect(catalog).toHaveCount(0);
-    await expect(trigger).toBeFocused();
+    await expectMenuOverCatalogPicker(page);
   },
 );
 
-test('at large text sizes Launch Atlas moves into the Menu, so the home logo keeps its size', async ({
+test(
+  'on a phone, a Menu opened from the keyboard over the full-screen catalog picker paints above it and closes first',
+  { tag: '@mobile-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await expectMenuOverCatalogPicker(page);
+  },
+);
+
+test('at large text sizes genomeOS Atlas moves into the Menu, so the home logo keeps its size', async ({
   context,
   page,
 }) => {
@@ -1460,7 +1926,7 @@ test('at large text sizes Launch Atlas moves into the Menu, so the home logo kee
   const cta = header.locator('.launch-atlas-cta');
   const launchInMenu = page
     .getByRole('navigation', { name: 'Mobile navigation' })
-    .getByRole('link', { name: 'Launch Atlas', exact: true });
+    .getByRole('link', { name: 'genomeOS Atlas', exact: true });
   const row = () =>
     page.evaluate(() => {
       const box = (selector: string) =>
