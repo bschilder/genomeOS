@@ -571,7 +571,8 @@ for (const route of ['/', '/project/', '/contribute/']) {
     // 2 px steps from 36 to 60 and back (instant, not html's smooth
     // scrolling), across both lines (compact above 56, expand below 40), each
     // held longer than a whole transition, so a resize that moved scrollY
-    // would show up.
+    // would show up. A single threshold in between also flips exactly twice
+    // here; the next test pins the band between the two lines.
     const steps = Array.from({ length: 13 }, (_, index) => 36 + 2 * index);
     for (const top of [...steps, ...[...steps].reverse()]) {
       await page.evaluate(
@@ -596,6 +597,46 @@ for (const route of ['/', '/project/', '/contribute/']) {
     expect(unrequested).toEqual([]);
   });
 }
+
+test('between the two scroll lines the header keeps the state it had', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const header = page.locator('[data-site-header]');
+  /** Scrolls instantly, then waits out the scroll event and the header's frame. */
+  const scrollTo = (top: number) =>
+    page.evaluate(
+      (y) =>
+        new Promise<boolean>((resolve) => {
+          window.scrollTo({ top: y, behavior: 'instant' });
+          let frames = 0;
+          const tick = () => {
+            frames += 1;
+            if (frames < 4) requestAnimationFrame(tick);
+            else
+              resolve(
+                document
+                  .querySelector('[data-site-header]')!
+                  .classList.contains('site-header--compact'),
+              );
+          };
+          requestAnimationFrame(tick);
+        }),
+      top,
+    );
+
+  // From the top, inside the band (40 to 56): still the landing bar.
+  expect(await scrollTo(50)).toBe(false);
+  expect(await scrollTo(56)).toBe(false);
+  // Past the upper line it compacts...
+  expect(await scrollTo(60)).toBe(true);
+  // ...and back inside the band it stays compact...
+  expect(await scrollTo(48)).toBe(true);
+  expect(await scrollTo(40)).toBe(true);
+  // ...until it crosses the lower line.
+  expect(await scrollTo(36)).toBe(false);
+  await expect(header).not.toHaveClass(/site-header--compact/);
+});
 
 /** The target's top and the fixed header's bottom, in viewport pixels. */
 const clearanceBelowHeader = (target: Locator) =>
