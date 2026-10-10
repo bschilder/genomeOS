@@ -154,15 +154,20 @@ const logo = isAtlasPage
 <script>
   /*
    * The Menu disclosure closes on Escape, and focus goes back to its summary.
-   * It also closes when focus moves to anything outside it, so the open panel
-   * never covers the control that has focus. The window capture listener runs
-   * before the Atlas explorer's Escape stack (a document capture listener):
-   * an open Menu is the innermost layer.
+   * It also closes on a press or a focus anywhere outside it, so the open
+   * panel never covers the control that has focus or the content the next
+   * Tab goes on to from a click. The window capture listener runs before the
+   * Atlas explorer's Escape stack (a document capture listener): an open Menu
+   * is the innermost layer.
    */
   for (const menu of document.querySelectorAll<HTMLDetailsElement>(
     'details.mobile-nav',
   )) {
     const summary = menu.querySelector('summary');
+    const closeFrom = (target: EventTarget | null) => {
+      if (menu.open && !(target instanceof Node && menu.contains(target)))
+        menu.open = false;
+    };
     window.addEventListener(
       'keydown',
       (event) => {
@@ -176,9 +181,17 @@ const logo = isAtlasPage
       },
       true,
     );
-    menu.addEventListener('focusout', (event) => {
-      const next = event.relatedTarget;
-      if (next instanceof Node && !menu.contains(next)) menu.open = false;
+    // Capture, so a press the Atlas globe handles still closes the Menu.
+    document.addEventListener(
+      'pointerdown',
+      (event) => closeFrom(event.target),
+      true,
+    );
+    document.addEventListener('focusin', (event) => closeFrom(event.target));
+    // The desktop nav takes over past 72rem and hides the Menu (global.css);
+    // closing it then means it never comes back already open.
+    window.addEventListener('resize', () => {
+      if (menu.open && menu.getClientRects().length === 0) menu.open = false;
     });
   }
 </script>

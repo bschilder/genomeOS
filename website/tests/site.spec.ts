@@ -1266,6 +1266,73 @@ test('the Menu panel scrolls inside short viewports and closes on Escape or when
   ).toHaveCount(1);
 });
 
+test('the Menu closes on a click or focus anywhere outside it', async ({
+  page,
+  isMobile,
+}) => {
+  if (!isMobile) await page.setViewportSize({ width: 1100, height: 800 });
+  await page.goto('/');
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+
+  // A click on page content that takes no focus moves focus to <body>, so no
+  // focusout names a next target. The panel stayed open, over the links the
+  // next Tab went on to from the click.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  const blank = await page.evaluate(() => {
+    const x = 16;
+    const y = window.innerHeight - 16;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      x,
+      y,
+      inMenu: hit?.closest('details.mobile-nav') != null,
+      focusable:
+        hit?.closest(
+          'a, button, input, select, textarea, summary, [tabindex]',
+        ) != null,
+    };
+  });
+  expect(blank.inMenu).toBe(false);
+  expect(blank.focusable).toBe(false);
+  await page.mouse.click(blank.x, blank.y);
+  await expect(menu).not.toHaveAttribute('open');
+  expect(
+    await page.evaluate(() => document.activeElement === document.body),
+  ).toBe(true);
+
+  // Focus that moves outside it closes it too, however it gets there.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  await page.locator('main a').first().focus();
+  await expect(menu).not.toHaveAttribute('open');
+});
+
+test(
+  'a Menu hidden by a resize past 72rem comes back closed',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/');
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(summary).toBeHidden();
+    await expect(menu).not.toHaveAttribute('open');
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect(summary).toBeVisible();
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(
+      page.getByRole('navigation', { name: 'Mobile navigation' }),
+    ).toBeHidden();
+  },
+);
+
 test(
   'on the Atlas, Escape closes an open Menu first, then the explorer layer under it',
   { tag: '@desktop-chromium' },
