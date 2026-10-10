@@ -1132,6 +1132,63 @@ test('mobile navigation is a keyboard-operable disclosure', async ({
   ).toBeVisible();
 });
 
+test('the Menu panel scrolls inside short viewports and closes on Escape or when focus leaves it', async ({
+  page,
+}) => {
+  // Instant scrolling and an instant header, so each step settles at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+  const links = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link');
+
+  // A landscape phone at 200% zoom (844x390) and 1280x1024 at 400%, the
+  // WCAG reflow case. The panel sat in the fixed header, taller than either
+  // viewport, so its last links could not be reached.
+  for (const [width, height] of [
+    [422, 195],
+    [320, 256],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+    await expect(links).toHaveCount(5);
+    for (const link of await links.all()) {
+      const reachable = await link.evaluate((element) => {
+        element.scrollIntoView({ block: 'nearest' });
+        const box = element.getBoundingClientRect();
+        const x = box.left + box.width / 2;
+        const y = box.top + box.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return y < window.innerHeight && hit !== null && element.contains(hit);
+      });
+      expect(reachable, `${await link.innerText()} at ${width}x${height}`).toBe(
+        true,
+      );
+    }
+  }
+
+  // Escape closes the panel and puts focus back on its summary.
+  await links.first().focus();
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(summary).toBeFocused();
+
+  // Tabbing past the last link closes it too, so it never covers the control
+  // that now has focus.
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  await links.last().focus();
+  await page.keyboard.press('Tab');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(
+    page.locator('main').locator(':focus'),
+    'focus moved on into the page',
+  ).toHaveCount(1);
+});
+
 test('404 page offers three recovery routes', async ({ page }) => {
   await page.goto('/404.html');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(

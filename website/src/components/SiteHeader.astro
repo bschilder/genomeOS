@@ -142,3 +142,35 @@ const logo = isAtlasPage
   </div>
 </header>
 {!isAtlasPage && <div class="site-header-spacer" aria-hidden="true" />}
+
+<script>
+  /*
+   * The Menu disclosure closes on Escape, and focus goes back to its summary.
+   * It also closes when focus moves to anything outside it, so the open panel
+   * never covers the control that has focus. The window capture listener runs
+   * before the Atlas explorer's Escape stack (a document capture listener):
+   * an open Menu is the innermost layer.
+   */
+  for (const menu of document.querySelectorAll<HTMLDetailsElement>(
+    'details.mobile-nav',
+  )) {
+    const summary = menu.querySelector('summary');
+    window.addEventListener(
+      'keydown',
+      (event) => {
+        if (event.key !== 'Escape' || event.isComposing) return;
+        // Closed, or hidden by the desktop layout after a resize.
+        if (!menu.open || menu.getClientRects().length === 0) return;
+        menu.open = false;
+        summary?.focus();
+        event.preventDefault();
+        event.stopPropagation();
+      },
+      true,
+    );
+    menu.addEventListener('focusout', (event) => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && !menu.contains(next)) menu.open = false;
+    });
+  }
+</script>

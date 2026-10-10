@@ -420,11 +420,17 @@ svg {
 .mobile-nav[open] summary::after {
   content: '−';
 }
+/* The header never scrolls with the page, so a panel taller than the space
+ * below it scrolls itself: it starts above the landing bar's bottom edge and
+ * ends at least 1rem above the viewport's. */
 .mobile-nav nav {
   position: absolute;
   top: 2.7rem;
   right: 0;
   width: min(19rem, calc(100vw - 2 * var(--space-page)));
+  max-height: max(6rem, 100dvh - var(--site-header-height) - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 1.2rem;
   border: 1px solid var(--color-line);
   background: var(--color-orbit);
