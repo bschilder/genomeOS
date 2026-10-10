@@ -48,7 +48,7 @@ describe('resolveInternalTarget', () => {
     ).toBeNull();
     expect(
       resolveInternalTarget(
-        'https://github.com/bschilder/genomeOS?q=docs',
+        'https://github.com/genomeOS/genomeOS?q=docs',
         'index.html',
         '/',
       ),

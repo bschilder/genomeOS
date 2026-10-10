@@ -33,7 +33,7 @@ export default defineConfig({
         './src/styles/starlight.css',
       ],
       editLink: {
-        baseUrl: 'https://github.com/bschilder/genomeOS/edit/main/website/',
+        baseUrl: 'https://github.com/genomeOS/genomeOS/edit/main/website/',
       },
       head: [
         {
@@ -61,7 +61,7 @@ export default defineConfig({
         {
           icon: 'github',
           label: 'GitHub',
-          href: 'https://github.com/bschilder/genomeOS',
+          href: 'https://github.com/genomeOS/genomeOS',
         },
       ],
       sidebar: [

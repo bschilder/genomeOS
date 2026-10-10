@@ -45,9 +45,9 @@ describe('homepage contract', () => {
 
   it('makes the GitHub community entry points prominent', () => {
     expect(html).toContain(
-      'https://github.com/bschilder/genomeOS/discussions/76',
+      'https://github.com/genomeOS/genomeOS/discussions/76',
     );
-    expect(html).toContain('https://github.com/bschilder/genomeOS/issues');
+    expect(html).toContain('https://github.com/genomeOS/genomeOS/issues');
     expect(html).toContain('https://github.com/users/bschilder/projects/8');
     expect(
       html.match(/class="[^"]*github-cta/g)?.length ?? 0,
@@ -57,7 +57,7 @@ describe('homepage contract', () => {
   it('offers keyboard bypass and an accessible repository link', () => {
     expect(html).toContain('Skip to main content');
     expect(html).toContain('aria-label="View genomeOS on GitHub"');
-    expect(html).toContain('https://github.com/bschilder/genomeOS');
+    expect(html).toContain('https://github.com/genomeOS/genomeOS');
     expect(visibleText).toMatch(/© \d{4} genomeOS/);
     expect(html).not.toContain('Population geography is context');
   });

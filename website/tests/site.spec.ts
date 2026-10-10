@@ -61,7 +61,7 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
   await expect(header.getByRole('link', { name: 'Preview' })).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'View genomeOS on GitHub' }).first(),
-  ).toHaveAttribute('href', 'https://github.com/bschilder/genomeOS');
+  ).toHaveAttribute('href', 'https://github.com/genomeOS/genomeOS');
 
   if (isMobile) {
     await page.getByText('Menu', { exact: true }).click();

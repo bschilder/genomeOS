@@ -41,7 +41,7 @@ describe('public site content', () => {
       /Potential applications[\s\S]*Screening programmes[\s\S]*Diagnostic context[\s\S]*Trial planning[\s\S]*The map of what we don’t know/,
     );
     expect(home).toContain(
-      'https://github.com/bschilder/genomeOS/discussions/1',
+      'https://github.com/genomeOS/genomeOS/discussions/1',
     );
     expect(home).toMatch(/open source/i);
     expect(home).toMatch(/global community/i);

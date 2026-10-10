@@ -43,5 +43,5 @@ using the website. The interactive map requests those results and shows measured
 patterns, uncertainty, insufficient-evidence areas, and disease-burden estimates as clearly separate
 layers. Every shareable view identifies the model and data versions behind it.
 
-See the <a href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific and engineering objectives</a>
+See the <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific and engineering objectives</a>
 for acceptance evidence at each boundary.
