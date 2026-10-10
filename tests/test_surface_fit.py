@@ -1,10 +1,12 @@
 """Surface fit tests (design §7). Sampling is small and seeded; see FAST_CONFIG."""
 
 import hashlib
+import os
 import subprocess
 import sys
 from contextlib import nullcontext
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -468,6 +470,94 @@ def test_boolean_fit_format_is_not_misread_as_legacy_format_one(fit, tmp_path):
         cloudpickle.dump({"format": True, "fit": fit}, stream)
     with pytest.raises(ValueError, match="supported format"):
         load_fit(path)
+
+
+# --- surfaces.persistence imports in isolation (#199) ---
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def _run_isolated(script: str, *args: str) -> subprocess.CompletedProcess:
+    """A clean interpreter with this checkout first on the path, so no earlier import can mask
+    an import-order failure the way a shared pytest process does."""
+    return subprocess.run(
+        [sys.executable, "-c", script, *args],
+        cwd=REPO_ROOT,
+        env={**os.environ, "PYTHONPATH": str(REPO_ROOT)},
+        capture_output=True,
+        text=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        ("genomeos.surfaces.persistence", "genomeos.surfaces.fit"),
+        ("genomeos.surfaces.fit", "genomeos.surfaces.persistence"),
+    ],
+)
+def test_persistence_and_fit_import_in_either_order(first, second):
+    """The module that owns `load_fit` failed to import on its own: it imported `fit` at module
+    level only to name `SurfaceFit`, and `fit` re-imports it at the bottom (#199). The `fit`
+    re-exports must stay the same objects, since nine call sites use that seam."""
+    script = f"""
+import importlib
+importlib.import_module({first!r})
+importlib.import_module({second!r})
+from genomeos.surfaces import fit, persistence
+assert fit.load_fit is persistence.load_fit
+assert fit.save_fit is persistence.save_fit
+assert fit.FIT_FORMAT == persistence.FIT_FORMAT
+"""
+    result = _run_isolated(script)
+    assert result.returncode == 0, result.stderr
+
+
+def test_persistence_imported_first_still_loads_trusted_new_and_legacy_caches(fit, tmp_path):
+    """Isolated import is only worth having if the isolated module still does its job: a fresh
+    process that imports `persistence` before anything else reloads both cache formats this
+    test wrote itself, and they predict what the live fit predicts."""
+    import cloudpickle
+
+    save_fit(fit, tmp_path / "current.pkl")
+    with (tmp_path / "legacy.pkl").open("wb") as stream:
+        cloudpickle.dump(
+            {"format": 1, "fit": SimpleNamespace(**fit.__dict__, prior_frequency_sd=9.9e99)},
+            stream,
+        )
+    lat, lon = np.array([9.0, 20.0]), np.array([0.0, 78.0])
+    expected = fit.predict(lat, lon)["post_median"].to_numpy()
+
+    script = """
+import sys
+from pathlib import Path
+
+import numpy as np
+
+from genomeos.surfaces.persistence import load_fit
+
+directory = Path(sys.argv[1])
+current = load_fit(directory / "current.pkl")
+legacy = load_fit(directory / "legacy.pkl")
+
+from genomeos.surfaces.fit import SurfaceFit
+
+assert type(current) is SurfaceFit and type(legacy) is SurfaceFit
+assert not hasattr(legacy, "prior_frequency_sd")
+lat, lon = np.array([9.0, 20.0]), np.array([0.0, 78.0])
+np.savez(
+    directory / "reloaded.npz",
+    current=current.predict(lat, lon)["post_median"].to_numpy(),
+    legacy=legacy.predict(lat, lon)["post_median"].to_numpy(),
+)
+"""
+    result = _run_isolated(script, str(tmp_path))
+    assert result.returncode == 0, result.stderr
+    reloaded = np.load(tmp_path / "reloaded.npz")
+    np.testing.assert_allclose(reloaded["current"], expected)
+    np.testing.assert_allclose(reloaded["legacy"], expected)
+
+
 def test_observation_parameters_follow_real_posterior_ids_and_query_identity(fit):
     queries = SurveyQueries(
         observation_ids=("unseen-a", "unseen-b", "unseen-c"),

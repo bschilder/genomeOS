@@ -12,10 +12,18 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from genomeos.surfaces.fit import FitConfig, SurfaceFit
+from genomeos.surfaces.config import FitConfig
+
+# `fit` re-exports this module's functions from its last lines, so importing `fit` here at module
+# level made the two a cycle: importing this module first failed with `FIT_FORMAT` not yet
+# defined (#199). The annotations need `SurfaceFit` only for type checkers; `load_fit`, which
+# checks and builds one at runtime, imports it when called, by which point both modules exist.
+if TYPE_CHECKING:
+    from genomeos.surfaces.fit import SurfaceFit
 
 #: Bumped whenever `SurfaceFit`'s fields change in a way that makes an older file unreadable.
 FIT_FORMAT = 2
@@ -93,6 +101,8 @@ def load_fit(path: str | Path) -> SurfaceFit:
     incomplete payloads refuse rather than guessing. The input file is never rewritten.
     """
     import cloudpickle
+
+    from genomeos.surfaces.fit import SurfaceFit
 
     with Path(path).open("rb") as stream:
         payload = cloudpickle.load(stream)
