@@ -1,5 +1,7 @@
 /** Stable basemap and terrain gallery metadata for Atlas design §11. */
 
+import type { ExplorerSceneMode } from './url-state';
+
 export interface EarthStyleOption<T extends string> {
   id: T;
   label: string;
@@ -244,4 +246,46 @@ export function basemapOption(id: BasemapId) {
 
 export function terrainOption(id: TerrainId) {
   return TERRAIN_OPTIONS.find((option) => option.id === id)!;
+}
+
+export interface SceneCapability {
+  available: boolean;
+  reason?: string;
+}
+
+export const ION_UNAVAILABLE =
+  'Cesium ion access is unavailable in this build.';
+
+export function ionCapability(token: string): SceneCapability {
+  return token.trim()
+    ? { available: true }
+    : { available: false, reason: ION_UNAVAILABLE };
+}
+
+export function availableBasemaps(token: string): Record<BasemapId, boolean> {
+  const ionAvailable = ionCapability(token).available;
+  return Object.fromEntries(
+    BASEMAP_OPTIONS.map(({ id, requiresIon }) => [
+      id,
+      !requiresIon || ionAvailable,
+    ]),
+  ) as Record<BasemapId, boolean>;
+}
+
+export function availableTerrains(token: string): Record<TerrainId, boolean> {
+  const ionAvailable = ionCapability(token).available;
+  return Object.fromEntries(
+    TERRAIN_OPTIONS.map(({ id, requiresIon }) => [
+      id,
+      !requiresIon || ionAvailable,
+    ]),
+  ) as Record<TerrainId, boolean>;
+}
+
+/** Elevation needs an angled view, so the flat map becomes perspective. */
+export function resolveElevationView(
+  view: ExplorerSceneMode,
+  elevationEnabled: boolean,
+): ExplorerSceneMode {
+  return view === 'map' && elevationEnabled ? 'perspective' : view;
 }

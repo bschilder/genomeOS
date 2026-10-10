@@ -18,7 +18,11 @@ import {
 
 import type { ArtifactRef } from '../../atlas/contracts';
 import type { ExplorerState } from '../../atlas/url-state';
-import { paletteStops } from '../../atlas/visual-encoding';
+import {
+  paletteStops,
+  type Metric,
+  type PaletteId,
+} from '../../atlas/visual-encoding';
 import { placeLegendPopover } from './sheet-layout';
 import { useEscapeLayer } from './useEscapeStack';
 import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
@@ -26,13 +30,22 @@ import { MOBILE_QUERY, useMediaQuery } from './useMediaQuery';
 interface AtlasLegendProps {
   artifact: ArtifactRef;
   state: ExplorerState;
+  /** The scene's committed layer; the legend never runs ahead of the pixels. */
+  layer?: { metric: Metric; palette: PaletteId } | null;
+  /** True while a cold reveal is still adding chunks. */
+  loading?: boolean;
 }
 
 function percent(value: number): string {
   return `${(value * 100).toFixed(value < 0.01 ? 2 : 1)}%`;
 }
 
-export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
+export function AtlasLegend({
+  artifact,
+  layer = null,
+  loading = false,
+  state,
+}: AtlasLegendProps) {
   const details = useRef<HTMLDetailsElement>(null);
   const summary = useRef<HTMLElement>(null);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -57,6 +70,8 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
   // under it (§A.1.9: the popover is innermost). `onToggle` keeps the state in sync, and
   // the close callback resets it because Chromium can merge two toggle events into one.
   useEscapeLayer(infoOpen, () => closeInfo(true), 'popover');
+  const metric = layer?.metric ?? state.metric;
+  const palette = layer?.palette ?? state.surfacePalette;
 
   // Phones: keep the open popover inside the explorer as the strip moves with the
   // sheets, and close it on a tap outside (which also starts any sheet drag).
@@ -90,13 +105,13 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
     document.addEventListener('pointerdown', dismiss, true);
     return () => document.removeEventListener('pointerdown', dismiss, true);
   }, [closeInfo, infoOpen, isMobile]);
-  const domain = artifact.metric_domains[state.metric];
-  const isEstimate = state.metric === 'post_mean';
+  const domain = artifact.metric_domains[metric];
+  const isEstimate = metric === 'post_mean';
   const metricLabel = isEstimate ? 'Modeled frequency' : 'Model uncertainty';
   const shortLabel = isEstimate ? 'Frequency' : 'Uncertainty';
   const low = percent(domain[0]);
   const high = percent(domain[1]);
-  const colors = paletteStops(state.surfacePalette);
+  const colors = paletteStops(palette);
   const scaleStyle = {
     '--atlas-scale': `linear-gradient(90deg, ${colors.join(', ')})`,
   } as CSSProperties;
@@ -104,7 +119,11 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
     '--atlas-prior-scale': `linear-gradient(90deg, ${colors.join(', ')})`,
   } as CSSProperties;
   return (
-    <aside className="atlas-legend" aria-label="Map legend">
+    <aside
+      className="atlas-legend"
+      aria-label="Map legend"
+      data-atlas-legend-loading={loading ? 'true' : undefined}
+    >
       <div className="atlas-legend__compact">
         <strong>
           <span className="atlas-legend__label-full">{metricLabel}</span>
@@ -128,6 +147,14 @@ export function AtlasLegend({ artifact, state }: AtlasLegendProps) {
               ? 'Color + height'
               : 'Color'}
         </span>
+        {loading && (
+          <span
+            className="atlas-legend__mode atlas-legend__loading"
+            role="status"
+          >
+            Loading map…
+          </span>
+        )}
         <details
           className="atlas-legend__info"
           ref={details}

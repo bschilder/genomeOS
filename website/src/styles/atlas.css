@@ -813,7 +813,8 @@ html.atlas-page .site-header--compact .site-header__inner {
 .atlas-camera-actions button,
 .atlas-keyboard-help summary,
 .atlas-error button,
-.atlas-failure button {
+.atlas-failure button,
+.atlas-inspector__retry {
   min-height: 2.65rem;
   padding: 0.58rem 0.8rem;
   border: 1px solid rgb(112 230 255 / 30%);
@@ -829,7 +830,8 @@ html.atlas-page .site-header--compact .site-header__inner {
 .atlas-camera-actions button:hover,
 .atlas-keyboard-help summary:hover,
 .atlas-error button:hover,
-.atlas-failure button:hover {
+.atlas-failure button:hover,
+.atlas-inspector__retry:hover {
   border-color: var(--color-ion);
   background: rgb(25 67 101 / 95%);
 }
@@ -1644,6 +1646,22 @@ html.atlas-page .site-header--compact .site-header__inner {
   white-space: nowrap;
 }
 
+/*
+ * The cold reveal's loading status (fast-load design §B.6.8) takes a line of
+ * its own above the legend row, so the row keeps its ramp, mode and info
+ * trigger. The legend docks by its bottom edge: it grows upward and the row
+ * stays put when the status goes.
+ */
+.atlas-legend__loading {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.atlas-legend[data-atlas-legend-loading] .atlas-legend__compact {
+  row-gap: 0.4rem;
+}
+
 .atlas-color-scale {
   margin-top: 0;
   display: grid;
@@ -1806,6 +1824,13 @@ html.atlas-page .site-header--compact .site-header__inner {
   font-size: 1rem;
   font-weight: 650;
   overflow-wrap: anywhere;
+}
+
+/* The retry takes the shared button look (≥ 24 px target) but stacks under
+ * "Cell values unavailable" with a gap instead of butting against it. */
+.atlas-inspector__retry {
+  margin-top: 0.38rem;
+  display: block;
 }
 
 .atlas-centroid-link {
@@ -2202,7 +2227,8 @@ body:has(.atlas-explorer) .skip-link {
 .atlas-inspector dt,
 .atlas-inspector dd,
 .atlas-inspector__meta,
-.atlas-inspector__citation {
+.atlas-inspector__citation,
+.atlas-inspector__retry {
   font-size: 0.8rem;
 }
 
@@ -2674,6 +2700,16 @@ body:has(.atlas-explorer) .skip-link {
   .atlas-legend__compact {
     grid-template-columns: auto minmax(6rem, 1fr) auto;
     gap: 0.6rem;
+  }
+
+  /* The strip drops the mode pill but keeps the loading status (§B.6.8), on
+   * its line above [label | ramp | info]: inside that row it would squeeze
+   * a 360 px phone's ramp to 108 px and overflow the strip. */
+  .atlas-legend__mode.atlas-legend__loading {
+    padding: 0 0.4rem;
+    display: block;
+    font-size: 0.72rem;
+    line-height: 1.5;
   }
 
   .atlas-legend__compact > strong {

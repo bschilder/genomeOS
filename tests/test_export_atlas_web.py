@@ -8,10 +8,11 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
+from genomeos.publication.surface_codec import GosaError
 from genomeos.registry.variants import load as load_variant_registry
 from genomeos.registry.variants import normalized_identity
 from genomeos.surfaces.prior import PRIOR_DRAWS, PRIOR_NORMALIZATION
-from scripts import export_atlas_web
+from scripts import encode_atlas_web, export_atlas_web
 
 HF_REVISION = "fc17bc1c1d96a0d0766746dcf26277ccdc669717"
 VARIANT_ID = "chr11-5227002-T-A"
@@ -312,6 +313,23 @@ def test_export_is_byte_deterministic(export_inputs: dict[str, Path]) -> None:
         if path.is_file()
     }
     assert after == before
+
+
+def test_export_output_is_an_intermediate_until_the_web_encoder_runs(
+    export_inputs: dict[str, Path],
+) -> None:
+    """The exporter never writes web objects, and its descending fixture grid is refused.
+
+    `_write_source_tree` lists 831f8dfffffffff before 831f8cfffffffff. Positional GOSA columns
+    require one sorted grid, so the encoder must refuse it loudly rather than reorder it (§B.5).
+    """
+    _export(export_inputs)
+    catalog = json.loads((export_inputs["out"] / "catalog.json").read_text())
+    assert "grids" not in catalog
+    assert {"web", "observations_bytes"}.isdisjoint(catalog["artifacts"][0])
+    with pytest.raises(GosaError, match="grid not strictly increasing"):
+        encode_atlas_web.encode_export(export_inputs["out"], export_inputs["out"])
+    assert json.loads((export_inputs["out"] / "catalog.json").read_text()) == catalog
 
 
 def test_export_publishes_alphagenome_cache_with_pinned_model_version(

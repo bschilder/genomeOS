@@ -450,3 +450,121 @@ export async function topChromeClearance(
     };
   });
 }
+
+/**
+ * Puts the legend in its cold-reveal state as AtlasLegend renders it
+ * (fast-load design §B.6.8): the attribute on the aside and the status pill
+ * after the mode pill, markup that tests/atlas-legend.test.ts pins. The
+ * explorer shows that state only until the cold reveal commits, so this holds
+ * it for checks across viewports; `recordLegendLoading` checks the real one.
+ */
+export async function markLegendLoading(page: Page): Promise<void> {
+  await page.locator('.atlas-legend').evaluate((legend) => {
+    legend.setAttribute('data-atlas-legend-loading', 'true');
+    const pill = document.createElement('span');
+    pill.className = 'atlas-legend__mode atlas-legend__loading';
+    pill.setAttribute('role', 'status');
+    pill.textContent = 'Loading map…';
+    legend.querySelector('.atlas-legend__mode')!.after(pill);
+  });
+}
+
+export interface LegendRow {
+  /** The info trigger's top is above the metric label's bottom: one line, not wrapped. */
+  infoBesideLabel: boolean;
+  /** The info trigger shares the ramp's row. */
+  infoInRow: boolean;
+  /** How far the legend's content overflows its box, in CSS px. */
+  overflow: number;
+  rampWidth: number;
+  /** Top of the [label | ramp | … | info] row in the viewport. */
+  rowTop: number;
+  /** Where the loading status sits, when the legend shows one. */
+  status: { aboveRow: boolean; insideLegend: boolean } | null;
+}
+
+/** Measures the legend in the page; serialised there, so it uses nothing outside itself. */
+function measureLegendRow(legend: Element): LegendRow {
+  const box = (selector: string) =>
+    legend.querySelector(selector)!.getBoundingClientRect();
+  const outer = legend.getBoundingClientRect();
+  const label = box('.atlas-legend__compact > strong');
+  const scale = box('.atlas-color-scale');
+  const info = box('.atlas-legend__info summary');
+  const rowTop = Math.min(label.top, scale.top, info.top);
+  const status = legend
+    .querySelector('.atlas-legend__loading')
+    ?.getBoundingClientRect();
+  return {
+    infoBesideLabel: info.top < label.bottom,
+    infoInRow: info.top < scale.bottom && info.bottom > scale.top,
+    overflow: legend.scrollWidth - legend.clientWidth,
+    rampWidth: box('.atlas-color-scale i').width,
+    rowTop,
+    status: status
+      ? {
+          aboveRow: status.bottom <= rowTop + 0.5,
+          insideLegend:
+            status.left >= outer.left - 0.5 &&
+            status.right <= outer.right + 0.5 &&
+            status.top >= outer.top - 0.5 &&
+            status.bottom <= outer.bottom + 0.5,
+        }
+      : null,
+  };
+}
+
+/** The legend's one row of label, ramp and info trigger, and its loading status. */
+export async function legendRow(page: Page): Promise<LegendRow> {
+  return page.locator('.atlas-legend').evaluate(measureLegendRow);
+}
+
+export interface LegendLoadingRecord extends LegendRow {
+  /** The status element is laid out (not `display: none` or hidden). */
+  statusShown: boolean;
+  statusText: string | null;
+}
+
+/**
+ * Call before navigating. Records the legend the moment the explorer first
+ * renders it in its cold-reveal state (fast-load design §B.6.8), between the
+ * first surface chunk and the commit, a window too short to poll for.
+ */
+export async function recordLegendLoading(page: Page): Promise<void> {
+  await page.addInitScript(`(() => {
+    const measure = ${measureLegendRow.toString()};
+    const observer = new MutationObserver(() => {
+      const legend = document.querySelector(
+        '.atlas-legend[data-atlas-legend-loading="true"]',
+      );
+      if (!legend) return;
+      observer.disconnect();
+      const status = legend.querySelector('[role="status"]');
+      const style = status ? getComputedStyle(status) : null;
+      window.atlasLegendLoading = {
+        ...measure(legend),
+        statusShown: Boolean(
+          style && style.display !== 'none' && style.visibility !== 'hidden',
+        ),
+        statusText: status ? status.textContent : null,
+      };
+    });
+    observer.observe(document, {
+      attributeFilter: ['data-atlas-legend-loading'],
+      attributes: true,
+      childList: true,
+      subtree: true,
+    });
+  })();`);
+}
+
+/** What `recordLegendLoading` saw, or null if the legend never showed its loading state. */
+export async function recordedLegendLoading(
+  page: Page,
+): Promise<LegendLoadingRecord | null> {
+  return page.evaluate(
+    () =>
+      (window as unknown as { atlasLegendLoading?: LegendLoadingRecord })
+        .atlasLegendLoading ?? null,
+  );
+}

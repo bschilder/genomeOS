@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   atlasCatalogSchema,
+  dataKeySchema,
   externalInfoSchema,
+  gridEntrySchema,
   observationArtifactSchema,
   surfaceArtifactSchema,
+  webObjectSchema,
 } from '../src/atlas/contracts';
 
 const artifact = {
@@ -72,6 +75,32 @@ const downloads = {
     media_type: 'application/json',
     sha256: 'a'.repeat(64),
     url: 'hbs-rs334.surface.json',
+  },
+};
+
+const gridSha256 = 'e'.repeat(64);
+
+const grids = {
+  [gridSha256]: {
+    bytes: 376,
+    n_cells: 1,
+    resolution: 3,
+    sha256: 'f'.repeat(64),
+    url: 'grids/h3-r3.ffffffffffffffff.gosa',
+  },
+};
+
+const web = {
+  detail: {
+    bytes: 1_680,
+    sha256: '2'.repeat(64),
+    url: 'surfaces/hbs-rs334/v1/map-2026-08/detail.2222222222222222.gosa',
+  },
+  grid_sha256: gridSha256,
+  render: {
+    bytes: 1_032,
+    sha256: '1'.repeat(64),
+    url: 'surfaces/hbs-rs334/v1/map-2026-08/render.1111111111111111.gosa',
   },
 };
 
@@ -352,11 +381,13 @@ describe('atlas browser contracts', () => {
       n_cells: 1,
       n_observations: 1,
       observations_available: true,
+      observations_bytes: 1_074,
       observations_sha256: 'b'.repeat(64),
       observations_url: 'hbs-rs334.observations.json',
       support_counts: { observed: 1 },
       surface_sha256: 'a'.repeat(64),
       surface_url: 'hbs-rs334.surface.json',
+      web,
     };
     const catalog = {
       artifact_version: 'v1',
@@ -365,6 +396,7 @@ describe('atlas browser contracts', () => {
       context_sources: [],
       created_at: '2026-09-06T00:00:00Z',
       discovery_groups: discoveryGroups,
+      grids,
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
@@ -406,12 +438,14 @@ describe('atlas browser contracts', () => {
       n_cells: 1,
       n_observations: 233,
       observations_available: false,
+      observations_bytes: null,
       observations_sha256: null,
       observations_url: null,
       support_counts: { observed: 1 },
       surface_sha256: 'a'.repeat(64),
       surface_url: 'kir-2dl1.surface.json',
       variant_id: 'kir:2dl1',
+      web,
     };
     const catalog = {
       artifact_version: 'v1',
@@ -420,6 +454,7 @@ describe('atlas browser contracts', () => {
       context_sources: [],
       created_at: '2026-09-06T00:00:00Z',
       discovery_groups: discoveryGroups,
+      grids,
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
@@ -546,11 +581,13 @@ describe('atlas browser contracts', () => {
       n_cells: 1,
       n_observations: 1,
       observations_available: true,
+      observations_bytes: 1_074,
       observations_sha256: 'b'.repeat(64),
       observations_url: 'hbs-rs334.observations.json',
       support_counts: { observed: 1 },
       surface_sha256: 'a'.repeat(64),
       surface_url: 'hbs-rs334.surface.json',
+      web,
     };
     const catalog = {
       artifact_version: 'v1',
@@ -559,6 +596,7 @@ describe('atlas browser contracts', () => {
       context_sources: [],
       created_at: '2026-09-06T00:00:00Z',
       discovery_groups: discoveryGroups,
+      grids,
       hf_dataset: 'bschilder/genomeos-data',
       hf_revision: artifact.hf_revision,
       registry_versions: [artifact.registry_version],
@@ -581,5 +619,142 @@ describe('atlas browser contracts', () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it('accepts only relative, lowercase data keys', () => {
+    for (const key of [
+      'hbs-rs334.surface.json',
+      'grids/h3-r4.0123456789abcdef.gosa',
+      'external/gnomad/chr11-5227002-t-a.json',
+    ])
+      expect(dataKeySchema.parse(key)).toBe(key);
+    for (const key of [
+      '',
+      '/data/atlas/hbs-rs334.surface.json',
+      '//cdn.example/hbs-rs334.surface.json',
+      'https://cdn.example/hbs-rs334.surface.json',
+      'surfaces/../catalog.json',
+      '..',
+      'HbS.surface.json',
+      '.hidden',
+      'with space.json',
+    ])
+      expect(dataKeySchema.safeParse(key).success, key).toBe(false);
+  });
+
+  it('declares decoded byte sizes and content digests for every web object', () => {
+    expect(webObjectSchema.parse(web.render)).toEqual(web.render);
+    expect(gridEntrySchema.parse(grids[gridSha256])).toEqual(grids[gridSha256]);
+    for (const invalid of [
+      { ...web.render, bytes: 0 },
+      { ...web.render, bytes: 1.5 },
+      { ...web.render, sha256: 'A'.repeat(64) },
+      { ...web.render, url: '/render.gosa' },
+      { ...web.render, extra: true },
+    ])
+      expect(webObjectSchema.safeParse(invalid).success).toBe(false);
+    expect(
+      gridEntrySchema.safeParse({ ...grids[gridSha256], resolution: 16 })
+        .success,
+    ).toBe(false);
+  });
+
+  it('requires web objects, exactly one declared grid and observation sizes', () => {
+    const catalogArtifact = {
+      ...artifact,
+      assumptions: ['fixture'],
+      correlation_range_km: 400,
+      discovery,
+      downloads,
+      external_resources: [],
+      likelihood: 'beta_binomial',
+      n_cells: 1,
+      n_observations: 1,
+      observations_available: true,
+      observations_bytes: 1_074,
+      observations_sha256: 'b'.repeat(64),
+      observations_url: 'hbs-rs334.observations.json',
+      support_counts: { observed: 1 },
+      surface_sha256: 'a'.repeat(64),
+      surface_url: 'hbs-rs334.surface.json',
+      web,
+    };
+    const catalog = {
+      artifact_version: 'v1',
+      artifacts: [catalogArtifact],
+      assumptions: ['fixture'],
+      context_sources: [],
+      created_at: '2026-09-06T00:00:00Z',
+      discovery_groups: discoveryGroups,
+      grids,
+      hf_dataset: 'bschilder/genomeos-data',
+      hf_revision: artifact.hf_revision,
+      registry_versions: [artifact.registry_version],
+      schema_version: 1,
+    };
+    const withArtifact = (changes: Record<string, unknown>) => ({
+      ...catalog,
+      artifacts: [{ ...catalogArtifact, ...changes }],
+    });
+
+    expect(atlasCatalogSchema.parse(catalog).grids).toEqual(grids);
+    const { grids: _grids, ...withoutGrids } = catalog;
+    expect(atlasCatalogSchema.safeParse(withoutGrids).success).toBe(false);
+    expect(() =>
+      atlasCatalogSchema.parse({
+        ...catalog,
+        grids: { ...grids, ['d'.repeat(64)]: grids[gridSha256] },
+      }),
+    ).toThrow(/exactly one grid/);
+    expect(() =>
+      atlasCatalogSchema.parse(
+        withArtifact({ web: { ...web, grid_sha256: 'd'.repeat(64) } }),
+      ),
+    ).toThrow(/declared grid/);
+    expect(() =>
+      atlasCatalogSchema.parse({
+        ...catalog,
+        grids: { [gridSha256]: { ...grids[gridSha256], resolution: 4 } },
+      }),
+    ).toThrow(/declared grid/);
+    for (const invalid of [
+      withArtifact({ web: undefined }),
+      withArtifact({ web: { ...web, detail: undefined } }),
+      withArtifact({ observations_bytes: undefined }),
+      withArtifact({ observations_bytes: null }),
+      withArtifact({ observations_bytes: 0 }),
+      withArtifact({
+        downloads: { ...downloads, observations: null },
+        observations_available: false,
+        observations_bytes: 1_074,
+        observations_sha256: null,
+        observations_url: null,
+      }),
+      withArtifact({ surface_url: '/data/atlas/hbs-rs334.surface.json' }),
+      withArtifact({ observations_url: '../hbs-rs334.observations.json' }),
+      withArtifact({
+        downloads: {
+          ...downloads,
+          manifest: {
+            ...downloads.manifest,
+            url: 'https://cdn.example/m.json',
+          },
+        },
+      }),
+      {
+        ...catalog,
+        context_sources: [
+          {
+            id: 'natural-earth-admin-0',
+            label: 'Natural Earth country boundaries',
+            license: 'public_domain',
+            revision: 'r1',
+            source_url: 'https://example.org/ne.geojson',
+            url: '/ne-50m-admin-0.geojson',
+          },
+        ],
+      },
+    ])
+      expect(atlasCatalogSchema.safeParse(invalid).success).toBe(false);
   });
 });

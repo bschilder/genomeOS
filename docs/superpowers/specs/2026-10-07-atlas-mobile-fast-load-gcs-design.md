@@ -316,7 +316,7 @@ committed as `docs/figures/atlas-mobile-{before,after}.png`.
 | -------------- | ---------------------- | ----------------- | ---------------- |
 | Desktop        | ≤ 1.5 s                | ≤ 2.5 s           | 9.6–12.9 s       |
 | Mobile Fast 4G | ≤ 4 s                  | ≤ 6 s             | 33 s             |
-| Mobile Slow 4G | ≤ 13 s                 | ≤ 18 s            | fails            |
+| Mobile Slow 4G | ≤ 12 s                 | ≤ 17.5 s          | fails            |
 
 The PR includes a bytes ledger per milestone (gzip bytes on the link ÷ bandwidth + serial round
 trips × latency + CPU) showing each budget is achievable, and the Slow 4G budgets are tightened in
@@ -324,11 +324,30 @@ the PR if the measurement allows. Additionally:
 
 - no request timeout or error on any profile;
 - **no Atlas main-thread long animation frame > 200 ms on desktop or > 800 ms on mobile** within the
-  window; surface reveal on mobile Fast 4G completes in ≤ 1 s from the first chunk, and the spec
+  window; surface reveal on mobile Fast 4G completes in ≤ 1.1 s from the first chunk, and the spec
   reports reveal frame count, total reveal time and the longest reveal frame;
 - warm layer switch stays < 2 s (`atlas-performance.spec.ts`), with ≥ 45 fps interaction;
 - a real mid-range Android cold load (Chrome remote debugging) is recorded in the PR as ground truth
   when a device is available; its absence is stated, not hidden.
+
+(Amended under R30 by the owner's ruling R-reveal, in Part B's scoped re-review, 2026-10-10. Three
+budgets change, each set from the measured medians on the shipped code tip: headed Chrome 154,
+ANGLE Metal on an Apple M3 Pro, the harness above.
+
+- **Fast 4G reveal: ≤ 1 s → ≤ 1.1 s.** Eleven tip invocations started and ended below a 1-minute
+  load average of 8. Their reveal medians were 840–1,050 ms, and 3 of the 11 were over 1 s: 1,050,
+  1,026 and 1,017 ms. In the same-session interleaved comparison the tip's pooled median was
+  932 ms over 18 runs (941 ms over all 33 runs of the 11 invocations). The two earlier builds in
+  that comparison, the R84-slow4g priority change without the fix wave's last three fixes and the
+  fix wave's starting point, reached medians of 998 and 946 ms, with single runs up to 1,059 and
+  997 ms. So the 1 s line sat inside run-to-run noise rather than marking a regression. The margin is thin: 1.1 s is 50 ms above the
+  worst quiet-machine median, and a loaded machine still misses it (1,276 ms at load 5.7 → 25.3).
+- **Slow 4G `observations-visible`: ≤ 13 s → ≤ 12 s, and `surface-visible`: ≤ 18 s → ≤ 17.5 s,**
+  the tightening the paragraph above provides for. Rule: the worst quiet-machine median plus at
+  least 0.75 s, rounded up to the next 0.5 s. The worst medians were 11,129 and 16,681 ms, which
+  leaves 871 ms (7.8%) and 819 ms (4.9%). The loaded invocation's medians (11,266 / 17,348 ms)
+  also pass, but one of its `surface-visible` runs took 18,189 ms, so 17.5 s holds on a quiet
+  machine, which the formal run requires.)
 
 **Visual parity.** Same-input parity (the legacy main-thread builder fed `Math.fround` of the JSON
 `post_mean`/`post_sd`, i.e. exactly the render-tier inputs) on the committed fixtures and the
@@ -341,8 +360,17 @@ sharing. Separately, a precision report over all 30 layers bounds the f32-vs-f64
 flip (today exactly one: `cyt-il-10-819-t` post_sd, `84194e9ffffffff`, bin 4 → 5; no bin's
 first-cell colour changes). Rendered bins come from the render tier; flips are reported, not hidden.
 HbS and G6PD screenshots at the default camera, for `triangles`, `hexagons`, `extruded` and
-`honmoon`, match the pre-change build within 0.5% of pixels, captured after the sky box has loaded:
-`docs/figures/atlas-fast-load-{before,after}-{hbs,g6pd}.png`.
+`honmoon`, match the pre-change build within 0.5% of pixels, captured after the sky box has loaded,
+both with every layer on and with the Natural Earth countries overlay off
+(`layers=surface,observations,support,context`). The figures
+`docs/figures/atlas-fast-load-{before,after}-{hbs,g6pd}.png` show every layer, and
+`docs/figures/atlas-fast-load-parity.receipt.json` records both comparisons. The countries-off
+comparison isolates the scientific layers. §B.6.9 redraws the country borders on purpose, as a
+`BufferPolylineCollection` instead of `GeoJsonDataSource` entity polylines, which rasterise
+differently, so the receipt also carries magnified before/after border crops
+(`docs/figures/atlas-fast-load-border-crops.png`). The buffer borders are drawn 0.5 px wider than
+the entity borders' nominal 1.65 px, because Cesium's entity and `PolylineCollection` shaders add
+that 0.5 px and the buffer shader does not, so the on-screen weight matches.
 
 ### B.2 Data tiers and the shared grid
 
@@ -555,8 +583,9 @@ when `observations_available` is true and `null` otherwise, mirroring `observati
  ├─ <script type="application/json" id="atlas-catalog"> validated catalog, '<' escaped as <
  ├─ tiny inline head script: reads the inline catalog and location.search (entity), resolves the
  │  selected artifact's grid, render and observations URLs with the data-url rules, and inserts
- │  <link rel="preload" as="fetch" crossorigin="anonymous"> for them (+ preconnect if absolute)
- └─ <link rel="modulepreload"> for the scene/Cesium chunk
+ │  <link rel="preload" as="fetch" crossorigin="anonymous"> for them (+ preconnect if absolute):
+ │  observations fetchpriority=high, grid and render low; on a slow connection no render preload
+ └─ <link rel="modulepreload" fetchpriority="high"> for the scene/Cesium chunk
 
 island module evaluation (before React mounts)
  ├─ starts import('…/atlas-scene') and constructs the data worker
@@ -576,7 +605,16 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    default `public/data/atlas/catalog.json`), validates it with the same zod schema (build fails
    loudly), and embeds it with `<` escaped. The head script picks the URL-selected artifact
    (default `artifacts[0]`), so a shared link preloads the right map and the default's ~0.5 MB is not
-   wasted. The provider's `getCatalog()` resolves from the inline JSON. `tests/content.test.ts`'s
+   wasted. Network priority (amended under R30 by ruling R84-slow4g, in Part B's final review): the
+   observations preload at `fetchpriority="high"`, since they are the first frame, and the grid and
+   render tiers at `low`; the scene/Cesium modulepreloads are `high`. On a slow connection
+   (`navigator.connection.saveData`, or an `effectiveType` of `3g` or slower; DevTools' Slow 4G preset
+   reads as `3g`) the render tier, the one large surface object, is not preloaded: the head script
+   sets `data-surface-downloads="after-scene"` on the catalog element and the provider starts the
+   render fetch once the scene chunk import settles, so Cesium and the observations have the link to
+   themselves. The ~11 kB grid still preloads, so its topology is ready when the render tier
+   arrives. A browser without `navigator.connection` preloads all three. The provider's
+   `getCatalog()` resolves from the inline JSON. `tests/content.test.ts`'s
    P-code check runs on the HTML with only the `#atlas-catalog` element removed (narrow regex on that
    id), plus a positive check that the element exists and parses with `atlasCatalogSchema`; the
    catalog text is unchanged.
@@ -584,7 +622,8 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    fetches, so the provider fetches (`mode: 'cors'`, `credentials: 'same-origin'`, matching
    `crossorigin="anonymous"`) and transfers each `ArrayBuffer`. A **stall timeout** (15 s without a
    new body chunk) replaces the 15 s whole-request budget; abort and retry are otherwise unchanged.
-   The detail tier is fetched with `priority: 'low'` after `atlas:surface-visible`.
+   Each tier is fetched at its preload's priority (observations `high`, grid and render `low`), and
+   the detail tier with `priority: 'low'` after `atlas:surface-visible`.
 3. **Worker.** One dedicated module worker
    (`new Worker(new URL('./atlas-data.worker.ts', import.meta.url), { type: 'module' })`; Vite
    `worker.format: 'es'`; no dynamic `import()` inside it). Typed request/response messages with ids;
@@ -622,11 +661,16 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
      colours, not the same tessellation. Pole-enclosing cells keep today's fan split.
    - **Chunks**: seed groups by H3 resolution-0 base cell (a base cell straddling ±180° is split by
      the sign of each cell centre's longitude); greedily merge a group into an adjacent group
-     (`gridDisk(base, 1)` adjacency, same side of ±180°), iterating base cells in index order, until
-     ≥ 2,048 cells (a group with no eligible neighbour may stay smaller); cells whose own boundary
-     crosses ±180° go into one dedicated seam chunk per side. Index arrays are `Uint32Array` when a
-     chunk exceeds 65,535 vertices, else `Uint16Array`. Bounding spheres are computed in the worker
-     from each chunk's positions (including the maximum elevated height).
+     (`gridDisk(base, 1)` adjacency, same side of ±180°, within the merge cap), iterating base cells
+     in index order, until ≥ 2,048 cells (a group with no eligible neighbour may stay smaller). The
+     merge cap `CHUNK_MAX_RADIUS_METRES` = 1,800 km bounds the merged group-bound radius over cell
+     centres: the largest distance from the merged groups' cell-weighted centroid to a member
+     group's centroid plus that group's own radius (its centroid to its farthest cell centre), all
+     on ground-level cell centres. It is a merge condition, chosen so that chunks meet B.8's
+     2,500 km bound, not the chunk bounding sphere B.8 tests. Cells whose own boundary crosses ±180°
+     go into one dedicated seam chunk per side and hemisphere (at most four). Index arrays are
+     `Uint32Array` when a chunk exceeds 65,535 vertices, else `Uint16Array`. Bounding spheres are
+     computed in the worker from each chunk's positions (including the maximum elevated height).
    - One `GeometryInstance` per chunk, in its own `Primitive`, built synchronously from the transferred
      arrays; a chunk is never added without its masked cells.
    - Observation anchor heights (smooth modes need the per-vertex mean heights) are returned with
@@ -640,9 +684,25 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
      pivots); the picked Cartesian is projected along the geocentric radial
      (`Ellipsoid.WGS84.scaleToGeocentricSurface`) before `cartesianToCartographic` → `latLngToCell`,
      undoing the shader's `elevationNormal` displacement;
-   - `extruded`: the projected cell and its `gridDisk(cell, 1)` neighbours are candidates; the hit
-     altitude `z = |p| − |scaleToGeocentricSurface(p)| − clearance` selects the cell whose top is
-     ≥ z among the two either side of a wall (ray-testing the ≤ 7 prisms is the equivalent fallback).
+   - `extruded` on the globe: the projected cell and its `gridDisk(cell, 1)` neighbours are
+     candidates, and the pointer's pick ray decides: the cell whose prism (its top at the raised
+     height, its walls down to the clearance) the ray enters first wins, ties to the lower row, so
+     depth-buffer noise in the picked position only chooses the neighbourhood. Without a ray, or
+     when the ray enters none of the ≤ 7 prisms, the hit altitude
+     `z = |p| − |scaleToGeocentricSurface(p)| − clearance` selects the cell whose top is ≥ z among
+     the two either side of a wall. (Amended under R30 in Part B's final review: Task 69's real-engine
+     probe, PF35, found the altitude rule misresolved 3–9 of 18 cells under measured depth noise, so
+     the ray test became the rule and the altitude test its fallback.)
+   - Columbus view (perspective) and 2D: the elevated shader adds its geocentric `elevationNormal`
+     displacement in the map frame, where it shears the surface sideways and only partly raises it,
+     so the radial projection above does not undo it (§B.7 keeps the drawing). The scene passes the
+     depth hit and the pick ray in the map frame (`SurfacePickInput.mapFrame`); `map-frame-pick.ts`
+     rebuilds the cells drawn near the hit as the mesh and shader draw them (smooth fans, flat
+     hexagons, extruded prisms with unlifted wall feet, masked rows as flat support plates) and
+     returns the first cell the ray meets. Candidates come from a walk over every lift up to the
+     exaggerated maximum that keeps the ray point within a depth-noise window around the hit (2% of
+     the hit's distance, at least 20 km), so noise inside the window changes nothing; without a ray,
+     the base recovered from the hit height decides.
    - `preferredAtlasPick` drops surface/support picks whose `artifactKey` is not the displayed key
      **before** choosing; observation picks still win. Depth comes from the displayed group only
      (the incoming group is excluded from picking until the swap commits). `sameAtlasPick` and
@@ -677,7 +737,8 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    `atlas:surface-visible`, parsed in the worker into ring vertex buffers and a label table, and drawn
    as a time-sliced `BufferPolylineCollection` plus a `LabelCollection` added in slices;
    `GeoJsonDataSource` and its entities are dropped. Its height adjustment is skipped at elevation 0
-   and computed in the worker from grid rows on the first non-zero factor. The sky box is hidden
+   and computed in the worker from grid rows on the first non-zero factor (or, when that factor
+   comes first, as soon as the worker has parsed the GeoJSON). The sky box is hidden
    (`viewer.scene.skyBox.show = false` right after `new Viewer`, keeping sun and moon) until
    `data-atlas-ready`, then shown.
 10. **No coarse aggregated tier.** Averaging res-4 children into res-3/2 parents is an aggregation that
@@ -706,6 +767,15 @@ highlight; inspector content and wording (plus the new loading/unavailable state
 transition and progress rules; reduced motion; keyboard camera controls; camera pivot behaviour;
 error and retry flows; the WebGL failure path; and every scientific value shown.
 
+(Amended under R30 in Part B's final review: one retry flow changes on purpose. Before Part B, a
+failed data request showed "Retry data", which fetched again and recovered. Part B decodes every
+tier in one module worker that the scene and the provider share. A worker that dies after it
+starts (its script failed to download, or it threw) cannot be restarted in the page, so "Retry
+data" would fail the same way. That case now shows a failure panel, "The map data could not load",
+whose Retry reloads the page; the map, view and layers are kept in the link. A worker that never
+started, because the browser has no module workers or a CSP blocks it, keeps its "Retry data"
+error.)
+
 ### B.8 Tests
 
 - **Python**: codec round-trip and every hard error incl. the shared mutation corpus; determinism
@@ -720,8 +790,14 @@ error and retry flows; the WebGL failure path; and every scientific value shown.
   the 2,000-cell subset; colour sweep (≥ 100k `t` points plus every stop ± 1e-9, all seven palettes,
   bytes equal `colorAtPosition`); chunk rule (every supported and masked cell exactly once; each
   chunk's support buffers cover exactly its masked cells; bounding radius ≤ 2,500 km; at most two
-  chunks per artifact fail the `splitLongitude` early-out; max index fits its index type, checked in
-  `extruded` on the full HbS grid shape); pick resolver (flat, elevated smooth near edges at
+  chunks of the default artifact `hbs-rs334` fail the `splitLongitude` early-out, counting its
+  default layer's surface primitives (seam chunks included); each of the 30 artifacts, which share
+  one chunk plan, has its count of default-layer surface chunks that fail it pinned at the measured
+  value as an upper bound, so a chunk-plan change that raises any count fails (layers with
+  supported cells along ±180° fail it in up to 13 chunks within the 2,500 km radius), and the
+  per-artifact surface and support counts are printed for the Part B PR; support primitives may fail
+  it and are not counted, and seam chunks are budgeted as costly (B.6.7); max index fits its index type,
+  checked in `extruded` on the full HbS grid shape); pick resolver (flat, elevated smooth near edges at
   exaggeration 5, extruded walls → taller cell); `resolveDataUrl`/`dataHref` (bases `/data/atlas/`,
   `/genomeOS/data/atlas/`, absolute with slash; absolute without slash throws; rejected keys; preload
   href resolves to the fetch URL); provider stall timeout, abort, retry; progress with declared bytes
@@ -747,7 +823,9 @@ error and retry flows; the WebGL failure path; and every scientific value shown.
 
 `website/serve.json` (outside `public/`) sets `Content-Type: application/octet-stream` for
 `**/*.gosa` (which `serve`'s `compression` middleware then gzips; octet-stream is compressible in
-mime-db); `serve:test` becomes `serve dist -c ../serve.json -l tcp://127.0.0.1:4322 --no-clipboard`.
+mime-db); `serve:test` becomes
+`serve dist -c ../serve.json -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard` (the port
+variable came from #412, picked up when Part B was rebased onto main; amended under R30).
 The Part B PR records what GitHub Pages actually sends for `.gosa` (`curl -H 'Accept-Encoding:
 gzip'`).
 
@@ -891,7 +969,8 @@ gzip'`).
 | SHA-256 in the worker with `@noble/hashes` | `crypto.subtle` is unavailable on the plain-HTTP origin | One small pinned dependency |
 | Part B generates `.gosa` in CI (git-ignored), not committed | Committing adds ~103 MB packed binaries to history forever | CI gains a Python step until Part C |
 | Two data bases; Natural Earth, places and `external/` stay in the repo | They are the only tracked copies and small | ~4 MB stays in the Pages bundle |
-| Slow 4G budgets 13 s / 18 s (not 9 / 14) | Bytes on a 180 KB/s, 562 ms link make 9/14 infeasible with Cesium on the path | Tightened in the PR if measurement allows |
+| Slow 4G budgets 12 s / 17.5 s (not 9 / 14); tightened from 13 s / 18 s under R30 (ruling R-reveal) | Bytes on a 180 KB/s, 562 ms link make 9/14 infeasible with Cesium on the path; the shipped tip's worst quiet-machine medians are 11,129 / 16,681 ms | 17.5 s holds on a quiet machine only: one loaded run took 18,189 ms |
+| Fast 4G reveal ≤ 1.1 s from the first chunk; amended from ≤ 1 s under R30 (owner ruling R-reveal) | Quiet-machine medians on the shipped tip are 840–1,050 ms and earlier builds reached 998 ms, so 1 s sat inside run-to-run noise | 50 ms margin over the worst quiet-machine median; a loaded machine still misses it |
 | Mobile budgets judged with workers throttled (or scaled ×4) | CDP page throttling does not slow dedicated workers | A real-device check is still recommended |
 | Natural Earth parsed in the worker and drawn time-sliced; `GeoJsonDataSource` dropped | Its single onload task exceeds every long-task budget | Geographic overlay code is rewritten |
 | GCS `edge` mode provisioned; `cloud-cdn` scripted only | DNS is at GoDaddy (human step) and the load balancer costs money monthly | `edge` URLs carry the bucket name in a build variable (not git) |

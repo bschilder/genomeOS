@@ -1,4 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Page,
+  type Request as PlaywrightRequest,
+} from '@playwright/test';
+import { assertProductionBuild } from './support/production-build';
 
 interface AtlasPerformanceMetrics {
   interactionFrameRate: number;
@@ -8,6 +14,9 @@ interface AtlasPerformanceMetrics {
   warmRenderMs: number;
   warmSelectMs: number;
 }
+
+/** Any map other than the default HbS and the timed G6PD. */
+const SWITCH_WARM_UP_ID = 'cyt-il-10-1082-g';
 
 async function chooseAtlasMap(page: Page, id: string): Promise<void> {
   await page
@@ -34,24 +43,64 @@ test('atlas meets the warm-switch and interaction budget', async ({
       );
     }).observe({ entryTypes: ['longtask'] });
   });
-  await page.route('https://tile.openstreetmap.org/**', (route) =>
-    route.abort(),
-  );
+  await assertProductionBuild(String(testInfo.project.use.baseURL));
+  // CDP blocking keeps the HTTP cache on; page.route would disable it.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.setBlockedURLs', {
+    urls: ['*tile.openstreetmap.org*'],
+  });
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
 
-  await page.evaluate(async () => {
-    await Promise.all([
-      fetch('/data/atlas/g6pd-deficiency.surface.json'),
-      fetch('/data/atlas/g6pd-deficiency.observations.json'),
-    ]);
+  const prewarmed = await page.evaluate(async () => {
+    const text = document.getElementById('atlas-catalog')?.textContent;
+    if (!text) throw new Error('The /app/ page has no inline catalog.');
+    const catalog = JSON.parse(text) as {
+      artifacts: {
+        id: string;
+        observations_url: string | null;
+        web: { render: { url: string }; detail: { url: string } };
+      }[];
+    };
+    const selected = catalog.artifacts[0];
+    const preload = [
+      ...document.querySelectorAll<HTMLLinkElement>(
+        'link[rel="preload"][as="fetch"]',
+      ),
+    ].find((link) => link.href.endsWith(`/${selected.web.render.url}`));
+    if (preload === undefined)
+      throw new Error('No preload link for the selected render tier.');
+    const base = preload.href.slice(
+      0,
+      preload.href.length - selected.web.render.url.length,
+    );
+    const g6pd = catalog.artifacts.find(({ id }) => id === 'g6pd-deficiency');
+    if (!g6pd?.observations_url)
+      throw new Error('G6PD deficiency is missing from the inline catalog.');
+    const urls = [
+      g6pd.web.render.url,
+      g6pd.web.detail.url,
+      g6pd.observations_url,
+    ].map((key) => new URL(key, base).href);
+    const responses = await Promise.all(urls.map((url) => fetch(url)));
+    const failed = responses
+      .filter((response) => !response.ok)
+      .map((response) => `${response.status} ${response.url}`);
+    if (failed.length > 0)
+      throw new Error(`Pre-warm failed: ${failed.join(', ')}`);
+    await Promise.all(responses.map((response) => response.arrayBuffer()));
+    return urls;
   });
-  await chooseAtlasMap(page, 'g6pd-deficiency');
+  // The timed switch must be G6PD's first: the provider keeps every surface it has handed out
+  // (Plan ruling R29), so a return visit makes no request and the pre-warm would not count. An
+  // untimed round trip through another map keeps the timed switch the session's second, as before.
+  await chooseAtlasMap(page, SWITCH_WARM_UP_ID);
   await expect(
     page.locator(
-      '[data-atlas-active="g6pd-deficiency"][data-atlas-ready="true"]',
+      `[data-atlas-active="${SWITCH_WARM_UP_ID}"][data-atlas-ready="true"]`,
     ),
   ).toBeVisible({ timeout: 45_000 });
   await chooseAtlasMap(page, 'hbs-rs334');
@@ -89,6 +138,12 @@ test('atlas meets the warm-switch and interaction budget', async ({
   const interactionFrameRate = await frameRatePromise;
   await page.waitForTimeout(1_500);
 
+  const switchRequests: string[] = [];
+  const recordSwitchRequest = (request: PlaywrightRequest): void => {
+    if (request.url().includes('g6pd-deficiency'))
+      switchRequests.push(request.url());
+  };
+  page.on('request', recordSwitchRequest);
   const warmStarted = Date.now();
   await chooseAtlasMap(page, 'g6pd-deficiency');
   const warmSelected = Date.now();
@@ -100,6 +155,10 @@ test('atlas meets the warm-switch and interaction budget', async ({
   ).toBeVisible({ timeout: 45_000 });
   const warmReady = Date.now();
   const warmArtifactMs = warmReady - warmStarted;
+  page.off('request', recordSwitchRequest);
+  // The timed switch fetched G6PD's tiers, and only ones the pre-warm already holds.
+  expect(switchRequests.length).toBeGreaterThan(0);
+  expect(switchRequests.filter((url) => !prewarmed.includes(url))).toEqual([]);
 
   const browserMetrics = await page.evaluate(() => {
     const canvas = document.createElement('canvas');
@@ -130,12 +189,19 @@ test('atlas meets the warm-switch and interaction budget', async ({
   });
   console.info(`Atlas performance: ${JSON.stringify(metrics)}`);
 
-  expect.soft(metrics.warmArtifactMs).toBeLessThan(2_000);
+  // Fast-load design §B.1 skips budget assertions on software renderers, the warm switch among
+  // them (headless SwiftShader takes 8-12 s); run headed on a hardware GPU (`--headed`) to assert.
   const softwareRenderer = /swiftshader|software/i.test(metrics.renderer);
-  if (!softwareRenderer) {
-    expect
-      .soft(metrics.longTasks.filter((duration) => duration > 250))
-      .toEqual([]);
-    expect.soft(metrics.interactionFrameRate).toBeGreaterThanOrEqual(45);
+  if (softwareRenderer) {
+    testInfo.annotations.push({
+      type: 'budgets skipped',
+      description: `software renderer: ${metrics.renderer}`,
+    });
+    return;
   }
+  expect.soft(metrics.warmArtifactMs).toBeLessThan(2_000);
+  expect
+    .soft(metrics.longTasks.filter((duration) => duration > 250))
+    .toEqual([]);
+  expect.soft(metrics.interactionFrameRate).toBeGreaterThanOrEqual(45);
 });

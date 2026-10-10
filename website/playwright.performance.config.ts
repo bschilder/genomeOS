@@ -10,7 +10,7 @@ const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: 'atlas-performance.spec.ts',
+  testMatch: /atlas-(performance|cold-load)\.spec\.ts/,
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? 'github' : 'list',
   retries: 0,

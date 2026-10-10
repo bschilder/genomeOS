@@ -1,0 +1,1 @@
+{"artifact_format":2,"correlation_range_km":420.0,"data_version":"map-test","likelihood":"beta_binomial","model_version":"v2","n_cells":10,"n_observations":3,"resolution":3,"support_counts":{"interpolated":4,"observed":2,"prior_dominated":2,"unknown":2},"target_grid_source":"worldpop-1km-unconstrained","target_grid_version":"fixture-2020","variant_id":"phenotype:g6pd-deficiency"}

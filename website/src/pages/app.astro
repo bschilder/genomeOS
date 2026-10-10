@@ -1,18 +1,55 @@
 ---
 import AtlasExplorer from '../components/atlas/AtlasExplorer';
 import SiteLayout from '../layouts/SiteLayout.astro';
+import { INLINE_CATALOG_ID } from '../atlas/inline-catalog';
+import { preloadScriptSource } from '../atlas/preload-script';
+import {
+  assertRequestStallOverride,
+  loadPageCatalog,
+} from '../lib/catalog-build';
+import { assertDataBase, dataOrigin } from '../lib/data-url';
 import { sitePath } from '../lib/paths';
+
+// fast-load design §B.4: site data always same-origin; Part C substitutes the artifact base
+// (PUBLIC_ATLAS_DATA_BASE_URL). Part B serves both from /data/atlas/.
+const siteDataBase = sitePath('/data/atlas/');
+const artifactDataBase = siteDataBase;
+assertDataBase(siteDataBase);
+assertDataBase(artifactDataBase);
+// fast-load design §B.6.1: the same strict schema the client uses; a violation fails the build.
+const { json: catalogJson } = loadPageCatalog(process.env.ATLAS_CATALOG_PATH);
+assertRequestStallOverride(
+  process.env.ATLAS_CATALOG_PATH,
+  import.meta.env.PUBLIC_ATLAS_REQUEST_STALL_MS,
+);
+const preconnect = dataOrigin(artifactDataBase);
 ---
 
 <SiteLayout
   title="Atlas"
   description="Explore measured observations, modeled geographic patterns, uncertainty, and evidence gaps in the genomeOS globe atlas."
-  viewportFit="cover"
   htmlClass="atlas-page"
+  viewportFit="cover"
 >
+  <Fragment slot="head">
+    {
+      preconnect && (
+        <link rel="preconnect" href={preconnect} crossorigin="anonymous" />
+      )
+    }
+    <script
+      type="application/json"
+      id={INLINE_CATALOG_ID}
+      data-artifact-data-base={artifactDataBase}
+      is:inline
+      set:html={catalogJson}
+    />
+    <script is:inline set:html={preloadScriptSource()} />
+  </Fragment>
   <AtlasExplorer
     client:load
+    artifactDataBase={artifactDataBase}
     cesiumToken={import.meta.env.CESIUM_TOKEN ?? ''}
-    dataBaseUrl={sitePath('/data/atlas/')}
+    siteDataBase={siteDataBase}
   />
 </SiteLayout>

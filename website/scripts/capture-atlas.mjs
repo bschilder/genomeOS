@@ -94,10 +94,7 @@ try {
   page.on('console', (entry) => {
     if (entry.type() === 'error') consoleErrors.push(entry.text());
   });
-  await installAtlasBrowserFixture(page, {
-    focus: { lat: 8, lon: 0 },
-    surfaceScope: 'regional',
-  });
+  await installAtlasBrowserFixture(page, { appUrl: `${baseUrl}/app/` });
   const query = new URLSearchParams({
     elevation: process.env.ATLAS_CAPTURE_ELEVATION ?? profile.elevation,
     entity: process.env.ATLAS_CAPTURE_ENTITY ?? 'hbs-rs334',

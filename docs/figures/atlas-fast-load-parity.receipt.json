@@ -1,0 +1,174 @@
+{
+  "generated_by": "website/scripts/capture-atlas-fast-load.mjs",
+  "spec": "docs/superpowers/specs/2026-10-07-atlas-mobile-fast-load-gcs-design.md §B.1",
+  "before": {
+    "baseUrl": "http://127.0.0.1:4383",
+    "commit": "a6188a212d7bd5b7fd856a55d5894cf90daf921e",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)"
+  },
+  "after": {
+    "baseUrl": "http://127.0.0.1:4384",
+    "commit": "1bbeabdf43966e92dfce3d82b367713b8ee3010b",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)"
+  },
+  "viewport": {
+    "height": 900,
+    "width": 1440
+  },
+  "fixed_time": "2026-10-07T12:00:00.000Z",
+  "compared": "globe captures with page overlays hidden and the Natural Earth countries overlay off (layers=surface,observations,support,context)",
+  "channel_tolerance": 2,
+  "max_different_fraction": 0.005,
+  "pairs": [
+    {
+      "entity": "hbs-rs334",
+      "geometry": "triangles",
+      "pixels": 1296000,
+      "fractionAny": 0.003932098765432099,
+      "fractionOverTolerance": 0.00009027777777777777,
+      "fractionOver16": 0.00003780864197530864,
+      "pass": true
+    },
+    {
+      "entity": "hbs-rs334",
+      "geometry": "hexagons",
+      "pixels": 1296000,
+      "fractionAny": 0.003992283950617284,
+      "fractionOverTolerance": 0.000125,
+      "fractionOver16": 0.00003472222222222222,
+      "pass": true
+    },
+    {
+      "entity": "hbs-rs334",
+      "geometry": "extruded",
+      "pixels": 1296000,
+      "fractionAny": 0.005104938271604938,
+      "fractionOverTolerance": 0.0001273148148148148,
+      "fractionOver16": 0.00003395061728395062,
+      "pass": true
+    },
+    {
+      "entity": "hbs-rs334",
+      "geometry": "honmoon",
+      "pixels": 1296000,
+      "fractionAny": 0.006790895061728395,
+      "fractionOverTolerance": 0.00042901234567901237,
+      "fractionOver16": 0.00006095679012345679,
+      "pass": true
+    },
+    {
+      "entity": "g6pd-deficiency",
+      "geometry": "triangles",
+      "pixels": 1296000,
+      "fractionAny": 0.004307870370370371,
+      "fractionOverTolerance": 0.00016589506172839507,
+      "fractionOver16": 0.00008101851851851852,
+      "pass": true
+    },
+    {
+      "entity": "g6pd-deficiency",
+      "geometry": "hexagons",
+      "pixels": 1296000,
+      "fractionAny": 0.0044675925925925924,
+      "fractionOverTolerance": 0.00021141975308641977,
+      "fractionOver16": 0.00008024691358024691,
+      "pass": true
+    },
+    {
+      "entity": "g6pd-deficiency",
+      "geometry": "extruded",
+      "pixels": 1296000,
+      "fractionAny": 0.004174382716049383,
+      "fractionOverTolerance": 0.00021064814814814815,
+      "fractionOver16": 0.00008101851851851852,
+      "pass": true
+    },
+    {
+      "entity": "g6pd-deficiency",
+      "geometry": "honmoon",
+      "pixels": 1296000,
+      "fractionAny": 0.007145061728395062,
+      "fractionOverTolerance": 0.0004699074074074074,
+      "fractionOver16": 0.00009182098765432098,
+      "pass": true
+    }
+  ],
+  "every_layer": {
+    "compared": "globe captures with page overlays hidden and every layer on (the default URL)",
+    "border_crops": "docs/figures/atlas-fast-load-border-crops.png",
+    "pairs": [
+      {
+        "entity": "hbs-rs334",
+        "geometry": "triangles",
+        "pixels": 1296000,
+        "fractionAny": 0.004872685185185185,
+        "fractionOverTolerance": 0.0005717592592592593,
+        "fractionOver16": 0.00009182098765432098,
+        "pass": true
+      },
+      {
+        "entity": "hbs-rs334",
+        "geometry": "hexagons",
+        "pixels": 1296000,
+        "fractionAny": 0.004974537037037037,
+        "fractionOverTolerance": 0.0006396604938271605,
+        "fractionOver16": 0.0001087962962962963,
+        "pass": true
+      },
+      {
+        "entity": "hbs-rs334",
+        "geometry": "extruded",
+        "pixels": 1296000,
+        "fractionAny": 0.006066358024691358,
+        "fractionOverTolerance": 0.0006388888888888889,
+        "fractionOver16": 0.0001087962962962963,
+        "pass": true
+      },
+      {
+        "entity": "hbs-rs334",
+        "geometry": "honmoon",
+        "pixels": 1296000,
+        "fractionAny": 0.007479938271604938,
+        "fractionOverTolerance": 0.0008572530864197531,
+        "fractionOver16": 0.00012191358024691358,
+        "pass": true
+      },
+      {
+        "entity": "g6pd-deficiency",
+        "geometry": "triangles",
+        "pixels": 1296000,
+        "fractionAny": 0.00442824074074074,
+        "fractionOverTolerance": 0.0006118827160493827,
+        "fractionOver16": 0.00015432098765432098,
+        "pass": true
+      },
+      {
+        "entity": "g6pd-deficiency",
+        "geometry": "hexagons",
+        "pixels": 1296000,
+        "fractionAny": 0.004627314814814815,
+        "fractionOverTolerance": 0.0006851851851851852,
+        "fractionOver16": 0.00017669753086419754,
+        "pass": true
+      },
+      {
+        "entity": "g6pd-deficiency",
+        "geometry": "extruded",
+        "pixels": 1296000,
+        "fractionAny": 0.004660493827160494,
+        "fractionOverTolerance": 0.0006921296296296297,
+        "fractionOver16": 0.00017515432098765433,
+        "pass": true
+      },
+      {
+        "entity": "g6pd-deficiency",
+        "geometry": "honmoon",
+        "pixels": 1296000,
+        "fractionAny": 0.007195216049382716,
+        "fractionOverTolerance": 0.0009166666666666666,
+        "fractionOver16": 0.00016512345679012345,
+        "pass": true
+      }
+    ]
+  }
+}

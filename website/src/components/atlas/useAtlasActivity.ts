@@ -1,7 +1,11 @@
 /** Shared Atlas operation lifecycle for Atlas design §11. */
 
-import { useRef, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
+import {
+  createFrameCoalescer,
+  type FrameCoalescer,
+} from '../../atlas/frame-coalescer';
 import type {
   ExplorerActivity,
   ExplorerLoadStatus,
@@ -27,25 +31,40 @@ export function useAtlasActivity(
     progress: null,
   });
 
+  const pending = useRef<FrameCoalescer<{
+    activity: ExplorerActivity;
+    id: number;
+  }> | null>(null);
+  pending.current ??= createFrameCoalescer(({ activity, id }) => {
+    if (id === sequence.current) setActivity(activity);
+  });
+  const frames = pending.current;
+  useEffect(() => () => frames.cancel(), [frames]);
+
   const begin = (
     nextStatus: Exclude<ExplorerLoadStatus, 'ready'>,
     nextActivity: ExplorerActivity,
   ): number => {
     const id = ++sequence.current;
+    frames.cancel();
     setStatus(nextStatus);
     setActivity(nextActivity);
     return id;
   };
+  // Streamed byte and geometry progress arrive per chunk; render at most once per frame.
   const update = (id: number, nextActivity: ExplorerActivity) => {
-    if (id === sequence.current) setActivity(nextActivity);
+    if (id === sequence.current) frames.push({ activity: nextActivity, id });
   };
   const finish = (id: number) => {
     if (id !== sequence.current) return;
+    frames.cancel();
     setActivity(null);
     setStatus('ready');
   };
   const fail = (id: number) => {
-    if (id === sequence.current) setActivity(null);
+    if (id !== sequence.current) return;
+    frames.cancel();
+    setActivity(null);
   };
   const runScene = (
     label: string,

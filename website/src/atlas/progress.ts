@@ -52,3 +52,30 @@ export function createTransferProgressTracker<Key extends string>(
     report(aggregateTransferProgress([...transfers.values()]));
   };
 }
+
+/** One transfer made of several parts (grid + render); the total is known only if every part's is. */
+export function combineTransfers(
+  transfers: readonly TransferProgress[],
+): TransferProgress {
+  const loadedBytes = transfers.reduce(
+    (total, transfer) =>
+      total +
+      Math.min(
+        Math.max(0, transfer.loadedBytes),
+        transfer.totalBytes ?? Number.POSITIVE_INFINITY,
+      ),
+    0,
+  );
+  const known =
+    transfers.length > 0 &&
+    transfers.every(({ totalBytes }) => totalBytes !== null && totalBytes > 0);
+  return {
+    loadedBytes,
+    totalBytes: known
+      ? transfers.reduce(
+          (total, transfer) => total + (transfer.totalBytes ?? 0),
+          0,
+        )
+      : null,
+  };
+}

@@ -1,6 +1,9 @@
 /** Shared Cesium scene contracts for Atlas design §11. */
 
-import type { ObservationArtifact, SurfaceArtifact } from '../contracts';
+import type { Primitive, PrimitiveCollection } from 'cesium';
+
+import type { ObservationArtifact } from '../contracts';
+import type { SurfaceArtifact as SurfaceColumns } from '../surface-columns';
 import type {
   ObservationColorVariable,
   ObservationShape,
@@ -17,16 +20,52 @@ import type {
   SurfaceGeometry,
   TerrainId,
 } from '../url-state';
+import type { AtlasWorkerClient } from '../worker/client';
 import type { ContextWarning } from './context-controller';
 import type { ObservationPick } from './observation-layer';
-import type { SurfacePick } from './surface-layer';
 
+/** A resolved surface pick: the cell row of the artifact whose chunk was picked. */
+export type SurfacePick = {
+  kind: 'surface';
+  artifactKey: string;
+  row: number;
+  h3Index: string;
+};
 export type AtlasPick = SurfacePick | ObservationPick;
+export type AtlasPickId = SurfaceChunkPick | ObservationPick;
 export interface AtlasHover {
   pick: AtlasPick;
   screenPosition: { x: number; y: number };
 }
+
+export type SurfaceChunkPick = {
+  kind: 'surface-chunk';
+  artifactKey: string;
+  chunk: number;
+};
+
+export interface ScientificPrimitiveGroup {
+  collection: PrimitiveCollection;
+  primitives: Primitive[];
+  isReady(): boolean;
+  readyCount(): number;
+  totalCount(): number;
+  setOpacity(opacity: number): void;
+  setSurfaceOpacity(opacity: number): void;
+  setCellEdges(visible: boolean): Promise<void>;
+  setElevationFactor(factor: number, force?: boolean): void;
+  setSceneMode(mode: ExplorerSceneMode): Promise<void>;
+  setVisibility(surface: boolean, support: boolean): void;
+}
 export type ContextStatus = 'loading' | 'ready' | 'fallback';
+export type AtlasMark =
+  | 'observations-visible'
+  | 'surface-first-chunk'
+  | 'surface-visible'
+  | 'ready'
+  | 'values-ready'
+  | 'edges-ready'
+  | 'context-ready';
 
 export interface SceneProgress {
   detail: string;
@@ -34,6 +73,34 @@ export interface SceneProgress {
 }
 
 export type SceneProgressListener = (progress: SceneProgress) => void;
+
+export interface ArtifactLoad {
+  artifactKey: string;
+  artifactId: string;
+  observations: Promise<ObservationArtifact | null>;
+  surface: Promise<SurfaceColumns>;
+  /** Degrees; the worker orders chunks nearest this point first. Defaults to the camera. */
+  lookAt?: { lat: number; lon: number };
+}
+
+export interface DisplayedLayer {
+  artifactKey: string;
+  metric: Metric;
+  palette: PaletteId;
+  geometry: SurfaceGeometry;
+}
+
+export interface ArtifactSceneApi {
+  setArtifact(
+    load: ArtifactLoad,
+    progress?: SceneProgressListener,
+  ): Promise<void>;
+  onCommit(listener: (artifactKey: string) => void): () => void;
+  onMark(listener: (mark: AtlasMark) => void): () => void;
+  displayedLayer(): DisplayedLayer | null;
+  markValuesReady(artifactKey: string): void;
+  removeSurface(artifactKey: string): void;
+}
 
 export interface SceneCapabilities {
   basemaps: Record<BasemapId, boolean>;
@@ -57,14 +124,14 @@ export interface AtlasSceneOptions {
   contextImageryUrl?: string;
   naturalEarthUrl: string;
   reducedMotion?: boolean;
+  /** The provider's worker: it already holds each artifact's decoded grid and render tier. */
+  worker: AtlasWorkerClient;
+  /** `.atlas-explorer`, which receives the readiness attributes. */
+  markTarget?: { setAttribute(name: string, value: string): void } | null;
+  frameBudgetMs?: number;
 }
 
-export interface AtlasSceneController {
-  setArtifact(
-    surface: SurfaceArtifact,
-    observations: ObservationArtifact | null,
-    progress?: SceneProgressListener,
-  ): Promise<void>;
+export interface AtlasSceneController extends ArtifactSceneApi {
   setMetric(metric: Metric, progress?: SceneProgressListener): Promise<void>;
   setSurfaceStyle(
     palette: PaletteId,

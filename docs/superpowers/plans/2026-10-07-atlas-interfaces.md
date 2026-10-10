@@ -119,7 +119,8 @@ export type WebObject; export type GridEntry;
 | `website/src/atlas/geometry/support-buffers.ts` | `interface SupportChunkBuffers { chunk; unknown: FlatCellBuffers \| null; priorDominated: { bin: number; color: [number, number, number] /* sRGB bytes */; buffers: FlatCellBuffers }[] }`, `buildSupportChunk(input: MeshInput, chunk): SupportChunkBuffers`; `FlatCellBuffers { positions: Float64Array; normals: Float32Array; st: Float32Array; indices: Uint16Array \| Uint32Array; boundingSphere }` |
 | `website/src/atlas/geometry/edge-buffers.ts` | `type EdgeColorSpec = { mode: 'matched' } \| { mode: 'fixed'; color: string /* #rrggbb */ }`, `interface EdgeChunkBuffers { chunk; ringOffsets: Uint32Array /* rings + 1 */; positions: Float64Array /* raised to the requested factor */; basePositions: Float64Array /* factor 0, 1,050 m clearance */; baseHeights: Float64Array /* mesh height at exaggeration 1 */; normals: Float32Array; colors: Float32Array /* RGBA per ring */ }`, `buildEdgeChunk(input: MeshInput, chunk, edgeColor: EdgeColorSpec, factor = 0): EdgeChunkBuffers`, `edgeCapacity(buffers): { primitiveCountMax; vertexCountMax }`, `brighterEdgeBytes`, `EDGE_CLEARANCE_METRES = 1_050` (Plan ruling R7) |
 | `website/src/atlas/geometry/anchors.ts` | `interface ObservationAnchors { heights: Float64Array /* per point, exaggeration 1 */; triangles: Float64Array /* 9 per point: lat, lon, height ×3; NaN when flat */ }`, `observationAnchors(input: MeshInput, points: Float64Array /* lon, lat interleaved */): ObservationAnchors` |
-| `website/src/atlas/geometry/pick-resolver.ts` | `resolveSurfaceRow(input: { cartesian: [number, number, number] \| null; ellipsoidHit: { lat: number; lon: number } \| null /* degrees */; factor: number; geometry: SurfaceGeometry; clearance: number }, surface: SurfaceArtifact, heights: (row: number) => number /* render height at exaggeration 1; 0 when masked */): number \| null` |
+| `website/src/atlas/geometry/pick-resolver.ts` | `interface PickRay { origin: Vec3; direction: Vec3 }`, `interface SurfacePickInput { cartesian: [number, number, number] \| null; ellipsoidHit: { lat: number; lon: number } \| null /* degrees */; factor: number; geometry: SurfaceGeometry; clearance: number; ray?: PickRay \| null /* globe ECEF; only extruded reads it: the first prism it enters wins, the altitude test is the fallback */; mapFrame?: MapFrameHit \| null /* Columbus view and 2D; when set, cartesian and ray are not read */ }`, `resolveSurfaceRow(input: SurfacePickInput, surface: SurfaceArtifact, heights: (row: number) => number /* render height at exaggeration 1; 0 when masked */, meshed?: (row: number) => boolean /* map frame only; default heights(row) > 0 */): number \| null` (spec §B.6.6, amended in Part B's final review) |
+| `website/src/atlas/geometry/map-frame-pick.ts` | `interface MapFrameHit { point: Vec3 /* [x, y, height] */; ray: PickRay \| null }`, `interface MapFrameMesh`, `alignToRay(point, ray)`, `firstDrawnRow(ray, point, mesh)` (the first drawn cell the ray meets within the depth-noise window), `unshearedBase(…)` (the base from the hit height when there is no ray) |
 | `website/src/atlas/geometry/natural-earth.ts` | `interface NaturalEarthBuffers { ringOffsets: Uint32Array; lonLat: Float64Array /* lon, lat interleaved */; labels: { text: string; lon: number; lat: number; minLabel: number }[] }`, `parseNaturalEarth(json: unknown): NaturalEarthBuffers` (outer rings; one label per distinct `countryLabelText`), `naturalEarthHeights(buffers, surface: { grid; support; values; domain }): { borderHeights: Float32Array; labelHeights: Float32Array }`, `countryLabelText` |
 | `website/src/atlas/worker/protocol.ts` | the complete protocol of Task 52 (B3.13), reproduced below |
 | `website/src/atlas/worker/state.ts` | `interface WorkerState { grids: Map<string, DecodedGrid>; renderGrids: Map<string, string> /* artifactKey -> grid_sha256 */; renders: Map<string, DecodedRender> }`, `createWorkerState()` — the worker never evicts a render tier on its own (the provider caches every surface it hands out and never re-sends a render tier on a cache hit) |
@@ -166,7 +167,7 @@ re-exported, `GeometryRequestType`, `GeometryResponse`, `LookAt`, `GridExpect`.
 
 | Entry | Kind | Written by | `detail` |
 | --- | --- | --- | --- |
-| `atlas:<AtlasMark>` | mark, first occurrence per page load, in the `scene.postRender` that satisfies it (with the `data-atlas-*` attribute) | scene marks (Tasks 58, 62 (B4.6, B4.10)) | none |
+| `atlas:<AtlasMark>` | mark, in the `scene.postRender` that satisfies it (with the `data-atlas-*` attribute): `context-ready` once per scene; the epoch marks (`observations-visible`, `surface-first-chunk`, `surface-visible`, `ready`) at most once per `setArtifact` (a new epoch drops the previous artifact's pending ones); `values-ready` and `edges-ready` again after each `clear()` at a commit. A page load can therefore hold several entries of one name; the cold-load harness reads the first (`firstMarkTime`) | scene marks (Tasks 58, 62 (B4.6, B4.10)) | none |
 | `atlas:worker:<step>` | measure, page-time `start`/`end` | `AtlasWorkerClient` on each `step-timing` (Task 32 (B2.9)) | `{ step, chunk, artifactKey }` |
 | `atlas:chunk-frame` | measure, `scene.preUpdate` → `scene.postRender` of the render after each batch add | `scheduleChunks` (Task 57 (B4.5)) | `{ artifactKey, chunks }` |
 | `atlas:chunk-add` | mark per added chunk | `ScientificLayers` (Task 62 (B4.10)) | `{ artifactKey, chunk }` |
@@ -180,11 +181,16 @@ re-exported, `GeometryRequestType`, `GeometryResponse`, `LookAt`, `GridExpect`.
   id="atlas-catalog" data-artifact-data-base="…">` (with `<` escaped as `<`), validated at build
   time with `atlasCatalogSchema` (`loadPageCatalog`), and an inline module-free `<script>` built from
   `website/src/atlas/preload-script.ts` (`preloadScriptSource(): string`, Cesium-free) that inserts
-  `<link rel="preload" as="fetch" crossorigin="anonymous">` for the URL-selected artifact's grid,
-  render and observations (default `artifacts[0]`), plus `<link rel=preconnect>` only for an absolute
-  base. The Astro integration `website/integrations/atlas-scene-preload.mjs` adds
-  `<link rel="modulepreload">` for the scene chunk and its static imports (the `cesium.<hash>.js`
-  chunk of Task 80 (B5.11)).
+  `<link rel="preload" as="fetch" crossorigin="anonymous">` for the URL-selected artifact's
+  observations (`fetchPriority` high), grid and render (low) (default `artifacts[0]`), plus
+  `<link rel=preconnect>` only for an absolute base. On a slow connection (`navigator.connection`
+  Save-Data or `effectiveType` 3g or slower) it skips the render preload and sets
+  `data-surface-downloads="after-scene"` on the catalog element (`SURFACE_DOWNLOADS_ATTRIBUTE`,
+  read by `surfaceDownloadsAfterScene(doc)` in `inline-catalog.ts`); the provider's
+  `surfaceStart?: Promise<void>` option then holds each render fetch until the scene chunk import
+  settles (ruling R84-slow4g, Part B final review). The Astro integration
+  `website/integrations/atlas-scene-preload.mjs` adds `<link rel="modulepreload" fetchpriority="high">`
+  for the scene chunk and its static imports (the `cesium.<hash>.js` chunk of Task 80 (B5.11)).
 - Build variable `ATLAS_CATALOG_PATH` (default `public/data/atlas/catalog.json`, resolved from `website/`).
 - Build variable `PUBLIC_ATLAS_REQUEST_STALL_MS` (e2e build only, `120000`; any other build refuses it, so production keeps the 15 s stall window of §B.2).
 

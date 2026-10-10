@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   aggregateTransferProgress,
+  combineTransfers,
   createTransferProgressTracker,
 } from '../src/atlas/progress';
 
@@ -39,5 +40,26 @@ describe('aggregateTransferProgress', () => {
     track('observations')({ loadedBytes: 25, totalBytes: 50 });
 
     expect(values).toEqual([null, 0.5]);
+  });
+});
+
+describe('combineTransfers', () => {
+  it('sums parts and keeps the total only when every part declares one', () => {
+    expect(
+      combineTransfers([
+        { loadedBytes: 10, totalBytes: 100 },
+        { loadedBytes: 5, totalBytes: 50 },
+      ]),
+    ).toEqual({ loadedBytes: 15, totalBytes: 150 });
+    expect(
+      combineTransfers([
+        { loadedBytes: 10, totalBytes: 100 },
+        { loadedBytes: 5, totalBytes: null },
+      ]),
+    ).toEqual({ loadedBytes: 15, totalBytes: null });
+    expect(combineTransfers([{ loadedBytes: 120, totalBytes: 100 }])).toEqual({
+      loadedBytes: 100,
+      totalBytes: 100,
+    });
   });
 });

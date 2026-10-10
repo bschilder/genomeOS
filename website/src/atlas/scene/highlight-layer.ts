@@ -12,16 +12,11 @@ import {
   type Scene,
 } from 'cesium';
 
-import type {
-  Observation,
-  ObservationArtifact,
-  SurfaceArtifact,
-  SurfaceCell,
-} from '../contracts';
-import { heightForCell, type Metric } from '../visual-encoding';
+import type { Observation, ObservationArtifact } from '../contracts';
+import { h3BoundaryDegrees } from '../geometry/polygon-parts';
+import type { Metric } from '../visual-encoding';
+import { surfaceHeightAt, type SurfaceHeightSource } from './surface-heights';
 import type { AtlasPick } from './types';
-import { surfaceHeightAt } from './observation-layer';
-import { h3BoundaryDegrees } from './surface-layer';
 
 export type HighlightKind = 'hover' | 'selection';
 
@@ -94,9 +89,8 @@ export class HighlightLayer {
   readonly #scene: Scene;
   readonly #hover: HighlightEntry;
   readonly #selection: HighlightEntry;
-  #surface: SurfaceArtifact | null = null;
+  #surface: SurfaceHeightSource | null = null;
   #observations = new Map<string, Observation>();
-  #surfaceCells = new Map<string, SurfaceCell>();
   #metric: Metric = 'post_mean';
   #elevation = false;
   #exaggeration = 1;
@@ -116,16 +110,13 @@ export class HighlightLayer {
   }
 
   setArtifacts(
-    surface: SurfaceArtifact,
+    surface: SurfaceHeightSource | null,
     observations: ObservationArtifact | null,
     metric: Metric,
     elevation: boolean,
     exaggeration: number,
   ): void {
     this.#surface = surface;
-    this.#surfaceCells = new Map(
-      surface.cells.map((cell) => [cell.h3_index, cell]),
-    );
     this.#observations = new Map(
       (observations?.observations ?? []).map((observation) => [
         observation.source_record_id,
@@ -202,19 +193,22 @@ export class HighlightLayer {
       this.#hide(entry);
       return;
     }
+    if (
+      pick.artifactKey !== undefined &&
+      this.#surface.artifactKey !== null &&
+      pick.artifactKey !== this.#surface.artifactKey
+    ) {
+      this.#hide(entry);
+      return;
+    }
     if (pick.kind === 'surface') {
-      const cell = this.#surfaceCells.get(pick.h3Index);
-      if (!cell) {
+      const height = this.#surface.cellHeight(pick.h3Index, this.#metric);
+      if (height === null) {
         this.#hide(entry);
         return;
       }
       const top = this.#elevation
-        ? heightForCell(
-            cell,
-            this.#surface.artifact.metric_domains[this.#metric],
-            this.#exaggeration,
-            this.#metric,
-          )
+        ? height * Math.max(0, this.#exaggeration)
         : 0;
       const coordinates = h3BoundaryDegrees(pick.h3Index).flatMap(
         ([lon, lat]) => [lon, lat, top + SURFACE_CLEARANCE_METRES],
@@ -235,7 +229,6 @@ export class HighlightLayer {
       this.#metric,
       this.#elevation,
       this.#exaggeration,
-      this.#surfaceCells,
     );
     entry.point.position = Cartesian3.fromDegrees(
       observation.lon,

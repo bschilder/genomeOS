@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAtlasScene } from '../src/atlas/scene/atlas-scene';
+import type { AtlasWorkerClient } from '../src/atlas/worker/client';
 
 /** A minimal Cesium Event: listeners in order, removal through the returned function. */
 type FakeEvent = ReturnType<typeof fakeEvent>;
@@ -53,10 +54,25 @@ vi.mock('../src/atlas/scene/context-controller', () => ({
     setBasemap = () => Promise.resolve(true);
   },
 }));
-vi.mock('../src/atlas/scene/geographic-overlay', () => ({
-  GeographicOverlay: class {
+vi.mock('../src/atlas/scene/context-overlay', () => ({
+  ContextOverlay: class {
     load = () => new Promise(() => {});
   },
+}));
+vi.mock('../src/atlas/scene/scientific-layers', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../src/atlas/scene/scientific-layers')
+  >()),
+  ScientificLayers: class {
+    destroy = () => {};
+  },
+}));
+vi.mock('../src/atlas/scene/scene-marks', () => ({
+  createMarkTracker: () => ({
+    destroy: () => {},
+    onMark: () => () => {},
+    queue: () => {},
+  }),
 }));
 vi.mock('../src/atlas/scene/highlight-layer', () => ({
   HighlightLayer: class {
@@ -74,6 +90,7 @@ vi.mock('../src/atlas/scene/picking', async (importOriginal) => ({
 }));
 vi.mock('../src/atlas/scene/scene-policy', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/atlas/scene/scene-policy')>()),
+  hideSkyUntilReady: () => () => {},
   styleAtlasScene: () => {},
 }));
 
@@ -88,7 +105,9 @@ function runFrame(): void {
 
 function scene() {
   const controller = createAtlasScene({} as HTMLElement, {
+    frameBudgetMs: 8,
     naturalEarthUrl: 'ne.geojson',
+    worker: {} as AtlasWorkerClient,
   });
   const viewer = viewers.at(-1)!;
   return { controller, viewer };

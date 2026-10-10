@@ -4,16 +4,25 @@ import type { CSSProperties } from 'react';
 
 import type { ObservationColorEncoding } from '../../atlas/observation-encoding';
 import type { ObservationPlaceContext } from '../../atlas/place-context';
+import type { SurfaceArtifact } from '../../atlas/surface-columns';
 import {
   evidenceSupportLabel,
   type InspectorSelection,
 } from './InspectorPanel';
+import {
+  CELL_VALUES_UNAVAILABLE,
+  LOADING_CELL_VALUES,
+  surfaceCellView,
+  type DetailStatus,
+} from './surface-cell-view';
 
 interface HoverPreviewProps {
   colorEncoding?: ObservationColorEncoding | null;
+  detail?: DetailStatus;
   placeContext?: ObservationPlaceContext | null;
   position: { x: number; y: number };
   selection: InspectorSelection;
+  surface?: SurfaceArtifact | null;
 }
 
 function percent(value: number): string {
@@ -33,9 +42,11 @@ function encodedValue(encoding: ObservationColorEncoding): string {
 
 export function HoverPreview({
   colorEncoding,
+  detail = 'loading',
   placeContext,
   position,
   selection,
+  surface = null,
 }: HoverPreviewProps) {
   const style = {
     '--atlas-hover-x': `${position.x}px`,
@@ -43,27 +54,39 @@ export function HoverPreview({
   } as CSSProperties;
 
   if (selection.kind === 'surface') {
-    const cell = selection.value;
+    const view = surfaceCellView(surface, selection, detail);
+    if (!view) return null;
     return (
       <div className="atlas-hover-preview" style={style} aria-hidden="true">
         <span>Modeled estimate</span>
-        <dl>
-          <div>
-            <dt>Posterior</dt>
-            <dd>{percent(cell.post_mean)}</dd>
-          </div>
-          <div>
-            <dt>95% credible range</dt>
-            <dd>
-              {percent(cell.q025)}–{percent(cell.q975)}
-            </dd>
-          </div>
-          <div>
-            <dt>Uncertainty</dt>
-            <dd>{percent(cell.post_sd)}</dd>
-          </div>
-        </dl>
-        <small>{evidenceSupportLabel(cell.support)}</small>
+        {view.state === 'values' ? (
+          <dl>
+            <div>
+              <dt>Posterior</dt>
+              <dd>{percent(view.cell.post_mean)}</dd>
+            </div>
+            <div>
+              <dt>95% credible range</dt>
+              <dd>
+                {percent(view.cell.q025)}–{percent(view.cell.q975)}
+              </dd>
+            </div>
+            <div>
+              <dt>Uncertainty</dt>
+              <dd>{percent(view.cell.post_sd)}</dd>
+            </div>
+          </dl>
+        ) : (
+          <>
+            <strong>
+              {view.state === 'loading'
+                ? LOADING_CELL_VALUES
+                : CELL_VALUES_UNAVAILABLE}
+            </strong>
+            <small>Cell {view.h3Index}</small>
+          </>
+        )}
+        <small>{evidenceSupportLabel(view.support)}</small>
       </div>
     );
   }

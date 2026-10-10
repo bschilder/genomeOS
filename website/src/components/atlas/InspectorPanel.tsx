@@ -1,6 +1,7 @@
 /** Evidence-only pick inspector for Atlas design §11. */
 
 import { cellToLatLng } from 'h3-js';
+import { useLayoutEffect, useRef, type RefObject } from 'react';
 
 import type {
   ArtifactRef,
@@ -9,7 +10,16 @@ import type {
 } from '../../atlas/contracts';
 import type { ObservationColorEncoding } from '../../atlas/observation-encoding';
 import type { ObservationPlaceContext } from '../../atlas/place-context';
+import type { SurfaceArtifact } from '../../atlas/surface-columns';
 import { sitePath } from '../../lib/paths';
+import {
+  CELL_VALUES_UNAVAILABLE,
+  LOADING_CELL_VALUES,
+  RETRY_CELL_VALUES,
+  surfaceCellView,
+  type DetailStatus,
+  type SurfaceSelection,
+} from './surface-cell-view';
 import { useEscapeLayer } from './useEscapeStack';
 import {
   useExplorerPanel,
@@ -18,15 +28,17 @@ import {
 } from './useExplorerPanels';
 
 export type InspectorSelection =
-  | { kind: 'surface'; value: SurfaceCell }
-  | { kind: 'observation'; value: Observation };
+  SurfaceSelection | { kind: 'observation'; value: Observation };
 
 interface InspectorPanelProps {
   artifact: ArtifactRef;
   colorEncoding?: ObservationColorEncoding | null;
+  detail?: DetailStatus;
   placeContext?: ObservationPlaceContext | null;
   selection: InspectorSelection;
+  surface?: SurfaceArtifact | null;
   onClose: () => void;
+  onRetryDetail?: () => void;
 }
 
 function percent(value: number): string {
@@ -66,25 +78,71 @@ function GoogleMapsIcon() {
   );
 }
 
+/**
+ * "Retry cell values" unmounts as soon as the retry moves the detail tier back
+ * to loading. Its layout cleanup runs before React removes the button, so a
+ * retry that still holds focus hands it to the panel's Close button, which
+ * stays mounted in every cell-value state and sits outside the phone sheet's
+ * inert body, instead of letting it fall to <body> (mobile sheets design
+ * 2026-10-07 §A.1.6).
+ */
+function RetryCellValues({
+  close,
+  onRetry,
+}: {
+  close: RefObject<HTMLButtonElement | null>;
+  onRetry: () => void;
+}) {
+  const button = useRef<HTMLButtonElement | null>(null);
+  useLayoutEffect(() => {
+    const node = button.current;
+    return () => {
+      if (node && node.ownerDocument.activeElement === node)
+        close.current?.focus();
+    };
+  }, [close]);
+  return (
+    <button
+      className="atlas-inspector__retry"
+      ref={button}
+      type="button"
+      onClick={onRetry}
+    >
+      {RETRY_CELL_VALUES}
+    </button>
+  );
+}
+
 export function InspectorPanel({
   artifact,
   colorEncoding,
+  detail = 'loading',
   placeContext,
   selection,
+  surface = null,
   onClose,
+  onRetryDetail,
 }: InspectorPanelProps) {
-  useEscapeLayer(true, onClose, 'inspector');
-  useExplorerPanel('inspector', true, onClose);
+  const view =
+    selection.kind === 'surface'
+      ? surfaceCellView(surface, selection, detail)
+      : null;
+  // A panel that renders nothing must not hold the Escape stack or the phone panel sheet.
+  const shown = selection.kind !== 'surface' || view !== null;
+  useEscapeLayer(shown, onClose, 'inspector');
+  useExplorerPanel('inspector', shown, onClose);
   const bodyId = usePanelBodyId('inspector');
   const bodyInert = usePanelBodyInert();
+  const close = useRef<HTMLButtonElement | null>(null);
   if (selection.kind === 'surface') {
-    const cell = selection.value;
-    const [centroidLat, centroidLon] = cellToLatLng(cell.h3_index);
+    if (!view) return null;
+    const [centroidLat, centroidLon] = cellToLatLng(view.h3Index);
     return (
       <aside className="atlas-inspector" aria-label="Selected map cell">
         <button
           className="atlas-inspector__close"
           data-sheet-peek
+          ref={close}
           type="button"
           onClick={onClose}
           aria-label="Close inspector"
@@ -100,31 +158,51 @@ export function InspectorPanel({
           inert={bodyInert}
         >
           <dl>
-            <div>
-              <dt>Posterior estimate</dt>
-              <dd>{percent(cell.post_mean)}</dd>
-            </div>
-            <div>
-              <dt>95% credible interval</dt>
-              <dd>
-                {percent(cell.q025)}–{percent(cell.q975)}
-              </dd>
-            </div>
-            <div>
-              <dt>Uncertainty</dt>
-              <dd>{percent(cell.post_sd)}</dd>
-            </div>
+            {view.state === 'values' ? (
+              <>
+                <div>
+                  <dt>Posterior estimate</dt>
+                  <dd>{percent(view.cell.post_mean)}</dd>
+                </div>
+                <div>
+                  <dt>95% credible interval</dt>
+                  <dd>
+                    {percent(view.cell.q025)}–{percent(view.cell.q975)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Uncertainty</dt>
+                  <dd>{percent(view.cell.post_sd)}</dd>
+                </div>
+              </>
+            ) : (
+              <div>
+                <dt>Cell values</dt>
+                <dd>
+                  <span role="status">
+                    {view.state === 'loading'
+                      ? LOADING_CELL_VALUES
+                      : CELL_VALUES_UNAVAILABLE}
+                  </span>
+                  {view.state === 'unavailable' && onRetryDetail && (
+                    <RetryCellValues close={close} onRetry={onRetryDetail} />
+                  )}
+                </dd>
+              </div>
+            )}
             <div>
               <dt>Evidence support</dt>
-              <dd>{evidenceSupportLabel(cell.support)}</dd>
+              <dd>{evidenceSupportLabel(view.support)}</dd>
             </div>
-            <div>
-              <dt>Nearest measurement</dt>
-              <dd>{Math.round(cell.dist_nearest_obs_km)} km</dd>
-            </div>
+            {view.state === 'values' && (
+              <div>
+                <dt>Nearest measurement</dt>
+                <dd>{Math.round(view.cell.dist_nearest_obs_km)} km</dd>
+              </div>
+            )}
             <div>
               <dt>Cell ID</dt>
-              <dd>{cell.h3_index}</dd>
+              <dd>{view.h3Index}</dd>
             </div>
             <div>
               <dt>Google Maps</dt>
@@ -154,7 +232,7 @@ export function InspectorPanel({
                       </span>
                     </a>
                     <a
-                      href={googleMapsPolygonUrl(cell.h3_index)}
+                      href={googleMapsPolygonUrl(view.h3Index)}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

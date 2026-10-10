@@ -24,19 +24,34 @@ function windowMatchMedia(): MatchMedia | undefined {
     : window.matchMedia.bind(window);
 }
 
+/**
+ * The snapshot moves only when this query's own `change` event fires. Read
+ * live, `matches` changes at the resize, before the browser dispatches the
+ * events, so any render in between would switch some components a commit
+ * early: the dataset picker could then move to the top slot in the same commit
+ * as the sheet enables and keep focus that belongs to the sheet's handle
+ * (mobile sheets design §A.1.4, §A.1.6).
+ */
 export function createMediaQueryStore(
   query: string,
   getMatchMedia: () => MatchMedia | undefined = windowMatchMedia,
 ): MediaQueryStore {
   const list = () => getMatchMedia()?.(query);
+  let current: boolean | null = null;
   return {
     subscribe(onChange) {
       const media = list();
       if (!media) return () => {};
-      media.addEventListener('change', onChange);
-      return () => media.removeEventListener('change', onChange);
+      const update = () => {
+        current = media.matches;
+        onChange();
+      };
+      media.addEventListener('change', update);
+      // A change between the first read and now had no listener to hear it.
+      if (current !== null && current !== media.matches) update();
+      return () => media.removeEventListener('change', update);
     },
-    getSnapshot: () => list()?.matches ?? false,
+    getSnapshot: () => (current ??= list()?.matches ?? false),
     getServerSnapshot: () => false,
   };
 }

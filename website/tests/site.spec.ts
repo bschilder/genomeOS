@@ -2,8 +2,28 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { cellToLatLng } from 'h3-js';
 
-import { installAtlasBrowserFixture } from './atlas-browser-fixture';
-import { expandExplorerSheet } from './atlas-mobile-helpers';
+import { StaticAtlasDataProvider } from '../src/atlas/static-provider';
+import { dataHref } from '../src/lib/data-url';
+import {
+  artifactTierKey,
+  corruptArtifactTier,
+  delayArtifactTier,
+  displayedArtifactIds,
+  E2E_ARTIFACT_DATA_BASE,
+  failArtifactTier,
+  installAtlasBrowserFixture,
+  readInlineCatalog,
+  urlMatchesKey,
+} from './atlas-browser-fixture';
+import {
+  expandExplorerSheet,
+  INSPECTOR_CAMERA,
+  legendRow,
+  markLegendLoading,
+  recordedLegendLoading,
+  recordLegendLoading,
+  type LegendRow,
+} from './atlas-mobile-helpers';
 import { topLevelRoutes } from './site-routes';
 
 test.beforeEach(async ({ page }) => installAtlasBrowserFixture(page));
@@ -104,7 +124,7 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
     header.getByRole('link', { name: 'Launch Atlas', exact: true }),
   ).toHaveCount(0);
   await expect(header.getByLabel('Atlas status')).toContainText(
-    /loading catalog|loading artifact|validating|rendering|Atlas ready/i,
+    /loading|validating|rendering|revealing|Atlas ready/i,
   );
 
   await page.goto('/project/');
@@ -206,14 +226,22 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
   page,
 }) => {
   test.setTimeout(90_000);
-  await page.route('**/g6pd-deficiency.surface.json', async (route) => {
-    await new Promise((resolve) => setTimeout(resolve, 1_800));
-    await route.fallback();
-  });
   await page.goto('/app/');
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
+  const render = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  const observations = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'observations',
+    Number.POSITIVE_INFINITY,
+  );
 
   await chooseAtlasMap(page, 'g6pd-deficiency');
   const status = page.locator('[data-atlas-status-slot]');
@@ -225,10 +253,112 @@ test('Atlas status shows progress while a replacement dataset stays pending', as
     'Atlas operation progress',
   );
   await expect(progress).toBeVisible();
+  await expect.poll(() => render.hits()).toBe(1);
+  await expect.poll(() => observations.hits()).toBe(1);
   await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  render.release();
+  observations.release();
   await expect(
     page.locator('[data-atlas-active="g6pd-deficiency"]'),
   ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect
+    .poll(() => displayedArtifactIds(page))
+    .toEqual(['g6pd-deficiency']);
+  expect(render.hits()).toBe(1);
+  expect(observations.hits()).toBe(1);
+});
+
+test('a replacement stays hidden until its render tier arrives, then swaps atomically', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const observationsKey = artifactTierKey(
+    await readInlineCatalog(page),
+    'g6pd-deficiency',
+    'observations',
+  );
+  const render = await delayArtifactTier(
+    page,
+    'g6pd-deficiency',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.evaluate(() => {
+    const explorer = document.querySelector('.atlas-explorer');
+    if (explorer === null) throw new Error('missing .atlas-explorer');
+    const history: string[] = [];
+    const probe = window as Window & {
+      __atlasDisplayedHistory?: string[];
+      __atlasReleaseMark?: () => void;
+    };
+    probe.__atlasDisplayedHistory = history;
+    probe.__atlasReleaseMark = () => history.push('|release|');
+    new MutationObserver(() =>
+      history.push(explorer.getAttribute('data-atlas-displayed') ?? ''),
+    ).observe(explorer, {
+      attributes: true,
+      attributeFilter: ['data-atlas-displayed'],
+    });
+  });
+  const observationsArrived = page.waitForResponse((response) =>
+    urlMatchesKey(new URL(response.url()), observationsKey),
+  );
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await observationsArrived;
+  await expect.poll(() => render.hits()).toBe(1);
+  await page.waitForTimeout(750);
+  await expect(page.locator('[data-atlas-status-slot]')).toContainText(
+    'G6PD deficiency',
+  );
+  await expect(page.locator('[data-atlas-active="hbs-rs334"]')).toBeVisible();
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  await page.evaluate(() =>
+    (
+      window as Window & { __atlasReleaseMark?: () => void }
+    ).__atlasReleaseMark?.(),
+  );
+  render.release();
+  await expect(
+    page.locator('[data-atlas-active="g6pd-deficiency"]'),
+  ).toHaveAttribute('data-atlas-ready', 'true', { timeout: 45_000 });
+  await expect
+    .poll(() => displayedArtifactIds(page))
+    .toEqual(['g6pd-deficiency']);
+  const history = await page.evaluate(
+    () =>
+      (window as Window & { __atlasDisplayedHistory?: string[] })
+        .__atlasDisplayedHistory ?? [],
+  );
+  const cut = history.indexOf('|release|');
+  expect(cut).toBeGreaterThanOrEqual(0);
+  const parse = (value: string) =>
+    [...new Set(value.split(/\s+/).filter(Boolean))].sort().join(' ');
+  const before = history.slice(0, cut).map(parse);
+  const after = history.slice(cut + 1).map(parse);
+  // Nothing of G6PD is displayed while its render tier is held.
+  for (const value of before) expect(value).toBe('hbs-rs334');
+  // After the release: hbs-rs334 -> (cross-fade: both)* -> g6pd-deficiency, never back.
+  expect(after.at(-1)).toBe('g6pd-deficiency');
+  const rank = {
+    'g6pd-deficiency': 2,
+    'g6pd-deficiency hbs-rs334': 1,
+    'hbs-rs334': 0,
+  } as const;
+  let last = 0;
+  for (const value of after) {
+    expect(Object.keys(rank)).toContain(value);
+    const step = rank[value as keyof typeof rank];
+    expect(step).toBeGreaterThanOrEqual(last);
+    last = step;
+  }
 });
 
 test('navigation stays visible and condenses after scrolling', async ({
@@ -628,11 +758,7 @@ test('explorer switches among globe, map, and perspective views', async ({
 
 test('explorer restores a complete shareable URL', async ({ page }) => {
   test.setTimeout(90_000);
-  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
-  expect(servedCatalog.ok()).toBe(true);
-  const servedArtifacts = (await servedCatalog.json()) as {
-    artifacts: { id: string; model_version: string }[];
-  };
+  const servedArtifacts = await readInlineCatalog(page);
   expect(servedArtifacts.artifacts).toHaveLength(30);
   expect(servedArtifacts.artifacts).toContainEqual(
     expect.objectContaining({
@@ -692,15 +818,7 @@ test('explorer recovers a stale version link for an available map', async ({
   page,
 }) => {
   test.setTimeout(60_000);
-  const servedCatalog = await page.request.get('/data/atlas/catalog.json');
-  expect(servedCatalog.ok()).toBe(true);
-  const servedArtifacts = (await servedCatalog.json()) as {
-    artifacts: {
-      data_version: string;
-      id: string;
-      model_version: string;
-    }[];
-  };
+  const servedArtifacts = await readInlineCatalog(page);
   const current = servedArtifacts.artifacts.find(
     ({ id }) => id === 'hbs-rs334',
   );
@@ -748,21 +866,6 @@ test('explorer exposes the full catalog and shareable appearance controls', asyn
       .getByRole('option'),
   ).toHaveCount(30);
   await page.keyboard.press('Escape');
-  const completeSurface = await page.request.get(
-    '/data/atlas/hbs-rs334.surface.json',
-  );
-  expect(completeSurface.ok()).toBe(true);
-  expect(
-    ((await completeSurface.json()) as { cells: unknown[] }).cells,
-  ).toHaveLength(77_844);
-  const completeObservations = await page.request.get(
-    '/data/atlas/hbs-rs334.observations.json',
-  );
-  expect(completeObservations.ok()).toBe(true);
-  expect(
-    ((await completeObservations.json()) as { observations: unknown[] })
-      .observations,
-  ).toHaveLength(1_071);
 
   const mapHelp = page.getByRole('button', { name: 'About map selection' });
   await mapHelp.click();
@@ -1102,6 +1205,82 @@ test('the legend info summary takes pointers across its whole 24 px box', async 
   expect(corners).toEqual(Array(5).fill('summary'));
 });
 
+test('the legend keeps its row while it shows the loading status', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'atlas-mobile.spec.ts holds the phone strip to its row',
+  );
+  // The centred legend at its minimum width, then the right-docked one (≤ 75rem).
+  const viewports = [
+    { height: 900, width: 1440 },
+    { height: 800, width: 1100 },
+  ];
+  await page.setViewportSize(viewports[0]!);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const before: LegendRow[] = [];
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport);
+    before.push(await legendRow(page));
+  }
+  await markLegendLoading(page);
+  const legend = page.getByRole('complementary', { name: 'Map legend' });
+  for (const [index, viewport] of viewports.entries()) {
+    await page.setViewportSize(viewport);
+    const size = `${viewport.width}x${viewport.height}`;
+    await expect(legend.getByRole('status'), size).toHaveText('Loading map…');
+    await expect(legend.getByRole('status'), size).toBeVisible();
+    await expect(
+      legend.locator('.atlas-legend__mode:not(.atlas-legend__loading)'),
+      size,
+    ).toBeVisible();
+    // A line of its own above the row: the row keeps its ramp, its mode pill
+    // and its info trigger, and does not move (the legend grows upward).
+    const row = await legendRow(page);
+    expect(row.status, size).toEqual({ aboveRow: true, insideLegend: true });
+    expect(row.infoInRow, size).toBe(true);
+    expect(
+      Math.abs(row.rowTop - before[index]!.rowTop),
+      size,
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(row.rampWidth - before[index]!.rampWidth),
+      size,
+    ).toBeLessThanOrEqual(1);
+    expect(row.overflow, size).toBeLessThanOrEqual(0);
+  }
+});
+
+test('the explorer shows the legend loading status in its row during the cold reveal', async ({
+  page,
+}, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'desktop-chromium',
+    'atlas-mobile.spec.ts checks the phone strip',
+  );
+  await recordLegendLoading(page);
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const loading = await recordedLegendLoading(page);
+  expect(loading, 'the legend rendered its cold-reveal state').not.toBeNull();
+  expect(loading!.statusText).toBe('Loading map…');
+  expect(loading!.statusShown).toBe(true);
+  expect(loading!.status).toEqual({ aboveRow: true, insideLegend: true });
+  expect(loading!.infoBesideLabel).toBe(true);
+  expect(loading!.infoInRow).toBe(true);
+  expect(loading!.overflow).toBeLessThanOrEqual(0);
+  // The commit ends the reveal and takes the status away.
+  const legend = page.getByRole('complementary', { name: 'Map legend' });
+  await expect(legend).not.toHaveAttribute('data-atlas-legend-loading', 'true');
+  await expect(legend.getByRole('status')).toHaveCount(0);
+});
+
 test('height exaggeration uses the available compact control width', async ({
   page,
 }, testInfo) => {
@@ -1219,15 +1398,21 @@ test('explorer provides versioned downloads and gated external lookups', async (
   await expandExplorerSheet(page);
 
   await page.locator('.atlas-downloads > summary').click();
-  await expect(
-    page.getByRole('link', { name: 'Artifact manifest' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.manifest.json');
-  await expect(
-    page.getByRole('link', { name: 'Measured observations' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.observations.json');
-  await expect(
-    page.getByRole('link', { name: 'Inferred surface' }),
-  ).toHaveAttribute('href', '/data/atlas/hbs-rs334.surface.json');
+  const hbs = (await readInlineCatalog(page)).artifacts.find(
+    ({ id }) => id === 'hbs-rs334',
+  );
+  if (hbs?.downloads.observations == null)
+    throw new Error('hbs-rs334 downloads are missing from the inline catalog');
+  for (const [name, key] of [
+    ['Artifact manifest', hbs.downloads.manifest.url],
+    ['Measured observations', hbs.downloads.observations.url],
+    ['Inferred surface', hbs.downloads.surface.url],
+  ] as const) {
+    await expect(page.getByRole('link', { name })).toHaveAttribute(
+      'href',
+      dataHref(key, E2E_ARTIFACT_DATA_BASE),
+    );
+  }
 
   await page.getByRole('button', { name: 'More info' }).click();
   const externalPanel = page.getByRole('complementary', {
@@ -1341,6 +1526,9 @@ test('explorer previews and opens separate surface and observation inspectors', 
   });
   await page.goto(`/app/?${query}`);
   await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('[data-atlas-values-ready="true"]')).toBeVisible({
     timeout: 45_000,
   });
   const canvas = page.locator('.atlas-scene canvas').first();
@@ -1534,13 +1722,20 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
   test.setTimeout(120_000);
   // Live failure: one transient worker-module fetch ("Failed to fetch dynamically imported
   // module …/createPolygonGeometry.js") threw inside a Cesium frame, Cesium showed its raw error
-  // panel, and rendering stopped for good. The support layer's asynchronous PolygonGeometry is
-  // built by that module, so aborting only its first request reproduces the failure.
-  let polygonWorkerRequests = 0;
-  await context.route('**/cesium/Workers/createPolygonGeometry.js', (route) => {
-    polygonWorkerRequests += 1;
-    return polygonWorkerRequests === 1 ? route.abort() : route.continue();
-  });
+  // panel, and rendering stopped for good. The fast-load scene builds no Cesium PolygonGeometry,
+  // so it never requests that module, and a failed terrain worker fetch fails only its tile. The
+  // sky box is the same failure class: its cube-map faces are fetched from inside Scene.render once
+  // the map is ready (fast-load design §B.6.9), and Cesium rethrows a failed face load on the next
+  // frame. Aborting only the first request for one face reproduces the raw panel without the
+  // Atlas render loop, and the sky box draws only in the 3-D globe view.
+  let skyFaceRequests = 0;
+  await context.route(
+    '**/cesium/Assets/Textures/SkyBox/tycho2t3_80_px.jpg',
+    (route) => {
+      skyFaceRequests += 1;
+      return skyFaceRequests === 1 ? route.abort() : route.continue();
+    },
+  );
   // The binding and init script survive navigation, so a raw panel on any document is caught.
   let rawPanelSeen = false;
   await page.exposeFunction('reportRawCesiumErrorPanel', () => {
@@ -1556,10 +1751,8 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
       void binding.reportRawCesiumErrorPanel?.();
     }).observe(document, { childList: true, subtree: true });
   });
-  // Retry reloads the page, so a non-default map, view and metric must come back from the URL.
-  await page.goto(
-    '/app/?entity=g6pd-deficiency&view=perspective&metric=post_sd',
-  );
+  // Retry reloads the page, so a non-default map, metric and opacity must come back from the URL.
+  await page.goto('/app/?entity=g6pd-deficiency&metric=post_sd&opacity=0.4');
 
   const rawPanel = page.locator('.cesium-widget-errorPanel');
   const explorer = page.locator('[data-atlas-explorer]');
@@ -1574,7 +1767,7 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
     failure.getByRole('link', { name: 'Browser requirements' }),
   ).toHaveCount(0);
   await expect(explorer).toHaveAttribute('data-atlas-ready', 'false');
-  expect(polygonWorkerRequests).toBeGreaterThan(0);
+  expect(skyFaceRequests).toBeGreaterThan(0);
 
   await page.evaluate(() => {
     (window as Window & { beforeRetry?: boolean }).beforeRetry = true;
@@ -1595,11 +1788,78 @@ test('explorer recovers from a render-loop error through Retry globe', async ({
   ).toBeVisible({ timeout: 60_000 });
   const restored = new URL(page.url()).searchParams;
   expect(restored.get('entity')).toBe('g6pd-deficiency');
-  expect(restored.get('view')).toBe('perspective');
   expect(restored.get('metric')).toBe('post_sd');
+  expect(restored.get('opacity')).toBe('0.4');
   await expect(failure).toHaveCount(0);
   await expect(rawPanel).toHaveCount(0);
   expect(rawPanelSeen).toBe(false);
+});
+
+test('Retry globe recovers from a failed scene-chunk download', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // Chromium caches a failed dynamic import in the module map, so only a reload fetches it again.
+  const sceneRequests: string[] = [];
+  await page.route(/\/_astro\/atlas-scene\.[^/]+\.js$/, async (route) => {
+    sceneRequests.push(route.request().url());
+    if (sceneRequests.length === 1) await route.abort('failed');
+    else await route.fallback();
+  });
+  const consoleErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error') consoleErrors.push(message.text());
+  });
+  await page.goto('/app/?metric=post_sd');
+  await expect(page.getByText('The globe could not load')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.getByText('This globe needs WebGL')).toHaveCount(0);
+  expect(consoleErrors).toContainEqual(
+    expect.stringContaining('The Atlas globe scene could not be loaded.'),
+  );
+  await page.getByRole('button', { name: 'Retry globe' }).click();
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  expect(sceneRequests).toHaveLength(2);
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+});
+
+test('Retry globe recovers from a data worker whose script failed to download', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // A dead data worker fails every later request, and only a new page starts a new one, so the
+  // explorer offers the reload panel instead of a "Retry data" that would fail the same way. The
+  // globe is not what failed, so the panel names the map data (fast-load §B.7, amended).
+  let workerRequests = 0;
+  await page.route(/\/_astro\/atlas-data\.worker-[^/]+\.js$/, async (route) => {
+    workerRequests += 1;
+    if (workerRequests === 1) await route.abort('failed');
+    else await route.fallback();
+  });
+  await page.goto('/app/?metric=post_sd');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'The map data could not load' });
+  await expect(failure).toBeVisible({ timeout: 45_000 });
+  await expect(failure).toContainText('Retrying reloads the page');
+  await expect(page.getByText('The globe could not load')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry data' })).toHaveCount(0);
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-ready',
+    'false',
+  );
+  await Promise.all([
+    page.waitForEvent('load'),
+    failure.getByRole('button', { name: 'Retry globe' }).click(),
+  ]);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  expect(workerRequests).toBe(2);
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
 });
 
 test('polygon map validates a selected model cell before loading Google Maps', async ({
@@ -1609,4 +1869,495 @@ test('polygon map validates a selected model cell before loading Google Maps', a
   await expect(page.getByRole('status')).toContainText(
     'domain-restricted Google Maps browser key',
   );
+});
+
+test('cold load shows observations, then the surface, then outlines and borders', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  for (const attribute of [
+    'data-atlas-observations-visible',
+    'data-atlas-surface-visible',
+    'data-atlas-ready',
+    'data-atlas-edges-ready',
+    'data-atlas-context-ready',
+  ])
+    await expect(explorer).toHaveAttribute(attribute, 'true', {
+      timeout: 45_000,
+    });
+  await expect(explorer).toHaveAttribute('data-atlas-displayed', 'hbs-rs334');
+
+  const marks = await page.evaluate(() =>
+    Object.fromEntries(
+      [
+        'observations-visible',
+        'surface-first-chunk',
+        'surface-visible',
+        'ready',
+        'edges-ready',
+        'context-ready',
+      ].map((name) => [
+        name,
+        performance.getEntriesByName(`atlas:${name}`)[0]?.startTime ?? null,
+      ]),
+    ),
+  );
+  for (const value of Object.values(marks)) expect(value).not.toBeNull();
+  expect(marks['observations-visible']!).toBeLessThanOrEqual(
+    marks['surface-visible']!,
+  );
+  expect(marks['surface-first-chunk']!).toBeLessThanOrEqual(
+    marks['surface-visible']!,
+  );
+  // `ready` means surface, support and observations are all visible (§B.1).
+  expect(marks['observations-visible']!).toBeLessThanOrEqual(marks['ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(marks['edges-ready']!);
+  expect(marks['surface-visible']!).toBeLessThanOrEqual(
+    marks['context-ready']!,
+  );
+  const reveal = JSON.parse(
+    (await explorer.getAttribute('data-atlas-reveal')) ?? '{}',
+  );
+  expect(reveal.frames).toBeGreaterThan(0);
+  expect(reveal.longestFrameMs).toBeGreaterThanOrEqual(0);
+});
+
+test('style choices in the URL reach the scene that renders them', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  await page.goto('/app/?metric=post_sd');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(
+    page.getByRole('complementary', { name: 'Map legend' }),
+  ).toContainText('Model uncertainty');
+});
+
+// An open inspector never shows the previous artifact's numbers after a dataset switch.
+test('switching dataset closes the inspector instead of keeping the old artifact’s cell', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered on desktop',
+  );
+  test.setTimeout(120_000);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearCanvasCentre(page, 'click', inspector);
+  await expect(inspector).toBeVisible();
+
+  await chooseAtlasMap(page, 'g6pd-deficiency');
+  await expect(explorer).toHaveAttribute(
+    'data-atlas-active',
+    'g6pd-deficiency',
+    {
+      timeout: 45_000,
+    },
+  );
+  await expect(inspector).toBeHidden();
+});
+
+const CANVAS_CENTRE_OFFSETS = [
+  [0, 0],
+  [-18, 0],
+  [18, 0],
+  [0, -18],
+  [0, 18],
+  [-18, -18],
+  [18, -18],
+  [-18, 18],
+  [18, 18],
+] as const;
+const SUPPORT_LABEL = /observed|interpolated|Mostly model assumptions|unknown/;
+const DISPLAYED_VALUE = /\d+\.\d{2}%/;
+// Hex lookarounds, not \b: the hover preview's text is "Cell <id>" directly followed by the
+// support label ("…ffffobserved"), so there is no word boundary after the id.
+const CELL_ID = /(?<![0-9a-f])[0-9a-f]{15}(?![0-9a-f])/;
+/**
+ * Every production build aborts a fetch that sends no data for this long (fast-load design §B.2).
+ * Only `build:e2e` stretches the window, to 120 s (`PUBLIC_ATLAS_REQUEST_STALL_MS`, Task 67 (B5.1)).
+ */
+const PRODUCTION_REQUEST_STALL_MS =
+  StaticAtlasDataProvider.defaultRequestStallMs;
+/** Time for a production-window stall abort to reach the inspector before the hold is read. */
+const STALL_ABORT_SETTLE_MS = 2_000;
+const HELD_PAST_PRODUCTION_STALL =
+  'the provider aborted the held detail tier at the production stall window (build with npm run build:e2e)';
+
+async function pointNearCanvasCentre(
+  page: Page,
+  action: 'move' | 'click',
+  until: Locator,
+): Promise<void> {
+  const box = await page.locator('.atlas-scene canvas').first().boundingBox();
+  expect(box).not.toBeNull();
+  for (const [offsetX, offsetY] of CANVAS_CENTRE_OFFSETS) {
+    const x = box!.x + box!.width / 2 + offsetX;
+    const y = box!.y + box!.height / 2 + offsetY;
+    if (action === 'move') await page.mouse.move(x, y);
+    else await page.mouse.click(x, y);
+    if (await until.isVisible()) return;
+  }
+}
+
+async function openSurfaceOnlyView(page: Page): Promise<void> {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`/app/?${INSPECTOR_CAMERA}`);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  await page
+    .getByRole('checkbox', { name: 'Measured points', exact: true })
+    .uncheck();
+  await page
+    .getByRole('checkbox', { name: 'Observation radii', exact: true })
+    .uncheck();
+  await expect
+    .poll(() => new URL(page.url()).searchParams.get('layers'))
+    .not.toContain('observations');
+}
+
+test('surface hover and inspector wait for the detail tier without showing numbers', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const detail = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'detail',
+    Number.POSITIVE_INFINITY,
+  );
+  await openSurfaceOnlyView(page);
+  const explorer = page.locator('.atlas-explorer');
+  await expect.poll(() => detail.hits(), { timeout: 30_000 }).toBe(1);
+  const heldSince = Date.now();
+  await expect(explorer).not.toHaveAttribute('data-atlas-values-ready', 'true');
+
+  const hoverPreview = page.locator('.atlas-hover-preview');
+  await pointNearCanvasCentre(page, 'move', hoverPreview);
+  await expect(hoverPreview).toContainText('Loading cell values…');
+  // innerText: `.atlas-hover-preview` is a grid, so its <small> rows are separated by line breaks.
+  await expect(hoverPreview).toContainText(CELL_ID, { useInnerText: true });
+  await expect(hoverPreview).toContainText(SUPPORT_LABEL);
+  await expect(hoverPreview).not.toContainText(DISPLAYED_VALUE);
+
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearCanvasCentre(page, 'click', inspector);
+  await expect(inspector).toBeVisible();
+  await expect(inspector).toContainText('Loading cell values…');
+  await expect(inspector).toContainText(SUPPORT_LABEL);
+  await expect(inspector).not.toContainText(DISPLAYED_VALUE);
+  const cellId = (await inspector.innerText()).match(CELL_ID)?.[0];
+  expect(cellId).toBeDefined();
+  const inspectorNode = await inspector.elementHandle();
+
+  // Keep the detail tier held past the production stall window before releasing it. A build without
+  // build:e2e's 120 s override has aborted the one held fetch by now and shows "Cell values
+  // unavailable", so this would turn into a test of the unavailable state. The provider arms its
+  // stall timer before the route sees the request, so by the read below that timer has run for at
+  // least the production window plus the settle margin.
+  await page.waitForTimeout(
+    Math.max(
+      0,
+      heldSince +
+        PRODUCTION_REQUEST_STALL_MS +
+        STALL_ABORT_SETTLE_MS -
+        Date.now(),
+    ),
+  );
+  const heldText = await inspector.innerText();
+  expect(heldText, HELD_PAST_PRODUCTION_STALL).not.toContain(
+    'Cell values unavailable',
+  );
+  expect(heldText, HELD_PAST_PRODUCTION_STALL).toContain(
+    'Loading cell values…',
+  );
+  expect(detail.hits(), HELD_PAST_PRODUCTION_STALL).toBe(1);
+  detail.release();
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 30_000,
+  });
+  await expect(inspector).toContainText(DISPLAYED_VALUE);
+  await expect(inspector).not.toContainText('Loading cell values…');
+  await expect(inspector).toContainText(cellId!);
+  expect(await inspectorNode!.evaluate((node) => node.isConnected)).toBe(true);
+  await expect(hoverPreview).toContainText('95% credible range');
+  await expect(hoverPreview).toContainText(DISPLAYED_VALUE);
+  expect(detail.hits()).toBe(1);
+  expect(pageErrors).toEqual([]);
+});
+
+test('surface values report an unavailable detail tier and recover on retry', async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(
+    isMobile,
+    'coordinate-sensitive canvas picking is covered in the desktop project',
+  );
+  test.setTimeout(120_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const failure = await failArtifactTier(page, 'hbs-rs334', 'detail');
+  await openSurfaceOnlyView(page);
+  await expect
+    .poll(() => failure.hits(), { timeout: 30_000 })
+    .toBeGreaterThanOrEqual(1);
+
+  const inspector = page.getByRole('complementary', {
+    name: 'Selected map cell',
+  });
+  await pointNearCanvasCentre(page, 'click', inspector);
+  await expect(inspector).toContainText('Cell values unavailable', {
+    timeout: 20_000,
+  });
+  await expect(inspector).not.toContainText(DISPLAYED_VALUE);
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-ready',
+    'true',
+  );
+
+  await failure.restore();
+  await inspector.getByRole('button', { name: /retry/i }).click();
+  // The retry button unmounts once the tier is loading again; focus moves to Close, never <body>.
+  await expect(
+    inspector.getByRole('button', { name: 'Close inspector' }),
+  ).toBeFocused();
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-values-ready',
+    'true',
+    { timeout: 30_000 },
+  );
+  await expect(inspector).toContainText(DISPLAYED_VALUE);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a corrupted render object shows Retry data and renders nothing', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  await page.goto('/app/');
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
+  await expect.poll(() => displayedArtifactIds(page)).toEqual([]);
+  await page.waitForTimeout(1_000);
+  expect(await displayedArtifactIds(page)).toEqual([]);
+  expect(corruption.hits()).toBeGreaterThanOrEqual(1);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+  await expect.poll(() => displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a metric change during a cold load never marks a failing map ready', async ({
+  page,
+  isMobile,
+}) => {
+  // The phone keeps the metric control in a collapsed sheet; the scene path is the same.
+  test.skip(isMobile, 'desktop exposes the metric radios without a sheet');
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  // Registered first, so it answers after the hold releases: a render tier that fails validation.
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  const render = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  const observations = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'observations',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer.locator('.atlas-scene canvas')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect.poll(() => render.hits(), { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => observations.hits(), { timeout: 30_000 }).toBe(1);
+  // The scene receives the pending request a few frames after it starts.
+  await page.waitForTimeout(2_000);
+  // Nothing is displayed, so the scene rebuilds the pending request with the new metric. The
+  // first request is still waiting on its observations when the render tier fails: once they
+  // arrive it finds itself superseded, and only the rebuild sees the failure.
+  await page.getByRole('radio', { name: 'Uncertainty' }).check();
+  render.release();
+  await page.waitForTimeout(1_000);
+  observations.release();
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  await page.waitForTimeout(1_000);
+  expect(await explorer.getAttribute('data-atlas-ready')).toBe('false');
+  expect(corruption.hits()).toBeGreaterThanOrEqual(1);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a corrupted detail object removes the map and offers Retry data', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'detail');
+  // The detail tier loads after the reveal (fast-load design §B.2). Holding the corrupted body until
+  // the surface and its cell edges are shown makes this a test of their removal, not of a surface
+  // that never finished.
+  const detail = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'detail',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.goto('/app/');
+
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-edges-ready', 'true', {
+    timeout: 30_000,
+  });
+  await expect.poll(() => detail.hits(), { timeout: 30_000 }).toBe(1);
+  // The cell values wait on the held tier: only a detail tier that passes validation marks them ready.
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'false');
+
+  detail.release();
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  expect(corruption.hits()).toBe(1);
+  // §B.2: the surface and support layers are removed and the map is marked not ready. The cell
+  // edges belong to the surface, so their mark is withdrawn with it (`data-atlas-surface-visible` is
+  // a one-shot load mark and stays set). The observations are not part of the removal, so
+  // `data-atlas-displayed` keeps hbs-rs334, unlike a corrupted render object, which renders nothing.
+  await expect(explorer).not.toHaveAttribute('data-atlas-ready', 'true');
+  await expect(explorer).toHaveAttribute('data-atlas-edges-ready', 'false');
+  // Stable for 1 s: nothing brings the edges back or marks the failed tier's values ready.
+  await page.waitForTimeout(1_000);
+  expect(await explorer.getAttribute('data-atlas-ready')).toBe('false');
+  expect(await explorer.getAttribute('data-atlas-edges-ready')).toBe('false');
+  expect(await explorer.getAttribute('data-atlas-values-ready')).toBe('false');
+  expect(await displayedArtifactIds(page)).toEqual(['hbs-rs334']);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-values-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true');
+  await expect(page.locator('.atlas-error')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a browser that cannot start the data worker gets Retry data, not an endless load', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const errors: Error[] = [];
+  page.on('pageerror', (error) => errors.push(error));
+  await page.addInitScript(() => {
+    // Firefox before 114 has no module workers, and a strict CSP `worker-src` blocks them; Cesium's
+    // own classic workers keep working.
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        if (String(url).includes('atlas-data')) {
+          throw new Error('module workers are unavailable');
+        }
+        super(url, options);
+      }
+    };
+  });
+  await page.goto('/app/');
+  await expect(page.getByRole('button', { name: 'Retry data' })).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect(page.locator('.atlas-explorer')).not.toHaveAttribute(
+    'data-atlas-ready',
+    'true',
+  );
+  expect(errors).toEqual([]);
+});
+
+test('Retry data recovers once the render object is served intact again', async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  const corrupt = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  await page.goto('/app/');
+  const retry = page.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible({ timeout: 45_000 });
+  await corrupt.restore();
+  await retry.click();
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect.poll(() => displayedArtifactIds(page)).toEqual(['hbs-rs334']);
 });

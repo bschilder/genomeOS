@@ -72,8 +72,8 @@ ruling R19 is decided (option (a)), so Task 43 (B3.4) Step 0 does not stop.
 - `AtlasExplorer.tsx` never exceeds its starting 755 logical (non-blank) lines, nor 784 physical lines (`tests/atlas-module-size.test.ts`, Task 5 (A5)); new orchestration lives in hooks and modules (spec §A.2, §B.6.12).
 - Cold-load profiles: desktop 1440×900, no throttling; mobile 390×844 at DPR 3, `isMobile`, `hasTouch`, CDP `Emulation.setCPUThrottlingRate {rate: 4}` on the page and on every dedicated-worker target (`Target.setAutoAttach {autoAttach: true, flatten: true, waitForDebuggerOnStart: true}`), else the scaled critical path (worker steps × 4).
 - Network presets: Fast 4G `{latency: 165, downloadThroughput: 1012500, uploadThroughput: 168750}`; Slow 4G `{latency: 562.5, downloadThroughput: 180000, uploadThroughput: 84375}`.
-- Budgets (median of 3): desktop `observations-visible` ≤ 1.5 s, `surface-visible` ≤ 2.5 s; mobile Fast 4G ≤ 4 s / ≤ 6 s; mobile Slow 4G ≤ 13 s / ≤ 18 s.
-- No Atlas main-thread long animation frame > 200 ms on desktop or > 800 ms on mobile in any run, window navigation start → max(`atlas:edges-ready`, `atlas:context-ready`) + 1 s; mobile Fast 4G reveal ≤ 1 s from the first chunk; warm layer switch < 2 s with ≥ 45 fps.
+- Budgets (median of 3): desktop `observations-visible` ≤ 1.5 s, `surface-visible` ≤ 2.5 s; mobile Fast 4G ≤ 4 s / ≤ 6 s; mobile Slow 4G ≤ 12 s / ≤ 17.5 s (tightened from 13 s / 18 s; spec §B.1 amended under R30 by ruling R-reveal, Part B's scoped re-review — the task steps below keep the values they were written with).
+- No Atlas main-thread long animation frame > 200 ms on desktop or > 800 ms on mobile in any run, window navigation start → max(`atlas:edges-ready`, `atlas:context-ready`) + 1 s; mobile Fast 4G reveal ≤ 1.1 s from the first chunk (was ≤ 1 s; same amendment); warm layer switch < 2 s with ≥ 45 fps.
 - Marks (taken in `scene.postRender`, mirrored on `.atlas-explorer`): `atlas:observations-visible` / `data-atlas-observations-visible`, `atlas:surface-first-chunk`, `atlas:surface-visible` / `data-atlas-surface-visible`, `atlas:ready` / `data-atlas-ready`, `atlas:values-ready` / `data-atlas-values-ready`, `atlas:edges-ready` / `data-atlas-edges-ready`, `atlas:context-ready` / `data-atlas-context-ready`; `data-atlas-displayed` lists the shown artifact ids.
 - Transport: `content-encoding` ∈ {`gzip`, `br`} on grid, render and observations; the measuring context sends `Accept-Encoding: gzip, deflate`; each preloaded resource is fetched exactly once.
 - Visual parity: positions within 1e-6 m; `surfaceHeight` and `surfaceValue` within 1 f32 ULP; identical 32-bin membership; effective diffuse colour within 1/255 per channel; screenshots within 0.5% of pixels after the sky box loads; |Δnormalised| ≤ 2⁻²⁴·max|v| / (hi − lo), height delta ≤ 180,000 m × that; the one known flip is `cyt-il-10-819-t` post_sd `84194e9ffffffff`, bin 4 → 5.
@@ -38920,7 +38920,8 @@ Slow 4G runs record `run ended in error: …timed out after 15000 ms…` (the ol
 ```bash
 cd $R && .venv/bin/python scripts/encode_atlas_web.py && cd $W && npm run build
 npx playwright test --config playwright.performance.config.ts atlas-cold-load --output test-results/cold-load-current
-npx playwright test --config playwright.performance.config.ts atlas-performance
+# Its own --output: without one, Playwright empties test-results/ and deletes both cold-load trees read below.
+npx playwright test --config playwright.performance.config.ts atlas-performance --output test-results/atlas-performance
 node --input-type=module -e "
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -38933,7 +38934,8 @@ find test-results -name 'atlas-cold-load-*-ledger.md' -exec cat {} +
 ```
 
 Expected: every current budget met on medians; `atlas-performance` passes (`warmArtifactMs < 2000`,
-no long task > 250 ms, ≥ 45 fps on hardware GPU).
+no long task > 250 ms, ≥ 45 fps on hardware GPU); the summary prints six lines and `find` prints six
+ledgers (baseline and current, one per profile).
 
 **Stop rule.** If any median misses a §B.1 budget, or any run breaks the per-run long-frame cap
 (Task 83 (B5.14)), stop before Task 85 (B5.16): record the miss, its profile and its ledger in the
@@ -45715,7 +45717,7 @@ ownership changes of the Plan rulings applied.
 | §B.1 Long tasks: LoAF `buffered: true`, window to max(edges, context) + 1 s, attribution by `sourceURL`, worker-message handlers as Atlas, `Primitive.update` on chunk frames as Atlas, Cesium eval separate | 81 (B5.12), 83 (B5.14) |
 | §B.1 stable Cesium chunk name | 80 (B5.11) |
 | §B.1 Transport: `content-encoding` ∈ {gzip, br} for grid/render/observations, recorded; `Accept-Encoding: gzip, deflate`; each preload fetched once | 83 (B5.14) |
-| §B.1 Budgets table (median) + no Atlas LoAF > 200/800 ms + Fast 4G reveal ≤ 1 s + reveal frames/total/longest + no request timeout/error | 81 (B5.12), 83 (B5.14) (the LoAF cap asserted per run; the median only reported); 84 (B5.15) (stop rule on a missed budget) |
+| §B.1 Budgets table (median) + no Atlas LoAF > 200/800 ms + Fast 4G reveal ≤ 1.1 s (≤ 1 s before R-reveal) + reveal frames/total/longest + no request timeout/error | 81 (B5.12), 83 (B5.14) (the LoAF cap asserted per run; the median only reported); 84 (B5.15) (stop rule on a missed budget) |
 | §B.1 bytes ledger per milestone | 81 (B5.12), 83 (B5.14), 84 (B5.15) |
 | §B.1 Baseline re-measured on a `5a10b15` build | 84 (B5.15) |
 | §B.1 Slow 4G tightening proposal; real Android statement | 84 (B5.15) |
