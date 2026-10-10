@@ -1361,6 +1361,31 @@ test(
     // Closed, the Menu leaves Escape to the explorer's own stack.
     await page.keyboard.press('Escape');
     await expect(legendInfo).not.toHaveAttribute('open');
+
+    // Opened without taking focus (a scripted click), the Menu closes on
+    // Escape without pulling focus out of the explorer layer that has it.
+    await legendSummary.click();
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(legendSummary).toBeFocused();
+    await summary.evaluate((element: HTMLElement) => element.click());
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(legendSummary).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(legendInfo).not.toHaveAttribute('open');
+    await expect(legendSummary).toBeFocused();
+
+    // From <body>, focus goes to the summary, as it does from the Menu.
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    await summary.evaluate((element: HTMLElement) => element.click());
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(summary).toBeFocused();
   },
 );
 
