@@ -58,12 +58,15 @@ workflow publishes the API/read-path image for both `linux/amd64` and
 `linux/arm64`:
 
 ```bash
-docker pull ghcr.io/bschilder/genomeos:latest
-docker pull ghcr.io/bschilder/genomeos:sha-<seven-character-commit>
+docker pull ghcr.io/genomeos/genomeos:latest
+docker pull ghcr.io/genomeos/genomeos:sha-<seven-character-commit>
 ```
 
 `latest` is the convenient discovery tag. Deployments must use the immutable
-`sha-...` tag so a cited service revision cannot change underneath them. Each
+`sha-...` tag so a cited service revision cannot change underneath them. Tags
+published before the repository moved to the genomeOS organization were not
+copied; a revision cited from that period stays pullable at
+`ghcr.io/bschilder/genomeos:sha-...`. Each
 manifest includes OCI source and revision labels, an SBOM, and provenance
 attestations. The image is only published after the same root Dockerfile has
 passed the container HTTP smoke in `ci`.

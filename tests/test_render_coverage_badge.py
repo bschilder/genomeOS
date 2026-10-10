@@ -45,7 +45,7 @@ def test_generator_updates_the_readme_badge_when_requested(tmp_path: Path) -> No
     )
     readme.write_text(
         "[![Coverage](https://genome-os.org/_static/coverage.svg)]"
-        "(https://github.com/bschilder/genomeOS/actions/workflows/ci.yml)\n",
+        "(https://github.com/genomeOS/genomeOS/actions/workflows/ci.yml)\n",
         encoding="utf-8",
     )
 
@@ -68,8 +68,8 @@ def test_generator_updates_the_readme_badge_when_requested(tmp_path: Path) -> No
 
     assert result.returncode == 0, result.stderr
     assert (
-        "[![Coverage](https://raw.githubusercontent.com/bschilder/genomeOS/main/"
+        "[![Coverage](https://raw.githubusercontent.com/genomeOS/genomeOS/main/"
         "website/public/_static/coverage.svg)]"
-        "(https://github.com/bschilder/genomeOS/blob/main/website/public/_static/coverage.svg)"
+        "(https://github.com/genomeOS/genomeOS/blob/main/website/public/_static/coverage.svg)"
         in readme.read_text(encoding="utf-8")
     )
