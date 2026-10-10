@@ -654,9 +654,25 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
      pivots); the picked Cartesian is projected along the geocentric radial
      (`Ellipsoid.WGS84.scaleToGeocentricSurface`) before `cartesianToCartographic` → `latLngToCell`,
      undoing the shader's `elevationNormal` displacement;
-   - `extruded`: the projected cell and its `gridDisk(cell, 1)` neighbours are candidates; the hit
-     altitude `z = |p| − |scaleToGeocentricSurface(p)| − clearance` selects the cell whose top is
-     ≥ z among the two either side of a wall (ray-testing the ≤ 7 prisms is the equivalent fallback).
+   - `extruded` on the globe: the projected cell and its `gridDisk(cell, 1)` neighbours are
+     candidates, and the pointer's pick ray decides: the cell whose prism (its top at the raised
+     height, its walls down to the clearance) the ray enters first wins, ties to the lower row, so
+     depth-buffer noise in the picked position only chooses the neighbourhood. Without a ray, or
+     when the ray enters none of the ≤ 7 prisms, the hit altitude
+     `z = |p| − |scaleToGeocentricSurface(p)| − clearance` selects the cell whose top is ≥ z among
+     the two either side of a wall. (Amended under R30 in Part B's final review: Task 69's real-engine
+     probe, PF35, found the altitude rule misresolved 3–9 of 18 cells under measured depth noise, so
+     the ray test became the rule and the altitude test its fallback.)
+   - Columbus view (perspective) and 2D: the elevated shader adds its geocentric `elevationNormal`
+     displacement in the map frame, where it shears the surface sideways and only partly raises it,
+     so the radial projection above does not undo it (§B.7 keeps the drawing). The scene passes the
+     depth hit and the pick ray in the map frame (`SurfacePickInput.mapFrame`); `map-frame-pick.ts`
+     rebuilds the cells drawn near the hit as the mesh and shader draw them (smooth fans, flat
+     hexagons, extruded prisms with unlifted wall feet, masked rows as flat support plates) and
+     returns the first cell the ray meets. Candidates come from a walk over every lift up to the
+     exaggerated maximum that keeps the ray point within a depth-noise window around the hit (2% of
+     the hit's distance, at least 20 km), so noise inside the window changes nothing; without a ray,
+     the base recovered from the hit height decides.
    - `preferredAtlasPick` drops surface/support picks whose `artifactKey` is not the displayed key
      **before** choosing; observation picks still win. Depth comes from the displayed group only
      (the incoming group is excluded from picking until the swap commits). `sameAtlasPick` and
@@ -768,7 +784,9 @@ error and retry flows; the WebGL failure path; and every scientific value shown.
 
 `website/serve.json` (outside `public/`) sets `Content-Type: application/octet-stream` for
 `**/*.gosa` (which `serve`'s `compression` middleware then gzips; octet-stream is compressible in
-mime-db); `serve:test` becomes `serve dist -c ../serve.json -l tcp://127.0.0.1:4322 --no-clipboard`.
+mime-db); `serve:test` becomes
+`serve dist -c ../serve.json -l tcp://127.0.0.1:${PLAYWRIGHT_PORT:-4322} --no-clipboard` (the port
+variable came from #412, picked up when Part B was rebased onto main; amended under R30).
 The Part B PR records what GitHub Pages actually sends for `.gosa` (`curl -H 'Accept-Encoding:
 gzip'`).
 
