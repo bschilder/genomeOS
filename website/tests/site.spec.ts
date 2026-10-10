@@ -862,7 +862,9 @@ test(
     await page.goto('/favicon.svg');
     const frame = await page.evaluate(() => {
       const svg = document.querySelector('svg')!;
-      // The O is the left square of the OS group: its side is the group's height.
+      // The O is approximately the left square of the OS group: its side is
+      // taken as the group's height, which comes from the S (about 3.8 units
+      // lower than the O).
       const os = document
         .querySelector<SVGGraphicsElement>('#wordmark-os')!
         .getBBox();

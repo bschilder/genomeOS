@@ -6,10 +6,13 @@
  * the FOUNDATION line and the tagline. Coordinates stay in the logo's user
  * space, so the userSpaceOnUse gradient lands exactly where it does in the logo.
  *
- * Only the O is shown. It is the left square of the OS group: its side is the
- * group's height, measured with getBBox() in Chromium. A circular clipPath,
- * 1.5 units wider than the O so its anti-aliased rim survives, wraps the group
- * and cuts away the S together with the stub where the O joins it.
+ * Only the O is shown. It is approximately the left square of the OS group:
+ * its side is taken as the group's height, measured with getBBox() in
+ * Chromium. That height comes from the S, which reaches about 3.8 units lower
+ * than the O, so the circle runs about that far below the O's own bottom edge.
+ * A circular clipPath, 1.5 units wider than that circle so the O's anti-aliased
+ * rim survives, wraps the group and cuts away the S together with the stub
+ * where the O joins it.
  *
  * The O sits on a circle of the header ground #020712, the dark ground the
  * logo is drawn for, 1.12 times its radius. Without it the cyan end of the
@@ -65,7 +68,10 @@ const os = extract(/^ {2}<g id="wordmark-os"[\s\S]*?^ {2}<\/g>$/m, 'OS group');
 
 const round = (value) => Number(value.toFixed(3));
 
-/** The O: the left square of the OS group, as a circle in logo units. */
+/**
+ * The O, approximately: the left square of the OS group, as a circle in logo
+ * units (the group's height comes from the S, about 3.8 units below the O).
+ */
 function globeOf(box) {
   const r = box.height / 2;
   return { cx: box.x + r, cy: box.y + r, r };
