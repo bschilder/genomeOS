@@ -421,6 +421,58 @@ svg {
   transform: translateX(3px);
 }
 
+/*
+ * "Explore the interactive app": a quiet caption that slides down from under
+ * the button and fades in on hover or keyboard focus, after a short pause so
+ * a passing cursor does not flash it, and leaves at once. It floats over the
+ * page, so the row never changes size, and takes no pointer events. Centred
+ * under the button, it is narrower than the full button and stays inside the
+ * row beside the narrower one (1153-1328 px). Phones and touch screens do
+ * without it (below); it is the link's description either way.
+ */
+.launch-atlas-cta__caption {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 0.55rem);
+  left: 50%;
+  padding: 0.32rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: rgb(2 7 18 / 95%);
+  box-shadow: 0 0.5rem 1.4rem rgb(0 0 0 / 40%);
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -0.4rem);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
+}
+
+.launch-atlas-cta:hover .launch-atlas-cta__caption,
+.launch-atlas-cta:focus-visible .launch-atlas-cta__caption {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 200ms ease 120ms,
+    transform 200ms cubic-bezier(0.2, 0.75, 0.25, 1) 120ms,
+    visibility 0s linear 120ms;
+}
+
+@media (max-width: 46rem), (hover: none) {
+  .launch-atlas-cta__caption {
+    display: none;
+  }
+}
+
 .desktop-nav ul {
   gap: clamp(1rem, 2.7vw, 2.25rem);
   margin: 0;
@@ -786,6 +838,13 @@ svg {
   .launch-atlas-cta__lights,
   .launch-atlas-cta__arrow {
     transition: none;
+  }
+  /* The caption appears in place, after the same pause, without sliding. */
+  .launch-atlas-cta__caption,
+  .launch-atlas-cta:hover .launch-atlas-cta__caption,
+  .launch-atlas-cta:focus-visible .launch-atlas-cta__caption {
+    transform: translateX(-50%);
+    transition-duration: 0s;
   }
 }
 

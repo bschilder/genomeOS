@@ -89,7 +89,11 @@ const logo = isAtlasPage
       }
       {
         !isAtlasPage && (
-          <a class="launch-atlas-cta" href={sitePath('/app/')}>
+          <a
+            class="launch-atlas-cta"
+            href={sitePath('/app/')}
+            aria-describedby="launch-atlas-caption"
+          >
             {/* Aurora curtains behind the black button (global.css). */}
             <span class="launch-atlas-cta__lights" aria-hidden="true">
               <i />
@@ -113,6 +117,19 @@ const logo = isAtlasPage
             >
               <path d="M5 12h13M13 6l6 6-6 6" />
             </svg>
+            {/*
+             * Shown under the button on hover and keyboard focus (global.css).
+             * It is the link's description, so it stays out of its name:
+             * aria-hidden keeps it from being read twice, and a description
+             * still reads text it points to directly.
+             */}
+            <span
+              class="launch-atlas-cta__caption"
+              id="launch-atlas-caption"
+              aria-hidden="true"
+            >
+              Explore the interactive app
+            </span>
           </a>
         )
       }
