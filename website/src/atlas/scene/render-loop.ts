@@ -8,6 +8,10 @@
  * worker module that did not download fails every later frame, and the document-wide geometry
  * workers keep that failed import, so the error is reported once and recovery is a fresh page (the
  * explorer's Retry globe), never a restarted loop or a new scene.
+ *
+ * The build bundles this module into the Cesium chunk (astro.config.mjs): its tick is the
+ * resize-and-render work Cesium's default loop did there, and the cold-load harness attributes
+ * long animation frames by script source (fast-load design §B.1).
  */
 
 /** Frame scheduling, injectable so the loop unit-tests without a browser. */

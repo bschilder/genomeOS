@@ -101,7 +101,12 @@ export default defineConfig({
                 // stub lands in the Cesium chunk the island gains a static
                 // import"./cesium.<hash>.js", loading all of Cesium with the island
                 // and undoing Task 35 (B2.12)'s lazy scene chunk.
-                test: /[\\/]node_modules[\\/](?:cesium|@cesium[\\/][^\\/]+)[\\/].*\.js$/,
+                //
+                // The Atlas-owned render loop joins it: its frame callback is only
+                // viewer.resize() + viewer.render(), the work Cesium's default loop did
+                // from this chunk, so the harness keeps counting Cesium renders as
+                // Cesium (atlas-scene is its only importer).
+                test: /[\\/]node_modules[\\/](?:cesium|@cesium[\\/][^\\/]+)[\\/].*\.js$|[\\/]src[\\/]atlas[\\/]scene[\\/]render-loop\.ts$/,
               },
             ],
           },

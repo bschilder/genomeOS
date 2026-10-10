@@ -85,6 +85,22 @@ describe('Atlas client bundle', () => {
     ).toEqual(new Set(CESIUM_MARKERS));
   });
 
+  it('bundles the Atlas render loop into the Cesium chunk, so its frames count as Cesium', () => {
+    // Fast-load design §B.1 attributes long animation frames by script source: Cesium-chunk work
+    // outside chunk frames is Cesium. The owned RenderLoop's tick is only viewer.resize() and
+    // viewer.render(), the work Cesium's default loop did from the Cesium chunk; in the scene
+    // chunk every Cesium render would be charged to Atlas.
+    const message = 'The Atlas globe stopped rendering.';
+    const scene = sceneChunk();
+    const cesium = staticGraph(scene).find((file) =>
+      path.posix.basename(file).startsWith('cesium.'),
+    );
+    expect(cesium).toBeDefined();
+    // Booleans, so a failure does not print a megabyte of minified source.
+    expect(code(cesium!).includes(message), cesium).toBe(true);
+    expect(code(scene).includes(message), scene).toBe(false);
+  });
+
   it('bundles the data worker as a Cesium-free ES module referenced by the island', () => {
     const worker = readdirSync(assets).find((name) =>
       /^atlas-data\.worker[-.].+\.js$/.test(name),
