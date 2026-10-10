@@ -540,6 +540,22 @@ svg {
   }
 }
 
+/* Landscape phones (iPhone 13 at 750x342, Pixel 7 at 863x360) are wide enough
+ * for the desktop row but too short for its 5.5rem bar: 27-29% of the screen.
+ * They get the phone bar's height, and a 3.2rem lockup (FOUNDATION ~7.9 px)
+ * keeps the landing bar's margins; the row is otherwise the desktop one. */
+@media (max-height: 30rem) {
+  :root {
+    --site-header-height: 4.75rem;
+  }
+}
+
+@media (max-height: 30rem) and (min-width: 46.01rem) {
+  .site-header--lockup {
+    --lockup-landing-width: calc(3.2rem * 1395 / 300);
+  }
+}
+
 /* The Menu's copy of Launch Atlas, for the query below. */
 .mobile-nav__launch {
   display: none;

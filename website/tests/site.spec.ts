@@ -1248,6 +1248,35 @@ test('at large text sizes Launch Atlas moves into the Menu, so the home logo kee
   }
 });
 
+test('landscape phones get the shorter landing bar', async ({ page }) => {
+  // iPhone 13 and Pixel 7 in landscape: wide enough for the desktop tier, so
+  // the bar was 100 px, 27-29% of the screen.
+  for (const [width, height] of [
+    [750, 342],
+    [863, 360],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    const layout = await page.evaluate(() => {
+      const header = document
+        .querySelector('[data-site-header]')!
+        .getBoundingClientRect();
+      return {
+        headerBottom: header.bottom,
+        headerHeight: header.height,
+        mainTop: document.querySelector('main')!.getBoundingClientRect().top,
+      };
+    });
+    const label = `${width}x${height}`;
+    expect(layout.headerHeight, label).toBeCloseTo(86.5, 0);
+    // The spacer follows the same tier, so the page starts where the bar ends.
+    expect(
+      Math.abs(layout.headerBottom - layout.mainTop),
+      label,
+    ).toBeLessThanOrEqual(0.5);
+  }
+});
+
 test('404 page offers three recovery routes', async ({ page }) => {
   await page.goto('/404.html');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
