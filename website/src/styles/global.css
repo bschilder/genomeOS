@@ -779,7 +779,8 @@ svg {
   .site-header--lockup .wordmark__logo {
     transition: none;
   }
-  .launch-atlas-cta__lights i {
+  /* As specific as each curtain's own animation rule, so this one wins. */
+  .launch-atlas-cta__lights i:nth-child(n) {
     animation: none;
   }
   .launch-atlas-cta__lights,
