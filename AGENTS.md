@@ -47,8 +47,10 @@ anything.
 gh issue list --state all --search "registry adapter"   # or the GitHub UI
 ```
 
-- **Open issues are the work queue** — 64 of them across 4 milestones, each with a sub-project,
-  a skill, and a priority. Everything planned for v1 is already logged.
+- **Open issues are the work queue**, grouped into four milestones and labelled with a
+  sub-project, a skill, and a priority. Everything planned for v1 is already logged; much of the
+  P2 modelling research opened since sits outside the milestones, so filter by label as well as
+  by milestone.
 - **Closed issues carry the decisions.** Closed as *completed* means the work exists — read it
   rather than redoing it, and note that its approach is probably the house pattern. Closed as
   *not planned* means it was considered and rejected; reopening that needs an argument in the
@@ -182,7 +184,8 @@ none of them. Install everything with `.[dev,atlas,surfaces,geo,figures]`.
 
 **Inference engine:** PyMC with a Hilbert-space GP (HSGP), *not* R-INLA-SPDE, despite what
 design §7 names. The reasoning and the rejected alternatives are in #34; do not reintroduce an R
-toolchain without reopening that decision.
+toolchain without reopening that decision. Amending §7 itself, including the Matérn-3/2 versus 5/2
+kernel question, is #85 and wants expert review.
 
 ## Commands
 
@@ -215,10 +218,15 @@ python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv \
 python scripts/build_observations.py --registry data/registry-fixture-v1 \
   --gnomad tests/fixtures/gnomad_hgdp_1kg_freqs.tsv \
   --map-surveys tests/fixtures/map_hbs_curated_synthetic.csv \
-  --literature-evidence tests/fixtures/literature/promotable/evidence.tsv \
-  --literature-field-evidence tests/fixtures/literature/promotable/field_evidence.tsv \
   --out data/observations
 ```
+
+It should report `registry 0.1.0+sha256.…: 6 populations, 6 aliases`, four counted MAP refusals,
+and `observations v0.1.0: 11 rows, 2 variants`. Do not add the literature fixtures to this
+command: the promotable rows resolve through a literature alias (`Sami`) that `build_registry.py`
+cannot yet add, so `build_observations.py` correctly refuses them with `UnmappedPopulationError`.
+`tests/test_build_scripts.py` builds a registry that carries those aliases and covers literature
+promotion end to end.
 
 **If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
 diff.** That diff is the review surface for schema change; CI fails if it is stale.
@@ -316,9 +324,15 @@ These are hard constraints, not preferences:
 
 - **All of Us data may inform models but may never be served by our backend** — it cannot leave
   the Researcher Workbench.
-- **Redistribution of derived surfaces from indigenous-population panels is an open question**
-  ([#66](https://github.com/genomeOS/genomeOS/issues/66)). Do not publish or commit derived
-  artifacts from HGDP, SGDP, AADR or AFND as standalone datasets until it is answered.
+- **Derived surfaces from indigenous-population panels are publishable, on conditions**
+  ([#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083)).
+  Fitted surfaces derived from HGDP, SGDP, AADR and AFND may be published and redistributed only
+  with source attribution and Biocultural Notices preserved, model outputs identified as estimates
+  rather than observations, and every explicit redistribution restriction honoured. CARE is part
+  of the provenance and responsible-use framework, not by itself a publication veto. Source terms
+  still bind: a panel whose access terms limit use, such as controlled access restricted to
+  population-history research, cannot be published as a derived surface (see the follow-up on #66
+  and #3 §H).
 - Registry entries carry provenance and a Biocultural Notice field, per the CARE Principles.
   Never drop these columns for convenience.
 - Check and record source terms before promotion. A completed check that finds no explicit licence

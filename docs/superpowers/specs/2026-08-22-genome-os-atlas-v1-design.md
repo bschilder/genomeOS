@@ -4,6 +4,24 @@
 **Date:** 2026-08-22
 **Scope:** sub-projects P0–P5 (the Mendelian burden map). P6+ are named here only to fix their boundaries.
 
+**Amendments since approval.** The text below is kept as approved. These notes record where later
+decisions departed from it, so read each section together with the decision it names:
+
+- **Inference engine (§3, §5, §7, §10).** Fits use PyMC with a Hilbert-space GP (HSGP), not
+  INLA-SPDE ([#34](https://github.com/genomeOS/genomeOS/issues/34)). The implementation also uses
+  a Matérn-5/2 kernel where §7 names Matérn-3/2, and offers a beta-binomial likelihood alongside
+  the binomial. Amending §7 itself, including whether 5/2 is the right smoothness assumption, is
+  [#85](https://github.com/genomeOS/genomeOS/issues/85) and wants expert review.
+- **Renderer (§3, §5, §11).** The P5 client is a CesiumJS globe in the project's Astro site. It
+  supersedes the Next.js + deck.gl + MapLibre choice
+  ([Cesium explorer design](2026-09-06-cesium-globe-explorer-design.md),
+  [#55](https://github.com/genomeOS/genomeOS/issues/55)) and leaves the P0–P4 contracts unchanged.
+- **Redistribution (§13, §14 item 1).** Answered by the
+  [#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083). Derived
+  surfaces from HGDP, SGDP, AADR and AFND may be published with attribution and Biocultural
+  Notices preserved, estimates labelled as estimates, and every explicit source restriction
+  honoured.
+
 ---
 
 ## 1. Objective

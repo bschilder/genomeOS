@@ -18,10 +18,11 @@ work. Every issue carries four labels and four board fields.
 Priority is derived from the **dependency graph**, not from enthusiasm. It answers "what breaks
 if this is late", not "what would be nice".
 
-- **critical** — blocks other work, or *is* the definition of done. Twelve issues. Examples: the
-  registry schema (blocks every P0 adapter), the INLA-SPDE runtime decision (blocks all of P2),
-  the MAP survey adapter (without it `β_design` is unidentifiable, so P2 cannot start), and
-  golden test 1 (HbS parity — spec §8's definition of done).
+- **critical** — blocks other work, or *is* the definition of done. Examples from the first
+  board: the registry schema (blocked every P0 adapter), the inference-runtime decision (blocked
+  all of P2; settled as PyMC + HSGP in #34), and the MAP survey adapter (without it `β_design` is
+  unidentifiable). All three are done. Golden test 1 (HbS parity — spec §8's definition of done)
+  remains critical, with the issues that block it.
 - **high** — the milestone is meaningless without it.
 - **medium** — wanted for the milestone.
 - **low** — safe to defer.

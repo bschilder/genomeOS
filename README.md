@@ -83,7 +83,7 @@ tests blocks publication of anything else.
 
 | | |
 |---|---|
-| **Atlas** | P0/P1 data contracts and adapters, P2 surface kernels, P3 burden kernels, and a fixture-backed P4 read path are implemented. The diagnostic preview proves browser → API → DuckDB → immutable Parquet; it is not the product map. |
+| **Atlas** | P0/P1 data contracts and adapters, P2 surface kernels, P3 burden kernels, and a fixture-backed P4 read path are implemented. The [globe explorer](https://genome-os.org/app/) shows measured observations and fitted surfaces for a catalog of 30 maps. The v1 gate is not met yet: HbS parity against Piel et al. currently fails ([#45](https://github.com/genomeOS/genomeOS/issues/45)), and the design holds back every burden layer until it passes. The API's diagnostic preview proves browser → API → DuckDB → immutable Parquet; it is not the product map. |
 | **Pan-UKB evidence API** | Running. Provenance-first API over Pan-UK Biobank metadata and selectively indexed ancestry-stratified GWAS associations — the trait and effect-size layer of the atlas. Full summary-statistics files stay in public object storage and are queried by genomic region through a [Tabix](https://www.htslib.org/doc/tabix.html) boundary. |
 
 ## Documentation
