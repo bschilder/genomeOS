@@ -8,17 +8,18 @@ import type { AtlasSceneController } from '../../atlas/scene/types';
 import type { AtlasWorkerClient } from '../../atlas/worker/client';
 
 /**
- * Why the globe is unavailable (Cesium globe design §12). `webgl`: no WebGL, or Cesium failed to
- * start. `download`: the scene chunk failed to load, or the Atlas data worker died after it
- * started (its module script failed to download, or it threw; `AtlasWorkerClient.onCrash`).
- * Chromium keeps a failed dynamic import in the page's module map and rejects every later
- * `import()` of that URL without a request, and the page's one data worker cannot be restarted
- * under the scene and provider that share it, so only a page reload recovers. `render`: a frame
- * threw and the scene's render loop stopped (`AtlasSceneController.onRenderError`); Cesium's
- * document-wide geometry workers keep a failed import, so that too recovers only through a
- * reload. This hook reports `webgl` and the scene-chunk `download`; the explorer reports the rest.
+ * Why the globe or its data is unavailable (Cesium globe design §12). `webgl`: no WebGL, or Cesium
+ * failed to start. `download`: the scene chunk failed to load. Chromium keeps a failed dynamic
+ * import in the page's module map and rejects every later `import()` of that URL without a
+ * request, so only a page reload recovers. `render`: a frame threw and the scene's render loop
+ * stopped (`AtlasSceneController.onRenderError`); Cesium's document-wide geometry workers keep a
+ * failed import, so that too recovers only through a reload. `worker`: the Atlas data worker died
+ * after it started (its module script failed to download, or it threw;
+ * `AtlasWorkerClient.onCrash`). The globe may be up, but the page's one data worker cannot be
+ * restarted under the scene and provider that share it, so only a reload recovers (fast-load design
+ * §B.7, amended). This hook reports `webgl` and `download`; the explorer reports the rest.
  */
-export type SceneFailure = 'webgl' | 'download' | 'render';
+export type SceneFailure = 'webgl' | 'download' | 'render' | 'worker';
 
 export interface AtlasSceneLifecycleOptions {
   attempt: number;
@@ -29,7 +30,7 @@ export interface AtlasSceneLifecycleOptions {
   /** Null until the catalog names the borders source; the scene waits for it. */
   naturalEarthUrl: string | null;
   onReset: () => void;
-  onUnavailable: (failure: Exclude<SceneFailure, 'render'>) => void;
+  onUnavailable: (failure: Extract<SceneFailure, 'webgl' | 'download'>) => void;
   reducedMotion: boolean;
   scene: RefObject<AtlasSceneController | null>;
   /** `.atlas-explorer`, which receives the readiness attributes (fast-load design §B.1). */

@@ -1831,7 +1831,8 @@ test('Retry globe recovers from a data worker whose script failed to download', 
 }) => {
   test.setTimeout(90_000);
   // A dead data worker fails every later request, and only a new page starts a new one, so the
-  // explorer offers the reload panel instead of a "Retry data" that would fail the same way.
+  // explorer offers the reload panel instead of a "Retry data" that would fail the same way. The
+  // globe is not what failed, so the panel names the map data (fast-load §B.7, amended).
   let workerRequests = 0;
   await page.route(/\/_astro\/atlas-data\.worker-[^/]+\.js$/, async (route) => {
     workerRequests += 1;
@@ -1841,8 +1842,10 @@ test('Retry globe recovers from a data worker whose script failed to download', 
   await page.goto('/app/?metric=post_sd');
   const failure = page
     .getByRole('alert')
-    .filter({ hasText: 'The globe could not load' });
+    .filter({ hasText: 'The map data could not load' });
   await expect(failure).toBeVisible({ timeout: 45_000 });
+  await expect(failure).toContainText('Retrying reloads the page');
+  await expect(page.getByText('The globe could not load')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Retry data' })).toHaveCount(0);
   await expect(page.locator('.atlas-explorer')).toHaveAttribute(
     'data-atlas-ready',

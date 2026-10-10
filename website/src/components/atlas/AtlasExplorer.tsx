@@ -114,12 +114,12 @@ export default function AtlasExplorer({
   const [error, setError] = useState<string | null>(null);
   const [sceneFailure, setSceneFailure] = useState<SceneFailure | null>(null);
   // A data worker that died (its module script failed to download on a flaky link, or it threw)
-  // fails every later request, and only a new page starts a new one, so it shows the reload panel
-  // rather than a "Retry data" that cannot succeed (final review spec-3). Kept apart from
-  // sceneFailure, which every new scene resets.
+  // fails every later request, and only a new page starts a new one, so it shows the map-data
+  // reload panel rather than a "Retry data" that cannot succeed (final review spec-3; fast-load
+  // §B.7, amended). Kept apart from sceneFailure, which every new scene resets.
   const [workerCrashed, setWorkerCrashed] = useState(false);
   const failure: SceneFailure | null =
-    sceneFailure ?? (workerCrashed ? 'download' : null);
+    sceneFailure ?? (workerCrashed ? 'worker' : null);
   const [viewNotice, setViewNotice] = useState<string | null>(null);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [explorerNode, setExplorerNode] = useState<HTMLDivElement | null>(null);
@@ -698,9 +698,13 @@ export default function AtlasExplorer({
             sceneFailure={failure}
             onRetry={() => {
               // A new scene reuses Cesium's shared workers and their failed imports, a failed
-              // scene chunk stays failed in this document, and so does a dead data worker
-              // ('download'); reload instead.
-              if (failure === 'render' || failure === 'download')
+              // scene chunk stays failed in this document, and so does a dead data worker;
+              // reload instead.
+              if (
+                failure === 'render' ||
+                failure === 'download' ||
+                failure === 'worker'
+              )
                 window.location.reload();
               else if (failure) setSceneAttempt((value) => value + 1);
               else setDataAttempt((value) => value + 1);

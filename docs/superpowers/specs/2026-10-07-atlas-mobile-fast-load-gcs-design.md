@@ -748,6 +748,15 @@ highlight; inspector content and wording (plus the new loading/unavailable state
 transition and progress rules; reduced motion; keyboard camera controls; camera pivot behaviour;
 error and retry flows; the WebGL failure path; and every scientific value shown.
 
+(Amended under R30 in Part B's final review: one retry flow changes on purpose. Before Part B, a
+failed data request showed "Retry data", which fetched again and recovered. Part B decodes every
+tier in one module worker that the scene and the provider share. A worker that dies after it
+starts (its script failed to download, or it threw) cannot be restarted in the page, so "Retry
+data" would fail the same way. That case now shows a failure panel, "The map data could not load",
+whose Retry reloads the page; the map, view and layers are kept in the link. A worker that never
+started, because the browser has no module workers or a CSP blocks it, keeps its "Retry data"
+error.)
+
 ### B.8 Tests
 
 - **Python**: codec round-trip and every hard error incl. the shared mutation corpus; determinism
