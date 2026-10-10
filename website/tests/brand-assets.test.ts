@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { inflateSync } from 'node:zlib';
@@ -5,7 +6,8 @@ import { inflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 
 const brand = path.resolve(import.meta.dirname, '../public/brand');
-const lockup = readFileSync(
+/** The full genomeOS Foundation artwork, tagline included; the crops come from it. */
+const fullArtwork = readFileSync(
   path.join(brand, 'genomeos-foundation-dark.svg'),
   'utf8',
 );
@@ -33,29 +35,42 @@ const artwork = (svg: string) =>
     .replace(/(<title id="logo-title">)[^<]*(<\/title>)/, '$1$2')
     .replace(/(<desc id="logo-description">)[^<]*(<\/desc>)/, '$1$2');
 
+/** sha256 of the artwork file the owner supplied (LF line endings). */
+const OWNER_ARTWORK_SHA256 =
+  '75225623f34220c80a81035eb7af9caf9831968dfe1a4d370f8510cc964cfb80';
+
 describe('genomeOS brand assets', () => {
-  it('keeps the full lockup at the artwork size', () => {
-    const root = rootTag(lockup);
+  it('keeps the owner-supplied artwork unedited', () => {
+    // Every crop and the favicon are checked against this copy, so editing it
+    // together with them would otherwise pass unnoticed.
+    const digest = createHash('sha256')
+      .update(fullArtwork.replace(/\r\n/g, '\n'), 'utf8')
+      .digest('hex');
+    expect(digest).toBe(OWNER_ARTWORK_SHA256);
+  });
+
+  it('keeps the full artwork at its own size', () => {
+    const root = rootTag(fullArtwork);
     expect(attribute(root, 'viewBox')).toBe('140 255 1380 435');
     expect(attribute(root, 'width')).toBe('1380');
     expect(attribute(root, 'height')).toBe('435');
-    expect(lockup).toContain(
+    expect(fullArtwork).toContain(
       'aria-label="open science for the benefit of all"',
     );
   });
 
   it('crops the wordmark from the same paths, byte for byte', () => {
-    expect(paths(lockup)).toHaveLength(5);
-    expect(paths(wordmark)).toEqual(paths(lockup));
+    expect(paths(fullArtwork)).toHaveLength(5);
+    expect(paths(wordmark)).toEqual(paths(fullArtwork));
   });
 
   it('changes only the root box and the title and description text', () => {
-    expect(artwork(wordmark)).toBe(artwork(lockup));
+    expect(artwork(wordmark)).toBe(artwork(fullArtwork));
     expect(wordmark).toContain('<title id="logo-title">genomeOS</title>');
     expect(wordmark).toContain('<desc id="logo-description">genomeOS</desc>');
   });
 
-  it('sizes the crops at one user unit per pixel, like the lockup', () => {
+  it('sizes the crops at one user unit per pixel, like the full artwork', () => {
     for (const crop of [wordmark, headerLockup]) {
       const root = rootTag(crop);
       const [, , width, height] = attribute(root, 'viewBox')
@@ -81,15 +96,15 @@ describe('genomeOS header lockup (genome + OS + FOUNDATION)', () => {
   });
 
   it('keeps the wordmark and FOUNDATION paths byte for byte, without the tagline', () => {
-    expect(lockup).toMatch(taglineGroup);
+    expect(fullArtwork).toMatch(taglineGroup);
     expect(headerLockup).not.toContain('id="tagline"');
-    expect(paths(headerLockup)).toEqual(paths(lockup).slice(0, 4));
-    expect(paths(lockup)[4]).toContain('M256.310,661.710');
+    expect(paths(headerLockup)).toEqual(paths(fullArtwork).slice(0, 4));
+    expect(paths(fullArtwork)[4]).toContain('M256.310,661.710');
   });
 
   it('changes only the root box, the title and description, and drops the tagline', () => {
     expect(artwork(headerLockup)).toBe(
-      artwork(lockup).replace(taglineGroup, ''),
+      artwork(fullArtwork).replace(taglineGroup, ''),
     );
     expect(headerLockup).toContain(
       '<title id="logo-title">genomeOS Foundation</title>',
@@ -188,11 +203,11 @@ describe('genomeOS favicon', () => {
       ['  <g id="wordmark-os"', '  </g>'],
     ]) {
       const kept = block(favicon, start, end);
-      expect(kept).toBe(block(lockup, start, end));
+      expect(kept).toBe(block(fullArtwork, start, end));
       expect(favicon).toContain(kept);
     }
     expect(paths(favicon)).toEqual(
-      paths(block(lockup, '  <g id="wordmark-os"', '  </g>')),
+      paths(block(fullArtwork, '  <g id="wordmark-os"', '  </g>')),
     );
     expect(paths(favicon)).toHaveLength(2);
     for (const dropped of ['wordmark-genome', 'foundation-line', 'tagline']) {
