@@ -117,7 +117,7 @@ people who can open doors to datasets.
 3. **Check [the issues](https://github.com/genomeOS/genomeOS/issues?q=is%3Aissue)** — open
    *and* closed. Open issues are the work queue; closed ones record what was already done and
    what was considered and rejected, so search before starting anything.
-4. **Pick something up** from the [project board](https://github.com/users/bschilder/projects/8).
+4. **Pick something up** from the [project board](https://github.com/orgs/genomeOS/projects/1).
    Filter by `skill:*` to find what you can do; `Ready` means fully specified and unblocked, so
    take it without asking.
 

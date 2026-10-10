@@ -1,13 +1,13 @@
 # Board conventions
 
-The [Genome OS Atlas project board](https://github.com/users/bschilder/projects/8) tracks all
+The [Genome OS Atlas project board](https://github.com/orgs/genomeOS/projects/1) tracks all
 work. Every issue carries four labels and four board fields.
 
 ## Labels
 
 | Family | Values | Why |
 |---|---|---|
-| `type:*` | `data` `science` `infra` `ui` `docs` `governance` `outreach` | GitHub's native issue *types* are an organisation-only feature, so types are labels here. They group and filter identically on the board. |
+| `type:*` | `data` `science` `infra` `ui` `docs` `governance` `outreach` | The repository began under a personal account, where GitHub's native issue *types* are not available, so types are labels here. They group and filter identically on the board. |
 | `P*:` | `P0:registry` `P1:observations` `P2:surfaces` `P3:burden` `P4:backend` `P5:map-ui` `launch` | Which sub-project of the [design spec](superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md). |
 | `skill:*` | `spatial-stats` `popgen` `clinical-genetics` `data-engineering` `frontend` `geospatial` `governance` `partnerships` | So an incoming contributor can filter to what they can actually do. |
 | `priority:*` | `critical` `high` `medium` `low` | See below. |
@@ -70,27 +70,21 @@ close-as-completed → `Done`, new issue → on the board as `Backlog`.
 
 Configuration lives in repository variables (`PROJECT_ID`, `STATUS_FIELD_ID`,
 `BACKLOG_OPTION_ID`, `DONE_OPTION_ID`, `NOT_PLANNED_OPTION_ID`, `IN_PROGRESS_OPTION_ID`),
-already set. It needs one secret:
+already set for the organisation board. It needs one secret, `PROJECT_TOKEN`, also set:
 
 ```bash
-# Classic token — NOT fine-grained. See below.
-# github.com/settings/tokens -> "Tokens (classic)" -> scopes: repo + project
-gh secret set PROJECT_TOKEN -R bschilder/genomeOS
+gh secret set PROJECT_TOKEN -R genomeOS/genomeOS
 ```
 
-**It must be a classic PAT.** Two separate limitations stack here:
+The default `GITHUB_TOKEN` cannot write to Projects v2, so the workflow needs a personal access
+token. The current secret is a classic PAT with the **`project`** and **`repo`** scopes. It dates
+from when the board was owned by a user account, where fine-grained tokens cannot reach Projects
+at all. It kept working after the board moved to the organisation on 2026-10-10 (#425).
 
-1. The default `GITHUB_TOKEN` cannot write to user-owned Projects v2 at all.
-2. **Fine-grained PATs cannot access Projects owned by a user account.** The `Projects`
-   permission on fine-grained tokens is *organisation*-only — there is no equivalent checkbox
-   for user-owned projects, so no fine-grained token can be configured to work here. This is a
-   documented gap, not a misconfiguration.
-
-Scopes needed on the classic token: **`project`** (the mutation) and **`repo`** (reading the
-issue's `projectItems` connection — required because this repository is private).
-
-If we later move the repo and project to an organisation, a fine-grained token scoped to that
-org's `Projects: Read and write` becomes viable and would be the better choice.
+When the token is next rotated, prefer a fine-grained token with **genomeOS** as the resource
+owner, organisation permission **`Projects: Read and write`**, and repository access to
+`genomeOS/genomeOS` with **`Issues: Read`**. The board belongs to the organisation now, so the
+fine-grained route is available.
 
 ## One manual step
 
