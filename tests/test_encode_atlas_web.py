@@ -280,6 +280,34 @@ def test_round_trip_verification_failure_leaves_the_catalog_unwritten(
     assert (export / "catalog.json").read_bytes() == before
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "code", "message"),
+    [
+        (
+            "support_counts",
+            {"observed": 2, "interpolated": 1},
+            "cross_tier",
+            "support interpolated: 1 cells, catalog 1|support observed: 1 cells, catalog 2",
+        ),
+        ("label", "renamed after export", "identity", "identity mismatch for label"),
+    ],
+)
+def test_refuses_tiers_that_disagree_with_their_catalog_entry(
+    tmp_path: Path, field: str, value: Any, code: str, message: str
+) -> None:
+    """§B.5: the encoder runs the cross-tier checks (verify_artifact_tiers) on what it wrote."""
+    export = _write_export(tmp_path / "web", {"alpha": _cells()})
+    catalog_path = export / "catalog.json"
+    catalog = json.loads(catalog_path.read_bytes())
+    catalog["artifacts"][0][field] = value
+    catalog_path.write_bytes(encode_atlas_web.canonical_bytes(catalog))
+    before = catalog_path.read_bytes()
+    with pytest.raises(codec.GosaError, match=message) as refused:
+        encode_atlas_web.encode_export(export, export)
+    assert refused.value.code == code
+    assert catalog_path.read_bytes() == before
+
+
 def test_refuses_keys_the_browser_contract_would_refuse() -> None:
     for key in ("/data/atlas/x.gosa", "https://x/y.gosa", "a/../b.gosa", "Surfaces/x.gosa", ""):
         with pytest.raises(ValueError, match="relative data key"):
