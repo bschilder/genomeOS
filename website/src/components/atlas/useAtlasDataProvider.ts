@@ -6,13 +6,20 @@
 
 import { useMemo } from 'react';
 
-import { atlasRequestStallMs, atlasWorker } from '../../atlas/boot';
+import {
+  atlasRequestStallMs,
+  atlasWorker,
+  loadAtlasSceneModule,
+} from '../../atlas/boot';
 import {
   NATURAL_EARTH_BORDERS,
   NATURAL_EARTH_PLACES,
 } from '../../atlas/context-sources';
 import type { AtlasCatalog } from '../../atlas/contracts';
-import { readInlineCatalog } from '../../atlas/inline-catalog';
+import {
+  readInlineCatalog,
+  surfaceDownloadsAfterScene,
+} from '../../atlas/inline-catalog';
 import { StaticAtlasDataProvider } from '../../atlas/static-provider';
 
 export interface ContextSourceUrls {
@@ -37,6 +44,14 @@ export function useAtlasDataProvider(
             inlineCatalog: readInlineCatalog(document),
             requestStallMs: atlasRequestStallMs(),
             siteDataBase,
+            // On a slow connection the render tier starts once the scene chunk (Cesium included)
+            // has arrived, whether or not its import succeeded (§B.1, R84-slow4g).
+            surfaceStart: surfaceDownloadsAfterScene(document)
+              ? loadAtlasSceneModule().then(
+                  () => undefined,
+                  () => undefined,
+                )
+              : undefined,
             worker: atlasWorker(),
           }),
     [artifactDataBase, siteDataBase],

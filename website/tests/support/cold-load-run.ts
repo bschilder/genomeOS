@@ -78,6 +78,11 @@ export interface PageMeasurements {
   probeErrors: string[];
   renderer: string;
   preloads: string[];
+  /**
+   * The head script's `data-surface-downloads` on the catalog element: `after-scene` when a slow
+   * connection left the render tier unpreloaded (§B.1, ruling R84-slow4g).
+   */
+  surfaceDownloads?: string | null;
   catalogText: string | null;
   documentUrl: string;
   origin: string;
@@ -117,6 +122,8 @@ export interface ColdLoadRun {
   transport: {
     tier: string;
     url: string | null;
+    /** False for a tier the head script deliberately left for the provider to fetch. */
+    preloaded: boolean;
     contentEncoding: string | null;
   }[];
   preloads: { url: string; requests: number }[];
@@ -446,13 +453,24 @@ export function analyseRun(args: {
   });
   const recordFor = (url: string): NetworkRecord | null =>
     records.find((record) => record.url === url) ?? null;
+  // On a slow connection the head script does not preload the render tier; the provider fetches
+  // it after the scene chunk, so its URL comes from the network log.
+  const surfaceAfterScene = m.surfaceDownloads === 'after-scene';
   const tierUrls =
     catalog && selected
       ? CRITICAL_TIERS.map((tier) => {
           const key = artifactTierKey(catalog, selected.id, tier);
+          const matches = (url: string) => url.endsWith(`/${key}`);
+          const preloadedUrl = m.preloads.find(matches) ?? null;
+          const expectPreload = tier !== 'render' || !surfaceAfterScene;
           return {
             tier: tier as string,
-            url: m.preloads.find((href) => href.endsWith(`/${key}`)) ?? null,
+            url: expectPreload
+              ? preloadedUrl
+              : (preloadedUrl ??
+                records.find((record) => matches(record.url))?.url ??
+                null),
+            preloaded: expectPreload,
           };
         })
       : records
@@ -464,6 +482,7 @@ export function analyseRun(args: {
               ? 'surface-json'
               : 'observations-json',
             url: record.url as string | null,
+            preloaded: false,
           }));
   const responseEnds = new Map<string, number>([
     [m.documentUrl, m.navigationResponseEnd],
@@ -554,7 +573,11 @@ export function analyseRun(args: {
           ),
           ...tierUrls
             .filter((entry) => entry.url === null)
-            .map((entry) => `no preload link for the ${entry.tier} tier`),
+            .map((entry) =>
+              entry.preloaded
+                ? `no preload link for the ${entry.tier} tier`
+                : `no request for the ${entry.tier} tier`,
+            ),
         ]
       : []),
   ];

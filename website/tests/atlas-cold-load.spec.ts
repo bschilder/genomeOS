@@ -154,6 +154,10 @@ function collectPageMeasurements(): PageMeasurements {
         'link[rel="preload"][as="fetch"]',
       ),
     ].map((link) => link.href),
+    surfaceDownloads:
+      document
+        .getElementById('atlas-catalog')
+        ?.getAttribute('data-surface-downloads') ?? null,
     catalogText: document.getElementById('atlas-catalog')?.textContent ?? null,
     documentUrl: location.href,
     origin: location.origin,
@@ -395,7 +399,12 @@ for (const profile of COLD_LOAD_PROFILES) {
             run.preloads.map((preload) => preload.url).sort(),
             `run ${run.index}: preloads`,
           )
-          .toEqual(run.transport.map((transfer) => transfer.url).sort());
+          .toEqual(
+            run.transport
+              .filter((transfer) => transfer.preloaded)
+              .map((transfer) => transfer.url)
+              .sort(),
+          );
         for (const preload of run.preloads)
           expect
             .soft(

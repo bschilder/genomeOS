@@ -17,6 +17,7 @@ import {
 import { contextSourceKey } from './context-sources';
 import type { DecodedDetail, DecodedGrid } from './gosa/types';
 import { assertIdentity } from './identity';
+import { OBSERVATIONS_PRIORITY, SURFACE_PRIORITY } from './inline-catalog';
 import {
   combineTransfers,
   type TransferProgress,
@@ -36,6 +37,12 @@ export interface StaticAtlasDataProviderOptions {
   inlineCatalog: unknown;
   /** Abort a transfer after this long without headers or a new body chunk. */
   requestStallMs?: number;
+  /**
+   * Render-tier downloads wait for this to settle: the scene chunk's arrival on a slow connection,
+   * where the head script did not preload the render tier (fast-load design §B.1, ruling
+   * R84-slow4g). It must never reject.
+   */
+  surfaceStart?: Promise<void>;
   /** Always same-origin: context sources and external caches. */
   siteDataBase: string;
   worker: AtlasWorkerClient;
@@ -135,6 +142,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
   readonly #inlineCatalog: unknown;
   readonly #siteDataBase: string;
   readonly #stallMs: number;
+  readonly #surfaceStart: Promise<void> | undefined;
   readonly #worker: AtlasWorkerClient;
   #catalog: AtlasCatalog | null = null;
   readonly #external = new Map<string, ExternalInfo>();
@@ -157,6 +165,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     this.#inlineCatalog = options.inlineCatalog;
     this.#siteDataBase = options.siteDataBase;
     this.#stallMs = stallMs;
+    this.#surfaceStart = options.surfaceStart;
     this.#worker = options.worker;
   }
 
@@ -282,6 +291,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
       promise: this.#fetchBytes(this.#artifactUrl(entry.url), entry.url, {
         declaredBytes: entry.bytes,
         mark: `atlas:last-byte:grid:${gridSha256}`,
+        priority: SURFACE_PRIORITY,
         progress: (transfer) => {
           shared.latest = transfer;
           for (const listener of shared.listeners) listener(transfer);
@@ -356,6 +366,10 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
     const forward = () => local.abort(signal?.reason);
     signal?.addEventListener('abort', forward, { once: true });
     try {
+      // A slow connection: the render tier waits for the scene chunk, so Cesium and the
+      // observations have the link; the small grid has already started, so its topology is
+      // ready when the render tier arrives.
+      if (this.#surfaceStart) await abortable(this.#surfaceStart, local.signal);
       const [grid, buffer] = await Promise.all([
         abortable(shared.promise, local.signal),
         this.#fetchBytes(
@@ -364,6 +378,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
           {
             declaredBytes: ref.web.render.bytes,
             mark: `atlas:last-byte:render:${key}`,
+            priority: SURFACE_PRIORITY,
             progress: (transfer) => report('render', transfer),
             signal: local.signal,
           },
@@ -436,6 +451,7 @@ export class StaticAtlasDataProvider implements AtlasDataProvider {
         {
           declaredBytes: ref.observations_bytes ?? null,
           mark: `atlas:last-byte:observations:${artifactKeyFor(ref)}`,
+          priority: OBSERVATIONS_PRIORITY,
           progress,
           signal,
         },

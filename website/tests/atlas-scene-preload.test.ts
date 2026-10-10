@@ -68,7 +68,7 @@ describe('injectModulePreloads', () => {
         ['_astro/atlas-scene.B2.js'],
       ),
     ).toBe(
-      '<html><head><title>x</title><link rel="modulepreload" href="/genomeOS/_astro/atlas-scene.B2.js"></head><body></body></html>',
+      '<html><head><title>x</title><link rel="modulepreload" fetchpriority="high" href="/genomeOS/_astro/atlas-scene.B2.js"></head><body></body></html>',
     );
   });
 

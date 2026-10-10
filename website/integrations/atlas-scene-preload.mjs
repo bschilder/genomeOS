@@ -1,7 +1,8 @@
 /**
- * Emit <link rel="modulepreload"> for the lazy Atlas scene chunk on /app/ (Atlas design §11;
- * fast-load design §B.6). The hashed chunk names come from the client build's bundle and are
- * injected into the generated HTML in astro:build:done.
+ * Emit <link rel="modulepreload" fetchpriority="high"> for the lazy Atlas scene chunk on /app/
+ * (Atlas design §11; fast-load design §B.6; §B.1 ruling R84-slow4g puts the scene chunk and Cesium
+ * ahead of the grid and render tiers). The hashed chunk names come from the client build's bundle
+ * and are injected into the generated HTML in astro:build:done.
  */
 
 import { readFile, writeFile } from 'node:fs/promises';
@@ -38,7 +39,10 @@ export function injectModulePreloads(html, base, files) {
     throw new Error('the /app/ page has no </head>');
   const prefix = base.endsWith('/') ? base : `${base}/`;
   const links = files
-    .map((file) => `<link rel="modulepreload" href="${prefix}${file}">`)
+    .map(
+      (file) =>
+        `<link rel="modulepreload" fetchpriority="high" href="${prefix}${file}">`,
+    )
     .join('');
   return html.replace('</head>', `${links}</head>`);
 }

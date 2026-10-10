@@ -47,7 +47,11 @@ afterEach(() => {
 });
 
 function createProvider(
-  options: { inlineCatalog?: unknown; stallMs?: number } = {},
+  options: {
+    inlineCatalog?: unknown;
+    stallMs?: number;
+    surfaceStart?: Promise<void>;
+  } = {},
 ) {
   return new StaticAtlasDataProvider({
     artifactDataBase: ARTIFACT_BASE,
@@ -56,6 +60,7 @@ function createProvider(
       'inlineCatalog' in options ? options.inlineCatalog : goldenCatalogRaw(),
     requestStallMs: options.stallMs,
     siteDataBase: SITE_BASE,
+    surfaceStart: options.surfaceStart,
     worker: new AtlasWorkerClient(new InProcessWorker().asWorker()),
   });
 }
@@ -529,6 +534,66 @@ describe('StaticAtlasDataProvider surface tiers', () => {
     await expect(provider.getSurface(ref)).resolves.toMatchObject({
       artifactKey: artifactKeyFor(ref),
     });
+  });
+
+  it('fetches observations at high priority and the grid and render tiers at low priority', async () => {
+    // Fast-load design §B.1, ruling R84-slow4g: the same priorities as the head script's preload
+    // links, so each fetch reuses its preload.
+    const { body, observed } = observationsFixture(2);
+    const fetchMock = goldenFetch({
+      [observed.observations_url!]: () => new Response(body),
+    });
+    const provider = createProvider();
+    await provider.getSurface(ref);
+    await provider.getObservations(observed);
+    for (const key of [entry.url, ref.web.render.url])
+      expect(initFor(fetchMock, key), key).toMatchObject({ priority: 'low' });
+    expect(initFor(fetchMock, observed.observations_url!)).toMatchObject({
+      priority: 'high',
+    });
+  });
+
+  it('starts the render download only once the surface start settles, and the grid at once', async () => {
+    // A slow connection: the scene chunk and the observations get the link first; the small grid
+    // starts at once so its topology is ready.
+    const { body, observed } = observationsFixture(2);
+    const fetchMock = goldenFetch({
+      [observed.observations_url!]: () => new Response(body),
+    });
+    let start!: () => void;
+    const surfaceStart = new Promise<void>((resolve) => {
+      start = resolve;
+    });
+    const provider = createProvider({ surfaceStart });
+    const surface = provider.getSurface(ref);
+    await provider.getObservations(observed);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(callsTo(fetchMock, entry.url)).toBe(1);
+    expect(callsTo(fetchMock, ref.web.render.url)).toBe(0);
+    expect(callsTo(fetchMock, observed.observations_url!)).toBe(1);
+
+    start();
+    await expect(surface).resolves.toMatchObject({
+      artifactKey: artifactKeyFor(ref),
+    });
+    expect(callsTo(fetchMock, entry.url)).toBe(1);
+    expect(callsTo(fetchMock, ref.web.render.url)).toBe(1);
+    // Later surfaces (a warm switch) do not wait again.
+    await provider.getSurface(sibling);
+    expect(callsTo(fetchMock, sibling.web.render.url)).toBe(1);
+  });
+
+  it('lets a caller abort while its surface waits to start', async () => {
+    const fetchMock = goldenFetch();
+    const provider = createProvider({
+      surfaceStart: new Promise<void>(() => undefined),
+    });
+    const abort = new AbortController();
+    const surface = provider.getSurface(ref, abort.signal);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    abort.abort();
+    await expect(surface).rejects.toMatchObject({ name: 'AbortError' });
+    expect(callsTo(fetchMock, ref.web.render.url)).toBe(0);
   });
 
   it('loads the detail tier at low priority and attaches it to the cached surface', async () => {

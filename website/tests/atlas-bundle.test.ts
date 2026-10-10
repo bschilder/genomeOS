@@ -119,7 +119,9 @@ describe('Atlas client bundle', () => {
     const html = appHtml();
     const head = html.slice(0, html.indexOf('</head>'));
     const hrefs = [
-      ...head.matchAll(/<link rel="modulepreload" href="([^"]+)">/g),
+      ...head.matchAll(
+        /<link rel="modulepreload" fetchpriority="high" href="([^"]+)">/g,
+      ),
     ].map((match) => match[1]);
     const scene = sceneChunk();
     expect(hrefs[0]).toBe(`/_astro/${scene}`);

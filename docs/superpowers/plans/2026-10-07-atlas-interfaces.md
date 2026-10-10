@@ -181,11 +181,16 @@ re-exported, `GeometryRequestType`, `GeometryResponse`, `LookAt`, `GridExpect`.
   id="atlas-catalog" data-artifact-data-base="…">` (with `<` escaped as `<`), validated at build
   time with `atlasCatalogSchema` (`loadPageCatalog`), and an inline module-free `<script>` built from
   `website/src/atlas/preload-script.ts` (`preloadScriptSource(): string`, Cesium-free) that inserts
-  `<link rel="preload" as="fetch" crossorigin="anonymous">` for the URL-selected artifact's grid,
-  render and observations (default `artifacts[0]`), plus `<link rel=preconnect>` only for an absolute
-  base. The Astro integration `website/integrations/atlas-scene-preload.mjs` adds
-  `<link rel="modulepreload">` for the scene chunk and its static imports (the `cesium.<hash>.js`
-  chunk of Task 80 (B5.11)).
+  `<link rel="preload" as="fetch" crossorigin="anonymous">` for the URL-selected artifact's
+  observations (`fetchPriority` high), grid and render (low) (default `artifacts[0]`), plus
+  `<link rel=preconnect>` only for an absolute base. On a slow connection (`navigator.connection`
+  Save-Data or `effectiveType` 3g or slower) it skips the render preload and sets
+  `data-surface-downloads="after-scene"` on the catalog element (`SURFACE_DOWNLOADS_ATTRIBUTE`,
+  read by `surfaceDownloadsAfterScene(doc)` in `inline-catalog.ts`); the provider's
+  `surfaceStart?: Promise<void>` option then holds each render fetch until the scene chunk import
+  settles (ruling R84-slow4g, Part B final review). The Astro integration
+  `website/integrations/atlas-scene-preload.mjs` adds `<link rel="modulepreload" fetchpriority="high">`
+  for the scene chunk and its static imports (the `cesium.<hash>.js` chunk of Task 80 (B5.11)).
 - Build variable `ATLAS_CATALOG_PATH` (default `public/data/atlas/catalog.json`, resolved from `website/`).
 - Build variable `PUBLIC_ATLAS_REQUEST_STALL_MS` (e2e build only, `120000`; any other build refuses it, so production keeps the 15 s stall window of §B.2).
 

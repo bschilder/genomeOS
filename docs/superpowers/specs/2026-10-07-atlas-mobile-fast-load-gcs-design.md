@@ -564,8 +564,9 @@ when `observations_available` is true and `null` otherwise, mirroring `observati
  ├─ <script type="application/json" id="atlas-catalog"> validated catalog, '<' escaped as <
  ├─ tiny inline head script: reads the inline catalog and location.search (entity), resolves the
  │  selected artifact's grid, render and observations URLs with the data-url rules, and inserts
- │  <link rel="preload" as="fetch" crossorigin="anonymous"> for them (+ preconnect if absolute)
- └─ <link rel="modulepreload"> for the scene/Cesium chunk
+ │  <link rel="preload" as="fetch" crossorigin="anonymous"> for them (+ preconnect if absolute):
+ │  observations fetchpriority=high, grid and render low; on a slow connection no render preload
+ └─ <link rel="modulepreload" fetchpriority="high"> for the scene/Cesium chunk
 
 island module evaluation (before React mounts)
  ├─ starts import('…/atlas-scene') and constructs the data worker
@@ -585,7 +586,16 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    default `public/data/atlas/catalog.json`), validates it with the same zod schema (build fails
    loudly), and embeds it with `<` escaped. The head script picks the URL-selected artifact
    (default `artifacts[0]`), so a shared link preloads the right map and the default's ~0.5 MB is not
-   wasted. The provider's `getCatalog()` resolves from the inline JSON. `tests/content.test.ts`'s
+   wasted. Network priority (amended under R30 by ruling R84-slow4g, in Part B's final review): the
+   observations preload at `fetchpriority="high"`, since they are the first frame, and the grid and
+   render tiers at `low`; the scene/Cesium modulepreloads are `high`. On a slow connection
+   (`navigator.connection.saveData`, or an `effectiveType` of `3g` or slower; DevTools' Slow 4G preset
+   reads as `3g`) the render tier, the one large surface object, is not preloaded: the head script
+   sets `data-surface-downloads="after-scene"` on the catalog element and the provider starts the
+   render fetch once the scene chunk import settles, so Cesium and the observations have the link to
+   themselves. The ~11 kB grid still preloads, so its topology is ready when the render tier
+   arrives. A browser without `navigator.connection` preloads all three. The provider's
+   `getCatalog()` resolves from the inline JSON. `tests/content.test.ts`'s
    P-code check runs on the HTML with only the `#atlas-catalog` element removed (narrow regex on that
    id), plus a positive check that the element exists and parses with `atlasCatalogSchema`; the
    catalog text is unchanged.
@@ -593,7 +603,8 @@ scene (when import resolves) ── observations → chunk scheduler (B.6.7) →
    fetches, so the provider fetches (`mode: 'cors'`, `credentials: 'same-origin'`, matching
    `crossorigin="anonymous"`) and transfers each `ArrayBuffer`. A **stall timeout** (15 s without a
    new body chunk) replaces the 15 s whole-request budget; abort and retry are otherwise unchanged.
-   The detail tier is fetched with `priority: 'low'` after `atlas:surface-visible`.
+   Each tier is fetched at its preload's priority (observations `high`, grid and render `low`), and
+   the detail tier with `priority: 'low'` after `atlas:surface-visible`.
 3. **Worker.** One dedicated module worker
    (`new Worker(new URL('./atlas-data.worker.ts', import.meta.url), { type: 'module' })`; Vite
    `worker.format: 'es'`; no dynamic `import()` inside it). Typed request/response messages with ids;
