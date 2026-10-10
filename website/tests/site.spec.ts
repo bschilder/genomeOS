@@ -76,8 +76,21 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
 }) => {
   await page.goto('/');
   const header = page.locator('.site-header');
-  const launchAtlas = header.getByRole('link', { name: 'Launch Atlas' });
-  await expect(launchAtlas).toHaveAttribute('href', '/app/');
+  const atlas = header.getByRole('link', {
+    name: 'genomeOS Atlas',
+    exact: true,
+  });
+  await expect(atlas).toHaveAttribute('href', '/app/');
+  await expect(atlas).toHaveAccessibleDescription(
+    'Explore the interactive app',
+  );
+  // The caption is beside the link, so the link's own text is its name: what
+  // a crawler or a plain-text copy reads.
+  expect(
+    await atlas.evaluate((link) =>
+      link.textContent!.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toBe('genomeOS Atlas');
   await expect(header.getByRole('link', { name: 'Preview' })).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'View genomeOS on GitHub' }).first(),
@@ -85,28 +98,37 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
 
   if (isMobile) {
     await page.getByText('Menu', { exact: true }).click();
-    await expect(launchAtlas).toBeVisible();
+    await expect(atlas).toBeVisible();
     await page
       .getByRole('navigation', { name: 'Mobile navigation' })
       .getByRole('link', { name: 'Working groups' })
       .click();
   } else {
-    const headerLinks = await header.locator('a').allInnerTexts();
-    expect(headerLinks.indexOf('Technical docs')).toBeLessThan(
-      headerLinks.indexOf('Launch Atlas'),
-    );
-    expect(headerLinks.indexOf('Launch Atlas')).toBeLessThan(
-      headerLinks.indexOf('GitHub'),
-    );
-    await launchAtlas.hover();
-    await expect(launchAtlas.locator('svg')).toHaveCSS(
-      'animation-name',
-      'launch-rocket',
-    );
-    await page
-      .getByRole('navigation', { name: 'Primary navigation' })
-      .getByRole('link', { name: 'Working groups' })
-      .click();
+    // GitHub is the nav's last link, right after Technical docs; genomeOS
+    // Atlas stands outside the nav.
+    const primary = page.getByRole('navigation', {
+      name: 'Primary navigation',
+    });
+    expect(
+      await primary
+        .getByRole('link')
+        .evaluateAll((links) =>
+          links.map(
+            (link) =>
+              link.getAttribute('aria-label') ?? link.textContent!.trim(),
+          ),
+        ),
+    ).toEqual([
+      'Project',
+      'Working groups',
+      'Contribute',
+      'Technical docs',
+      'View genomeOS on GitHub',
+    ]);
+    await expect(
+      primary.getByRole('link', { name: 'genomeOS Atlas' }),
+    ).toHaveCount(0);
+    await primary.getByRole('link', { name: 'Working groups' }).click();
   }
 
   await expect(page).toHaveURL(/\/working-groups\/$/);
@@ -121,7 +143,7 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   await page.goto('/app/');
   const header = page.locator('.site-header');
   await expect(
-    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+    header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
   ).toHaveCount(0);
   await expect(header.getByLabel('Atlas status')).toContainText(
     /loading|validating|rendering|revealing|Atlas ready/i,
@@ -130,8 +152,504 @@ test('Atlas status replaces the launch action only on the Atlas page', async ({
   await page.goto('/project/');
   await expect(header.getByLabel('Atlas status')).toHaveCount(0);
   await expect(
-    header.getByRole('link', { name: 'Launch Atlas', exact: true }),
+    header.getByRole('link', { name: 'genomeOS Atlas', exact: true }),
   ).toBeVisible();
+});
+
+/** The header's genomeOS Atlas link on the lockup pages. */
+function atlasLink(page: Page): Locator {
+  return page
+    .locator('[data-site-header]')
+    .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+}
+
+/** The caption's vertical offset from its resting place (its slide). */
+function captionSlide(caption: Locator): Promise<number> {
+  return caption.evaluate(
+    (element) => new DOMMatrix(getComputedStyle(element).transform).m42,
+  );
+}
+
+/** Its transition durations, in seconds. */
+function captionDurations(caption: Locator): Promise<number[]> {
+  return caption.evaluate((element) =>
+    getComputedStyle(element)
+      .transitionDuration.split(',')
+      .map((duration) => Number.parseFloat(duration)),
+  );
+}
+
+/** Where the shown caption lies against its button, the row and the screen. */
+function measureAtlasCaption(page: Page) {
+  return page.evaluate(() => {
+    const cta = document
+      .querySelector('.launch-atlas-cta')!
+      .getBoundingClientRect();
+    const caption = document.querySelector('.launch-atlas-cta__caption')!;
+    const box = caption.getBoundingClientRect();
+    const inner = document.querySelector('.site-header__inner')!;
+    const hit = document.elementFromPoint(
+      (box.left + box.right) / 2,
+      (box.top + box.bottom) / 2,
+    );
+    return {
+      belowButton: box.top - cta.bottom,
+      bottom: box.bottom,
+      centreOffset: (box.left + box.right) / 2 - (cta.left + cta.right) / 2,
+      innerOverflow: inner.scrollWidth - inner.clientWidth,
+      left: box.left,
+      pageOverflow:
+        document.documentElement.scrollWidth -
+        document.documentElement.clientWidth,
+      // A press there reaches the page under it, not the caption or the link.
+      passesThrough:
+        hit !== null &&
+        !hit.closest('.launch-atlas-cta, .launch-atlas-cta__caption'),
+      pointerEvents: getComputedStyle(caption).pointerEvents,
+      right: box.right,
+      screenHeight: window.innerHeight,
+      screenWidth: document.documentElement.clientWidth,
+    };
+  });
+}
+
+/** Settles a compact header: its 200 ms height transition has run. */
+async function scrollToCompact(page: Page, top: number): Promise<void> {
+  await page.evaluate(
+    (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+    top,
+  );
+  const header = page.locator('[data-site-header]');
+  await expect(header).toHaveClass(/site-header--compact/);
+  await expect
+    .poll(async () => (await header.boundingBox())!.height)
+    .toBeCloseTo(71.2, 0);
+}
+
+test(
+  'hovering or keyboard-focusing genomeOS Atlas reveals "Explore the interactive app" under it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const header = page.locator('[data-site-header]');
+    const atlas = atlasLink(page);
+    const caption = header.locator('.launch-atlas-cta__caption');
+
+    // 1153 px: the narrower button beside the full nav; 737 px: the narrowest
+    // row where the button shows its name (beside Menu).
+    for (const [width, scrollY] of [
+      [1440, 0],
+      [1440, 600],
+      [1153, 0],
+      [737, 0],
+    ] as const) {
+      const label = `${width} px, scrolled ${scrollY}`;
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      if (scrollY) await scrollToCompact(page, scrollY);
+      await expect(caption, label).toHaveText('Explore the interactive app');
+      await expect(caption, label).toBeHidden();
+      // It waits above its resting place, to slide down into it.
+      expect(await captionSlide(caption), label).toBeLessThan(-4);
+      expect(
+        Math.max(...(await captionDurations(caption))),
+        label,
+      ).toBeGreaterThan(0);
+      const row = await header.boundingBox();
+
+      await atlas.hover();
+      await expect(caption, label).toBeVisible();
+      await expect(caption, label).toHaveCSS('opacity', '1');
+      await expect
+        .poll(() => captionSlide(caption), { message: label })
+        .toBe(0);
+      const shown = await measureAtlasCaption(page);
+      expect(shown.belowButton, label).toBeGreaterThanOrEqual(4);
+      expect(Math.abs(shown.centreOffset), label).toBeLessThanOrEqual(1);
+      expect(shown.left, label).toBeGreaterThanOrEqual(0);
+      expect(shown.right, label).toBeLessThanOrEqual(shown.screenWidth);
+      expect(shown.bottom, label).toBeLessThanOrEqual(shown.screenHeight);
+      expect(shown.innerOverflow, label).toBeLessThanOrEqual(0);
+      expect(shown.pageOverflow, label).toBeLessThanOrEqual(0);
+      expect(shown.pointerEvents, label).toBe('none');
+      expect(shown.passesThrough, label).toBe(true);
+      // It floats over the page: the header keeps its size.
+      expect(await header.boundingBox(), label).toEqual(row);
+
+      await page.mouse.move(8, 400);
+      await expect(caption, label).toBeHidden();
+    }
+
+    // Keyboard focus shows it too: Tab on from GitHub, the nav's last link.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'View genomeOS on GitHub' })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(atlas).toBeFocused();
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('opacity', '1');
+    await page.keyboard.press('Shift+Tab');
+    await expect(caption).toBeHidden();
+  },
+);
+
+test(
+  'the aurora drifts and the caption slides, except under reduced motion',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const curtains = page.locator('.launch-atlas-cta__lights i');
+    const caption = page.locator('.launch-atlas-cta__caption');
+    const names = ['launch-aurora-a', 'launch-aurora-b', 'launch-aurora-c'];
+    await page.goto('/');
+    await expect(curtains).toHaveCount(3);
+    for (const [index, name] of names.entries())
+      await expect(curtains.nth(index)).toHaveCSS('animation-name', name);
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    for (const index of names.keys())
+      await expect(curtains.nth(index)).toHaveCSS('animation-name', 'none');
+    await expect(caption).toBeHidden();
+    expect(await captionSlide(caption)).toBe(0);
+    await atlasLink(page).hover();
+    await expect(caption).toBeVisible();
+    await expect(caption).toHaveCSS('opacity', '1');
+    expect(await captionSlide(caption)).toBe(0);
+    expect(Math.max(...(await captionDurations(caption)))).toBe(0);
+  },
+);
+
+test(
+  'the aurora drifts through the first 20 s on a page, then holds still until hovered or focused',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // A drift that never ended kept the compositor drawing 60 frames a
+    // second for as long as the page was open. The clock runs the page's
+    // timers; the curtains keep the real one.
+    await page.clock.install();
+    await page.goto('/project/');
+    const curtains = page.locator('.launch-atlas-cta__lights i');
+    await expect(curtains).toHaveCount(3);
+    const playStates = () =>
+      curtains.evaluateAll((elements) =>
+        elements.map((element) =>
+          element
+            .getAnimations()
+            .map((animation) => animation.playState)
+            .join(),
+        ),
+      );
+    // Once each pause has taken hold (a pause waits for the next frame).
+    const times = () =>
+      curtains.evaluateAll((elements) =>
+        Promise.all(
+          elements.map(async (element) => {
+            const [animation] = element.getAnimations();
+            await animation.ready;
+            return animation.currentTime;
+          }),
+        ),
+      );
+    const drifting = ['running', 'running', 'running'];
+    const resting = ['paused', 'paused', 'paused'];
+
+    expect(await playStates()).toEqual(drifting);
+    await page.clock.runFor(19_000);
+    expect(await playStates()).toEqual(drifting);
+    await page.clock.runFor(1_500);
+    await expect.poll(playStates).toEqual(resting);
+    // Held still where it was, and still lit.
+    const held = await times();
+    await page.waitForTimeout(300);
+    expect(await times()).toEqual(held);
+    await expect(page.locator('.launch-atlas-cta__lights')).toBeVisible();
+
+    // Hovered, it drifts on from there, and rests again once left.
+    await atlasLink(page).hover();
+    await expect.poll(playStates).toEqual(drifting);
+    await page.mouse.move(8, 400);
+    await expect.poll(playStates).toEqual(resting);
+
+    // Keyboard focus wakes it too.
+    await page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'View genomeOS on GitHub' })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(atlasLink(page)).toBeFocused();
+    await expect.poll(playStates).toEqual(drifting);
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(playStates).toEqual(resting);
+  },
+);
+
+test(
+  'in forced colours genomeOS Atlas keeps a system border and drops the aurora',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.goto('/');
+    const atlas = atlasLink(page);
+    const lights = atlas.locator('.launch-atlas-cta__lights');
+    await expect(lights).toBeVisible();
+    await page.emulateMedia({ forcedColors: 'active' });
+    await expect(atlas).toHaveCSS('border-top-style', 'solid');
+    await expect(atlas).toHaveCSS('border-top-width', '1px');
+    await expect(lights).toBeHidden();
+  },
+);
+
+test(
+  'touch screens and phone-width windows do without the caption',
+  { tag: '@desktop-chromium' },
+  async ({ browser, page }) => {
+    const expectNoCaption = async (on: Page, label: string) => {
+      await on.goto('/');
+      const atlas = atlasLink(on);
+      const caption = on.locator('.launch-atlas-cta__caption');
+      await expect(atlas, label).toHaveAccessibleDescription(
+        'Explore the interactive app',
+      );
+      await atlas.focus();
+      await expect(atlas, label).toBeFocused();
+      expect(
+        await atlas.evaluate((element) => element.matches(':focus-visible')),
+        label,
+      ).toBe(true);
+      await expect(caption, label).toBeHidden();
+      await atlas.hover();
+      await expect(caption, label).toBeHidden();
+    };
+
+    // A touch screen as wide as a laptop: it shows the button's name, but a
+    // tap would only flash the caption on the way to the Atlas.
+    const touch = await browser.newContext({
+      hasTouch: true,
+      viewport: { width: 1280, height: 800 },
+    });
+    const tablet = await touch.newPage();
+    await expectNoCaption(tablet, 'touch screen at 1280 px');
+    expect(
+      await tablet.evaluate(() => matchMedia('(hover: none)').matches),
+    ).toBe(true);
+    await touch.close();
+
+    // A window with a mouse at phone width, where the button is the globe
+    // mark alone.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expectNoCaption(page, 'mouse at 390 px');
+  },
+);
+
+test(
+  'GitHub sits in the primary nav right after Technical docs, set exactly like it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const compare = () =>
+      page.evaluate(() => {
+        const nav = document.querySelector('nav.desktop-nav')!;
+        const links = [...nav.querySelectorAll('a')];
+        const docs = links.find(
+          (link) => link.textContent!.trim() === 'Technical docs',
+        )!;
+        const github = nav.querySelector<HTMLAnchorElement>('.github-link')!;
+        const githubText = github.querySelector('span')!;
+        const type = (element: Element) => {
+          const style = getComputedStyle(element);
+          return {
+            colour: style.color,
+            family: style.fontFamily,
+            lineHeight: style.lineHeight,
+            size: style.fontSize,
+            weight: style.fontWeight,
+          };
+        };
+        const text = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const { top, bottom } = range.getBoundingClientRect();
+          return { top, bottom };
+        };
+        return {
+          after: links.indexOf(github) - links.indexOf(docs),
+          docs: { text: text(docs), type: type(docs) },
+          github: { text: text(githubText), type: type(githubText) },
+          last: links[links.length - 1] === github,
+        };
+      });
+    const expectAligned = async (label: string) => {
+      const measured = await compare();
+      expect(measured.after, label).toBe(1);
+      expect(measured.last, label).toBe(true);
+      expect(measured.github.type, label).toEqual(measured.docs.type);
+      for (const edge of ['top', 'bottom'] as const)
+        expect(
+          Math.abs(measured.github.text[edge] - measured.docs.text[edge]),
+          `${label}: text ${edge}`,
+        ).toBeLessThanOrEqual(0.5);
+    };
+
+    for (const width of [1153, 1280, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of ['/', '/project/']) {
+        await page.goto(route);
+        await page.evaluate(() => document.fonts.ready);
+        await expectAligned(`${route} at ${width} px, landing`);
+        await scrollToCompact(page, 600);
+        await expectAligned(`${route} at ${width} px, compact`);
+      }
+    }
+    // The Atlas page's nav, beside its status chip.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/app/');
+    await page.evaluate(() => document.fonts.ready);
+    await expectAligned('/app/ at 1440 px');
+  },
+);
+
+test(
+  'genomeOS Atlas stands alone, centred right of the nav, and beside Menu up to 72rem',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    const layout = () =>
+      page.evaluate(() => {
+        const edges = (element: Element | null) => {
+          if (!element || element.getClientRects().length === 0) return null;
+          const { left, right } = element.getBoundingClientRect();
+          return { left, right };
+        };
+        const cta = document.querySelector('.launch-atlas-cta')!;
+        const items = [...document.querySelectorAll('nav.desktop-nav li')].map(
+          (item) => item.getBoundingClientRect(),
+        );
+        return {
+          arrow:
+            cta.querySelector('.launch-atlas-cta__arrow')!.getClientRects()
+              .length > 0,
+          beforeMenu:
+            cta
+              .closest('.launch-atlas')!
+              .nextElementSibling?.matches('details.mobile-nav') ?? false,
+          cta: edges(cta)!,
+          inNav: cta.closest('nav') !== null,
+          inner: edges(document.querySelector('.site-header__inner'))!,
+          menu: edges(document.querySelector('.mobile-nav summary')),
+          nav: edges(
+            document.querySelector('.site-header__inner > nav.desktop-nav'),
+          ),
+          navGaps: items
+            .slice(1)
+            .map((item, index) => item.left - items[index].right),
+        };
+      });
+
+    // 1366 px: a common laptop width. 1377 px: where the full button came
+    // back at 86rem, 1.2 px further from GitHub than the nav's own gaps.
+    // 1392 and 1393 px: the last width with the narrower button (87rem) and
+    // the first with the full one.
+    for (const width of [1280, 1366, 1377, 1392, 1393, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      for (const state of ['landing', 'compact'] as const) {
+        if (state === 'compact') await scrollToCompact(page, 600);
+        const label = `${width} px, ${state}`;
+        const row = await layout();
+        expect(row.inNav, label).toBe(false);
+        expect(row.menu, label).toBeNull();
+        const centre = (row.cta.left + row.cta.right) / 2;
+        const room = (row.nav!.right + row.inner.right) / 2;
+        expect(Math.abs(centre - room), label).toBeLessThanOrEqual(2);
+        // Clearly further from GitHub than the links are from each other,
+        // so it reads as its own control, not one more nav link.
+        expect(
+          row.cta.left - row.nav!.right - Math.max(...row.navGaps),
+          label,
+        ).toBeGreaterThanOrEqual(4);
+        expect(row.arrow, label).toBe(width > 1392);
+      }
+    }
+
+    for (const width of [737, 1100, 1152]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/');
+      const label = `${width} px`;
+      const row = await layout();
+      expect(row.nav, label).toBeNull();
+      expect(row.beforeMenu, label).toBe(true);
+      // One 0.8rem gap (14.4 px) before the Menu, at the row's end.
+      expect(row.menu!.left - row.cta.right, label).toBeCloseTo(14.4, 0);
+      expect(row.menu!.right, label).toBeLessThanOrEqual(row.inner.right + 0.5);
+    }
+  },
+);
+
+test('the aurora around genomeOS Atlas never widens the page, is not clipped, and takes no pointer events', async ({
+  page,
+  isMobile,
+}) => {
+  const widths = isMobile
+    ? [320, 360, 412]
+    : [737, 1100, 1152, 1153, 1280, 1392, 1393, 1440, 1920];
+  const measure = () =>
+    page.evaluate(() => {
+      const cta = document.querySelector('.launch-atlas-cta')!;
+      const lights = cta.querySelector('.launch-atlas-cta__lights')!;
+      const ctaBox = cta.getBoundingClientRect();
+      const lightsBox = lights.getBoundingClientRect();
+      const inner = document.querySelector('.site-header__inner')!;
+      // Nothing between the lights and the page clips them.
+      const clippedBy: string[] = [];
+      for (
+        let element: Element | null = lights;
+        element && element !== document.documentElement;
+        element = element.parentElement
+      ) {
+        const style = getComputedStyle(element);
+        if (
+          style.overflowX !== 'visible' ||
+          style.overflowY !== 'visible' ||
+          style.clipPath !== 'none' ||
+          /paint|strict|content/.test(style.contain)
+        )
+          clippedBy.push(element.className || element.tagName);
+      }
+      // A point in the spill beside the button, at its vertical centre.
+      const hit = document.elementFromPoint(
+        ctaBox.left - 6,
+        (ctaBox.top + ctaBox.bottom) / 2,
+      );
+      return {
+        clippedBy,
+        innerOverflow: inner.scrollWidth - inner.clientWidth,
+        pageOverflow:
+          document.documentElement.scrollWidth -
+          document.documentElement.clientWidth,
+        pointerEvents: [lights, ...lights.children].map(
+          (element) => getComputedStyle(element).pointerEvents,
+        ),
+        spillLeft: ctaBox.left - lightsBox.left,
+        spillReachesHit: lightsBox.left < ctaBox.left - 6,
+        hitsLink: hit !== null && cta.contains(hit),
+      };
+    });
+
+  for (const width of widths) {
+    const label = `${width} px`;
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto('/');
+    // Hovered, the lights spill their widest: 1.25rem (22.5 px) each side.
+    await atlasLink(page).hover();
+    await expect
+      .poll(async () => (await measure()).spillLeft, { message: label })
+      .toBeCloseTo(22.5, 0);
+    const lit = await measure();
+    expect(lit.pageOverflow, label).toBeLessThanOrEqual(0);
+    expect(lit.innerOverflow, label).toBeLessThanOrEqual(0);
+    expect(lit.clippedBy, label).toEqual([]);
+    expect(lit.pointerEvents, label).toEqual(['none', 'none', 'none', 'none']);
+    expect(lit.spillReachesHit, label).toBe(true);
+    expect(lit.hitsLink, label).toBe(false);
+  }
 });
 
 test('Atlas fills the viewport below the header without page scroll', async ({
@@ -390,6 +908,823 @@ test('navigation stays visible and condenses after scrolling', async ({
   expect(navFontSize).toBeGreaterThanOrEqual(16);
 });
 
+/**
+ * The FOUNDATION capitals span 41.1 of the header lockup's 300 user units of
+ * height (the brand SVG test below checks that against the artwork).
+ */
+const FOUNDATION_SHARE = 41.11 / 300;
+
+async function measureHeaderLogo(page: Page) {
+  return page.evaluate(() => {
+    const img = document.querySelector<HTMLImageElement>('.wordmark__logo')!;
+    const box = img.getBoundingClientRect();
+    const header = document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect();
+    return {
+      headerHeight: header.height,
+      height: box.height,
+      naturalHeight: img.naturalHeight,
+      naturalWidth: img.naturalWidth,
+      width: box.width,
+    };
+  });
+}
+
+test('the header home link is the FOUNDATION lockup, large at the top of the page', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/');
+  const home = page
+    .locator('.site-header')
+    .getByRole('link', { name: 'genomeOS Foundation', exact: true });
+  await expect(home).toHaveAttribute('href', '/');
+  const logo = home.getByRole('img', {
+    name: 'genomeOS Foundation',
+    exact: true,
+  });
+  await expect(logo).toBeVisible();
+  await expect(logo).toHaveJSProperty('complete', true);
+  await expect(logo).not.toHaveAttribute('loading', 'lazy');
+  await expect(logo).toHaveAttribute('src', '/brand/genomeos-lockup-dark.svg');
+  await expect(logo).toHaveAttribute('width', '1395');
+  await expect(logo).toHaveAttribute('height', '300');
+
+  const landing = await measureHeaderLogo(page);
+  expect(landing.naturalWidth).toBeGreaterThan(0);
+  expect(landing.width / landing.height).toBeCloseTo(
+    landing.naturalWidth / landing.naturalHeight,
+    1,
+  );
+  if (isMobile) {
+    // Pixel 7 (412 px): the width left beside genomeOS Atlas and Menu.
+    expect(landing.height).toBeGreaterThanOrEqual(40);
+    expect(landing.height).toBeLessThanOrEqual(50);
+    expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(5);
+    expect(landing.headerHeight).toBeCloseTo(86.5, 0);
+  } else {
+    // 3.6rem (64.8 px) in a 5.5rem bar: FOUNDATION capitals at ~8.9 px.
+    expect(landing.height).toBeGreaterThanOrEqual(62);
+    expect(landing.height).toBeLessThanOrEqual(68);
+    expect(landing.height * FOUNDATION_SHARE).toBeGreaterThanOrEqual(7);
+    expect(landing.headerHeight).toBeCloseTo(100, 0);
+
+    // The taller bar keeps the nav links on its vertical centre line.
+    const centres = await page.evaluate(() => {
+      const middle = (element: Element) => {
+        const box = element.getBoundingClientRect();
+        return box.top + box.height / 2;
+      };
+      return {
+        bar: middle(document.querySelector('.site-header__inner')!),
+        links: [
+          ...document.querySelectorAll('nav.desktop-nav a, .launch-atlas-cta'),
+        ].map(middle),
+        logo: middle(document.querySelector('.wordmark__logo')!),
+      };
+    });
+    for (const centre of [centres.logo, ...centres.links])
+      expect(Math.abs(centre - centres.bar)).toBeLessThanOrEqual(1);
+  }
+});
+
+// Home, and a page whose scroll anchoring used to pull scrollTo(400) to 399.
+for (const route of ['/', '/contribute/']) {
+  test(`the lockup shrinks with the compact bar and the page stays put (${route})`, async ({
+    page,
+    isMobile,
+  }) => {
+    await page.goto(route);
+    const header = page.locator('[data-site-header]');
+    const landing = await measureHeaderLogo(page);
+    const layout = () =>
+      page.evaluate(() => {
+        const left = (selector: string) => {
+          const element = document.querySelector(selector)!;
+          // A display:none desktop nav (phones) has no box to compare.
+          return element.getClientRects().length > 0
+            ? element.getBoundingClientRect().left
+            : null;
+        };
+        return {
+          actionsLeft: left('.site-header__actions'),
+          headerBottom: document
+            .querySelector('[data-site-header]')!
+            .getBoundingClientRect().bottom,
+          mainTop:
+            document.querySelector('main')!.getBoundingClientRect().top +
+            window.scrollY,
+          navLeft: left('.site-header__inner > nav.desktop-nav'),
+          scrollHeight: document.documentElement.scrollHeight,
+        };
+      });
+    const before = await layout();
+    // At the top of the page the bar ends where the page begins.
+    expect(Math.abs(before.headerBottom - before.mainTop)).toBeLessThanOrEqual(
+      0.5,
+    );
+    expect(before.actionsLeft).not.toBeNull();
+    expect(before.navLeft === null).toBe(Boolean(isMobile));
+
+    // html has scroll-behavior: smooth; jump straight there.
+    await page.evaluate(() =>
+      window.scrollTo({ top: 400, behavior: 'instant' }),
+    );
+    await expect(header).toHaveClass(/site-header--compact/);
+    // Both transitions are 200 ms; wait for the bar and the logo to settle.
+    await expect(async () => {
+      const compact = await measureHeaderLogo(page);
+      expect(compact.headerHeight).toBeCloseTo(71.2, 0);
+      expect(compact.height).toBeCloseTo(isMobile ? 42.1 : 46.8, 0);
+    }).toPass({ timeout: 5_000 });
+
+    const compact = await measureHeaderLogo(page);
+    expect(compact.height).toBeLessThan(landing.height * 0.95);
+    expect(compact.height).toBeLessThan(compact.headerHeight - 16);
+    expect(await page.evaluate(() => window.scrollY)).toBe(400);
+    // The header is fixed over a spacer of its landing height, so nothing
+    // below it moves, and the nav and actions beside the logo stay put.
+    const after = await layout();
+    expect(after.mainTop).toBe(before.mainTop);
+    expect(after.scrollHeight).toBe(before.scrollHeight);
+    expect(after.actionsLeft).toBe(before.actionsLeft);
+    expect(after.navLeft).toBe(before.navLeft);
+
+    await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
+    await expect(header).not.toHaveClass(/site-header--compact/);
+    await expect
+      .poll(async () => (await measureHeaderLogo(page)).height)
+      .toBeCloseTo(landing.height, 0);
+  });
+}
+
+// Home, and pages where, on phones, scroll anchoring used to correct scrollY
+// by a pixel and flip the header back.
+for (const route of ['/', '/project/', '/contribute/']) {
+  test(`the header settles in one state while scrolling slowly across the threshold (${route})`, async ({
+    page,
+  }) => {
+    await page.goto(route);
+    await page.evaluate(() => {
+      const header = document.querySelector('[data-site-header]')!;
+      const record = window as unknown as {
+        headerFlips: boolean[];
+        scrollPositions: number[];
+      };
+      record.headerFlips = [];
+      record.scrollPositions = [];
+      new MutationObserver(() =>
+        record.headerFlips.push(
+          header.classList.contains('site-header--compact'),
+        ),
+      ).observe(header, { attributeFilter: ['class'] });
+      window.addEventListener(
+        'scroll',
+        () => record.scrollPositions.push(window.scrollY),
+        { passive: true },
+      );
+    });
+
+    // 2 px steps from 36 to 60 and back (instant, not html's smooth
+    // scrolling), across both lines (compact above 56, expand below 40), each
+    // held longer than a whole transition, so a resize that moved scrollY
+    // would show up. A single threshold in between also flips exactly twice
+    // here; the next test pins the band between the two lines.
+    const steps = Array.from({ length: 13 }, (_, index) => 36 + 2 * index);
+    for (const top of [...steps, ...[...steps].reverse()]) {
+      await page.evaluate(
+        (y) => window.scrollTo({ top: y, behavior: 'instant' }),
+        top,
+      );
+      await page.waitForTimeout(240);
+    }
+
+    const record = await page.evaluate(() => {
+      const { headerFlips, scrollPositions } = window as unknown as {
+        headerFlips: boolean[];
+        scrollPositions: number[];
+      };
+      return { headerFlips, scrollPositions };
+    });
+    expect(record.headerFlips).toEqual([true, false]);
+    // Only the positions scrolled to: no scroll-anchoring correction.
+    const unrequested = record.scrollPositions.filter(
+      (y) => !steps.some((step) => Math.abs(step - y) < 0.5),
+    );
+    expect(unrequested).toEqual([]);
+  });
+}
+
+test('between the two scroll lines the header keeps the state it had', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const header = page.locator('[data-site-header]');
+  /** Scrolls instantly, then waits out the scroll event and the header's frame. */
+  const scrollTo = (top: number) =>
+    page.evaluate(
+      (y) =>
+        new Promise<boolean>((resolve) => {
+          window.scrollTo({ top: y, behavior: 'instant' });
+          let frames = 0;
+          const tick = () => {
+            frames += 1;
+            if (frames < 4) requestAnimationFrame(tick);
+            else
+              resolve(
+                document
+                  .querySelector('[data-site-header]')!
+                  .classList.contains('site-header--compact'),
+              );
+          };
+          requestAnimationFrame(tick);
+        }),
+      top,
+    );
+
+  // From the top, inside the band (40 to 56): still the landing bar.
+  expect(await scrollTo(50)).toBe(false);
+  expect(await scrollTo(56)).toBe(false);
+  // Past the upper line it compacts...
+  expect(await scrollTo(60)).toBe(true);
+  // ...and back inside the band it stays compact...
+  expect(await scrollTo(48)).toBe(true);
+  expect(await scrollTo(40)).toBe(true);
+  // ...until it crosses the lower line.
+  expect(await scrollTo(36)).toBe(false);
+  await expect(header).not.toHaveClass(/site-header--compact/);
+});
+
+/** The target's top and the fixed header's bottom, in viewport pixels. */
+const clearanceBelowHeader = (target: Locator) =>
+  target.evaluate((element) => ({
+    headerBottom: document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect().bottom,
+    top: element.getBoundingClientRect().top,
+  }));
+
+test('linked sections land below the fixed header, not under it', async ({
+  page,
+}) => {
+  // Shared links to section headings, opened fresh, at the reported sizes:
+  // without scroll padding each heading ended at the viewport top, 71 px of
+  // it under the compact bar.
+  for (const [route, id, width, height] of [
+    ['/project/', 'safeguards-title', 1440, 900],
+    ['/', 'metrics-title', 390, 844],
+    ['/project/', 'pipeline-title', 844, 390],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto(`${route}#${id}`);
+    await expect(page.locator('[data-site-header]')).toHaveClass(
+      /site-header--compact/,
+    );
+    // The bar's 200 ms resize and any reveal under the target settle first.
+    await page.waitForTimeout(1_000);
+    const { headerBottom, top } = await clearanceBelowHeader(
+      page.locator(`#${id}`),
+    );
+    expect(top, `${route}#${id} at ${width}x${height}`).toBeGreaterThanOrEqual(
+      headerBottom - 0.5,
+    );
+  }
+
+  // The skip link's target starts right below the landing bar's spacer, so
+  // following it leaves the page at the top with nothing under the bar.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/contribute/');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#main-content$/);
+  await page.waitForTimeout(1_000);
+  const main = await clearanceBelowHeader(page.locator('#main-content'));
+  expect(main.top).toBeGreaterThanOrEqual(main.headerBottom - 0.5);
+});
+
+test('keyboard focus moving back up the page stays clear of the fixed header', async ({
+  page,
+}) => {
+  // Instant scrolling and an instant header, so each focus step settles at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 844, height: 390 });
+  for (const route of ['/404.html', '/contribute/']) {
+    await page.goto(route);
+    await page.locator('.site-footer a').last().focus();
+    const hidden: string[] = [];
+    // Shift+Tab back through main until focus reaches the header.
+    for (let step = 0; step < 40; step += 1) {
+      await page.keyboard.press('Shift+Tab');
+      const focused = await page.evaluate(() => {
+        const element = document.activeElement!;
+        const header = document.querySelector('[data-site-header]')!;
+        return {
+          headerBottom: header.getBoundingClientRect().bottom,
+          inHeader: header.contains(element),
+          inMain: element.closest('main') !== null,
+          label: (element.textContent ?? '').trim().slice(0, 40),
+          top: element.getBoundingClientRect().top,
+        };
+      });
+      if (focused.inHeader) break;
+      if (focused.inMain && focused.top < focused.headerBottom - 0.5)
+        hidden.push(`${focused.label} (top ${Math.round(focused.top)})`);
+    }
+    expect(hidden, route).toEqual([]);
+  }
+});
+
+test(
+  'the header shrinks the lockup instead of wrapping the nav at narrow desktop widths',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // Media queries count rem at 16 px, not the 112.5% root. 737 px: the first
+    // width above the phone layout (46rem). 1025 px: the first above 64rem,
+    // where the desktop nav used to start. 1152 px: the last Menu width
+    // (72rem). 1153 px: the first desktop-nav width, the tightest row.
+    // 1280 px: a common laptop width. 1392 and 1393 px: the last width with
+    // the narrower genomeOS Atlas (87rem) and the first with the full one.
+    const desktopNavFrom = 1153;
+    for (const width of [737, 1025, 1152, 1153, 1280, 1392, 1393]) {
+      await page.setViewportSize({ width, height: 800 });
+      await page.goto('/project/');
+      const row = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const shown = (selector: string) =>
+          document.querySelector(selector)!.getClientRects().length > 0;
+        const links = [...document.querySelectorAll('nav.desktop-nav a')];
+        return {
+          clientWidth: inner.clientWidth,
+          desktopNav: shown('.site-header__inner > nav.desktop-nav'),
+          linkHeights: links
+            .filter((link) => link.getClientRects().length > 0)
+            .map((link) => link.getBoundingClientRect().height),
+          menu: shown('.mobile-nav summary'),
+          scrollWidth: inner.scrollWidth,
+        };
+      });
+      expect(row.desktopNav, `${width}`).toBe(width >= desktopNavFrom);
+      expect(row.menu, `${width}`).toBe(width < desktopNavFrom);
+      expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
+      // One line each: a wrapped label would be ~2x the 1rem line height.
+      for (const height of row.linkHeights)
+        expect(height, `${width}`).toBeLessThan(36);
+      const landing = await measureHeaderLogo(page);
+      expect(
+        landing.height * FOUNDATION_SHARE,
+        `${width}`,
+      ).toBeGreaterThanOrEqual(7);
+
+      // The landing lockup is still the larger one, so scrolling shrinks it.
+      await page.evaluate(() =>
+        window.scrollTo({ top: 400, behavior: 'instant' }),
+      );
+      await expect(async () => {
+        const compact = await measureHeaderLogo(page);
+        expect(compact.headerHeight, `${width}`).toBeCloseTo(71.2, 0);
+        expect(compact.height, `${width}`).toBeCloseTo(46.8, 0);
+      }).toPass({ timeout: 5_000 });
+      expect(landing.height, `${width}`).toBeGreaterThan(46.8 * 1.1);
+    }
+  },
+);
+
+test(
+  'the Atlas header shows the Menu up to 72rem too, so its nav labels never wrap',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // With the desktop nav from 1025 px, the wider Atlas SVG wordmark wrapped
+    // "Working groups" and "Technical docs" onto two lines up to 1058 px.
+    await page.setViewportSize({ width: 1025, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const desktopNavFrom = 1153;
+    for (const width of [1025, 1058, 1152, 1153, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const row = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const shown = (selector: string) =>
+          document.querySelector(selector)!.getClientRects().length > 0;
+        return {
+          clientWidth: inner.clientWidth,
+          desktopNav: shown('.site-header__inner > nav.desktop-nav'),
+          linkHeights: [...document.querySelectorAll('nav.desktop-nav a')]
+            .filter((link) => link.getClientRects().length > 0)
+            .map((link) => link.getBoundingClientRect().height),
+          menu: shown('.mobile-nav summary'),
+          scrollWidth: inner.scrollWidth,
+        };
+      });
+      expect(row.desktopNav, `${width}`).toBe(width >= desktopNavFrom);
+      expect(row.menu, `${width}`).toBe(width < desktopNavFrom);
+      expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
+      for (const height of row.linkHeights)
+        expect(height, `${width}`).toBeLessThan(36);
+    }
+  },
+);
+
+test(
+  'the Atlas nav keeps its labels on one line, GitHub on Technical docs, while the status chip loads',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // Hold the default map's surface, so the chip keeps its loading copy, a
+    // label over its detail line beside its progress meter. With GitHub in the
+    // nav, Working groups and Technical docs wrapped beside it up to 1259 px,
+    // and GitHub sat 14.8 px below Technical docs' first line. The e2e build
+    // stretches the request stall window to 120 s, so the held tier never
+    // times out while a loaded machine measures the row.
+    // The chip reads "Loading HbS (rs334)" until the globe starts drawing the
+    // map, then "Rendering HbS (rs334)" over "Building measured points" while
+    // the surface is still on its way; the download's progress and the
+    // drawing's share one activity, so either can be the copy showing.
+    const loading = /^(Loading|Rendering) HbS \(rs334\)/;
+    const render = await delayArtifactTier(
+      page,
+      'hbs-rs334',
+      'render',
+      Number.POSITIVE_INFINITY,
+    );
+    await page.setViewportSize({ width: 1153, height: 800 });
+    await page.goto('/app/');
+    const chip = page.locator('.atlas-navbar-status-slot .atlas-status');
+    await expect(chip).toContainText(loading);
+    await expect(chip.locator('small')).toHaveText(/\S/);
+    await expect(chip.getByRole('progressbar')).toBeVisible();
+    await expect.poll(() => render.hits()).toBe(1);
+    await page.evaluate(() => document.fonts.ready);
+
+    for (const width of [1153, 1160, 1200, 1240, 1259, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const label = `${width} px`;
+      const row = await page.evaluate(() => {
+        const nav = document.querySelector('nav.desktop-nav')!;
+        const textBox = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const lines = new Set(
+            [...range.getClientRects()].map(({ top }) => Math.round(top)),
+          );
+          const { top, bottom } = range.getBoundingClientRect();
+          return { bottom, lines: lines.size, top };
+        };
+        const links = [...nav.querySelectorAll('a')];
+        const docs = links.find(
+          (link) => link.textContent!.trim() === 'Technical docs',
+        )!;
+        const inner = document.querySelector('.site-header__inner')!;
+        return {
+          docs: textBox(docs),
+          github: textBox(nav.querySelector('.github-link span')!),
+          // GitHub's text is its <span>, beside the icon.
+          lines: links.map(
+            (link) => textBox(link.querySelector('span') ?? link).lines,
+          ),
+          overflow: inner.scrollWidth - inner.clientWidth,
+        };
+      });
+      expect(row.lines, label).toEqual([1, 1, 1, 1, 1]);
+      for (const edge of ['top', 'bottom'] as const)
+        expect(
+          Math.abs(row.github[edge] - row.docs[edge]),
+          `${label}: text ${edge}`,
+        ).toBeLessThanOrEqual(0.5);
+      expect(row.overflow, label).toBeLessThanOrEqual(0);
+      // The chip's copy gives way instead, and still reads as loading.
+      await expect(chip, label).toContainText(loading);
+      await expect(chip.locator('small'), label).toHaveText(/\S/);
+      await expect(chip, label).toBeVisible();
+    }
+    // Still the held load: one request, and the map not ready.
+    expect(render.hits()).toBe(1);
+    await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+      'data-atlas-ready',
+      'false',
+    );
+    render.release();
+  },
+);
+
+test('the Atlas header keeps the wordmark crop at its previous size', async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const header = page.locator('[data-site-header]');
+  await expect(header).not.toHaveClass(/site-header--lockup/);
+  const logo = header
+    .getByRole('link', { name: 'genomeOS', exact: true })
+    .getByRole('img', { name: 'genomeOS', exact: true });
+  await expect(logo).toHaveAttribute(
+    'src',
+    '/brand/genomeos-wordmark-dark.svg',
+  );
+  // 1.6rem on desktop and 0.96rem in the phone header (atlas.css), in the
+  // unchanged 4.75rem bar.
+  await expect(async () => {
+    const measured = await measureHeaderLogo(page);
+    expect(measured.height).toBeCloseTo(isMobile ? 17.28 : 28.8, 0);
+    expect(measured.headerHeight).toBeCloseTo(86.5, 0);
+  }).toPass({ timeout: 5_000 });
+});
+
+test('the footer shows the full logo with a legible tagline', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const lockup = page
+    .locator('.site-footer')
+    .getByRole('img', { name: /^genomeOS Foundation.*benefit of all$/ });
+  await lockup.scrollIntoViewIfNeeded();
+  await expect(lockup).toBeVisible();
+  await expect
+    .poll(() => lockup.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBeGreaterThan(0);
+  // The tagline's glyphs span 43.2 of the artwork's 435 user units of height.
+  const taglinePx = await lockup.evaluate(
+    (img) => (img.getBoundingClientRect().height * 43.23) / 435,
+  );
+  expect(taglinePx).toBeGreaterThanOrEqual(10);
+});
+
+test(
+  'brand SVGs are served and the header crops frame their glyphs',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    const svgs = new Map<string, string>();
+    for (const name of [
+      'genomeos-wordmark-dark.svg',
+      'genomeos-lockup-dark.svg',
+      'genomeos-foundation-dark.svg',
+    ]) {
+      const response = await request.get(`/brand/${name}`);
+      expect(response.status(), name).toBe(200);
+      expect(response.headers()['content-type'], name).toContain(
+        'image/svg+xml',
+      );
+      svgs.set(name, await response.text());
+    }
+
+    await page.setContent(
+      svgs.get('genomeos-wordmark-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const frame = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const box = (id: string) =>
+        document.querySelector<SVGGraphicsElement>(`#${id}`)!.getBBox();
+      const genome = box('wordmark-genome');
+      const os = box('wordmark-os');
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        bottom: y + height,
+        foundationTop: box('foundation-line').y,
+        height,
+        left: x,
+        right: x + width,
+        top: y,
+        width,
+        wordmark: {
+          bottom: Math.max(genome.y + genome.height, os.y + os.height),
+          left: Math.min(genome.x, os.x),
+          right: Math.max(genome.x + genome.width, os.x + os.width),
+          top: Math.min(genome.y, os.y),
+        },
+      };
+    });
+    // At least 1% of clear space on every side, so no glyph edge is clipped,
+    // and the FOUNDATION line below the wordmark stays out of the frame.
+    expect(frame.wordmark.left - frame.left).toBeGreaterThan(
+      0.01 * frame.width,
+    );
+    expect(frame.right - frame.wordmark.right).toBeGreaterThan(
+      0.01 * frame.width,
+    );
+    expect(frame.wordmark.top - frame.top).toBeGreaterThan(0.01 * frame.height);
+    expect(frame.bottom - frame.wordmark.bottom).toBeGreaterThan(
+      0.01 * frame.height,
+    );
+    expect(frame.foundationTop).toBeGreaterThan(frame.bottom);
+
+    // The lockup crop adds the FOUNDATION line and leaves out the tagline.
+    await page.setContent(
+      svgs.get('genomeos-foundation-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const taglineTop = await page.evaluate(
+      () => document.querySelector<SVGGraphicsElement>('#tagline')!.getBBox().y,
+    );
+    await page.setContent(
+      svgs.get('genomeos-lockup-dark.svg')!.replace(/^<\?xml[^>]*>/, ''),
+    );
+    const lockup = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      const boxes = ['wordmark-genome', 'wordmark-os', 'foundation-line'].map(
+        (id) => document.querySelector<SVGGraphicsElement>(`#${id}`)!.getBBox(),
+      );
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        bottom: y + height,
+        foundationHeight: boxes[2].height,
+        glyphs: {
+          bottom: Math.max(...boxes.map((box) => box.y + box.height)),
+          left: Math.min(...boxes.map((box) => box.x)),
+          right: Math.max(...boxes.map((box) => box.x + box.width)),
+          top: Math.min(...boxes.map((box) => box.y)),
+        },
+        hasTagline: document.querySelector('#tagline') !== null,
+        height,
+        left: x,
+        right: x + width,
+        top: y,
+        width,
+      };
+    });
+    expect(lockup.glyphs.left - lockup.left).toBeGreaterThan(
+      0.01 * lockup.width,
+    );
+    expect(lockup.right - lockup.glyphs.right).toBeGreaterThan(
+      0.01 * lockup.width,
+    );
+    expect(lockup.glyphs.top - lockup.top).toBeGreaterThan(
+      0.01 * lockup.height,
+    );
+    expect(lockup.bottom - lockup.glyphs.bottom).toBeGreaterThan(
+      0.01 * lockup.height,
+    );
+    expect(lockup.hasTagline).toBe(false);
+    expect(taglineTop).toBeGreaterThan(lockup.bottom);
+    // FOUNDATION_SHARE, which the header size checks rely on.
+    expect(lockup.foundationHeight / lockup.height).toBeCloseTo(
+      FOUNDATION_SHARE,
+      3,
+    );
+  },
+);
+
+test(
+  'every page declares the favicon set and the files are served',
+  { tag: '@desktop-chromium' },
+  async ({ page, request }) => {
+    const served = new Map<string, RegExp>([
+      ['/favicon.svg', /^image\/svg\+xml/],
+      ['/favicon-32.png', /^image\/png/],
+      ['/favicon-16.png', /^image\/png/],
+      ['/apple-touch-icon.png', /^image\/png/],
+    ]);
+    // SiteLayout pages, the Atlas, the standalone polygon page (opened in its
+    // own tab from the inspector) and Starlight docs build their heads separately.
+    for (const route of [
+      '/',
+      '/app/',
+      '/app/polygon/',
+      '/docs/',
+      '/docs/system-overview/',
+    ]) {
+      await page.goto(route, { waitUntil: 'domcontentloaded' });
+      const icons = await page
+        .locator('link[rel~="icon"], link[rel="apple-touch-icon"]')
+        .evaluateAll((links) =>
+          (links as HTMLLinkElement[]).map((link) => ({
+            href: new URL(link.href).pathname,
+            type: link.type,
+          })),
+        );
+      expect(
+        icons.filter(({ type }) => type === 'image/svg+xml'),
+        route,
+      ).toEqual([{ href: '/favicon.svg', type: 'image/svg+xml' }]);
+      expect(icons.map(({ href }) => href).sort(), route).toEqual(
+        [...served.keys()].sort(),
+      );
+    }
+
+    served.set('/favicon.ico', /^image\/(x-icon|vnd\.microsoft\.icon)/);
+    for (const [href, type] of served) {
+      const response = await request.get(href);
+      expect(response.status(), href).toBe(200);
+      expect(response.headers()['content-type'], href).toMatch(type);
+    }
+  },
+);
+
+test(
+  'the favicon frames the globe O on a dark circle, and its PNGs render the shipped SVG',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.goto('/favicon.svg');
+    const frame = await page.evaluate(() => {
+      const svg = document.querySelector('svg')!;
+      // The O is approximately the left square of the OS group: its side is
+      // taken as the group's height, which comes from the S (about 3.8 units
+      // lower than the O).
+      const os = document
+        .querySelector<SVGGraphicsElement>('#wordmark-os')!
+        .getBBox();
+      const circle = (selector: string) => {
+        const { cx, cy, r } =
+          document.querySelector<SVGCircleElement>(selector)!;
+        return [cx, cy, r].map((length) => length.baseVal.value);
+      };
+      const { x, y, width, height } = svg.viewBox.baseVal;
+      return {
+        view: [x + width / 2, y + height / 2, width / 2],
+        square: width === height,
+        globe: [os.x + os.height / 2, os.y + os.height / 2, os.height / 2],
+        clip: circle('clipPath circle'),
+        backing: circle('#favicon-backing'),
+      };
+    });
+    expect(frame.square).toBe(true);
+    const [cx, cy, radius] = frame.globe;
+    // The clip just clears the O's rim and cuts away the S; the backing is
+    // 1.12 times the O's radius and exactly fills the square viewBox.
+    for (const [actual, expected] of [
+      [frame.view, [cx, cy, radius * 1.12]],
+      [frame.backing, [cx, cy, radius * 1.12]],
+      [frame.clip, [cx, cy, radius + 1.5]],
+    ]) {
+      actual.forEach((value, index) =>
+        expect(value).toBeCloseTo(expected[index], 2),
+      );
+    }
+
+    /** RGBA bytes of a same-origin image drawn at `size` x `size`. */
+    const pixels = (href: string, size: number) =>
+      page.evaluate(
+        async ([href, size]) => {
+          const image = new Image();
+          image.src = href;
+          await image.decode();
+          const canvas = document.createElementNS(
+            'http://www.w3.org/1999/xhtml',
+            'canvas',
+          ) as HTMLCanvasElement;
+          canvas.width = size;
+          canvas.height = size;
+          const context = canvas.getContext('2d')!;
+          context.drawImage(image, 0, 0, size, size);
+          return [...context.getImageData(0, 0, size, size).data];
+        },
+        [href, size] as const,
+      );
+    const pixel = (data: number[], size: number, x: number, y: number) =>
+      data.slice(4 * (y * size + x), 4 * (y * size + x) + 4);
+    const ground = [2, 7, 18, 255]; // header ground #020712, the backing colour
+    /** Columns spanned by the O: opaque pixels that are not the ground. */
+    const drawnShare = (data: number[], size: number) => {
+      let minX = size;
+      let maxX = -1;
+      for (let index = 0; index < data.length; index += 4) {
+        const differs = [0, 1, 2].some(
+          (channel) => Math.abs(data[index + channel] - ground[channel]) > 8,
+        );
+        if (data[index + 3] < 128 || !differs) continue;
+        const x = (index / 4) % size;
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x);
+      }
+      return (maxX - minX + 1) / size;
+    };
+
+    const tab = await pixels('/favicon-48.png', 48);
+    expect(pixel(tab, 48, 0, 0)[3]).toBe(0); // outside the round backing
+    expect(pixel(tab, 48, 0, 8)[3]).toBe(0); // still outside, by the rim
+    expect(pixel(tab, 48, 1, 24)).toEqual(ground); // the backing's rim, left
+    expect(pixel(tab, 48, 46, 24)).toEqual(ground); // and right, where S was
+    expect(drawnShare(tab, 48)).toBeGreaterThan(0.86);
+    expect(drawnShare(tab, 48)).toBeLessThan(0.93);
+
+    const apple = await pixels('/apple-touch-icon.png', 180);
+    expect(pixel(apple, 180, 0, 0)).toEqual(ground);
+    expect(drawnShare(apple, 180)).toBeGreaterThan(0.66);
+    expect(drawnShare(apple, 180)).toBeLessThan(0.74);
+
+    // The rasters are renderings of the favicon.svg being served, not stale
+    // copies. Chromium's drawing of the SVG matches each PNG exactly where they
+    // were built; 16 levels per channel leaves room for another platform's
+    // anti-aliasing, while a stale PNG is off by up to 255. Channels are
+    // premultiplied, so colour under zero alpha does not count.
+    const premultiplied = (data: number[]) =>
+      data.map((value, index) =>
+        index % 4 === 3 ? value : (value * data[index - (index % 4) + 3]) / 255,
+      );
+    for (const size of [16, 32, 48]) {
+      const svg = premultiplied(await pixels('/favicon.svg', size));
+      const png = premultiplied(await pixels(`/favicon-${size}.png`, size));
+      const worst = Math.max(
+        ...svg.map((value, index) => Math.abs(value - png[index])),
+      );
+      expect(worst, `favicon-${size}.png against favicon.svg`).toBeLessThan(16);
+    }
+  },
+);
+
 test('visible project names use the wordmark typography', async ({ page }) => {
   for (const route of brandAuditRoutes) {
     await page.goto(route);
@@ -409,8 +1744,9 @@ test('visible project names use the wordmark typography', async ({ page }) => {
             !nonVisual &&
             getComputedStyle(parent).display !== 'none'
           ) {
+            // The header wordmark is the logo image, so it has no text node.
             const wordmark = parent.closest<HTMLElement>(
-              '.brand-name, .wordmark, .site-title',
+              '.brand-name, .site-title',
             );
             if (!wordmark) {
               failures.push(
@@ -474,6 +1810,383 @@ test('mobile navigation is a keyboard-operable disclosure', async ({
   ).toBeVisible();
 });
 
+test('the Menu panel scrolls inside short viewports and closes on Escape or when focus leaves it', async ({
+  page,
+}) => {
+  // Instant scrolling and an instant header, so each step settles at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+  const links = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link');
+
+  // A landscape phone at 200% zoom (844x390) and 1280x1024 at 400%, the
+  // WCAG reflow case. The panel sat in the fixed header, taller than either
+  // viewport, so its last links could not be reached.
+  for (const [width, height] of [
+    [422, 195],
+    [320, 256],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+    await expect(links).toHaveCount(5);
+    for (const link of await links.all()) {
+      const reachable = await link.evaluate((element) => {
+        element.scrollIntoView({ block: 'nearest' });
+        const box = element.getBoundingClientRect();
+        const x = box.left + box.width / 2;
+        const y = box.top + box.height / 2;
+        const hit = document.elementFromPoint(x, y);
+        return y < window.innerHeight && hit !== null && element.contains(hit);
+      });
+      expect(reachable, `${await link.innerText()} at ${width}x${height}`).toBe(
+        true,
+      );
+    }
+  }
+
+  // Escape closes the panel and puts focus back on its summary.
+  await links.first().focus();
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(summary).toBeFocused();
+
+  // Tabbing past the last link closes it too, so it never covers the control
+  // that now has focus.
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  await links.last().focus();
+  await page.keyboard.press('Tab');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(
+    page.locator('main').locator(':focus'),
+    'focus moved on into the page',
+  ).toHaveCount(1);
+});
+
+test('the Menu closes on a click or focus anywhere outside it', async ({
+  page,
+  isMobile,
+}) => {
+  if (!isMobile) await page.setViewportSize({ width: 1100, height: 800 });
+  await page.goto('/');
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+
+  // A click on page content that takes no focus moves focus to <body>, so no
+  // focusout names a next target. The panel stayed open, over the links the
+  // next Tab went on to from the click.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  const blank = await page.evaluate(() => {
+    const x = 16;
+    const y = window.innerHeight - 16;
+    const hit = document.elementFromPoint(x, y);
+    return {
+      x,
+      y,
+      inMenu: hit?.closest('details.mobile-nav') != null,
+      focusable:
+        hit?.closest(
+          'a, button, input, select, textarea, summary, [tabindex]',
+        ) != null,
+    };
+  });
+  expect(blank.inMenu).toBe(false);
+  expect(blank.focusable).toBe(false);
+  await page.mouse.click(blank.x, blank.y);
+  await expect(menu).not.toHaveAttribute('open');
+  expect(
+    await page.evaluate(() => document.activeElement === document.body),
+  ).toBe(true);
+
+  // Focus that moves outside it closes it too, however it gets there.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  await page.locator('main a').first().focus();
+  await expect(menu).not.toHaveAttribute('open');
+
+  // A press on the panel's own padding is inside the Menu, so it stays open.
+  await summary.click();
+  await expect(menu).toHaveAttribute('open', '');
+  const panel = page.getByRole('navigation', { name: 'Mobile navigation' });
+  const padding = await panel.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = box.left + 6;
+    const y = box.top + 6;
+    return { x, y, onPanel: document.elementFromPoint(x, y) === element };
+  });
+  expect(padding.onPanel).toBe(true);
+  if (isMobile) await page.touchscreen.tap(padding.x, padding.y);
+  else await page.mouse.click(padding.x, padding.y);
+  await expect(menu).toHaveAttribute('open', '');
+
+  // And a press on one of its links still follows the link.
+  const link = panel.getByRole('link', { name: 'Working groups' });
+  if (isMobile) await link.tap();
+  else await link.click();
+  await expect(page).toHaveURL(/\/working-groups\/$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText(
+    'Choose the part of the problem',
+  );
+});
+
+test(
+  'a Menu hidden by a resize past 72rem comes back closed',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/');
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(summary).toBeHidden();
+    await expect(menu).not.toHaveAttribute('open');
+
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expect(summary).toBeVisible();
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(
+      page.getByRole('navigation', { name: 'Mobile navigation' }),
+    ).toBeHidden();
+  },
+);
+
+test(
+  'on the Atlas, Escape closes an open Menu first, then the explorer layer under it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    // 1100 px: the Menu stands in for the desktop nav, and the legend
+    // popover stays open on a click outside it (it closes so only on phones).
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    const legendInfo = page.locator('details.atlas-legend__info');
+    const legendSummary = legendInfo.locator('summary');
+
+    await legendSummary.click();
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(summary).toBeFocused();
+    // Closed, the Menu leaves Escape to the explorer's own stack.
+    await page.keyboard.press('Escape');
+    await expect(legendInfo).not.toHaveAttribute('open');
+
+    // Opened without taking focus (a scripted click), the Menu closes on
+    // Escape without pulling focus out of the explorer layer that has it.
+    await legendSummary.click();
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(legendSummary).toBeFocused();
+    await summary.evaluate((element: HTMLElement) => element.click());
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(legendSummary).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(legendInfo).not.toHaveAttribute('open');
+    await expect(legendSummary).toBeFocused();
+
+    // From <body>, focus goes to the summary, as it does from the Menu.
+    await page.evaluate(() =>
+      (document.activeElement as HTMLElement | null)?.blur(),
+    );
+    await summary.evaluate((element: HTMLElement) => element.click());
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(summary).toBeFocused();
+  },
+);
+
+/**
+ * The Menu opened from the keyboard over the Atlas catalog picker, which is
+ * not modal: the Menu paints above the picker and Escape closes it first.
+ */
+async function expectMenuOverCatalogPicker(page: Page): Promise<void> {
+  await page.goto('/app/');
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  const menu = page.locator('details.mobile-nav');
+  const summary = menu.locator('summary');
+  const trigger = page.getByRole('button', {
+    name: /Select dataset\. Current dataset:/,
+  });
+  const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+
+  await trigger.click();
+  await expect(
+    catalog.getByRole('searchbox', { name: 'Search maps' }),
+  ).toBeFocused();
+  // The picker is not modal, so the keyboard can leave it open for the Menu.
+  await summary.focus();
+  await page.keyboard.press('Enter');
+  await expect(menu).toHaveAttribute('open', '');
+  await expect(catalog).toBeVisible();
+
+  // The portaled picker (z-index 1003) painted over the Menu's panel.
+  const overlap = await page.evaluate(() => {
+    const panel = document
+      .querySelector('.mobile-nav nav')!
+      .getBoundingClientRect();
+    const picker = document
+      .querySelector('.atlas-map-picker')!
+      .getBoundingClientRect();
+    const left = Math.max(panel.left, picker.left);
+    const right = Math.min(panel.right, picker.right);
+    const top = Math.max(panel.top, picker.top);
+    const bottom = Math.min(panel.bottom, picker.bottom);
+    const hit = document.elementFromPoint(
+      (left + right) / 2,
+      (top + bottom) / 2,
+    );
+    return {
+      height: bottom - top,
+      menuOnTop: hit?.closest('details.mobile-nav') != null,
+      width: right - left,
+    };
+  });
+  expect(overlap.width).toBeGreaterThan(0);
+  expect(overlap.height).toBeGreaterThan(0);
+  expect(overlap.menuOnTop).toBe(true);
+
+  await page.keyboard.press('Escape');
+  await expect(menu).not.toHaveAttribute('open');
+  await expect(catalog).toBeVisible();
+  await expect(summary).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(catalog).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+}
+
+test(
+  'a Menu opened from the keyboard over the catalog picker paints above it and closes first',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await expectMenuOverCatalogPicker(page);
+  },
+);
+
+test(
+  'on a phone, a Menu opened from the keyboard over the full-screen catalog picker paints above it and closes first',
+  { tag: '@mobile-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await expectMenuOverCatalogPicker(page);
+  },
+);
+
+test('at large text sizes genomeOS Atlas moves into the Menu, so the home logo keeps its size', async ({
+  context,
+  page,
+}) => {
+  const header = page.locator('[data-site-header]');
+  const cta = header.locator('.launch-atlas-cta');
+  const launchInMenu = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link', { name: 'genomeOS Atlas', exact: true });
+  const row = () =>
+    page.evaluate(() => {
+      const box = (selector: string) =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const inner = document.querySelector('.site-header__inner')!;
+      return {
+        logoWidth: box('.wordmark__logo').width,
+        menuRight: box('.mobile-nav summary').right,
+        overflow: inner.scrollWidth - inner.clientWidth,
+        screen: document.documentElement.clientWidth,
+      };
+    });
+
+  // At the default text size the action stays beside the Menu, not in it.
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto('/');
+  await expect(cta).toBeVisible();
+  await header.locator('.mobile-nav summary').click();
+  await expect(launchInMenu).toHaveCount(0);
+
+  // Text-only zoom: Chromium's default font size, which a browser's text-size
+  // setting changes (32 px is 200%). The lockup used to shrink to 1x0 at
+  // 390 px and 0x0 at 360 px, leaving the home link a bare focus ring.
+  // Page zoom narrows the viewport instead: a 390 px phone at 200% is 195 CSS
+  // px wide, where the lockup was 1x0 too.
+  const session = await context.newCDPSession(page);
+  for (const [fontSize, width, minLogoWidth] of [
+    [32, 390, 110],
+    [32, 360, 85],
+    [16, 195, 55],
+  ] as const) {
+    await session.send('Page.setFontSizes', {
+      fontSizes: { standard: fontSize },
+    });
+    await page.setViewportSize({ width, height: 780 });
+    await page.goto('/');
+    const label = `${width} px at ${fontSize} px text`;
+    await expect(cta, label).toBeHidden();
+    const measured = await row();
+    expect(measured.logoWidth, label).toBeGreaterThanOrEqual(minLogoWidth);
+    expect(measured.overflow, label).toBeLessThanOrEqual(0);
+    // On the screen at load. Some page copy is wider than the screen at these
+    // sizes, which on a phone widens the layout viewport a fixed box spans.
+    expect(measured.menuRight, label).toBeLessThanOrEqual(measured.screen);
+    await header.locator('.mobile-nav summary').click();
+    await expect(launchInMenu, label).toBeVisible();
+    await expect(launchInMenu, label).toHaveAttribute('href', '/app/');
+  }
+});
+
+test('landscape phones get the shorter landing bar', async ({ page }) => {
+  // iPhone 13 and Pixel 7 in landscape: wide enough for the desktop tier, so
+  // the bar was 100 px, 27-29% of the screen.
+  for (const [width, height] of [
+    [750, 342],
+    [863, 360],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto('/');
+    const layout = await page.evaluate(() => {
+      const header = document
+        .querySelector('[data-site-header]')!
+        .getBoundingClientRect();
+      return {
+        headerBottom: header.bottom,
+        headerHeight: header.height,
+        mainTop: document.querySelector('main')!.getBoundingClientRect().top,
+      };
+    });
+    const label = `${width}x${height}`;
+    expect(layout.headerHeight, label).toBeCloseTo(86.5, 0);
+    // The spacer follows the same tier, so the page starts where the bar ends.
+    expect(
+      Math.abs(layout.headerBottom - layout.mainTop),
+      label,
+    ).toBeLessThanOrEqual(0.5);
+    // A 3.2rem lockup (57.6 px at the 112.5% root), not the desktop 3.6rem
+    // (64.8 px), keeps the shorter bar's margins.
+    const logo = await measureHeaderLogo(page);
+    expect(logo.height, label).toBeCloseTo(57.6, 0);
+    expect(logo.width, label).toBeCloseTo((57.6 * 1395) / 300, 0);
+  }
+});
+
 test('404 page offers three recovery routes', async ({ page }) => {
   await page.goto('/404.html');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(
@@ -516,10 +2229,18 @@ test('reduced-motion preferences disable decorative hero movement', async ({
     .evaluate((element) => getComputedStyle(element).animationName);
   expect(animationName).toBe('none');
 
+  // The header still compacts, at once: no transition to animate it.
   const header = page.locator('.site-header');
+  await expect(header).toHaveCSS('transition-duration', '0s');
+  await expect(page.locator('.site-header__inner')).toHaveCSS(
+    'transition-duration',
+    '0s',
+  );
   await page.evaluate(() => window.scrollTo(0, 900));
-  await expect(header).not.toHaveClass(/site-header--compact/);
-  expect(Math.abs((await header.boundingBox())!.y)).toBeLessThanOrEqual(1);
+  await expect(header).toHaveClass(/site-header--compact/);
+  const box = (await header.boundingBox())!;
+  expect(Math.abs(box.y)).toBeLessThanOrEqual(1);
+  expect(box.height).toBeCloseTo(71.2, 0);
 });
 
 test('public typography keeps body and supporting text comfortably large', async ({

@@ -1,13 +1,25 @@
 ---
 import GitHubLink from './GitHubLink.astro';
 import BrandName from './BrandName.astro';
+import { sitePath } from '../lib/paths';
 
 const year = new Date().getFullYear();
 ---
 
 <footer class="site-footer">
   <div class="site-footer__inner">
-    <p>© {year} <BrandName /></p>
+    <div class="site-footer__brand">
+      <img
+        class="site-footer__logo"
+        src={sitePath('/brand/genomeos-foundation-dark.svg')}
+        width="1380"
+        height="435"
+        alt="genomeOS Foundation: open science for the benefit of all"
+        loading="lazy"
+        decoding="async"
+      />
+      <p>© {year} <BrandName /></p>
+    </div>
     <GitHubLink />
   </div>
 </footer>

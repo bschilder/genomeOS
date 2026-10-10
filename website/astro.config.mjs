@@ -5,6 +5,8 @@ import { defineConfig } from 'astro/config';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import atlasScenePreload from './integrations/atlas-scene-preload.mjs';
 
+import { FAVICON_SVG, rasterIconLinks } from './src/lib/favicons.ts';
+
 const site = process.env.SITE_URL ?? 'https://genome-os.org';
 const base = process.env.BASE_PATH ?? '/';
 const outDir = process.env.OUT_DIR ?? 'dist';
@@ -23,7 +25,7 @@ export default defineConfig({
     starlight({
       title: 'genomeOS',
       description: 'An open atlas of human genetic variation across geography.',
-      favicon: '/favicon.svg',
+      favicon: FAVICON_SVG,
       disable404Route: true,
       components: {
         EditLink: './src/components/starlight/EditLink.astro',
@@ -38,6 +40,10 @@ export default defineConfig({
         baseUrl: 'https://github.com/genomeOS/genomeOS/edit/main/website/',
       },
       head: [
+        ...rasterIconLinks(normalizedBase).map((attrs) => ({
+          tag: 'link',
+          attrs,
+        })),
         {
           tag: 'meta',
           attrs: {
