@@ -252,80 +252,172 @@ svg {
   display: none;
 }
 
+/*
+ * genomeOS Atlas: a black pill lit by aurora curtains (the site's aurora,
+ * ion and genome colours) that drift on their own clocks and spill past its
+ * edges. The curtains sit behind the pill's black fill, so only the light
+ * leaking around the rim shows.
+ */
 .launch-atlas-cta {
-  padding: 0.56rem 0.78rem 0.56rem 0.88rem;
+  position: relative;
+  isolation: isolate;
+  padding: 0.6rem 0.95rem 0.6rem 0.62rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.48rem;
-  overflow: hidden;
-  border: 1px solid rgb(205 255 247 / 72%);
-  border-radius: 0.5rem;
-  background: linear-gradient(135deg, #86f3d8 0%, #62ddf4 100%);
-  color: #03111f;
-  box-shadow:
-    0 0.4rem 1.35rem rgb(78 225 221 / 20%),
-    inset 0 1px rgb(255 255 255 / 52%);
+  gap: 0.5rem;
+  border-radius: 999px;
+  color: var(--color-starlight);
   font-size: 0.94rem;
-  font-weight: 820;
+  font-weight: 720;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.launch-atlas-cta::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background:
+    linear-gradient(#000, #000) padding-box,
+    linear-gradient(
+        100deg,
+        rgb(114 231 193 / 70%),
+        rgb(18 255 255 / 45%),
+        rgb(138 92 255 / 70%)
+      )
+      border-box;
+  content: '';
+}
+
+.launch-atlas-cta__lights {
+  position: absolute;
+  z-index: -2;
+  inset: -0.72rem -1rem;
+  border-radius: 999px;
+  filter: blur(10px) saturate(1.3);
+  pointer-events: none;
   transition:
-    background 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    filter 260ms ease,
+    inset 260ms ease;
+}
+
+.launch-atlas-cta__lights i {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+
+.launch-atlas-cta__lights i:nth-child(1) {
+  left: 0;
+  width: 55%;
+  background: radial-gradient(closest-side, #72e7c1, transparent);
+  animation: launch-aurora-a 8s ease-in-out infinite alternate;
+}
+
+.launch-atlas-cta__lights i:nth-child(2) {
+  left: 30%;
+  width: 45%;
+  background: radial-gradient(closest-side, #12ffff, transparent);
+  animation: launch-aurora-b 10.5s ease-in-out infinite alternate;
+}
+
+.launch-atlas-cta__lights i:nth-child(3) {
+  right: 0;
+  width: 50%;
+  background: radial-gradient(closest-side, #8a5cff, transparent);
+  animation: launch-aurora-c 12.5s ease-in-out infinite alternate;
+}
+
+@keyframes launch-aurora-a {
+  0% {
+    opacity: 0.55;
+    transform: translateX(-6%) scaleY(0.75);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+    transform: translateX(70%) scaleY(1.15);
+  }
+}
+
+@keyframes launch-aurora-b {
+  0% {
+    opacity: 0.8;
+    transform: translateX(40%) scaleY(1.1);
+  }
+  50% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0.9;
+    transform: translateX(-60%) scaleY(0.8);
+  }
+}
+
+@keyframes launch-aurora-c {
+  0% {
+    opacity: 0.7;
+    transform: translateX(0) scaleY(0.9);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+    transform: translateX(-80%) scaleY(1.2);
+  }
 }
 
 .launch-atlas-cta:hover,
 .launch-atlas-cta:focus-visible,
 .launch-atlas-cta[aria-current='page'] {
-  background: linear-gradient(135deg, #b1ffe8 0%, #78e8ff 100%);
-  box-shadow:
-    0 0.55rem 1.7rem rgb(78 225 221 / 32%),
-    inset 0 1px rgb(255 255 255 / 64%);
   transform: translateY(-1px);
+}
+
+.launch-atlas-cta:hover .launch-atlas-cta__lights,
+.launch-atlas-cta:focus-visible .launch-atlas-cta__lights {
+  inset: -0.95rem -1.33rem;
+  filter: blur(12px) saturate(1.4) brightness(1.4);
 }
 
 .launch-atlas-cta:focus-visible {
   outline: 2px solid var(--color-starlight);
-  outline-offset: 3px;
+  outline-offset: 4px;
 }
 
-.launch-atlas-cta__rocket {
-  width: 1.12rem;
-  height: 1.12rem;
+.launch-atlas-cta__mark {
+  width: 1.3rem;
+  height: 1.3rem;
+  flex: none;
+}
+
+.launch-atlas-cta__label .brand-name {
+  font-weight: 400;
+}
+
+.launch-atlas-cta__arrow {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
   fill: none;
-  stroke: #465565;
+  stroke: var(--color-ion);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
-  transform-origin: center;
+  stroke-width: 2.2;
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
-.launch-atlas-cta:hover .launch-atlas-cta__rocket,
-.launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
-  animation: launch-rocket 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes launch-rocket {
-  0% {
-    transform: translate(0, 0) rotate(0);
-  }
-  42% {
-    opacity: 1;
-    transform: translate(0.3rem, -0.34rem) rotate(4deg);
-  }
-  43% {
-    opacity: 0;
-  }
-  44% {
-    opacity: 0;
-    transform: translate(-0.34rem, 0.34rem) rotate(4deg);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0);
-  }
+.launch-atlas-cta:hover .launch-atlas-cta__arrow,
+.launch-atlas-cta:focus-visible .launch-atlas-cta__arrow {
+  transform: translateX(3px);
 }
 
 .desktop-nav ul {
@@ -502,10 +594,18 @@ svg {
   }
 
   .launch-atlas-cta {
-    padding-inline: 0.7rem;
+    padding: 0.55rem;
   }
 
-  .launch-atlas-cta > span {
+  .launch-atlas-cta__lights {
+    inset: -0.72rem;
+  }
+
+  .launch-atlas-cta__arrow {
+    display: none;
+  }
+
+  .launch-atlas-cta__label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -603,9 +703,12 @@ svg {
   .site-header--lockup .wordmark__logo {
     transition: none;
   }
-  .launch-atlas-cta:hover .launch-atlas-cta__rocket,
-  .launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
+  .launch-atlas-cta__lights i {
     animation: none;
+  }
+  .launch-atlas-cta__lights,
+  .launch-atlas-cta__arrow {
+    transition: none;
   }
 }
 
@@ -616,6 +719,13 @@ svg {
   .site-footer__logo {
     forced-color-adjust: none;
     background: var(--color-void);
+  }
+  /* The aurora is decoration; a plain system-coloured border marks the button. */
+  .launch-atlas-cta {
+    border: 1px solid LinkText;
+  }
+  .launch-atlas-cta__lights {
+    display: none;
   }
 }
 
