@@ -379,9 +379,12 @@ export class ContextOverlay {
     );
   }
 
+  // Hidden until every ring is added, like the cell outlines (edge-layer.ts): a shown
+  // PolylineCollection rebuilds every polyline added so far on each render after an add.
+  // #ensureRenderer shows it once it is complete.
   async #addProjected(): Promise<void> {
     const rings = this.#parsed!.ringOffsets.length - 1;
-    const target = new PolylineCollection();
+    const target = new PolylineCollection({ show: false });
     const lines: Polyline[] = [];
     this.collection.add(target);
     this.#projected = target;

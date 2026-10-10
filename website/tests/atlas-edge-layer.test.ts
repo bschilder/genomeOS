@@ -375,6 +375,46 @@ describe('cell outlines built across several slices', () => {
     expectRingsAt(layer, RINGS, EDGE_CLEARANCE + 2_000);
   });
 
+  it.each([
+    ['a map build', 'map', 'map'],
+    ['a switch to perspective', 'globe', 'perspective'],
+  ] as const)(
+    'keeps the projected outlines hidden until every ring is added (%s)',
+    async (_label, buildMode, viewMode) => {
+      // Cesium rebuilds a shown PolylineCollection's vertex arrays for every ring added so far on
+      // each render, so drawing it slice by slice costs time quadratic in the ring count (about
+      // 80 s of 0.2-2 fps on a phone at 77k rings). Hidden, it is built once, when shown.
+      stubCesiumBrowserImageTypes();
+      const shownWhileAdding: boolean[] = [];
+      let layer: EdgeLayer | null = null;
+      const slice = {
+        sliceMs: 0,
+        yieldFn: async () => {
+          const projected = layer?.collection.get(layer.collection.length - 1);
+          if (projected instanceof PolylineCollection)
+            shownWhileAdding.push(projected.show);
+        },
+      };
+      layer = createEdgeLayer({ requestRender: vi.fn(), slice });
+      await layer.build(
+        sourceOf([edgeBuffers(0, RINGS)]),
+        '#ffffff',
+        buildMode,
+        0,
+      );
+      await layer.setMode(viewMode);
+
+      const projected = layer.collection.get(
+        layer.collection.length - 1,
+      ) as PolylineCollection;
+      expect(projected).toBeInstanceOf(PolylineCollection);
+      expect(projected.length).toBe(RINGS.length);
+      expect(shownWhileAdding.length).toBeGreaterThan(0);
+      expect(shownWhileAdding.every((shown) => !shown)).toBe(true);
+      expect(projected.show).toBe(true);
+    },
+  );
+
   it('shows projected outlines when the view switches to map while the build adds rings', async () => {
     stubCesiumBrowserImageTypes();
     const { atNextYield, slice } = interleaved();

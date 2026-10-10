@@ -185,9 +185,13 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
       sliceOptions(signal),
     );
   };
+  // Hidden until every ring is added: Cesium rebuilds a shown PolylineCollection's vertex arrays,
+  // for every polyline added so far, on each render after an add, so a render per slice costs time
+  // quadratic in the ring count (≈80 s at 0.2–2 fps on a 4× phone for 77k rings). `showRenderer`
+  // shows it once it is complete, and Cesium builds it once.
   const addProjected = async (signal: AbortSignal): Promise<void> => {
     const list = rings;
-    const target = new PolylineCollection();
+    const target = new PolylineCollection({ show: false });
     const lines: Polyline[] = [];
     collection.add(target);
     projected = target;

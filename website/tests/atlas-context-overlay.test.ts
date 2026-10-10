@@ -241,6 +241,30 @@ describe('Natural Earth context overlay', () => {
     expect(projectedOf(overlay)!.get(0).width).toBeCloseTo(1.65, 2);
   });
 
+  it('keeps the projected borders hidden until every ring is added', async () => {
+    // As for the cell outlines: a shown PolylineCollection is rebuilt in full on every render
+    // after an add, so slice-by-slice drawing costs time quadratic in the ring count.
+    stubCesiumBrowserImageTypes();
+    const shownWhileAdding: boolean[] = [];
+    let overlay: ContextOverlay | null = null;
+    ({ overlay } = setup(undefined, {
+      slice: {
+        sliceMs: 0,
+        yieldFn: async () => {
+          const projected = overlay && projectedOf(overlay);
+          if (projected) shownWhileAdding.push(projected.show);
+        },
+      },
+    }));
+    await overlay.load('/a.geojson');
+    await overlay.setSceneMode('map');
+
+    expect(projectedRingCount(overlay)).toBe(2);
+    expect(shownWhileAdding.length).toBeGreaterThan(0);
+    expect(shownWhileAdding.every((shown) => !shown)).toBe(true);
+    expect(projectedOf(overlay)!.show).toBe(true);
+  });
+
   it('switches to projected borders in the 2D map', async () => {
     stubCesiumBrowserImageTypes();
     const { overlay } = setup();
