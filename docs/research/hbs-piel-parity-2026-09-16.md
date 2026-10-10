@@ -1,8 +1,8 @@
 # HbS parity acceptance run — 2026-09-16
 
 **Status:** failed publication gate, with a corrected reference-year denominator. This advances
-[#45](https://github.com/bschilder/genomeOS/issues/45); it does not close it. The denominator bug
-and permanent fix are [#300](https://github.com/bschilder/genomeOS/issues/300).
+[#45](https://github.com/genomeOS/genomeOS/issues/45); it does not close it. The denominator bug
+and permanent fix are [#300](https://github.com/genomeOS/genomeOS/issues/300).
 
 ## Scientific contract
 

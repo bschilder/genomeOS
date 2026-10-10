@@ -1,6 +1,6 @@
 # HbC source and reproducibility audit — September 9, 2026
 
-Status: source-discovery and methods notes for [#182](https://github.com/bschilder/genomeOS/issues/182), advancing WP0/WP1 of [#189](https://github.com/bschilder/genomeOS/issues/189). This is **not** a reviewed field-evidence record, observation import, reproduced frequency or validated surface.
+Status: source-discovery and methods notes for [#182](https://github.com/genomeOS/genomeOS/issues/182), advancing WP0/WP1 of [#189](https://github.com/genomeOS/genomeOS/issues/189). This is **not** a reviewed field-evidence record, observation import, reproduced frequency or validated surface.
 
 **Scientific objective:** determine whether this published HbC study can support a traceable benchmark and what its validation actually establishes. **Acceptance evidence:** recover original survey counts and source metadata, reproduce the three frequencies required by #182, then independently review the evidence. **Component:** a future source-qualified observation adapter, not inferred-map ingestion. **Refusal:** no counts, coordinates, dates, sampling footprints or rights may be invented. Currently **0/3 frequencies reproduced**; no observations admitted.
 

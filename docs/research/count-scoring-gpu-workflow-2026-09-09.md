@@ -1,6 +1,6 @@
 # Synthetic complete-workflow count-scoring GPU evidence
 
-September 9, 2026; [research program #189](https://github.com/bschilder/genomeOS/issues/189).
+September 9, 2026; [research program #189](https://github.com/genomeOS/genomeOS/issues/189).
 
 These reports describe their original source snapshots. The later reviewed numerical correction
 has separate [boundary-refresh hardware evidence](count-scoring-boundary-refresh-2026-09-09.md)

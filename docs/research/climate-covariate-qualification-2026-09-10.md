@@ -1,7 +1,7 @@
 # Climate covariates: qualify decoding before testing predictive value
 
 Status: `automated_proposal` / `pending`, 2026-09-10. Advances
-[#189](https://github.com/bschilder/genomeOS/issues/189) WP3, Atlas design §§4–9,
+[#189](https://github.com/genomeOS/genomeOS/issues/189) WP3, Atlas design §§4–9,
 12 and the [global modeling plan](../superpowers/plans/2026-09-09-global-af-modeling.md).
 This note admits no source or feature and claims no allele-frequency improvement.
 

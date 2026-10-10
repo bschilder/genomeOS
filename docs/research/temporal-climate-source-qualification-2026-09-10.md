@@ -1,7 +1,7 @@
 # Temporal climate: source coverage and testable genetic questions
 
 Status: `automated_proposal` / `pending`, 2026-09-10. Advances
-[#189](https://github.com/bschilder/genomeOS/issues/189), WP3/WP7 and Atlas design
+[#189](https://github.com/genomeOS/genomeOS/issues/189), WP3/WP7 and Atlas design
 §§4–9,12. Companion to the [climate decoding note](climate-covariate-qualification-2026-09-10.md).
 This is a research/source qualification proposal, not admission of climate data,
 ancestral locations, a model or an allele-frequency performance claim.

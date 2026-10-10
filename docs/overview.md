@@ -126,7 +126,7 @@ halves exist separately in the world today. The connection does not.
 
 ### What people could do with it
 
-From [Discussion #1](https://github.com/bschilder/genomeOS/discussions/1):
+From [Discussion #1](https://github.com/genomeOS/genomeOS/discussions/1):
 
 | Who | What they get |
 |---|---|
@@ -229,7 +229,7 @@ Principles](https://www.gida-global.org/careprinciples) — a framework assertin
 communities a dataset came from have a continuing say in how it is used. Every population entry
 in our registry carries provenance and a place to record those terms, and whether our derived
 maps can be redistributed at all is an open question we intend to answer in writing before
-going further ([#66](https://github.com/bschilder/genomeOS/issues/66)).
+going further ([#66](https://github.com/genomeOS/genomeOS/issues/66)).
 
 ## 4. How it works, in outline
 
@@ -261,7 +261,7 @@ you want to work on, and see §9 for a glossary.*
 
 ## 5. The data, and the tension that shapes every design decision
 
-[Issue #3](https://github.com/bschilder/genomeOS/issues/3) scores every candidate dataset on
+[Issue #3](https://github.com/genomeOS/genomeOS/issues/3) scores every candidate dataset on
 three axes, 1–5, and is the upstream document for the entire design:
 
 - **C — Comprehensiveness**: variants × individuals × ancestry breadth.
@@ -287,7 +287,7 @@ line of mapping code.
 | **B. Large aggregate resources** | **Variant context** — indispensable for what a variant *is*, useless for geography alone | **[gnomAD v4](https://gnomad.broadinstitute.org/news/2023-11-gnomad-v4-0/)** ([CC0](https://gnomad.broadinstitute.org/policies); note bundled SpliceAI annotations are CC BY-NC), **[NCBI ALFA](https://www.ncbi.nlm.nih.gov/snp/docs/gsr/alfa/)** (904M variants, 316M novel to [dbSNP](https://www.ncbi.nlm.nih.gov/snp/) — underused), [TOPMed/BRAVO](https://bravo.sph.umich.edu/), [Ensembl](https://www.ensembl.org/). **[All of Us](https://www.researchallofus.org/)** is deliberately diverse with 3-digit-ZIP geography, but data cannot leave its Researcher Workbench — **it can inform models and can never be served by our backend.** |
 | **C. National / regional programmes** | **Filling specific geographic holes**, mostly under controlled access | **[UK Biobank](https://www.ukbiobank.ac.uk/)** holds birth coordinates, and IBD [localises birth to a median 45 km](https://www.nature.com/articles/s41467-020-19588-x) — the single best proof that fine-scale geographic genetics is real, *and* a warning: [birth location correlates with BMI, hypertension and lung function even after PC adjustment](https://www.nature.com/articles/s41467-018-08219-1). **[MCPS](https://www.nature.com/articles/s41586-023-06595-3)** exposes 142M variants through a public browser and is massively under-exploited for Latin American coverage. **[GenomeIndia](https://genomeindia.in/)** (99 populations), [IndiGen](https://academic.oup.com/nar/article/49/D1/D1225/5943190), [FinnGen](https://www.finngen.fi/en) (founder-effect validation), [H3Africa](https://h3africa.org/). |
 | **D. Primary publications and curated compilations** | **Expanding beyond fixed panels and locus-specific databases** while preserving each independently sampled measurement | PubMed discovery manifests retain every candidate and screening decision. The [literature evidence contract](literature-evidence-curation.md) stores exact counts or honest intervals, allele orientation, sample/cohort identity, ascertainment, exact table/figure/dataset location, independent verification, and checked reuse terms. Only complete reviewed records resolve through P0 into P1; unresolved evidence remains valuable staging data. The commit-pinned LCT/MCM6 rs4988235 pilot reconciles 426 source rows, but it is an audit inventory—not 426 promoted observations. HBB and G6PD are the next round-trip corpora. |
-| **E. Direct-to-consumer** | **The highest geographic precision on Earth — and closed** | [23andMe](https://pubmed.ncbi.nlm.nih.gov/25529636/) (>12M) and [AncestryDNA](https://www.nature.com/articles/ncomms14238) (>20M) are C5/G5/A1. Published work is *ancestry proportions* by state, never allele frequency by location. The concrete ask is drafted in #3 and tracked as [#68](https://github.com/bschilder/genomeOS/issues/68): *k*-anonymised AF for a curated variant list binned to 3-digit ZIP, **or** — easier for a privacy team to defend and exactly what our renderer consumes — a fitted surface with posteriors and no counts at all. |
+| **E. Direct-to-consumer** | **The highest geographic precision on Earth — and closed** | [23andMe](https://pubmed.ncbi.nlm.nih.gov/25529636/) (>12M) and [AncestryDNA](https://www.nature.com/articles/ncomms14238) (>20M) are C5/G5/A1. Published work is *ancestry proportions* by state, never allele frequency by location. The concrete ask is drafted in #3 and tracked as [#68](https://github.com/genomeOS/genomeOS/issues/68): *k*-anonymised AF for a curated variant list binned to 3-digit ZIP, **or** — easier for a privacy team to defend and exactly what our renderer consumes — a fitted surface with posteriors and no counts at all. |
 | **F. Trait and effect-size layers** | **What turns a frequency into a statement about a phenotype** | **[PanUKBB](https://pan.ukbb.broadinstitute.org/)** — multi-ancestry summary statistics, and the cleanest way to quantify PRS portability loss and render it as uncertainty. This is what the shipped `genomeos/` service serves. **[PGS Catalog](https://www.pgscatalog.org/) + [`pgsc_calc`](https://github.com/PGScatalog/pgsc_calc)** is a non-negotiable dependency: score normalisation is the only principled way to render PRS across populations. **[Open Targets](https://platform.opentargets.org/)** — fine-mapped credible sets are the right unit, not raw GWAS hits. **[GWAS Catalog](https://www.ebi.ac.uk/gwas/)** ancestry metadata makes *"how European is the evidence for this trait?"* a renderable map layer — a powerful honesty feature. **[CPIC](https://cpicpgx.org/) / [PharmGKB](https://www.pharmgkb.org/) / [PharmVar](https://www.pharmvar.org/)** already tabulate PGx frequencies by biogeographic group: the most clinically actionable and least ethically fraught layer available, and a strong flagship-demo candidate. Plus **[EFO](https://www.ebi.ac.uk/efo/)/[MONDO](https://mondo.monarchinitiative.org/)** as the ontology backbone, and **[GBMI](https://www.globalbiobankmeta.org/)**. |
 | **G. Burden and denominator layers** | **What earns the word "burden"** | **[WorldPop](https://www.worldpop.org/) / [GPWv4](https://www.earthdata.nasa.gov/data/projects/gpw)** gridded population ([also on Earth Engine](https://developers.google.com/earth-engine/datasets/catalog/CIESIN_GPWv411_GPW_Population_Density)) (100 m / ~1 km) is both the per-capita denominator and the multiplier that converts a frequency surface into expected case counts. **[GBD 2023](https://www.healthdata.org/data-tools-practices/interactive-visuals/gbd-results)** (375 diseases, 204 countries + 660 subnational locations) is the validation ground truth and the UX benchmark. **[GADM](https://gadm.org/) / [Natural Earth](https://www.naturalearthdata.com/)** for admin aggregation. **[Orphadata](http://www.orphadata.org/)** gives prevalence for 6,172 rare diseases annotated by geographic area *and by founder population* — the natural partner to a carrier-frequency map. **[Glottolog](https://glottolog.org/) / [D-PLACE](https://d-place.org/)** are unglamorous and essential: they are how population *labels* become coordinates. |
 | **H. Synthetic and internal** | **Testing before real data lands** | [HAPNEST](https://www.ebi.ac.uk/biostudies/studies/S-BSST936) for backend load-testing; [`bioDB`](https://github.com/standardmodelbio/bioDB) for bulk pulls; [`synthlab`](https://github.com/bschilder/synthlab). |
@@ -298,19 +298,19 @@ Issue #3 closes with five recommendations. Every one is now a structural feature
 the clearest illustration of how this project works:
 
 1. **Build on the gnomAD HGDP+1KG harmonized callset.** → the first observations adapter
-   ([#25](https://github.com/bschilder/genomeOS/issues/25)).
+   ([#25](https://github.com/genomeOS/genomeOS/issues/25)).
 2. **The binding constraint is coordinates, not variants** — so build a population geolocation
    registry with provenance, a sampling-vs-ancestral flag, and an explicit uncertainty radius.
    Nobody has published this; it is independently publishable. → **became sub-project P0**, and
    is publishable as a standalone citable dataset
-   ([#23](https://github.com/bschilder/genomeOS/issues/23)).
+   ([#23](https://github.com/genomeOS/genomeOS/issues/23)).
 3. **Separate observations from surfaces in the data model, permanently** — cheap at
    schema-design time, impossible to retrofit. → invariant 1 in §3.
 4. **Validate against HbS/G6PD before anything else.** → **HbS parity is the definition of done
-   for v1** ([#45](https://github.com/bschilder/genomeOS/issues/45)).
+   for v1** ([#45](https://github.com/genomeOS/genomeOS/issues/45)).
 5. **Two outreach asks worth making now** — PGG.SNV bulk access and the 23andMe fitted-surface
-   proposal → [#67](https://github.com/bschilder/genomeOS/issues/67),
-   [#68](https://github.com/bschilder/genomeOS/issues/68).
+   proposal → [#67](https://github.com/genomeOS/genomeOS/issues/67),
+   [#68](https://github.com/genomeOS/genomeOS/issues/68).
 
 The scores in #3 are explicitly "a first pass and deliberately arguable — please edit them
 directly." Stated weak spots: national biobank AF browsers outside the Anglophone literature,
@@ -349,16 +349,16 @@ genetics: every number on screen came from an artifact or an aggregation endpoin
 
 | | Goal — done when |
 |---|---|
-| **P0 registry** ([#7](https://github.com/bschilder/genomeOS/issues/7)) | Every population label across the Tier-A sources resolves to coordinates + uncertainty radius + provenance; validation passes; the registry is versioned and published |
-| **P1 observations** ([#8](https://github.com/bschilder/genomeOS/issues/8)) | Observations built from all Tier-A sources, **every row carrying `sampling_design` and `cohort_id`**; disease-variant sets ascertained outside Western clinical genetics ingested; clinical-testing-intensity layer built; curated variant set defined and frozen |
-| **P2 surfaces** ([#9](https://github.com/bschilder/genomeOS/issues/9)) | HbS and G6PD surfaces reproduce their published frequency maps; resolution-promotion and posterior-contraction thresholds calibrated; full curated set fitted, with the `prior_dominated` fraction reported per variant |
-| **P3 burden** ([#10](https://github.com/bschilder/genomeOS/issues/10)) | **HbS parity** — our national estimate inside the published interval for ≥80% of countries and overlapping intervals for ≥95%; G6PD parity (X-linked); carrier-screening parity; every refusal condition verified by test |
-| **P4 backend** ([#11](https://github.com/bschilder/genomeOS/issues/11)) | All endpoints serve p95 <150 ms warm and <500 ms cache-cold at H3 res 4; `/aggregate` returns the unmapped fraction; batch orchestration reproducible from a clean project |
-| **P5 map UI** ([#12](https://github.com/bschilder/genomeOS/issues/12)) | All layers render; lasso aggregation works; every view is URL-round-trippable; the data-support mask is on by default |
+| **P0 registry** ([#7](https://github.com/genomeOS/genomeOS/issues/7)) | Every population label across the Tier-A sources resolves to coordinates + uncertainty radius + provenance; validation passes; the registry is versioned and published |
+| **P1 observations** ([#8](https://github.com/genomeOS/genomeOS/issues/8)) | Observations built from all Tier-A sources, **every row carrying `sampling_design` and `cohort_id`**; disease-variant sets ascertained outside Western clinical genetics ingested; clinical-testing-intensity layer built; curated variant set defined and frozen |
+| **P2 surfaces** ([#9](https://github.com/genomeOS/genomeOS/issues/9)) | HbS and G6PD surfaces reproduce their published frequency maps; resolution-promotion and posterior-contraction thresholds calibrated; full curated set fitted, with the `prior_dominated` fraction reported per variant |
+| **P3 burden** ([#10](https://github.com/genomeOS/genomeOS/issues/10)) | **HbS parity** — our national estimate inside the published interval for ≥80% of countries and overlapping intervals for ≥95%; G6PD parity (X-linked); carrier-screening parity; every refusal condition verified by test |
+| **P4 backend** ([#11](https://github.com/genomeOS/genomeOS/issues/11)) | All endpoints serve p95 <150 ms warm and <500 ms cache-cold at H3 res 4; `/aggregate` returns the unmapped fraction; batch orchestration reproducible from a clean project |
+| **P5 map UI** ([#12](https://github.com/genomeOS/genomeOS/issues/12)) | All layers render; lasso aggregation works; every view is URL-round-trippable; the data-support mask is on by default |
 
-The three golden tests are [#45](https://github.com/bschilder/genomeOS/issues/45) (HbS parity),
-[#46](https://github.com/bschilder/genomeOS/issues/46) (G6PD, which exercises X-linked
-inheritance), and [#47](https://github.com/bschilder/genomeOS/issues/47) (carrier-screening
+The three golden tests are [#45](https://github.com/genomeOS/genomeOS/issues/45) (HbS parity),
+[#46](https://github.com/genomeOS/genomeOS/issues/46) (G6PD, which exercises X-linked
+inheritance), and [#47](https://github.com/genomeOS/genomeOS/issues/47) (carrier-screening
 parity — **the only test that validates the ascertainment correction at all**). Failing them
 blocks publication of any other variant's burden layer.
 
@@ -421,27 +421,27 @@ composes is a versioned, citable artifact.
   deployment manifest.
 - **Open questions with named next steps** (spec §14): a written position on redistributing
   derived surfaces from indigenous-population panels
-  ([#66](https://github.com/bschilder/genomeOS/issues/66), `needs-human-decision`); a
+  ([#66](https://github.com/genomeOS/genomeOS/issues/66), `needs-human-decision`); a
   consanguinity-coefficient source; PGG.SNV bulk access
-  ([#67](https://github.com/bschilder/genomeOS/issues/67) — 977 populations, the largest free
+  ([#67](https://github.com/genomeOS/genomeOS/issues/67) — 977 populations, the largest free
   coverage gain available); the 23andMe fitted-surface proposal
-  ([#68](https://github.com/bschilder/genomeOS/issues/68)).
+  ([#68](https://github.com/genomeOS/genomeOS/issues/68)).
 - `CONTRIBUTING.md`, a code of conduct, and issue templates are themselves an open issue
-  ([#65](https://github.com/bschilder/genomeOS/issues/65)). Until they land, this document is the
+  ([#65](https://github.com/genomeOS/genomeOS/issues/65)). Until they land, this document is the
   contributor guide.
 
 ## 8. How to contribute
 
 **Start here:** introduce yourself in
-[Discussion #76](https://github.com/bschilder/genomeOS/discussions/76) — your name, where in the
+[Discussion #76](https://github.com/genomeOS/genomeOS/discussions/76) — your name, where in the
 world you are, your background, and what you'd like to contribute (code, data, compute,
 connections, or ideas). All levels of experience are welcome; the sections above are written so
 that no part of this project requires you to already be an expert in the others.
 
 **Reading order:** this document → the [scored dataset assessment
-(#3)](https://github.com/bschilder/genomeOS/issues/3) → the [design
+(#3)](https://github.com/genomeOS/genomeOS/issues/3) → the [design
 spec](superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md) → the [prior-art review
-(#4)](https://github.com/bschilder/genomeOS/discussions/4) → the plan for your sub-project.
+(#4)](https://github.com/genomeOS/genomeOS/discussions/4) → the plan for your sub-project.
 
 **Find work** on the [project board](https://github.com/users/bschilder/projects/8). Conventions
 live in [`board-conventions.md`](board-conventions.md); the short version:
@@ -463,34 +463,34 @@ most useful:
 
 Shortest paths to something load-bearing:
 
-- **Spatial statistics / geostatistics** — [#34](https://github.com/bschilder/genomeOS/issues/34)
+- **Spatial statistics / geostatistics** — [#34](https://github.com/genomeOS/genomeOS/issues/34)
 (the INLA-SPDE runtime decision, which blocks all of P2, since [R-INLA](https://www.r-inla.org/)
 is R-only),
-  [#35](https://github.com/bschilder/genomeOS/issues/35) (the binomial-GP fit with ascertainment
-  offsets), [#36](https://github.com/bschilder/genomeOS/issues/36).
-- **Clinical genetics** — [#32](https://github.com/bschilder/genomeOS/issues/32) (which ClinVar
+  [#35](https://github.com/genomeOS/genomeOS/issues/35) (the binomial-GP fit with ascertainment
+  offsets), [#36](https://github.com/genomeOS/genomeOS/issues/36).
+- **Clinical genetics** — [#32](https://github.com/genomeOS/genomeOS/issues/32) (which ClinVar
   P/LP variants have defensible penetrance) and
-  [#42](https://github.com/bschilder/genomeOS/issues/42) (the penetrance table). These gate P2
+  [#42](https://github.com/genomeOS/genomeOS/issues/42) (the penetrance table). These gate P2
   and P3 respectively.
 - **Population genetics / data engineering** — the M1 adapters:
-  [#15](https://github.com/bschilder/genomeOS/issues/15) (HGDP, the reference adapter),
-  [#25](https://github.com/bschilder/genomeOS/issues/25) (gnomAD HGDP+1KG),
-  [#26](https://github.com/bschilder/genomeOS/issues/26) (MAP HbS/G6PD surveys — critical,
+  [#15](https://github.com/genomeOS/genomeOS/issues/15) (HGDP, the reference adapter),
+  [#25](https://github.com/genomeOS/genomeOS/issues/25) (gnomAD HGDP+1KG),
+  [#26](https://github.com/genomeOS/genomeOS/issues/26) (MAP HbS/G6PD surveys — critical,
   because it is what identifies `β_design`),
-  [#18](https://github.com/bschilder/genomeOS/issues/18) (AFND, 1,324 populations),
-  [#20](https://github.com/bschilder/genomeOS/issues/20) (AADR, and with it the time axis).
-- - **Frontend / geospatial** — [#55](https://github.com/bschilder/genomeOS/issues/55)
+  [#18](https://github.com/genomeOS/genomeOS/issues/18) (AFND, 1,324 populations),
+  [#20](https://github.com/genomeOS/genomeOS/issues/20) (AADR, and with it the time axis).
+- - **Frontend / geospatial** — [#55](https://github.com/genomeOS/genomeOS/issues/55)
   ([Next.js](https://nextjs.org/) 16
   + [deck.gl](https://deck.gl/) + [MapLibre](https://maplibre.org/) scaffold) onward, and
-  [#27](https://github.com/bschilder/genomeOS/issues/27) (the H3 resolution ladder).
-- **Governance** — [#66](https://github.com/bschilder/genomeOS/issues/66),
-  [#22](https://github.com/bschilder/genomeOS/issues/22) (CARE-aligned biocultural notices).
-- **Partnerships** — [#67](https://github.com/bschilder/genomeOS/issues/67),
-  [#68](https://github.com/bschilder/genomeOS/issues/68).
+  [#27](https://github.com/genomeOS/genomeOS/issues/27) (the H3 resolution ladder).
+- **Governance** — [#66](https://github.com/genomeOS/genomeOS/issues/66),
+  [#22](https://github.com/genomeOS/genomeOS/issues/22) (CARE-aligned biocultural notices).
+- **Partnerships** — [#67](https://github.com/genomeOS/genomeOS/issues/67),
+  [#68](https://github.com/genomeOS/genomeOS/issues/68).
 - **No genetics background?** There is real work in the frontend, the API, the data pipeline,
   documentation, and governance that needs no genetics at all. And if a section of this document
   was hard to follow, saying so in an issue is a genuine contribution — the project needs to be
-  legible to outside contributors ([#65](https://github.com/bschilder/genomeOS/issues/65)).
+  legible to outside contributors ([#65](https://github.com/genomeOS/genomeOS/issues/65)).
 - **Know a dataset we've missed, or think a score in #3 is wrong?** Edit it directly.
 
 **Conventions when writing code:**
@@ -505,7 +505,7 @@ is R-only),
 - Respect each source's access terms: some data (notably All of Us) may inform models but may
   never be served by our backend, and redistribution of derived surfaces from
   indigenous-population panels is an open question
-  ([#66](https://github.com/bschilder/genomeOS/issues/66)). A source with no named licence is not
+  ([#66](https://github.com/genomeOS/genomeOS/issues/66)). A source with no named licence is not
   automatically restricted, but its checked surfaces and lack of explicit restrictions must be
   logged before promotion.
 - Coordinates are WGS84 decimal degrees; variant IDs are `chr-pos-ref-alt` on

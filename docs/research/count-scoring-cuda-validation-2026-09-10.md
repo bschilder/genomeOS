@@ -1,6 +1,6 @@
 # Actual CUDA verification of the count-scoring repair
 
-Follow-up to #209 and [PR210](https://github.com/bschilder/genomeOS/pull/210),
+Follow-up to #209 and [PR210](https://github.com/genomeOS/genomeOS/pull/210),
 Atlas design §§7–8. This resolves the previously outstanding hardware check
 for science revision `92659aa6999b04652fd0c3208c1e0836c96832a6`.
 It does not change the twelve CPU baseline results or establish better AF
@@ -69,7 +69,7 @@ are distinct; no end-to-end model speedup is inferred.
   At the quoted$0.49/hour, its elapsed-time compute bound is approximately
   $0.071, excluding any billing-specific/storage charges. This is not an invoice.
 - GitHub CI for PR210 independently completed successfully at03:13:18UTC,
-  [run34431226958](https://github.com/bschilder/genomeOS/actions/runs/34431226958).
+  [run34431226958](https://github.com/genomeOS/genomeOS/actions/runs/34431226958).
   That CPU/container CI and this CUDA check are separate evidence.
 
 The scientific interface remains CountPredictive; no model, numerical

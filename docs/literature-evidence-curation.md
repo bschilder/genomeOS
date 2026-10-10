@@ -100,7 +100,7 @@ but do not enter the current exact-count likelihood.
 | `extracted_at` | Required | UTC `YYYY-MM-DDTHH:MM:SSZ`, not in the future | Must remain present | No | `2026-09-04T10:00:00Z` | Local time without zone, date only, or future timestamp | Extraction chronology is part of reproducibility and review independence |
 | `verified_by` | Blank while pending | A valid identity in the same format as `extracted_by` | Required for verified rows; must be independent of extractor | No | `human:reviewer` | Same agent/human as `extracted_by`, or invented reviewer | Self-review cannot catch a shared transcription or interpretation error |
 | `verified_at` | Blank while pending | UTC `YYYY-MM-DDTHH:MM:SSZ`, not in the future | Required for verified rows | No | `2026-09-04T11:00:00Z` | Timestamp present on a pending row | Verifier metadata on pending data falsely signals completed review |
-| `verification_reference` | Blank while pending | Stable issue, PR, review record, or equivalent reference | Required for verified rows | No | `https://github.com/bschilder/genomeOS/issues/149` | `looks good`, branch name, chat assertion, or unresolvable local file | Review must leave an inspectable decision trail |
+| `verification_reference` | Blank while pending | Stable issue, PR, review record, or equivalent reference | Required for verified rows | No | `https://github.com/genomeOS/genomeOS/issues/149` | `looks good`, branch name, chat assertion, or unresolvable local file | Review must leave an inspectable decision trail |
 
 ### Reuse and versioning
 

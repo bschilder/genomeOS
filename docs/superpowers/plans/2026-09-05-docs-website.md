@@ -183,7 +183,7 @@ expect(html).toMatch(
   /Measured here[\s\S]*Estimated there[\s\S]*Never confused/,
 );
 expect(html).toContain('aria-label="View genomeOS on GitHub"');
-expect(html).toContain("https://github.com/bschilder/genomeOS");
+expect(html).toContain("https://github.com/genomeOS/genomeOS");
 expect(html).toContain("Skip to main content");
 ```
 

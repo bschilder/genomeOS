@@ -1,6 +1,6 @@
 # Local CuGen LD preflight — September 9, 2026
 
-**Implementation target:** the owner's `$HOME/code/cugen` checkout, clean at `03df1688abf52d295bd85d47f1aca6130440b553`, package version `0.1.7`. No pg_gpu substitution. This advances the WP6 admission investigation in [#189](https://github.com/bschilder/genomeOS/issues/189); no genomeOS LD adapter or GPU LD benchmark has been implemented yet.
+**Implementation target:** the owner's `$HOME/code/cugen` checkout, clean at `03df1688abf52d295bd85d47f1aca6130440b553`, package version `0.1.7`. No pg_gpu substitution. This advances the WP6 admission investigation in [#189](https://github.com/genomeOS/genomeOS/issues/189); no genomeOS LD adapter or GPU LD benchmark has been implemented yet.
 
 **Scientific objective:** establish the selected library's genotype-correlation semantics before feeding training-only LD into a joint allele-frequency model. **Measurable output:** explicit pair identity, co-observed counts and independent-reference agreement, followed later by GPU parity, full-workflow cost and held-out predictive benefit. **Interface:** CuGen's existing `cugen.ld.ld_matrix`, wrapped later by an offline, versioned genomeOS adapter. **Refusals:** no marginal-AF-to-LD inference, unknown genotype encoding, invented sample mapping, missing annotation, silent missing-as-reference conversion or unauthorized data movement.
 

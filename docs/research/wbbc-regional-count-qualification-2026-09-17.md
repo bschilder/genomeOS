@@ -1,6 +1,6 @@
 # WBBC regional-count qualification — 2026-09-17
 
-Issue: [#325](https://github.com/bschilder/genomeOS/issues/325)
+Issue: [#325](https://github.com/genomeOS/genomeOS/issues/325)
 
 Design: Atlas §§4, 6 and 7.1
 
@@ -9,7 +9,7 @@ Design: Atlas §§4, 6 and 7.1
 The public WBBC GRCh38 WGS frequency release is eligible for **source-isolated P1 ingestion** for
 an explicit curated variant set. It is not eligible to be combined with PGG.Han, ChinaMAP, NyuWa
 or CMDB while participant independence remains unresolved in
-[#326](https://github.com/bschilder/genomeOS/issues/326).
+[#326](https://github.com/genomeOS/genomeOS/issues/326).
 
 Each retained variant produces four measured-observation rows: North, Central, South and Lingnan.
 The rows retain the source denominators (448, 100, 8,070 and 126 alleles) and the disease-enriched

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python standard-library CSV/math, pandas, existing Pandera schemas and pytest; no dependency changes.
 
-**Spec:** [Atlas design §§6,12,13](../specs/2026-08-22-genome-os-atlas-v1-design.md), [scientific objectives P0](../../scientific-engineering-objectives.md), [#21](https://github.com/bschilder/genomeOS/issues/21), [#219](https://github.com/bschilder/genomeOS/issues/219). This corrects the default-radius and constant-provenance implementation in the original data-foundation plan Task 3; it advances #189 WP0.
+**Spec:** [Atlas design §§6,12,13](../specs/2026-08-22-genome-os-atlas-v1-design.md), [scientific objectives P0](../../scientific-engineering-objectives.md), [#21](https://github.com/genomeOS/genomeOS/issues/21), [#219](https://github.com/genomeOS/genomeOS/issues/219). This corrects the default-radius and constant-provenance implementation in the original data-foundation plan Task 3; it advances #189 WP0.
 
 ## Scientific contract
 

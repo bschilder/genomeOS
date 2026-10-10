@@ -11,7 +11,7 @@ its physical scale, the generating algorithm, climate accuracy, or genetic
 predictive value. GDAL's returned scale 1 and offset 0 are unqualified reader
 defaults rather than source packing evidence.
 
-![Native-block exact-formula failures and signed raw-integer residuals](https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/chelsa_annual_consistency.png)
+![Native-block exact-formula failures and signed raw-integer residuals](https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/chelsa_annual_consistency.png)
 
 The public [aggregate JSON](chelsa-annual-consistency-2026-09-11.json) contains
 the complete signed histogram, all 3,485 native-block summaries, thirteen source

@@ -5975,7 +5975,7 @@ AGENTS "Show the map"; §A.1.11 and Part A preamble items recorded in the PR.
   ```
   **PR body notes for Part A** (whoever opens the PR copies these; the body ends with `closes #404`):
   - Design sections implemented: mobile sheets design §A.1.1–§A.1.13, §A.2, §A.3.
-  - Figures: embed `https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/atlas-mobile-before.png`
+  - Figures: embed `https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/atlas-mobile-before.png`
     and `…/atlas-mobile-after.png` (captured at 390×844, DPR 3, from the pre-change and final builds).
   - Desktop deltas (§A.1.13): 24 px InfoTip/legend target boxes (glyph unchanged); legend Escape;
     the Escape stack; header-height flex layout (explorer = viewport − 86.5 px header, the old
@@ -10624,7 +10624,7 @@ git commit -m "docs: add the GOSA web-rendition parity review figure" -m "Co-Aut
 ```
 
 The Part B PR embeds it as
-`https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/surface-codec-parity.png`.
+`https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/surface-codec-parity.png`.
 
 ---
 

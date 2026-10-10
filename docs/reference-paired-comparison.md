@@ -82,7 +82,7 @@ before validation. Corrupt gzip input is refused before any output is written.
 The example contains 17 complete pairs, four conditional pairs, two wholly failed pairs, and one
 absent pair. No real data or model fitting produced these examples.
 
-![Synthetic reporting demonstration, not a model-performance result](https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/reference_comparison_synthetic.png)
+![Synthetic reporting demonstration, not a model-performance result](https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/reference_comparison_synthetic.png)
 
 Regenerate the image **directly from the committed report**, using a new output
 directory each time:

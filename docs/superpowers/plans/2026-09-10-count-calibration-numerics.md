@@ -1,7 +1,7 @@
 # Count-calibration numerical repair
 
 Follow-up to the reference-count baseline, prompted by empirical failures at
-`fabbf53`; [#209](https://github.com/bschilder/genomeOS/issues/209), advancing #189.
+`fabbf53`; [#209](https://github.com/genomeOS/genomeOS/issues/209), advancing #189.
 Atlas design §§7–8. Use subagent-driven development and test-driven development.
 This is a new empirical bug task, not a repeated whole-branch review fix wave.
 

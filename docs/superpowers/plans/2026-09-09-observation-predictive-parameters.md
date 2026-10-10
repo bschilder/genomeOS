@@ -8,7 +8,7 @@
 
 **Tech Stack:** Existing Python, NumPy, SciPy, pandas, PyMC/xarray and cloudpickle; no new dependency, production schema, model likelihood or serving change.
 
-**Spec:** [Observation-aware predictive parameters](../specs/2026-09-09-observation-predictive-parameters-design.md), committed initially in `6ae09cf`; [#191](https://github.com/bschilder/genomeOS/issues/191), advancing [#189](https://github.com/bschilder/genomeOS/issues/189).
+**Spec:** [Observation-aware predictive parameters](../specs/2026-09-09-observation-predictive-parameters-design.md), committed initially in `6ae09cf`; [#191](https://github.com/genomeOS/genomeOS/issues/191), advancing [#189](https://github.com/genomeOS/genomeOS/issues/189).
 
 ## Global Constraints
 
@@ -115,7 +115,7 @@ fresh-versus-cache is a separately retained numerical observation, not a toleran
 The original fresh reference must never be replaced by the cache control. If recovering a cache
 control after extraction, execute and fingerprint the actual parent module in an isolated process;
 never label changed-code output as the parent control. The execution ledger/report records both
-controls and this ruling; the baseline discrepancy is tracked in [#198](https://github.com/bschilder/genomeOS/issues/198). Task 3's new-interface round-trip requirement remains independently tested.
+controls and this ruling; the baseline discrepancy is tracked in [#198](https://github.com/genomeOS/genomeOS/issues/198). Task 3's new-interface round-trip requirement remains independently tested.
 
 ### Task 1: Preserve configuration and cache import compatibility
 
@@ -159,9 +159,9 @@ tests, 40 smoke tests and the listed lint/contract/module/privacy/whitespace gat
 legacy numeric arrays match the parent-loaded cache control exactly. Independent review
 approved spec compliance and task quality with no Critical/Important findings; five existing
 uncaptured inducing warnings remain a deferred test-noise concern. The separate direct-import
-cycle is tracked in [#199](https://github.com/bschilder/genomeOS/issues/199); the established
+cycle is tracked in [#199](https://github.com/genomeOS/genomeOS/issues/199); the established
 `fit.load_fit` seam works. Fresh-fit and new-interface round-trip checks remain Task 3 gates.
-Neither this milestone nor parent [PR #197](https://github.com/bschilder/genomeOS/pull/197)
+Neither this milestone nor parent [PR #197](https://github.com/genomeOS/genomeOS/pull/197)
 completes the full modeling program.
 
 ### Task 2: Pure unseen-cohort parameter composition
@@ -219,7 +219,7 @@ completes the full modeling program.
 
   Parameterize exact refusals: empty/mismatched queries, repeated observation ID, blank/nonstring IDs, boolean/nonfinite/out-of-range coordinates, duplicate/boolean/fractional draw coordinates, unsupported convention/likelihood, duplicate or absent fitted designs, seen cohort, missing or extra effect arrays, wrong `(D,N)/(D,K)/(D,)` shapes, NaN/inf, negative scales, nonpositive concentration and invalid seeds. Test input-copy isolation and `setflags(write=True)` refusal on returned arrays. Test extreme finite logits without epsilon clipping.
 
-  Add the reproduced [#200](https://github.com/bschilder/genomeOS/issues/200) overflow regression:
+  Add the reproduced [#200](https://github.com/genomeOS/genomeOS/issues/200) overflow regression:
   one alternate-design query, latent and design logits both `-9e307`, cohort/nugget scales
   `1.7e308`/`1.4e308`, seed 42. The independent combined logit is positive, but unguarded
   float64 addition returns a zero mean after overflow. Require a numerical-domain error, with
@@ -327,7 +327,7 @@ new scientific surface is claimed.
 Genuine fresh-parent/fresh-new and old-cache/parent-loaded comparisons are bitwise exact for
 all four retained arrays. Corrected clean-process new-cache means, concentrations and draw
 identities are bitwise exact; the original failed dtype-demotion control is preserved.
-The [#198 mechanism report](https://github.com/bschilder/genomeOS/issues/198#issuecomment-5606556750)
+The [#198 mechanism report](https://github.com/genomeOS/genomeOS/issues/198#issuecomment-5606556750)
 distinguishes this new-save fix from unmodified historical caches. Historical ArviZ container
 support is covered by an API-faithful fixture and primary-source signature inspection, not
 an executed full historical environment. Final locked full CI, broad whole-slice review and

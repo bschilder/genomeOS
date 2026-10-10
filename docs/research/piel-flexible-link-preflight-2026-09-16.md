@@ -1,7 +1,7 @@
 # Piel cubic and Stukel link preflight: do not advance to a spatial fit
 
 Status: `automated_analysis` / `pending_expert_review`, 2026-09-16. Advances
-[#103](https://github.com/bschilder/genomeOS/issues/103), Atlas design §§7–8, and
+[#103](https://github.com/genomeOS/genomeOS/issues/103), Atlas design §§7–8, and
 the [global modeling plan](../superpowers/plans/2026-09-09-global-af-modeling.md).
 This is a method preflight, not a fitted surface or publication result.
 

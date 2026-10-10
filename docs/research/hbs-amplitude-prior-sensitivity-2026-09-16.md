@@ -2,8 +2,8 @@
 
 **Date:** 2026-09-16
 
-**Issues:** advances [#103](https://github.com/bschilder/genomeOS/issues/103) and
-[#45](https://github.com/bschilder/genomeOS/issues/45)
+**Issues:** advances [#103](https://github.com/genomeOS/genomeOS/issues/103) and
+[#45](https://github.com/genomeOS/genomeOS/issues/45)
 
 **Design:** Atlas §§7–8; global AF plan WP2/WP4
 

@@ -1,7 +1,7 @@
 # Demographic covariates: population grids are modeled inputs
 
 Status: `automated_proposal` / `pending`, 2026-09-10. Advances
-[#189](https://github.com/bschilder/genomeOS/issues/189) WP3; no source admission,
+[#189](https://github.com/genomeOS/genomeOS/issues/189) WP3; no source admission,
 raster extraction, model fit or predictive gain is claimed. Atlas design §§4–9,
 12 and the [global modeling plan](../superpowers/plans/2026-09-09-global-af-modeling.md).
 
@@ -74,9 +74,9 @@ no blanket user-approval requirement. [Global1 notices](https://hub.worldpop.org
 The existing population pipeline sums pixel counts into H3, records raster hashes,
 and fills absent cells from ordered supplements. Those mechanics do not certify
 units, acquisition dates or survey recruitment. Its negative-count validation
-defect is separately tracked in [#241](https://github.com/bschilder/genomeOS/issues/241);
+defect is separately tracked in [#241](https://github.com/genomeOS/genomeOS/issues/241);
 no published-data impact or fix is claimed here. Gridded births remain the
-separate [#96](https://github.com/bschilder/genomeOS/issues/96) burden question.
+separate [#96](https://github.com/genomeOS/genomeOS/issues/96) burden question.
 
 Before extraction, freeze exact assets/checksums, grid/datum/units/nodata, source
 and modeled years, available date, country input metadata and applicable terms.

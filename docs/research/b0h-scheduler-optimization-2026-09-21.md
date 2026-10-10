@@ -1,6 +1,6 @@
 # B0H scheduler optimization evidence (2026-09-21)
 
-Issue: [#337](https://github.com/bschilder/genomeOS/issues/337). The implementation is split
+Issue: [#337](https://github.com/genomeOS/genomeOS/issues/337). The implementation is split
 across PRs #353 and #354. This note reports engineering performance only; it makes no new
 scientific claim about population heterogeneity.
 

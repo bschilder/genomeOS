@@ -1,6 +1,6 @@
 # Pointwise prior normalization for surface support
 
-Implements [#266](https://github.com/bschilder/genomeOS/issues/266), advancing
+Implements [#266](https://github.com/genomeOS/genomeOS/issues/266), advancing
 #189 WP2 and Atlas design §§5–7.1b, 12. This is a normalization repair, not a
 claim of calibrated fitted uncertainty or better geographic predictions.
 

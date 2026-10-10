@@ -2,7 +2,7 @@
 
 **Implementation target remains the owner's local CuGen**, pinned for the existing source preflight at `03df1688abf52d295bd85d47f1aca6130440b553`. The [LD preflight](cugen-ld-preflight-2026-09-09.md) records executable CPU evidence and the narrower API contract. This note adds the paper's methods; it does not substitute pg_gpu, introduce a dependency, or claim GPU LD validation.
 
-**Scientific objective:** determine which demonstrated computational ideas could support training-only multivariant AF experiments. **Measurable output:** an explicit adoption/refusal matrix, followed by independently checked LD and held-out AF experiments. **Engineering boundary:** offline CuGen sample/block preparation and `cugen.ld.ld_matrix`; no phenotype model or inference on the serving path. **Assumptions and consumers:** the paper studies different statistical targets and populations; its findings inform WP4/WP6 hypotheses, not model promotion or population-data qualification under [#189](https://github.com/bschilder/genomeOS/issues/189).
+**Scientific objective:** determine which demonstrated computational ideas could support training-only multivariant AF experiments. **Measurable output:** an explicit adoption/refusal matrix, followed by independently checked LD and held-out AF experiments. **Engineering boundary:** offline CuGen sample/block preparation and `cugen.ld.ld_matrix`; no phenotype model or inference on the serving path. **Assumptions and consumers:** the paper studies different statistical targets and populations; its findings inform WP4/WP6 hypotheses, not model promotion or population-data qualification under [#189](https://github.com/genomeOS/genomeOS/issues/189).
 
 ## Source and reading record
 

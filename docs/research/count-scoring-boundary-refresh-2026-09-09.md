@@ -1,7 +1,7 @@
 # Count-scoring boundary-fix hardware refresh
 
-September 9, 2026; advances [#189](https://github.com/bschilder/genomeOS/issues/189)
-and verifies the numerical correction for [#194](https://github.com/bschilder/genomeOS/issues/194).
+September 9, 2026; advances [#189](https://github.com/genomeOS/genomeOS/issues/189)
+and verifies the numerical correction for [#194](https://github.com/genomeOS/genomeOS/issues/194).
 
 ## Question and scope
 

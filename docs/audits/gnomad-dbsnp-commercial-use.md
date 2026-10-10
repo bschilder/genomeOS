@@ -11,7 +11,7 @@ restrictions and names SpliceAI only as an example. That list is not closed, so 
 in a gnomAD payload needs its own check rather than inheriting this one.
 
 Both terms pages were read on **2026-09-15**. Resolves
-[#294](https://github.com/bschilder/genomeOS/issues/294).
+[#294](https://github.com/genomeOS/genomeOS/issues/294).
 
 ---
 

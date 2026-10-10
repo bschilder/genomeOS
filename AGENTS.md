@@ -17,7 +17,7 @@ workstream, and the gate list — and points back here. It routes; this file rul
 4. The plan for your sub-project, e.g.
    [`docs/superpowers/plans/2026-08-22-atlas-data-foundation.md`](docs/superpowers/plans/2026-08-22-atlas-data-foundation.md)
    (P0 + P1). Plans are task-by-task with tests specified; follow them rather than improvising.
-5. [Issue #3](https://github.com/bschilder/genomeOS/issues/3) if you are touching data ingestion —
+5. [Issue #3](https://github.com/genomeOS/genomeOS/issues/3) if you are touching data ingestion —
    it explains what every source is for and what its access terms are.
 6. [`docs/literature-evidence-curation.md`](docs/literature-evidence-curation.md) and its linked
    schema-tested examples if you are extracting or importing publication evidence.
@@ -39,7 +39,7 @@ a dataset, method, coordinate, default, or success criterion when the specified 
 
 ## Check the issues before you start — open *and* closed
 
-The [issue tracker](https://github.com/bschilder/genomeOS/issues) is the project's record of what
+The [issue tracker](https://github.com/genomeOS/genomeOS/issues) is the project's record of what
 has been done, what was decided and why, and what still needs doing. Search it before writing
 anything.
 
@@ -66,7 +66,7 @@ gh issue list --state all --search "registry adapter"   # or the GitHub UI
   [`docs/overview.md`](docs/overview.md) first: P6–P12 are deliberately out of scope for v1, and
   their absence is a decision rather than an oversight.
 - **Improving the design, the dataset scores in
-  [#3](https://github.com/bschilder/genomeOS/issues/3), or the statistics?** Very welcome — comment
+  [#3](https://github.com/genomeOS/genomeOS/issues/3), or the statistics?** Very welcome — comment
   on the relevant issue or open a new one.
 - New issues are auto-added to the board as `Backlog`. Apply the four label families if you can;
   if you cannot, say so in the issue body so it can be triaged.
@@ -317,7 +317,7 @@ These are hard constraints, not preferences:
 - **All of Us data may inform models but may never be served by our backend** — it cannot leave
   the Researcher Workbench.
 - **Redistribution of derived surfaces from indigenous-population panels is an open question**
-  ([#66](https://github.com/bschilder/genomeOS/issues/66)). Do not publish or commit derived
+  ([#66](https://github.com/genomeOS/genomeOS/issues/66)). Do not publish or commit derived
   artifacts from HGDP, SGDP, AADR or AFND as standalone datasets until it is answered.
 - Registry entries carry provenance and a Biocultural Notice field, per the CARE Principles.
   Never drop these columns for convenience.
@@ -381,7 +381,7 @@ Nothing is committed directly to `main`.**
 - **Show the map.** Once a change affects something renderable — observations, a surface, a
   mask, a burden layer — put a figure in the PR or issue rather than describing it. Generate it
   with a script under `scripts/plot_*.py`, commit the PNG under `docs/figures/`, and embed it
-  with a raw URL (`https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/...`).
+  with a raw URL (`https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/...`).
   A committed figure is reviewable, diffable and regenerable; a pasted screenshot is none of those.
 - **Review figures obey the same invariants as the product.** Never draw a fitted surface and
   measured observations as one layer (§4), always show where there is no data rather than

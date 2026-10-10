@@ -1,6 +1,6 @@
 # Harmonized HGDP + 1KG: cohort and dependency qualification
 
-September 9, 2026; advances [#189](https://github.com/bschilder/genomeOS/issues/189),
+September 9, 2026; advances [#189](https://github.com/genomeOS/genomeOS/issues/189),
 WP0/WP1 of the [global AF plan](../superpowers/plans/2026-09-09-global-af-modeling.md).
 This is actual source-metadata evidence, not an allele-frequency performance result.
 
@@ -114,7 +114,7 @@ does not establish random sampling or disease-ascertainment exclusion.
 
 The [source terms](https://github.com/broadinstitute/gnomad-browser/blob/16e39929a8938c334a8eee4d7d0c7a67e6624153/browser/about/policies/terms.md)
 identify primary data as CC0 and prohibit participant reidentification; annotation-specific
-restrictions remain separate. The owner's resolved [#66 decision](https://github.com/bschilder/genomeOS/issues/66#issuecomment-5565166083)
+restrictions remain separate. The owner's resolved [#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083)
 permits fitted-surface redistribution with attribution, biocultural notices, explicit distinction
 between observations and estimates, and source restrictions honored. Earlier qualification
 commentary that called #66 unresolved was stale. Conditional permission does not establish

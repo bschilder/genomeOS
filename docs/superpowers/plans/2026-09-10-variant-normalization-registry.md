@@ -539,7 +539,7 @@ git commit -m "feat(registry): add the loader and the normalized-identity resolu
 - Consumes: `normalized_identity` and `load` from Task 3.
 - Produces: `_external_resources` gains a keyword-only parameter `variant_registry: pd.DataFrame`.
 
-This replaces the coordinate-shape check requested in review of [#207](https://github.com/bschilder/genomeOS/pull/207). One source of truth instead of a regex in Python and another in TypeScript.
+This replaces the coordinate-shape check requested in review of [#207](https://github.com/genomeOS/genomeOS/pull/207). One source of truth instead of a regex in Python and another in TypeScript.
 
 **Before starting**, read the existing `_external_resources` in full. It already refuses when `entity_type != "variant"`, which is what excludes HLA (`allele`) and KIR (`gene`) artifacts. **Do not remove or weaken that check** — this task adds a second, narrower gate for artifacts that *are* typed `variant` but carry a non-coordinate identifier.
 
@@ -687,7 +687,7 @@ For each of the four, in order:
 
 Create `data/registry/variant_normalization.tsv`, tab-separated, with the 15 columns from Task 1 in that order. Include the HbS identity row from Task 4 Step 5.
 
-Set `verification_status` to `pending` on every resolved cytokine row. Per spec §9, [#242](https://github.com/bschilder/genomeOS/issues/242) decides whether an agent-resolved row may be agent-verified, and until then nothing promotes to `verified`. Set `reviewed_by` to the identity that actually did the work: `agent:<provider>:<model>` if an agent resolved it.
+Set `verification_status` to `pending` on every resolved cytokine row. Per spec §9, [#242](https://github.com/genomeOS/genomeOS/issues/242) decides whether an agent-resolved row may be agent-verified, and until then nothing promotes to `verified`. Set `reviewed_by` to the identity that actually did the work: `agent:<provider>:<model>` if an agent resolved it.
 
 - [ ] **Step 3: Write the test that pins the file**
 
@@ -758,7 +758,7 @@ Spec §10 lists two consequences that are easy to drop on the floor. Neither is 
 
 - [ ] **Step 1: Correct the #207 review**
 
-My review of [#207](https://github.com/bschilder/genomeOS/pull/207) asked the contributor to add a
+My review of [#207](https://github.com/genomeOS/genomeOS/pull/207) asked the contributor to add a
 coordinate-shape check to `_external_resources`. Task 4 supersedes that with a registry lookup.
 Post a comment on #207 saying so, so the contributor does not build the weaker version:
 

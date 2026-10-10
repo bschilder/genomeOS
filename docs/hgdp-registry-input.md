@@ -45,8 +45,8 @@ adapter signature are unchanged.
 
 Schema-valid output does not certify the source review, population identity, coordinate meaning,
 sampling footprint, residency, or eligibility for a scientific benchmark. Those qualifications
-precede parsing and remain open scientific work under [#21](https://github.com/bschilder/genomeOS/issues/21)
-and [#219](https://github.com/bschilder/genomeOS/issues/219).
+precede parsing and remain open scientific work under [#21](https://github.com/genomeOS/genomeOS/issues/21)
+and [#219](https://github.com/genomeOS/genomeOS/issues/219).
 
 ## Migrating existing files
 

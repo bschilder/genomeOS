@@ -1,7 +1,7 @@
 ---
 license: other
 license_name: mixed-see-provenance
-license_link: https://github.com/bschilder/genomeOS/issues/66
+license_link: https://github.com/genomeOS/genomeOS/issues/66
 language:
   - en
 tags:
@@ -17,20 +17,20 @@ size_categories:
 
 # genomeOS Atlas data store
 
-Working store for [genomeOS](https://github.com/bschilder/genomeOS) — an open atlas of human
+Working store for [genomeOS](https://github.com/genomeOS/genomeOS) — an open atlas of human
 genetic variation where every number can be traced back to the measurement behind it.
 
 It holds three kinds of thing: **source tables** the pipeline ingests, **trained models**, and the
 **published per-cell surfaces** those models produce.
 
 > **This is interim storage.** The project's artifact home is GCS
-> ([#33](https://github.com/bschilder/genomeOS/issues/33)); this dataset exists so the store lives
+> ([#33](https://github.com/genomeOS/genomeOS/issues/33)); this dataset exists so the store lives
 > in one addressable place until that is set up. Everything here is plain files, so the migration
 > is a copy.
 
 > **Nothing here is validated science yet.** No golden test has passed. Held-out validation of the
 > HbS surface shows it predicting held-out surveys only marginally better than a global constant
-> ([#109](https://github.com/bschilder/genomeOS/issues/109)). Treat these as pipeline outputs, not
+> ([#109](https://github.com/genomeOS/genomeOS/issues/109)). Treat these as pipeline outputs, not
 > as results.
 
 ## Contents
@@ -58,7 +58,7 @@ store/
 
 **`raw/afnd_populations.tsv`** — harvested from
 [allelefrequencies.net](http://www.allelefrequencies.net) by
-[`scripts/fetch_afnd.py`](https://github.com/bschilder/genomeOS/blob/main/scripts/fetch_afnd.py),
+[`scripts/fetch_afnd.py`](https://github.com/genomeOS/genomeOS/blob/main/scripts/fetch_afnd.py),
 in two public hops: `pop6001b.asp` lists every population as a `?pop_name=` link in one request,
 and `pop6001c.asp?pop_name=<name>` prints the coordinate. 1,821 of 1,825 retained; the four
 refusals print no coordinate at all. Coordinates are kept in AFND's printed sexagesimal
@@ -169,7 +169,7 @@ files you trust. It is here because refitting costs ~20 minutes, not because it 
 parquet is the durable form: 1.1 MB against a 121 MB fit, carrying everything a consumer needs.
 
 Reproduce the environment exactly with
-[`requirements.lock`](https://github.com/bschilder/genomeOS/blob/main/requirements.lock).
+[`requirements.lock`](https://github.com/genomeOS/genomeOS/blob/main/requirements.lock).
 
 ## Provenance and terms
 
@@ -178,9 +178,9 @@ disclaimer rather than an explicit reuse prohibition, and re3data's "public doma
 third-party catalogue metadata. The project therefore records the source as
 `no_restriction_found`: lack of a clearly stated licence does not by itself block valuable data,
 while any explicit restriction discovered later still governs that source
-([#117](https://github.com/bschilder/genomeOS/issues/117)).
+([#117](https://github.com/genomeOS/genomeOS/issues/117)).
 
-[Issue #66](https://github.com/bschilder/genomeOS/issues/66) records the completed decision that
+[Issue #66](https://github.com/genomeOS/genomeOS/issues/66) records the completed decision that
 fitted surfaces derived from AFND, HGDP, SGDP, and AADR may be published with source attribution,
 Biocultural Notices, measured/inferred separation, and explicit source restrictions preserved.
 The [CARE Principles](https://www.gida-global.org/careprinciples)—Collective Benefit, Authority to
@@ -202,12 +202,12 @@ Cite the sources, not this store:
 - **No golden test has passed.** §8's HbS parity test is blocked on population-weighted national
   aggregation.
 - **Held-out skill is marginal.** Under spatially-blocked cross-validation the HbS surface scores
-  MAE 0.0388 against a constant baseline's 0.0391 ([#109](https://github.com/bschilder/genomeOS/issues/109)).
+  MAE 0.0388 against a constant baseline's 0.0391 ([#109](https://github.com/genomeOS/genomeOS/issues/109)).
 - **HLA surfaces are not published here.** A screen of twenty alleles fitted correlation ranges of
   1,036–4,111 km — a range that long makes the field near-constant and indistinguishable from the
-  intercept ([#122](https://github.com/bschilder/genomeOS/issues/122)).
+  intercept ([#122](https://github.com/genomeOS/genomeOS/issues/122)).
 - **One population can dominate.** AFND's DKMS German donor entry has `an` = 6,912,132, about
   23,000× the median; a binomial likelihood weights by `an`
-  ([#123](https://github.com/bschilder/genomeOS/issues/123)).
+  ([#123](https://github.com/genomeOS/genomeOS/issues/123)).
 - **G6PD is a phenotype, not a variant.** `phenotype:g6pd-deficiency` aggregates ~200 alleles
-  assayed by enzyme activity ([#116](https://github.com/bschilder/genomeOS/issues/116)).
+  assayed by enzyme activity ([#116](https://github.com/genomeOS/genomeOS/issues/116)).

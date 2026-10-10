@@ -2,7 +2,7 @@
 
 This is a matched development comparison of the current single-variant spatial GP (`B2-current`)
 against the pooled Beta-binomial-free baseline (`B0`). It implements the reduction frozen in
-[issue #189](https://github.com/bschilder/genomeOS/issues/189#issuecomment-5705882045) while only two
+[issue #189](https://github.com/genomeOS/genomeOS/issues/189#issuecomment-5705882045) while only two
 of five B2 folds existed and before their predictive values were inspected. It is observational
 research evidence, not a publication or production promotion.
 
@@ -44,7 +44,7 @@ development baseline than pooled B0. Spatial/observation-aware modeling is there
 future candidates must beat B2 rather than claiming success against B0 alone. The hard local-support
 B1 model remains rejected: its global primary emitted no rows, and its post-hoc wider support improved
 positive counts while worsening zeros. The predeclared compact positive-residual B1G candidate in
-[#331](https://github.com/bschilder/genomeOS/issues/331) remains a sensible next mechanism because it
+[#331](https://github.com/genomeOS/genomeOS/issues/331) remains a sensible next mechanism because it
 targets that support/zero-count tradeoff, but it stays in Backlog until B0H is terminal and must beat
 this completed B2 result on matched rows.
 

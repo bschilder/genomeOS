@@ -1,6 +1,6 @@
 # Curated variant set v1 candidate
 
-Issue [#32](https://github.com/bschilder/genomeOS/issues/32) asks which ClinVar pathogenic or
+Issue [#32](https://github.com/genomeOS/genomeOS/issues/32) asks which ClinVar pathogenic or
 likely pathogenic variants have defensible penetrance, and adds CPIC Level A/B pharmacogenomic
 and founder variants. This document records the first immutable candidate release. It implements
 the data and refusal boundary needed to answer that question; it does not claim that clinical

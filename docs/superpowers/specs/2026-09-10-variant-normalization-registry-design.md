@@ -89,7 +89,7 @@ own. Nothing consumes an unresolved or refused row except a coverage report.
 - **The counted allele.** It stays data-dependent under the adapter's minor-allele rule; reference
   and alternate are fixed by the genome. The registry must not conflate them.
 - **Automated verification policy.** Whether an agent-resolved row may be verified by another agent
-  is [#242](https://github.com/bschilder/genomeOS/issues/242) and is not decided here.
+  is [#242](https://github.com/genomeOS/genomeOS/issues/242) and is not decided here.
 - **CI checks for data PRs.** Related but separate; filed independently.
 
 ---
@@ -272,7 +272,7 @@ Agent-resolved rows land as `pending` unless #242 decides otherwise.
 
 ## 9. Open questions
 
-1. **Verification policy** — [#242](https://github.com/bschilder/genomeOS/issues/242). Whether an
+1. **Verification policy** — [#242](https://github.com/genomeOS/genomeOS/issues/242). Whether an
    agent-resolved row may be verified by a different agent, or requires a human. This design defers
    to whatever that decides and marks rows `pending` in the meantime. **The four cytokine loci do
    not become eligible for external annotation until their rows are verified**, so the verification
@@ -285,7 +285,7 @@ Agent-resolved rows land as `pending` unless #242 decides otherwise.
 
 ## 10. Tracker and documentation changes
 
-- The review of [#207](https://github.com/bschilder/genomeOS/pull/207) asked for a coordinate-shape
+- The review of [#207](https://github.com/genomeOS/genomeOS/pull/207) asked for a coordinate-shape
   check in the exporter. This design supersedes that with a registry lookup; the review comment
   should be updated so the contributor does not implement the weaker version.
 - `docs/literature-evidence-curation.md` already documents `variant_normalization` as an allowlisted

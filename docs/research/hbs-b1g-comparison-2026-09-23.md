@@ -87,7 +87,7 @@ the broad-smearing risk that motivated the experiment.
 
 Do not promote B1G, widen its basis radii, tune its priors from these outcomes, or use additional
 random seeds to select a favorable result. Seed 42 was the registered primary comparison. Issue
-[#382](https://github.com/bschilder/genomeOS/issues/382) records the matched-baseline rule for any
+[#382](https://github.com/genomeOS/genomeOS/issues/382) records the matched-baseline rule for any
 future multi-seed sensitivity analysis and explicitly forbids sensitivity seeds from rescuing a
 failed primary result.
 
@@ -102,7 +102,7 @@ promotion.
 
 This is dependent development evidence. Dependency review remains `not_checked`, geographic
 assignments remain `algorithmic_development_unreviewed`, and the adequately powered subgroup rule
-in [#371](https://github.com/bschilder/genomeOS/issues/371) remains undefined. The report therefore
+in [#371](https://github.com/genomeOS/genomeOS/issues/371) remains undefined. The report therefore
 keeps `publication_eligible=false` and `scientific_promotion_decision=not_made`.
 
 The campaign used source revision `d11770551234e7899f7a9ab7da2cd29a9772a077`. All five terminal

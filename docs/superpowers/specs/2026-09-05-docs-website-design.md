@@ -1,7 +1,7 @@
 # genomeOS public documentation website — design
 
 **Status:** Approved for implementation<br>
-**Issue:** [#153](https://github.com/bschilder/genomeOS/issues/153)<br>
+**Issue:** [#153](https://github.com/genomeOS/genomeOS/issues/153)<br>
 **Visual direction:** Orbital observatory<br>
 **Production domain:** `https://genome-os.org`
 
@@ -462,7 +462,7 @@ consume stable APIs and governance decisions rather than importing website imple
 
 ## 15. References
 
-- [Issue #153](https://github.com/bschilder/genomeOS/issues/153)
+- [Issue #153](https://github.com/genomeOS/genomeOS/issues/153)
 - [Astro: deploy to GitHub Pages](https://v6.docs.astro.build/en/guides/deploy/github/)
 - [Starlight: content and custom pages](https://starlight.astro.build/guides/pages/)
 - [Starlight customization](https://starlight.astro.build/guides/customization/)

@@ -14,14 +14,14 @@ every contributor, human or agent. **Read it before writing code.** It is short 
    | If you are touching | Read |
    |---|---|
    | Publication / literature evidence | [`docs/literature-evidence-curation.md`](docs/literature-evidence-curation.md) |
-   | Data ingestion of any source | [Issue #3](https://github.com/bschilder/genomeOS/issues/3) — what every source is for and its access terms |
+   | Data ingestion of any source | [Issue #3](https://github.com/genomeOS/genomeOS/issues/3) — what every source is for and its access terms |
    | The Pan-UKB evidence slice | [`docs/panukb-architecture.md`](docs/panukb-architecture.md) |
    | The population registry, observations, surfaces, burden | [`docs/scientific-engineering-objectives.md`](docs/scientific-engineering-objectives.md) |
    | The board, labels, or status | [`docs/board-conventions.md`](docs/board-conventions.md) |
 
 ## Check the issues first — open *and* closed
 
-The [issue tracker](https://github.com/bschilder/genomeOS/issues) is the record of what has been
+The [issue tracker](https://github.com/genomeOS/genomeOS/issues) is the record of what has been
 done, what was decided, and why.
 
 ```bash
@@ -84,7 +84,7 @@ feature PR — priority here is derived from the dependency graph, so unschedule
 critical-path work even when it is a good idea.
 
 **Improving the science?** Very welcome. Comment on the relevant issue or open a new one. The
-dataset scores in [#3](https://github.com/bschilder/genomeOS/issues/3) and the statistics are both
+dataset scores in [#3](https://github.com/genomeOS/genomeOS/issues/3) and the statistics are both
 fair game.
 
 Apply the four label families (`type:*`, `P*:`, `skill:*`, `priority:*`) if you can. If you cannot —
