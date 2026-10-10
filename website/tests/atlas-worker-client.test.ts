@@ -155,18 +155,34 @@ describe('AtlasWorkerClient', () => {
   });
 
   it('fails every pending request when the worker crashes', async () => {
+    // The provider runs grid, render and context requests at once; a crash must end all of
+    // them, or the ones left pending show "Loading" forever (RF5).
+    const never = () => new Promise<void>(() => undefined);
     const worker = new InProcessWorker({
       ...ATLAS_WORKER_HANDLERS,
-      'load-grid': () => new Promise<void>(() => undefined),
+      'load-grid': never,
+      'load-render': never,
+      'parse-context': never,
     });
     const { client: atlas } = client(worker);
-    const request = atlas.loadGrid(toBuffer(goldenBytes(entry.url)), {
-      entry,
-      gridSha256,
-    });
+    const requests = [
+      atlas.loadGrid(toBuffer(goldenBytes(entry.url)), { entry, gridSha256 }),
+      atlas.loadRender(toBuffer(goldenBytes(ref.web.render.url)), ref),
+      atlas.parseContext(new TextEncoder().encode('{}').buffer),
+    ];
+    const outcomes: (string | null)[] = requests.map(() => null);
+    requests.forEach((request, index) =>
+      request.catch((error: Error) => {
+        outcomes[index] = error.message;
+      }),
+    );
     await Promise.resolve();
+    expect(worker.received).toHaveLength(3);
     worker.crash('boom');
-    await expect(request).rejects.toThrow('Atlas data worker failed: boom');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(outcomes).toEqual(
+      requests.map(() => 'Atlas data worker failed: boom'),
+    );
   });
 
   it('fails a retry after a worker crash instead of posting it to the dead worker', async () => {
