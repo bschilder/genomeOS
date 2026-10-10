@@ -1070,6 +1070,9 @@ describe('surface picks in the map frame (Columbus view and 2D, fast-load §B.6.
       }
       expect(checked).toBeGreaterThan(40);
     },
+    // CPU-bound: about 3 s alone on an idle Apple-silicon machine and up to 6.5 s in a loaded
+    // full-suite run, past vitest's 5 s default (CI runs on slower ubuntu-latest cores).
+    60_000,
   );
 
   it('resolves hits the radial projection gives to another cell', () => {
