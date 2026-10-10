@@ -76,6 +76,14 @@ describe('Atlas client bundle', () => {
     }
   });
 
+  it('checks the production bundle Pages ships, not a development build', () => {
+    // vitest sets NODE_ENV=test, which the build inherits unless tests/setup/build.ts pins
+    // production; a development build carries React's jsxDEV and dev chunking, so the §B.8 checks
+    // here would bind nothing (final review spec-6).
+    for (const file of staticGraph(islandChunk()))
+      expect(code(file).includes('jsxDEV'), file).toBe(false);
+  });
+
   it('loads Cesium only through the lazy scene chunk', () => {
     const scene = sceneChunk();
     expect(existsSync(path.join(assets, scene))).toBe(true);
