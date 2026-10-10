@@ -327,8 +327,8 @@ sources: gnomAD HGDP+1KG · AFND · AADR · MAP HbS/G6PD surveys · GAsP · MCPS
    ▼
 [P0] population geolocation registry — coordinates + uncertainty radius + provenance
    ▼
-[P1] observations (parquet on GCS)                           ← "what was measured"
-   ▼  offline batch: per-variant PyMC + HSGP fit
+[P1] observations (partitioned parquet)                      ← "what was measured"
+   ▼  offline batch: per-variant PyMC GP fit
 [P2] surfaces: posterior mean + sd + data-support mask, H3-keyed   ← "what was inferred"
    ▼  × gridded population × penetrance, via posterior draws
 [P3] burden: expected cases, mean + 95% CI, H3-keyed
@@ -338,21 +338,29 @@ sources: gnomAD HGDP+1KG · AFND · AADR · MAP HbS/G6PD surveys · GAsP · MCPS
        (no inference on this path)                (no genetics in this layer)
 ```
 
-Fitting uses [PyMC](https://www.pymc.io/) with a Hilbert-space Gaussian process (HSGP) rather
-than the INLA-SPDE the design first named; the reasoning is in
-[#34](https://github.com/genomeOS/genomeOS/issues/34).
+Fitting uses [PyMC](https://www.pymc.io/) (NumPyro NUTS) rather than the INLA-SPDE the design
+first named; the reasoning is in [#34](https://github.com/genomeOS/genomeOS/issues/34). Published
+surfaces and the HbS parity run use an inducing-point Gaussian process on H3 cells
+([#105](https://github.com/genomeOS/genomeOS/pull/105)) with a beta-binomial likelihood
+([#83](https://github.com/genomeOS/genomeOS/issues/83)). The Hilbert-space approximation (HSGP)
+that #34 chose remains available.
 
-- **Batch tier:** planned on [BigQuery](https://cloud.google.com/bigquery) with artifacts on
-  [GCS](https://cloud.google.com/storage)
-  ([#33](https://github.com/genomeOS/genomeOS/issues/33)). Until that lands, fits run as offline
+- **Batch tier:** planned on [BigQuery](https://cloud.google.com/bigquery)
+  ([#53](https://github.com/genomeOS/genomeOS/issues/53)), with artifact staging and
+  data-version pinning on [GCS](https://cloud.google.com/storage)
+  ([#33](https://github.com/genomeOS/genomeOS/issues/33)). Until those land, fits run as offline
   PyMC jobs on a workstation or a GPU pod, and the immutable artifacts are committed under
   `data/store/` ([`data-store.md`](data-store.md)).
 - **Read tier:** [Cloud Run](https://cloud.google.com/run) + [DuckDB](https://duckdb.org/) over
-  [Parquet](https://parquet.apache.org/), indexed by [H3](https://h3geo.org/).
+  [Parquet](https://parquet.apache.org/), indexed by [H3](https://h3geo.org/). A diagnostic read
+  path is deployed ([#147](https://github.com/genomeOS/genomeOS/pull/147)): it serves the MAP
+  HbS/G6PD surfaces from a read-only GCS bucket. The full read service
+  ([#49](https://github.com/genomeOS/genomeOS/issues/49)) and staging and pinning (#33) remain
+  open.
 - **Client:** a CesiumJS globe in the Astro site at [genome-os.org](https://genome-os.org). It
   replaced the original Next.js + deck.gl + MapLibre plan
-  ([Cesium explorer design](superpowers/specs/2026-09-06-cesium-globe-explorer-design.md)).
-  Until the read API is deployed, it reads a static, versioned export of those artifacts.
+  ([Cesium explorer design](superpowers/specs/2026-09-06-cesium-globe-explorer-design.md)). It
+  reads a static, versioned export of the artifacts and does not call the read path yet.
 
 **Boundary rules that make this maintainable:** P2 and P3 are pure offline functions,
 deterministic given `(config, data_version, seed)` — all science lives there, and both are unit
@@ -445,20 +453,26 @@ Remaining work and current status are tracked in the issue board.
     - Open: the curated variant set awaits clinical-genetics review
       ([#32](https://github.com/genomeOS/genomeOS/issues/32)), so its selectors return no rows yet.
 - **Surfaces and burden (P2/P3):**
-    - Built: the beta-binomial HSGP fitter, the data-support mask, the burden kernels and the
-      national rollups.
+    - Built: the beta-binomial GP fitter (inducing points on H3 cells in production), the
+      data-support mask, the burden kernels and the national rollups.
     - **Golden test 1 currently fails.** On the 2026-09-16 canonical run, 29.3% of countries fell
-      inside Piel's published interval for HbSS (target ≥80%), and 46.6% of intervals overlapped
-      (target ≥95%). See
+      inside Piel's published IQR for HbSS (target ≥80%), and 46.6% of intervals overlapped it
+      (target ≥95%). The run scores against Piel's IQR rather than a 95% interval, which is the
+      subject of [#92](https://github.com/genomeOS/genomeOS/issues/92). See
       [`research/hbs-piel-parity-2026-09-16.md`](research/hbs-piel-parity-2026-09-16.md) and
       [#45](https://github.com/genomeOS/genomeOS/issues/45).
     - Each remedy tried since, and why it was rejected, is recorded under
       [`docs/research/`](research/).
     - Golden tests 2 and 3 have not started.
 - **Read path and explorer (P4/P5):**
-    - Built: a fixture-backed read API with its diagnostic `/preview`, and the Cesium explorer at
-      [genome-os.org](https://genome-os.org) over a catalog of 30 maps.
-    - Still open in M3: burden layers, `/aggregate`, lasso selection and the GCS-backed service.
+    - Built: a diagnostic read path on Cloud Run
+      ([#147](https://github.com/genomeOS/genomeOS/pull/147)) that serves the MAP HbS/G6PD
+      surfaces from a read-only GCS bucket, with its `/preview`; and the Cesium explorer at
+      [genome-os.org](https://genome-os.org) over a catalog of 30 maps. The explorer reads a
+      static export and does not call the read path yet.
+    - Still open in M3: burden layers, `/aggregate`, lasso selection, the full read service
+      ([#49](https://github.com/genomeOS/genomeOS/issues/49)), and staging and data-version
+      pinning ([#33](https://github.com/genomeOS/genomeOS/issues/33)).
 - **Pan-UKB API:** running, with tests and a [Cloud Run](https://cloud.google.com/run)
   deployment manifest.
 - **Open questions with named next steps** (spec §14):
@@ -504,7 +518,7 @@ most useful:
 
 | Label | Meaning |
 |---|---|
-| `wants-expert-review` | An agent implements it; a domain expert reviewing afterwards materially lowers the risk. **This is the highest-leverage way for a specialist to contribute** — you do not have to write the code to make the difference. Currently on the surface-fitting model, its hyperpriors, the inference-runtime decision, the curated variant set, and the penetrance table. |
+| `wants-expert-review` | An agent implements it; a domain expert reviewing afterwards materially lowers the risk. **This is the highest-leverage way for a specialist to contribute** — you do not have to write the code to make the difference. Currently on the surface-fitting model, its hyperpriors, the §7 amendment (#85), the curated variant set, and the penetrance table. |
 | `needs-recruiting` | Would benefit from a dedicated collaborator, but does not gate the work. |
 | `needs-human-decision` | Requires a person to commit on the project's behalf — a judgement call, not a skills gap. |
 
@@ -516,7 +530,9 @@ Shortest paths to something load-bearing:
   [#36](https://github.com/genomeOS/genomeOS/issues/36) (hierarchical hyperpriors), and
   [#85](https://github.com/genomeOS/genomeOS/issues/85) (amending design §7 to the implemented
   engine, including the Matérn-3/2 versus 5/2 question). The engine decision itself is settled:
-  PyMC + HSGP ([#34](https://github.com/genomeOS/genomeOS/issues/34)).
+  PyMC rather than INLA ([#34](https://github.com/genomeOS/genomeOS/issues/34)), with an
+  inducing-point GP on H3 cells in production
+  ([#105](https://github.com/genomeOS/genomeOS/pull/105)).
 - **Clinical genetics** — [#32](https://github.com/genomeOS/genomeOS/issues/32) (which ClinVar
   P/LP variants have defensible penetrance) and
   [#42](https://github.com/genomeOS/genomeOS/issues/42) (the penetrance table). These gate P2
@@ -529,8 +545,12 @@ Shortest paths to something load-bearing:
   HGDP adapter ([#15](https://github.com/genomeOS/genomeOS/issues/15)) is the reference pattern
   to copy.
 - **Frontend / geospatial** — the P5 map UI
-  ([#12](https://github.com/genomeOS/genomeOS/issues/12)), starting with URL-encodable view state
-  ([#63](https://github.com/genomeOS/genomeOS/issues/63)). The Cesium explorer scaffold
+  ([#12](https://github.com/genomeOS/genomeOS/issues/12)): region selection
+  ([#62](https://github.com/genomeOS/genomeOS/issues/62)), the legend with version and assumption
+  flags ([#64](https://github.com/genomeOS/genomeOS/issues/64)), or the admin choropleth
+  ([#61](https://github.com/genomeOS/genomeOS/issues/61)). URL-encodable view state
+  ([#63](https://github.com/genomeOS/genomeOS/issues/63)) is implemented apart from drawn
+  geometry (`website/src/atlas/url-state.ts`). The Cesium explorer scaffold
   ([#55](https://github.com/genomeOS/genomeOS/issues/55)) and the H3 resolution ladder
   ([#27](https://github.com/genomeOS/genomeOS/issues/27)) are done; the explorer code lives in
   `website/src/atlas/`.
@@ -599,12 +619,15 @@ a single number but a distribution, from which "the estimate" and "how uncertain
 come. **Prior** — what the model assumes before seeing data; if a cell's answer is still mostly
 prior afterwards, we mark it `prior_dominated` rather than pretending it's a measurement.
 **GP / Gaussian process** — the model class used to estimate a smooth spatial surface with
-uncertainty. **HSGP / Hilbert-space Gaussian process** — the fast approximation we fit it with,
-in [PyMC](https://www.pymc.io/). **[INLA](https://www.r-inla.org/) /
+uncertainty. **Inducing-point GP** — the fast approximation that fits it in production, in
+[PyMC](https://www.pymc.io/): the field is represented by its values at a fixed set of points
+placed on H3 cells (150 by default in `scripts/build_surfaces.py`). **HSGP / Hilbert-space
+Gaussian process** — the alternative approximation #34 chose, still available.
+**[INLA](https://www.r-inla.org/) /
 [SPDE](https://rss.onlinelibrary.wiley.com/doi/10.1111/j.1467-9868.2011.00777.x)** — the
 approximation the published malaria-mapping work used, and the one the design first named;
-[#34](https://github.com/genomeOS/genomeOS/issues/34) records why we chose HSGP, and parity
-against published estimates, not shared lineage, is what makes the result defensible.
+[#34](https://github.com/genomeOS/genomeOS/issues/34) records why we chose PyMC instead, and
+parity against published estimates, not shared lineage, is what makes the result defensible.
 
 **[GWAS](https://www.ebi.ac.uk/gwas/docs/about)** — genome-wide association study: scanning the
 genome for statistical associations with

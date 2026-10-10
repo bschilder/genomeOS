@@ -29,6 +29,7 @@ Paste the result, not a tick. `passed` alone is not evidence; a count or the fai
 - [ ] `python scripts/freeze_contract.py --check`
 - [ ] `python scripts/check_module_size.py`
 - [ ] `python scripts/check_private_files.py`
+- [ ] `python scripts/check_commercial_use.py`
 - [ ] `python scripts/smoke.py`
 - [ ] `pytest` — full suite
 - [ ] Focused tests for the touched behaviour:

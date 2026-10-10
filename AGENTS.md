@@ -182,10 +182,13 @@ The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the 
 PyMC/PyTensor in a `surfaces` extra, and rasterio in a `geo` extra, so the API container carries
 none of them. Install everything with `.[dev,atlas,surfaces,geo,figures]`.
 
-**Inference engine:** PyMC with a Hilbert-space GP (HSGP), *not* R-INLA-SPDE, despite what
-design §7 names. The reasoning and the rejected alternatives are in #34; do not reintroduce an R
-toolchain without reopening that decision. Amending §7 itself, including the Matérn-3/2 versus 5/2
-kernel question, is #85 and wants expert review.
+**Inference engine:** PyMC (NumPyro NUTS), *not* R-INLA-SPDE, despite what design §7 names. The
+reasoning and the rejected alternatives are in #34; do not reintroduce an R toolchain without
+reopening that decision. Published surfaces and the HbS parity run use an inducing-point GP on H3
+cells (#105; `scripts/build_surfaces.py` sets `approximation="inducing"`). HSGP, the approximation
+#34 chose, remains available in `genomeos/surfaces/config.py`. The likelihood is beta-binomial by
+default (#83). Amending §7 itself, including the Matérn-3/2 versus 5/2 kernel question, is #85
+and wants expert review.
 
 ## Commands
 
@@ -213,6 +216,7 @@ never be presented as scientific results.
 Rebuild the Atlas stores from fixtures (the end-to-end check):
 
 ```bash
+rm -rf data/registry-fixture-v1 data/observations   # releases are immutable; see below
 python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv \
   --release-version 0.1.0 --out data/registry-fixture-v1
 python scripts/build_observations.py --registry data/registry-fixture-v1 \
@@ -226,7 +230,8 @@ and `observations v0.1.0: 11 rows, 2 variants`. Do not add the literature fixtur
 command: the promotable rows resolve through a literature alias (`Sami`) that `build_registry.py`
 cannot yet add, so `build_observations.py` correctly refuses them with `UnmappedPopulationError`.
 `tests/test_build_scripts.py` builds a registry that carries those aliases and covers literature
-promotion end to end.
+promotion end to end. `build_registry.py` refuses an existing `--out` by design, because registry
+releases are immutable, so the first line clears these local, gitignored outputs before a re-run.
 
 **If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
 diff.** That diff is the review surface for schema change; CI fails if it is stale.
@@ -245,7 +250,7 @@ Linux CI and on a pod:
 ```bash
 uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -r requirements.lock
-python -m pip install -e '.' --no-deps
+uv pip install -e . --no-deps    # a uv venv has no pip, so `python -m pip` fails here
 ```
 
 Regenerate it when a dependency changes, and commit the diff. **`--upgrade` is not optional**, and
@@ -353,9 +358,9 @@ everything that has to come out. Full rules in
   directions.
 - Every external resource in the publish allowlist carries a `commercial_use` block naming its
   `finding` and its `restricted_fields`. The exporter refuses a missing or self-contradictory one.
-- `KNOWN_NON_COMMERCIAL_FIELDS` in `scripts/export_atlas_web.py` is a tripwire: a field already
-  known to be restricted may ship **marked**, and may never ship **unmarked**. Never delete an entry
-  to make an export pass.
+- `KNOWN_NON_COMMERCIAL_FIELDS` in `genomeos/publication/commercial_use.py` (re-exported by
+  `scripts/export_atlas_web.py`) is a tripwire: a field already known to be restricted may ship
+  **marked**, and may never ship **unmarked**. Never delete an entry to make an export pass.
 - `not_checked` is publishable and stays honest. Refusing it would push a contributor to invent a
   licence finding, which the publication-evidence safeguards above forbid. The gate lists unchecked
   sources as unresolved instead.

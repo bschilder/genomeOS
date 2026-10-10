@@ -7,10 +7,13 @@
 **Amendments since approval.** The text below is kept as approved. These notes record where later
 decisions departed from it, so read each section together with the decision it names:
 
-- **Inference engine (§3, §5, §7, §10).** Fits use PyMC with a Hilbert-space GP (HSGP), not
-  INLA-SPDE ([#34](https://github.com/genomeOS/genomeOS/issues/34)). The implementation also uses
-  a Matérn-5/2 kernel where §7 names Matérn-3/2, and offers a beta-binomial likelihood alongside
-  the binomial. Amending §7 itself, including whether 5/2 is the right smoothness assumption, is
+- **Inference engine (§3, §5, §7, §10).** Fits use PyMC (NumPyro NUTS), not INLA-SPDE
+  ([#34](https://github.com/genomeOS/genomeOS/issues/34)). Published surfaces and the HbS parity
+  run use an inducing-point GP on H3 cells ([#105](https://github.com/genomeOS/genomeOS/pull/105));
+  HSGP, the approximation #34 chose, remains available. The implementation uses a Matérn-5/2
+  kernel where §7 names Matérn-3/2. It uses a beta-binomial likelihood by default where §7 names
+  a binomial ([#83](https://github.com/genomeOS/genomeOS/issues/83)); the binomial remains
+  selectable. Amending §7 itself, including whether 5/2 is the right smoothness assumption, is
   [#85](https://github.com/genomeOS/genomeOS/issues/85) and wants expert review.
 - **Renderer (§3, §5, §11).** The P5 client is a CesiumJS globe in the project's Astro site. It
   supersedes the Next.js + deck.gl + MapLibre choice

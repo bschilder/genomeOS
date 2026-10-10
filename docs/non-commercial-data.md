@@ -80,7 +80,9 @@ Two gates, so neither depends on convention:
   with no `commercial_use` block, a finding outside the vocabulary, a `restricted` finding that
   names no fields, a named field the payload does not actually contain, or a performed check
   missing its date, terms URL or record.
-- `KNOWN_NON_COMMERCIAL_FIELDS` in the same file is a **tripwire**. A field already known to be
+- `KNOWN_NON_COMMERCIAL_FIELDS`, defined in
+  [`genomeos/publication/commercial_use.py`](../genomeos/publication/commercial_use.py) and
+  re-exported by the exporter, is a **tripwire**. A field already known to be
   restricted cannot reach the published payload unless the declaration names it. This is what the
   earlier blanket refusal of `top_attributions` became: restricted data may ship marked, and may
   never ship unmarked.

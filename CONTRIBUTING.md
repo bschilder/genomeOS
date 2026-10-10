@@ -37,7 +37,14 @@ Status `Ready` means fully specified and unblocked. Take it without asking.
 
 ## Before you open a pull request
 
-Run every gate. The PR template lists them, and CI runs the same set.
+Run every gate below; the PR template lists them too. CI runs all of them, plus three checks
+that need its own environment:
+
+- that the coverage badge is current;
+- a container build with an HTTP smoke test;
+- for changes the `pages` workflow watches (`website/`, `genomeos/publication/`,
+  `scripts/encode_atlas_web.py`, `pyproject.toml`, `requirements.lock`), the website gates,
+  including a check that the committed Atlas catalog is exactly what the encoder writes.
 
 ```bash
 python -m pip install -e '.[dev,atlas,surfaces,geo,figures]'
@@ -45,6 +52,7 @@ ruff check .
 python scripts/freeze_contract.py --check
 python scripts/check_module_size.py
 python scripts/check_private_files.py
+python scripts/check_commercial_use.py
 python scripts/smoke.py
 pytest
 ```
