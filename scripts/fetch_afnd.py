@@ -54,7 +54,7 @@ PAGE_URL = BASE + "/pop6001c.asp?pop_name={name}"
 
 #: Identifies the fetcher to the server. A scraper that hides what it is gives an operator no way
 #: to contact anyone or to rate-limit it specifically, which is worse for them and for us.
-USER_AGENT = "genomeOS-registry/0.1 (+https://github.com/bschilder/genomeOS; research use)"
+USER_AGENT = "genomeOS-registry/0.1 (+https://github.com/genomeOS/genomeOS; research use)"
 
 #: AFND's own field labels on a population page, mapped to the adapter's column names.
 FIELDS = {

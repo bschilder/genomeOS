@@ -212,7 +212,7 @@ def entrypoint(args) -> str:
                 rm -rf /workspace/genomeOS
                 if git clone --depth 1 --filter=blob:none --sparse \
                         --branch {args.ref} \
-                        https://github.com/bschilder/genomeOS /workspace/genomeOS; then
+                        https://github.com/genomeOS/genomeOS /workspace/genomeOS; then
                     cd /workspace/genomeOS || return 1
                     git sparse-checkout set genomeos scripts reference contract tests data/raw || return 1
                     return 0
