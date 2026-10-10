@@ -40,20 +40,45 @@ const EU = [
 ];
 
 /**
- * Every `Europe/*` zone of a country outside the EEA, the UK and Switzerland, under each name a
- * browser may report. A zone the runtime knows must be listed either here or in
- * CONSENT_TIME_ZONES, so new tz data cannot slip through unclassified.
+ * Places where the GDPR (or a law modelled on it) applies that Google geolocates as countries of
+ * their own, so the EEA's 30 codes alone miss them: the EU's outermost regions (Guadeloupe,
+ * Martinique, French Guiana, Réunion, Mayotte, Saint-Martin), Åland, the Crown dependencies and
+ * Gibraltar.
+ */
+const SEPARATELY_GEOLOCATED = ['GP', 'MQ', 'GF', 'RE', 'YT', 'MF', 'AX'];
+const BRITISH_ISLES_GDPR_EQUIVALENT = ['JE', 'GG', 'IM', 'GI'];
+
+/**
+ * Their time zones, outside `Europe/*` for the outermost regions, so the Europe-wide
+ * classification below cannot catch one missing.
+ */
+const GDPR_ZONES_OUTSIDE_EUROPE = [
+  'America/Guadeloupe', // GP
+  'America/Martinique', // MQ
+  'America/Cayenne', // GF
+  'Indian/Reunion', // RE
+  'Indian/Mayotte', // YT
+  'America/Marigot', // MF
+];
+const GDPR_EQUIVALENT_EUROPE = [
+  'Europe/Mariehamn', // AX
+  'Europe/Jersey', // JE
+  'Europe/Guernsey', // GG
+  'Europe/Isle_of_Man', // IM
+  'Europe/Gibraltar', // GI
+];
+
+/**
+ * Every `Europe/*` zone of a country outside the EEA, the UK, Switzerland, the Crown dependencies
+ * and Gibraltar, under each name a browser may report. A zone the runtime knows must be listed
+ * either here or in CONSENT_TIME_ZONES, so new tz data cannot slip through unclassified.
  */
 const NON_CONSENT_EUROPE = [
   'Europe/Andorra',
   'Europe/Astrakhan', // RU
   'Europe/Belgrade', // RS
   'Europe/Chisinau', // MD
-  'Europe/Gibraltar',
-  'Europe/Guernsey',
-  'Europe/Isle_of_Man',
   'Europe/Istanbul', // TR
-  'Europe/Jersey',
   'Europe/Kaliningrad', // RU
   'Europe/Kiev', // UA
   'Europe/Kirov', // RU
@@ -86,7 +111,16 @@ function reportedName(timeZone: string): string {
 describe('consent regions', () => {
   it('denies by default in the EEA, the UK and Switzerland, each once', () => {
     expect([...CONSENT_COUNTRIES].sort()).toEqual(
-      [...EU, 'IS', 'LI', 'NO', 'GB', 'CH'].sort(),
+      [
+        ...EU,
+        'IS',
+        'LI',
+        'NO',
+        'GB',
+        'CH',
+        ...SEPARATELY_GEOLOCATED,
+        ...BRITISH_ISLES_GDPR_EQUIVALENT,
+      ].sort(),
     );
     expect(new Set(CONSENT_COUNTRIES).size).toBe(CONSENT_COUNTRIES.length);
     for (const code of CONSENT_COUNTRIES) expect(code).toMatch(/^[A-Z]{2}$/);
@@ -120,6 +154,15 @@ describe('consent time zones', () => {
       expect(isConsentTimeZone(zone), zone).toBe(true);
   });
 
+  it('is opt-in in the EU outermost regions, Åland, the Crown dependencies and Gibraltar', () => {
+    // A visitor in Réunion or Guadeloupe is in the EU: the browser asks before any cookie.
+    for (const zone of [
+      ...GDPR_ZONES_OUTSIDE_EUROPE,
+      ...GDPR_EQUIVALENT_EUROPE,
+    ])
+      expect(isConsentTimeZone(zone), zone).toBe(true);
+  });
+
   it('is opt-out outside them, non-EEA Europe included', () => {
     for (const zone of [
       ...NON_CONSENT_EUROPE,
@@ -141,7 +184,12 @@ describe('consent time zones', () => {
 
   it('lists only real zones, each once', () => {
     expect(new Set(CONSENT_TIME_ZONES).size).toBe(CONSENT_TIME_ZONES.length);
-    for (const zone of [...CONSENT_TIME_ZONES, ...NON_CONSENT_EUROPE])
+    for (const zone of [
+      ...CONSENT_TIME_ZONES,
+      ...NON_CONSENT_EUROPE,
+      ...GDPR_ZONES_OUTSIDE_EUROPE,
+      ...GDPR_EQUIVALENT_EUROPE,
+    ])
       expect(() => reportedName(zone), zone).not.toThrow();
   });
 

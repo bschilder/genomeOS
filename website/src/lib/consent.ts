@@ -5,7 +5,8 @@
  *   off, or their browser sends Global Privacy Control (which US state laws such as California's,
  *   Colorado's and Connecticut's require honouring as an opt-out).
  * - In those regions it is opt-in: Google's IP region default is denied, and a visitor in one of
- *   their time zones is asked once per visit with an Accept/Decline prompt.
+ *   their time zones is asked once per visit with an Accept/Decline prompt. Wherever analytics is
+ *   denied in the browser, the page does not load gtag.js at all (basic consent mode).
  * - An explicit choice made in the cookie control wins over both and is kept in `localStorage`,
  *   never in a cookie.
  *
@@ -139,7 +140,11 @@ export function browserTimeZone(): string | undefined {
   }
 }
 
-/** Tell gtag the visitor's choice. Ad signals stay denied whatever the choice. */
+/**
+ * Tell gtag the visitor's choice. On a page that has not loaded gtag.js because analytics was
+ * denied, a grant loads it (the head bootstrap, `ga.mjs`). Ad signals stay denied whatever the
+ * choice.
+ */
 export function applyConsentChoice(choice: ConsentChoice): void {
   try {
     pageGtag()?.('consent', 'update', { analytics_storage: choice });

@@ -56,6 +56,10 @@ describe('a build without a Measurement ID', () => {
 
   it('still publishes the privacy page, linked from the site and docs footers', () => {
     expect(read('privacy')).toContain('<h1>');
+    // It describes genome-os.org's analytics, so it first says this copy has none.
+    expect(read('privacy')).toMatch(
+      /<article data-no-analytics[^>]*>[\s\S]*?loads no analytics and sets no cookies/,
+    );
     for (const route of ['', 'contribute', 'docs', 'docs/deployment'])
       expect(read(route), route).toMatch(
         /<nav[^>]*aria-label="Site policies"[^>]*>\s*<a[^>]*href="\/privacy\/"/,

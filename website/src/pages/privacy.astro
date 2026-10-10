@@ -2,7 +2,8 @@
 /**
  * The privacy page (#422): what Google Analytics 4 collects on genome-os.org, which cookies it
  * sets and when (opt-in in the EEA, the UK and Switzerland; opt-out elsewhere, with Global Privacy
- * Control honoured), and how to change the choice.
+ * Control honoured), how long they and the data last, and how to change the choice. Every build
+ * publishes it; a build without analytics (the /genomeOS/ fallback, local dev) says so first.
  */
 import BrandName from '../components/BrandName.astro';
 import CookieSettings from '../components/CookieSettings.astro';
@@ -25,21 +26,37 @@ const analytics = gaMeasurementId() !== null;
 
   <section class="contribution-detail" aria-label="How analytics works">
     <div class="section-shell contribution-detail__grid">
+      {
+        !analytics && (
+          <article data-no-analytics>
+            <h2>This copy of the site</h2>
+            <p>
+              This copy of <BrandName /> loads no analytics and sets no cookies.
+              The rest of this page describes genome-os.org, which does.
+            </p>
+          </article>
+        )
+      }
       <article>
         <h2>Cookies and your choice</h2>
         <p>
           Google Analytics 4 sets two first-party cookies, <code>_ga</code> and <code
             >_ga_&lt;container&gt;</code
-          >, which tell one visit from the next. Whether they are set depends on
-          where you are:
+          >, which tell one visit from the next. Each lasts up to two years
+          unless you turn analytics off. Whether they are set depends on where
+          you are:
         </p>
         <ul>
           <li>
             <strong>European Economic Area, UK and Switzerland: opt-in.</strong>
-            The cookies are set only after you choose <strong>Accept</strong>.
-            Until then Google receives cookieless pings that it uses only to
-            estimate totals. Visitors in these time zones see a short Accept or
-            Decline prompt on their first visit.
+            This includes the EU’s overseas regions, Åland, the Channel Islands, the
+            Isle of Man and Gibraltar. Until you choose <strong>Accept</strong>,
+            the site doesn’t load Google Analytics, so nothing is sent to
+            Google. Visitors in these time zones see a short Accept or Decline
+            prompt on their first visit. If Google places you in these regions
+            but your device is set to a time zone elsewhere, Google Analytics
+            loads without setting cookies and sends cookieless pings, which
+            Google uses only to estimate totals, until you choose.
           </li>
           <li>
             <strong>Everywhere else: opt-out.</strong> The cookies are set by default
@@ -52,7 +69,8 @@ const analytics = gaMeasurementId() !== null;
         </ul>
         <p>
           Your choice is kept in your browser’s local storage, not in a cookie,
-          and applies on every page until you change it. Turning analytics off
+          and applies on every page until you change it. While analytics is off,
+          the pages you open don’t load Google Analytics at all. Turning it off
           also removes the analytics cookies.
         </p>
       </article>
@@ -82,6 +100,11 @@ const analytics = gaMeasurementId() !== null;
           They never include the places you look at or click, or anything else
           about you.
         </p>
+        <p>
+          Google Analytics keeps this visit-level data for two months, then
+          deletes it. Only the aggregate reports, such as page counts, are kept
+          after that.
+        </p>
       </article>
       <article>
         <h2>What is not</h2>
@@ -102,12 +125,14 @@ const analytics = gaMeasurementId() !== null;
       <article id="your-choice">
         <h2>Changing your choice</h2>
         <p>
-          Every page has a small cookie icon in a bottom corner (in the Atlas,
-          it sits in the credits under the map). It opens your cookie settings,
-          with a switch for analytics cookies that you can change at any time.
-          The <strong>Cookie settings</strong> link at the foot of each page opens
-          the same panel. Blocking Google Analytics in your browser or content blocker
-          also stops it; the site works the same without it.
+          Every page has a small cookie icon in a bottom corner. In the Atlas it
+          sits under the map controls on a wide screen, and at the end of the
+          data credits on a phone. It opens your cookie settings, with a switch
+          for analytics cookies that you can change at any time. The <strong
+            >Cookie settings</strong
+          > link at the foot of the site and documentation pages opens the same panel.
+          Blocking Google Analytics in your browser or content blocker also stops
+          it; the site works the same without it.
         </p>
         {
           analytics && (

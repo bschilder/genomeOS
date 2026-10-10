@@ -1,7 +1,10 @@
 // @ts-check
 /**
  * Where genome-os.org asks before it sets analytics cookies (#422; consent model refined by the
- * owner on 2026-10-10): opt-in in the EEA, the UK and Switzerland, opt-out everywhere else.
+ * owner on 2026-10-10): opt-in in the EEA, the UK and Switzerland, opt-out everywhere else. "Just
+ * to be safe", the opt-in places also include the parts of them that Google geolocates as
+ * countries of their own (the EU's outermost regions and Åland) and the Crown dependencies and
+ * Gibraltar, whose data protection laws follow the GDPR.
  *
  * Two lists describe the same places. Google applies `CONSENT_COUNTRIES` from the visitor's IP:
  * there every consent signal defaults to denied, so no analytics cookie is set before an Accept.
@@ -25,7 +28,8 @@ export const PROMPT_DISMISSED_KEY = 'genomeos-analytics-prompt-dismissed';
 
 /**
  * ISO 3166-1 alpha-2 codes of the EEA (the 27 EU states with Iceland, Liechtenstein and Norway),
- * the UK and Switzerland.
+ * the UK and Switzerland; then the EU territory that has a code of its own, so Google's IP lookup
+ * reports it apart from its state; then the Crown dependencies and Gibraltar.
  */
 export const CONSENT_COUNTRIES = /* @__PURE__ */ Object.freeze([
   // European Union
@@ -63,15 +67,29 @@ export const CONSENT_COUNTRIES = /* @__PURE__ */ Object.freeze([
   // United Kingdom and Switzerland
   'GB',
   'CH',
+  // EU territory with a country code of its own: France's outermost regions (Guadeloupe,
+  // Martinique, French Guiana, Réunion, Mayotte, Saint-Martin) and Finland's Åland
+  'GP',
+  'MQ',
+  'GF',
+  'RE',
+  'YT',
+  'MF',
+  'AX',
+  // GDPR-equivalent law: Jersey, Guernsey, the Isle of Man and Gibraltar
+  'JE',
+  'GG',
+  'IM',
+  'GI',
 ]);
 
 /**
- * The IANA time zones of `CONSENT_COUNTRIES`. Browsers report a zone under its ICU name, which is
- * sometimes an older spelling (`Atlantic/Faeroe`) or a link (`Europe/Belfast` is London), so a
- * zone's other names are listed beside it. Zones of non-EEA Europe are left out on purpose:
- * Russia, Belarus, Ukraine, Moldova, Turkey, the western Balkans outside the EU, Andorra, Monaco,
- * San Marino, the Vatican, Gibraltar and the Crown dependencies (their IP region default, where
- * Google has one, still applies).
+ * The IANA time zones of `CONSENT_COUNTRIES`, the EU's outermost regions outside `Europe/*`
+ * included. Browsers report a zone under its ICU name, which is sometimes an older spelling
+ * (`Atlantic/Faeroe`) or a link (`Europe/Belfast` is London), so a zone's other names are listed
+ * beside it. Zones of the rest of Europe are left out on purpose: Russia, Belarus, Ukraine,
+ * Moldova, Turkey, the western Balkans outside the EU, Andorra, Monaco, San Marino and the
+ * Vatican.
  */
 export const CONSENT_TIME_ZONES = /* @__PURE__ */ Object.freeze([
   'Europe/Vienna', // AT
@@ -91,8 +109,14 @@ export const CONSENT_TIME_ZONES = /* @__PURE__ */ Object.freeze([
   'Africa/Ceuta', // ES
   'Atlantic/Canary', // ES
   'Europe/Helsinki', // FI
-  'Europe/Mariehamn', // FI (Åland)
+  'Europe/Mariehamn', // FI, Åland (AX)
   'Europe/Paris', // FR
+  'America/Guadeloupe', // FR outermost region (GP)
+  'America/Martinique', // FR outermost region (MQ)
+  'America/Cayenne', // FR outermost region (GF)
+  'Indian/Reunion', // FR outermost region (RE)
+  'Indian/Mayotte', // FR outermost region (YT)
+  'America/Marigot', // FR outermost region, Saint-Martin (MF)
   'Europe/Athens', // GR
   'Europe/Zagreb', // HR
   'Europe/Budapest', // HU
@@ -119,6 +143,10 @@ export const CONSENT_TIME_ZONES = /* @__PURE__ */ Object.freeze([
   'Europe/London', // GB
   'Europe/Belfast', // GB, a link to Europe/London
   'Europe/Zurich', // CH
+  'Europe/Jersey', // JE
+  'Europe/Guernsey', // GG
+  'Europe/Isle_of_Man', // IM
+  'Europe/Gibraltar', // GI
 ]);
 
 // Pure annotations let a build without analytics drop these lists with the unused control code.

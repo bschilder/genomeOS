@@ -6,6 +6,10 @@
  * On /app/ the Atlas docks its own copy of the icon (AtlasCookieSettings.tsx), so the corner one
  * steps aside there and nothing covers the Atlas controls, legend, credits or phone sheets.
  *
+ * On /app/polygon/ (`corner="map"`) the bottom-right corner belongs to Google Maps, whose camera
+ * control, Street View Pegman and Terms strip sit there, so the icon takes the bottom-left corner,
+ * above the Google logo.
+ *
  * Renders nothing unless the build loads analytics. Place it at the end of <body>. Self-contained
  * global styles under `.cookie-control`: the site layout, the Starlight docs and /app/polygon/
  * each load different stylesheets.
@@ -14,12 +18,18 @@ import { gaMeasurementId } from '../lib/ga.mjs';
 import { COOKIE_GLYPH_PATHS } from '../lib/cookie-glyph';
 import { sitePath } from '../lib/paths';
 
+interface Props {
+  /** `map`: bottom-left, above a full-page Google Map's logo, clear of its controls. */
+  corner?: 'page' | 'map';
+}
+
+const { corner = 'page' } = Astro.props;
 const enabled = gaMeasurementId() !== null;
 ---
 
 {
   enabled && (
-    <div class="cookie-control" data-cookie-control>
+    <div class="cookie-control" data-cookie-control data-cookie-corner={corner}>
       <button
         type="button"
         class="cookie-control__toggle"
@@ -140,6 +150,14 @@ const enabled = gaMeasurementId() !== null;
     color: rgb(220 232 246 / 62%);
     cursor: pointer;
     backdrop-filter: blur(10px);
+  }
+
+  /* Google Maps keeps its camera control, Pegman and Terms strip bottom-right; its logo (26 px
+     tall) is the only control bottom-left. */
+  .cookie-control[data-cookie-corner='map'] .cookie-control__toggle {
+    right: auto;
+    bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 26px);
+    left: max(0.75rem, env(safe-area-inset-left));
   }
 
   .cookie-control__toggle:hover,

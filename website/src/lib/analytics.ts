@@ -5,7 +5,7 @@
  *
  * Only a build with PUBLIC_GA_MEASUREMENT_ID loads gtag (`ga.mjs`). In every other build the
  * check below is a constant, so the bundler drops the sending code; on a page without gtag the
- * call does nothing. It never throws.
+ * call does nothing, and while analytics is denied the head's gtag drops it. It never throws.
  */
 
 import { pageGtag } from './gtag';
