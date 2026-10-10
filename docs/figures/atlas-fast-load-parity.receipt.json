@@ -2,13 +2,13 @@
   "generated_by": "website/scripts/capture-atlas-fast-load.mjs",
   "spec": "docs/superpowers/specs/2026-10-07-atlas-mobile-fast-load-gcs-design.md §B.1",
   "before": {
-    "baseUrl": "http://127.0.0.1:4331",
-    "commit": "d09390b315485e0c40634ad9caa46839ab952af0",
+    "baseUrl": "http://127.0.0.1:4383",
+    "commit": "a6188a212d7bd5b7fd856a55d5894cf90daf921e",
     "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)"
   },
   "after": {
-    "baseUrl": "http://127.0.0.1:4323",
-    "commit": "336629cd93cd78b8af56bf7b1444447a4ac8bb77",
+    "baseUrl": "http://127.0.0.1:4384",
+    "commit": "1bbeabdf43966e92dfce3d82b367713b8ee3010b",
     "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)"
   },
   "viewport": {
@@ -87,7 +87,7 @@
       "entity": "g6pd-deficiency",
       "geometry": "honmoon",
       "pixels": 1296000,
-      "fractionAny": 0.00714429012345679,
+      "fractionAny": 0.007145061728395062,
       "fractionOverTolerance": 0.0004699074074074074,
       "fractionOver16": 0.00009182098765432098,
       "pass": true
@@ -164,9 +164,9 @@
         "entity": "g6pd-deficiency",
         "geometry": "honmoon",
         "pixels": 1296000,
-        "fractionAny": 0.007204475308641975,
-        "fractionOverTolerance": 0.0009205246913580247,
-        "fractionOver16": 0.00016589506172839507,
+        "fractionAny": 0.007195216049382716,
+        "fractionOverTolerance": 0.0009166666666666666,
+        "fractionOver16": 0.00016512345679012345,
         "pass": true
       }
     ]
