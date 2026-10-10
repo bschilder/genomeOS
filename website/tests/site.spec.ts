@@ -1266,6 +1266,37 @@ test('the Menu panel scrolls inside short viewports and closes on Escape or when
   ).toHaveCount(1);
 });
 
+test(
+  'on the Atlas, Escape closes an open Menu first, then the explorer layer under it',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    // 1100 px: the Menu stands in for the desktop nav, and the legend
+    // popover stays open on a click outside it (it closes so only on phones).
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    const legendInfo = page.locator('details.atlas-legend__info');
+    const legendSummary = legendInfo.locator('summary');
+
+    await legendSummary.click();
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await summary.click();
+    await expect(menu).toHaveAttribute('open', '');
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(legendInfo).toHaveAttribute('open', '');
+    await expect(summary).toBeFocused();
+    // Closed, the Menu leaves Escape to the explorer's own stack.
+    await page.keyboard.press('Escape');
+    await expect(legendInfo).not.toHaveAttribute('open');
+  },
+);
+
 test('at large text sizes Launch Atlas moves into the Menu, so the home logo keeps its size', async ({
   context,
   page,
