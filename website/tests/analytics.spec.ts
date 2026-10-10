@@ -1,7 +1,7 @@
 /**
- * Google Analytics 4 and the cookie control (#422; consent model refined by the owner on
- * 2026-10-10): opt-out by default, Global Privacy Control honoured, opt-in in EEA, UK and Swiss
- * time zones, and a small cookie icon on every page.
+ * Google Analytics 4, the cookie control and the Atlas events (#422; consent model refined by the
+ * owner on 2026-10-10): opt-out by default, Global Privacy Control honoured, opt-in in EEA, UK and
+ * Swiss time zones, and a small cookie icon on every page.
  *
  * `npm run test:e2e` builds with the placeholder Measurement ID G-TEST123, and the Atlas browser
  * fixture answers gtag.js with an empty stub, so every gtag call stays in the page's
@@ -70,6 +70,12 @@ async function updatesBeforeConfig(page: Page): Promise<boolean> {
     )
     .filter((index) => index >= 0);
   return config >= 0 && updates.every((index) => index < config);
+}
+
+async function events(page: Page, name: string): Promise<unknown[]> {
+  return (await gtagCalls(page))
+    .filter(([command, event]) => command === 'event' && event === name)
+    .map((call) => call[2]);
 }
 
 async function storedChoice(page: Page): Promise<string | null> {
@@ -769,5 +775,142 @@ test.describe('privacy page', () => {
     await waitForCookieControl(page);
     await main.getByRole('button', { name: 'Cookie settings' }).click();
     await expect(panel(page)).toBeVisible();
+  });
+});
+
+test.describe('Atlas events', { tag: '@desktop-chromium' }, () => {
+  test.use({ timezoneId: NEW_YORK });
+
+  test('dataset opens and view switches each fire once, with public parameters only', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/app/');
+    await waitForAtlasReady(page);
+    const initial = await page
+      .locator('[data-atlas-active]')
+      .getAttribute('data-atlas-active');
+    expect(initial).toBeTruthy();
+    await expect
+      .poll(() => events(page, 'atlas_dataset_open'))
+      .toEqual([{ dataset_id: initial }]);
+    expect(await events(page, 'atlas_view_change')).toEqual([]);
+
+    const next =
+      initial === 'g6pd-deficiency' ? 'hbs-rs334' : 'g6pd-deficiency';
+    await page
+      .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+      .click();
+    await page.locator(`[role="option"][data-map-id="${next}"]`).click();
+    await expect(page.locator(`[data-atlas-active="${next}"]`)).toBeVisible({
+      timeout: 45_000,
+    });
+    await waitForAtlasReady(page);
+    expect(await events(page, 'atlas_dataset_open')).toEqual([
+      { dataset_id: initial },
+      { dataset_id: next },
+    ]);
+
+    await page.locator('summary').filter({ hasText: /^Map$/ }).click();
+    await page
+      .locator('summary')
+      .filter({ hasText: /^Inferred surface$/ })
+      .click();
+    for (const view of ['Map', 'Perspective', 'Globe']) {
+      const control = page.getByRole('radio', { name: view });
+      await control.check();
+      await expect(control).toBeChecked();
+    }
+    expect(await events(page, 'atlas_view_change')).toEqual([
+      { view: 'map' },
+      { view: 'perspective' },
+      { view: 'globe' },
+    ]);
+    expect(await events(page, 'atlas_dataset_open')).toHaveLength(2);
+  });
+
+  test('each inspector open fires once, by kind', async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const query = new URLSearchParams({
+      heading: '0',
+      height: '1000000',
+      lat: '40.4407',
+      lon: '-3.7201',
+      pitch: '-90',
+    });
+    await page.goto(`/app/?${query}`);
+    await waitForAtlasReady(page);
+    await expect(page.locator('[data-atlas-values-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const canvas = page.locator('.atlas-scene canvas').first();
+    const clickNearCenter = async (inspector: Locator) => {
+      const box = await canvas.boundingBox();
+      expect(box).not.toBeNull();
+      for (const [x, y] of [
+        [0, 0],
+        [-18, 0],
+        [18, 0],
+        [0, -18],
+        [0, 18],
+        [-18, -18],
+        [18, -18],
+        [-18, 18],
+        [18, 18],
+      ]) {
+        await page.mouse.click(
+          box!.x + box!.width / 2 + x!,
+          box!.y + box!.height / 2 + y!,
+        );
+        if (await inspector.isVisible()) return;
+      }
+    };
+
+    await page
+      .getByRole('checkbox', { name: 'Measured points', exact: true })
+      .uncheck();
+    await page
+      .getByRole('checkbox', { name: 'Observation radii', exact: true })
+      .uncheck();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('layers'))
+      .not.toContain('observations');
+    const surface = page.getByRole('complementary', {
+      name: 'Selected map cell',
+    });
+    await clickNearCenter(surface);
+    await expect(surface).toBeVisible();
+    expect(await events(page, 'atlas_inspector_open')).toEqual([
+      { inspector: 'surface' },
+    ]);
+    await page.keyboard.press('Escape');
+    await expect(surface).toHaveCount(0);
+
+    await page
+      .getByRole('checkbox', { name: 'Measured points', exact: true })
+      .check();
+    await page
+      .getByRole('checkbox', { name: 'Observation radii', exact: true })
+      .check();
+    await page
+      .getByRole('checkbox', { name: 'Inferred surface', exact: true })
+      .uncheck();
+    await expect(page).toHaveURL(/layers=[^&]*observations/);
+    await page.waitForTimeout(650);
+    const observation = page.getByRole('complementary', {
+      name: 'Selected observation',
+    });
+    await clickNearCenter(observation);
+    await expect(observation).toBeVisible();
+    expect(await events(page, 'atlas_inspector_open')).toEqual([
+      { inspector: 'surface' },
+      { inspector: 'observation' },
+    ]);
+    // Nothing about the visitor or the place: only the three public events and their one parameter.
+    for (const [command, , params] of await gtagCalls(page))
+      if (command === 'event')
+        expect(Object.keys(params as object)).toHaveLength(1);
   });
 });
