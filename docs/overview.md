@@ -443,7 +443,7 @@ that no part of this project requires you to already be an expert in the others.
 spec](superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md) → the [prior-art review
 (#4)](https://github.com/bschilder/genomeOS/discussions/4) → the plan for your sub-project.
 
-**Find work** on the [project board](https://github.com/users/bschilder/projects/8). Conventions
+**Find work** on the [project board](https://github.com/orgs/genomeOS/projects/1). Conventions
 live in [`board-conventions.md`](board-conventions.md); the short version:
 
 - Every issue carries a `type:*`, a `P*:` sub-project, a `skill:*`, and a `priority:*` label.

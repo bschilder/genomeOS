@@ -1,6 +1,6 @@
 # Keep the project board in sync with issue state.
 #
-# Two things GitHub's built-in project workflows cannot do for a user-owned project, both of
+# Two things GitHub's built-in project workflows cannot do, both of
 # which are UI-only to configure and therefore easy to lose:
 #   1. "Item closed" sets a single Status value, so it cannot distinguish an issue closed as
 #      completed from one closed as not planned.

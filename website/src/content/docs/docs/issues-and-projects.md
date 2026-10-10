@@ -6,7 +6,7 @@ sidebar:
 ---
 
 GitHub Issues record both work and decisions. The
-<a href="https://github.com/users/bschilder/projects/8" target="_blank" rel="noopener noreferrer">project board</a> shows how that work moves.
+<a href="https://github.com/orgs/genomeOS/projects/1" target="_blank" rel="noopener noreferrer">project board</a> shows how that work moves.
 
 ## Before starting
 

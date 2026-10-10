@@ -48,7 +48,7 @@ describe('homepage contract', () => {
       'https://github.com/genomeOS/genomeOS/discussions/76',
     );
     expect(html).toContain('https://github.com/genomeOS/genomeOS/issues');
-    expect(html).toContain('https://github.com/users/bschilder/projects/8');
+    expect(html).toContain('https://github.com/orgs/genomeOS/projects/1');
     expect(
       html.match(/class="[^"]*github-cta/g)?.length ?? 0,
     ).toBeGreaterThanOrEqual(6);

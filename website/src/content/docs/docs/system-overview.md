@@ -39,9 +39,10 @@ number.
 ## Data service and interactive map (internal labels: P4 and P5)
 
 The data service reads finished, versioned result files; it never fits a model while someone is
-using the website. The interactive map requests those results and shows measured evidence, modeled
-patterns, uncertainty, insufficient-evidence areas, and disease-burden estimates as clearly separate
-layers. Every shareable view identifies the model and data versions behind it.
+using the website. Today the interactive map reads a static, versioned export of those files
+rather than calling the service. It shows measured evidence, modeled patterns, uncertainty and
+insufficient-evidence areas as clearly separate layers; disease-burden estimates will be added as a
+further layer. Every shareable view identifies the model and data versions behind it.
 
 See the <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific and engineering objectives</a>
 for acceptance evidence at each boundary.
