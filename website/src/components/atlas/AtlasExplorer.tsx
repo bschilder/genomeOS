@@ -72,6 +72,15 @@ interface AtlasExplorerProps {
 // Island module evaluation (before React mounts) starts the data worker and the Cesium chunk.
 bootAtlas();
 
+/**
+ * A restyle before anything is displayed rebuilds the pending cold request, and the pipeline's
+ * `setArtifact` for that request settles with the rebuild (ScientificLayers.setArtifact), so the
+ * pipeline reports its outcome; this copy is only marked handled.
+ */
+function restyleColdLoad(restyle: Promise<void> | undefined): void {
+  restyle?.catch(() => undefined);
+}
+
 export default function AtlasExplorer({
   artifactDataBase,
   cesiumToken = '',
@@ -348,7 +357,7 @@ export default function AtlasExplorer({
   useEffect(() => {
     if (!state) return;
     if (!sceneHasArtifact()) {
-      void scene.current?.setMetric(state.metric);
+      restyleColdLoad(scene.current?.setMetric(state.metric));
       return;
     }
     return runSceneActivity(
@@ -374,7 +383,7 @@ export default function AtlasExplorer({
         progress,
       );
     if (!sceneHasArtifact()) {
-      void (scene.current && apply(scene.current));
+      restyleColdLoad(scene.current ? apply(scene.current) : undefined);
       return;
     }
     return runSceneActivity(
@@ -396,7 +405,7 @@ export default function AtlasExplorer({
     if (!state) return;
     const style = observationStyleFor(state);
     if (!sceneHasArtifact()) {
-      void scene.current?.setObservationStyle(style);
+      restyleColdLoad(scene.current?.setObservationStyle(style));
       return;
     }
     return runSceneActivity(

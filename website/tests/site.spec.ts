@@ -2160,6 +2160,65 @@ test('a corrupted render object shows Retry data and renders nothing', async ({
   expect(pageErrors).toEqual([]);
 });
 
+test('a metric change during a cold load never marks a failing map ready', async ({
+  page,
+  isMobile,
+}) => {
+  // The phone keeps the metric control in a collapsed sheet; the scene path is the same.
+  test.skip(isMobile, 'desktop exposes the metric radios without a sheet');
+  test.setTimeout(90_000);
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  // Registered first, so it answers after the hold releases: a render tier that fails validation.
+  const corruption = await corruptArtifactTier(page, 'hbs-rs334', 'render');
+  const render = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'render',
+    Number.POSITIVE_INFINITY,
+  );
+  const observations = await delayArtifactTier(
+    page,
+    'hbs-rs334',
+    'observations',
+    Number.POSITIVE_INFINITY,
+  );
+  await page.goto('/app/');
+  const explorer = page.locator('.atlas-explorer');
+  await expect(explorer.locator('.atlas-scene canvas')).toBeVisible({
+    timeout: 45_000,
+  });
+  await expect.poll(() => render.hits(), { timeout: 30_000 }).toBe(1);
+  await expect.poll(() => observations.hits(), { timeout: 30_000 }).toBe(1);
+  // The scene receives the pending request a few frames after it starts.
+  await page.waitForTimeout(2_000);
+  // Nothing is displayed, so the scene rebuilds the pending request with the new metric. The
+  // first request is still waiting on its observations when the render tier fails: once they
+  // arrive it finds itself superseded, and only the rebuild sees the failure.
+  await page.getByRole('radio', { name: 'Uncertainty' }).check();
+  render.release();
+  await page.waitForTimeout(1_000);
+  observations.release();
+
+  const failure = page.locator('.atlas-error');
+  await expect(failure).toContainText('That map could not be displayed.', {
+    timeout: 45_000,
+  });
+  const retry = failure.getByRole('button', { name: 'Retry data' });
+  await expect(retry).toBeVisible();
+  await page.waitForTimeout(1_000);
+  expect(await explorer.getAttribute('data-atlas-ready')).toBe('false');
+  expect(corruption.hits()).toBeGreaterThanOrEqual(1);
+
+  await corruption.restore();
+  await retry.click();
+  await expect(explorer).toHaveAttribute('data-atlas-ready', 'true', {
+    timeout: 45_000,
+  });
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+  expect(pageErrors).toEqual([]);
+});
+
 test('a corrupted detail object removes the map and offers Retry data', async ({
   page,
 }) => {

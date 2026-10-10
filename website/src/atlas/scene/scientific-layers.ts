@@ -208,6 +208,12 @@ export class ScientificLayers {
    * fails it falls back to the displayed artifact.
    */
   #current: Omit<ArtifactLoad, 'lookAt'> | null = null;
+  /**
+   * The newest `setArtifact` call's outcome. A call that a later call for the same artifact
+   * supersedes (a restyle's `rebuild()` replays the pending request) settles with that later
+   * call, so its caller never sees success while the replacement alone carries the outcome.
+   */
+  #newest: { artifactKey: string; outcome: Promise<void> } | null = null;
   #sequence = 0;
   #build: AbortController | null = null;
   #edgeBuild: AbortController | null = null;
@@ -268,10 +274,36 @@ export class ScientificLayers {
       : null;
   }
 
-  async setArtifact(
+  /**
+   * Shows `load`. A call superseded by a call for another artifact resolves; one superseded by a
+   * call for the same artifact (a rebuild) settles with the newest such call.
+   */
+  setArtifact(
     load: ArtifactLoad,
     progress?: SceneProgressListener,
   ): Promise<void> {
+    const outcome: Promise<void> = this.#show(load, progress).then(
+      (superseded) => {
+        const newest = this.#newest;
+        if (
+          superseded &&
+          !this.#destroyed &&
+          newest &&
+          newest.outcome !== outcome &&
+          newest.artifactKey === load.artifactKey
+        )
+          return newest.outcome;
+      },
+    );
+    this.#newest = { artifactKey: load.artifactKey, outcome };
+    return outcome;
+  }
+
+  /** Resolves true when a newer call superseded this one, false once it is shown. */
+  async #show(
+    load: ArtifactLoad,
+    progress?: SceneProgressListener,
+  ): Promise<boolean> {
     const sequence = ++this.#sequence;
     this.#build?.abort();
     const abort = new AbortController();
@@ -375,13 +407,14 @@ export class ScientificLayers {
       });
       // A request made during the swap animation began a new epoch; this `ready` is not its own.
       if (sequence === this.#sequence) this.#options.marks.queue('ready');
+      return false;
     } catch (error) {
       this.#discard(epoch, partial);
       if (
         error instanceof SupersededBuild ||
         (sequence !== this.#sequence && isAbortError(error))
       )
-        return;
+        return true;
       // A rebuild must not replay a request that failed; it restyles what is displayed.
       if (sequence === this.#sequence) this.#current = this.#displayedLoad();
       throw error;

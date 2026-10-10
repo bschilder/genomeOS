@@ -635,6 +635,63 @@ describe('atomic replacement', () => {
     expect(ringColor.alpha).toBeCloseTo(0.9 * 0.25, 6);
   });
 
+  it('settles a cold request that a restyle of the same artifact superseded with the restyle’s failure', async () => {
+    // AtlasExplorer restyles a cold load with `void scene.setMetric(…)`, whose rebuild replays the
+    // pipeline's pending request. The pipeline awaits the original call: it must not resolve (and
+    // mark the map ready) while the rebuild alone carries the outcome (final review correctness-1).
+    const h = harness();
+    const observations = deferred<ObservationArtifact>();
+    const surface = deferred<SurfaceArtifact>();
+    const original = h.layers.setArtifact({
+      artifactId: 'hbs-rs334',
+      artifactKey: keyOf('hbs-rs334'),
+      observations: observations.promise,
+      surface: surface.promise,
+    });
+    await flushTasks();
+    h.style.metric = 'post_sd';
+    const rebuilt = h.layers.rebuild();
+    const outcomeOf = (promise: Promise<void>) =>
+      promise.then(
+        () => 'resolved',
+        (error: Error) => `rejected: ${error.message}`,
+      );
+    const originalOutcome = outcomeOf(original);
+    const rebuiltOutcome = outcomeOf(rebuilt);
+    surface.reject(new Error('Atlas request failed with HTTP 503: render'));
+    observations.resolve(observationsFor());
+    await h.pump();
+    const failure = 'rejected: Atlas request failed with HTTP 503: render';
+    expect(await rebuiltOutcome).toBe(failure);
+    expect(await originalOutcome).toBe(failure);
+    expect(h.commits).toEqual([]);
+    expect(h.layers.displayedLayer()).toBeNull();
+  });
+
+  it('settles a cold request that a restyle of the same artifact superseded only when the restyle commits', async () => {
+    const h = harness();
+    const surface = deferred<SurfaceArtifact>();
+    const original = h.layers.setArtifact(h.load('hbs-rs334', surface.promise));
+    let commitsWhenSettled: number | null = null;
+    void original.then(() => {
+      commitsWhenSettled = h.commits.length;
+    });
+    await flushTasks();
+    h.style.metric = 'post_sd';
+    const rebuilt = h.layers.rebuild();
+    await h.pump(4);
+    expect(commitsWhenSettled).toBeNull();
+
+    surface.resolve(surfaceFor('hbs-rs334'));
+    await h.pump();
+    await rebuilt;
+    await original;
+    // Not when it noticed it was superseded (the surface arrived), but when the rebuild committed.
+    expect(commitsWhenSettled).toBe(1);
+    expect(h.commits).toEqual([keyOf('hbs-rs334')]);
+    expect(h.layers.displayedLayer()?.metric).toBe('post_sd');
+  });
+
   it('commits only the latest request when one is superseded', async () => {
     const h = harness();
     const slow = deferred<SurfaceArtifact>();
