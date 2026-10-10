@@ -89,39 +89,43 @@ const logo = isAtlasPage
       }
       {
         !isAtlasPage && (
-          <a
-            class="launch-atlas-cta"
-            href={sitePath('/app/')}
-            aria-describedby="launch-atlas-caption"
-          >
-            {/* Aurora curtains behind the black button (global.css). */}
-            <span class="launch-atlas-cta__lights" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-            </span>
-            <img
-              class="launch-atlas-cta__mark"
-              src={sitePath(FAVICON_SVG)}
-              alt=""
-              width="22"
-              height="22"
-            />
-            <span class="launch-atlas-cta__label">
-              <span class="brand-name">genomeOS</span> Atlas
-            </span>
-            <svg
-              class="launch-atlas-cta__arrow"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
+          <div class="launch-atlas">
+            <a
+              class="launch-atlas-cta"
+              href={sitePath('/app/')}
+              aria-describedby="launch-atlas-caption"
             >
-              <path d="M5 12h13M13 6l6 6-6 6" />
-            </svg>
+              {/* Aurora curtains behind the black button (global.css). */}
+              <span class="launch-atlas-cta__lights" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </span>
+              <img
+                class="launch-atlas-cta__mark"
+                src={sitePath(FAVICON_SVG)}
+                alt=""
+                width="22"
+                height="22"
+              />
+              <span class="launch-atlas-cta__label">
+                <span class="brand-name">genomeOS</span> Atlas
+              </span>
+              <svg
+                class="launch-atlas-cta__arrow"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+              >
+                <path d="M5 12h13M13 6l6 6-6 6" />
+              </svg>
+            </a>
             {/*
              * Shown under the button on hover and keyboard focus (global.css).
-             * It is the link's description, so it stays out of its name:
-             * aria-hidden keeps it from being read twice, and a description
-             * still reads text it points to directly.
+             * It is the link's description, so it stays out of its name, and
+             * beside the link rather than in it, out of its text too (what a
+             * crawler or a plain-text copy reads). aria-hidden keeps it from
+             * being read twice; a description still reads text it points to
+             * directly.
              */}
             <span
               class="launch-atlas-cta__caption"
@@ -130,7 +134,7 @@ const logo = isAtlasPage
             >
               Explore the interactive app
             </span>
-          </a>
+          </div>
         )
       }
       <details class="mobile-nav">
@@ -231,5 +235,27 @@ const logo = isAtlasPage
     window.addEventListener('resize', () => {
       if (menu.open && menu.getClientRects().length === 0) menu.open = false;
     });
+  }
+
+  /*
+   * genomeOS Atlas's aurora drifts through a visitor's first 20 s on a page,
+   * counted from when the page is first in view, then holds still wherever
+   * it is until the button is hovered or focused (global.css). A drift that
+   * never ended kept the compositor drawing 60 frames a second, for as long
+   * as the page stayed open, on a page with nothing else moving.
+   */
+  const AURORA_DRIFT_MS = 20_000;
+  const atlas = document.querySelector<HTMLElement>('.launch-atlas-cta');
+  if (atlas) {
+    const driftThenRest = () =>
+      window.setTimeout(
+        () => atlas.classList.add('launch-atlas-cta--resting'),
+        AURORA_DRIFT_MS,
+      );
+    if (document.visibilityState === 'visible') driftThenRest();
+    else
+      document.addEventListener('visibilitychange', driftThenRest, {
+        once: true,
+      });
   }
 </script>

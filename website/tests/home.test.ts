@@ -58,9 +58,17 @@ describe('homepage contract', () => {
     const link = html.match(/<a class="launch-atlas-cta"[^>]*>[\s\S]*?<\/a>/);
     expect(link?.[0]).toContain('href="/app/"');
     expect(link?.[0]).toContain('aria-describedby="launch-atlas-caption"');
-    // The caption is the description only: hidden from the name, read once.
-    expect(link?.[0]).toMatch(
-      /<span class="launch-atlas-cta__caption" id="launch-atlas-caption" aria-hidden="true">Explore the interactive app<\/span>/,
+    // Its text is its name alone, for crawlers and plain-text copies too.
+    expect(
+      link?.[0]
+        .replace(/<[^>]+>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('genomeOS Atlas');
+    // The caption follows the link: the description only, hidden from the
+    // name and read once.
+    expect(html).toMatch(
+      /<\/a>\s*<span class="launch-atlas-cta__caption" id="launch-atlas-caption" aria-hidden="true">Explore the interactive app<\/span>/,
     );
     // The Menu's copy, in the wordmark type like every visible genomeOS.
     expect(html).toMatch(

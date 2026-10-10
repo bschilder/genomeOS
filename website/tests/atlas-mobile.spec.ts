@@ -306,7 +306,7 @@ for (const phone of PHONE_PROFILES) {
       expect(button.width).toBeLessThan(button.height * 1.2);
 
       // No caption, from the keyboard or under a pointer.
-      const caption = atlas.locator('.launch-atlas-cta__caption');
+      const caption = page.locator('.launch-atlas-cta__caption');
       await page.locator('.wordmark').focus();
       await page.keyboard.press('Tab');
       await expect(atlas).toBeFocused();

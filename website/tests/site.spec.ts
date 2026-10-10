@@ -84,6 +84,13 @@ test('primary navigation reaches working groups and exposes GitHub access', asyn
   await expect(atlas).toHaveAccessibleDescription(
     'Explore the interactive app',
   );
+  // The caption is beside the link, so the link's own text is its name: what
+  // a crawler or a plain-text copy reads.
+  expect(
+    await atlas.evaluate((link) =>
+      link.textContent!.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toBe('genomeOS Atlas');
   await expect(header.getByRole('link', { name: 'Preview' })).toHaveCount(0);
   await expect(
     page.getByRole('link', { name: 'View genomeOS on GitHub' }).first(),
@@ -194,8 +201,10 @@ function measureAtlasCaption(page: Page) {
       pageOverflow:
         document.documentElement.scrollWidth -
         document.documentElement.clientWidth,
-      // A press there reaches the page under it, not the link.
-      passesThrough: hit !== null && !hit.closest('.launch-atlas-cta'),
+      // A press there reaches the page under it, not the caption or the link.
+      passesThrough:
+        hit !== null &&
+        !hit.closest('.launch-atlas-cta, .launch-atlas-cta__caption'),
       pointerEvents: getComputedStyle(caption).pointerEvents,
       right: box.right,
       screenHeight: window.innerHeight,
@@ -312,6 +321,70 @@ test(
 );
 
 test(
+  'the aurora drifts through the first 20 s on a page, then holds still until hovered or focused',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // A drift that never ended kept the compositor drawing 60 frames a
+    // second for as long as the page was open. The clock runs the page's
+    // timers; the curtains keep the real one.
+    await page.clock.install();
+    await page.goto('/project/');
+    const curtains = page.locator('.launch-atlas-cta__lights i');
+    await expect(curtains).toHaveCount(3);
+    const playStates = () =>
+      curtains.evaluateAll((elements) =>
+        elements.map((element) =>
+          element
+            .getAnimations()
+            .map((animation) => animation.playState)
+            .join(),
+        ),
+      );
+    // Once each pause has taken hold (a pause waits for the next frame).
+    const times = () =>
+      curtains.evaluateAll((elements) =>
+        Promise.all(
+          elements.map(async (element) => {
+            const [animation] = element.getAnimations();
+            await animation.ready;
+            return animation.currentTime;
+          }),
+        ),
+      );
+    const drifting = ['running', 'running', 'running'];
+    const resting = ['paused', 'paused', 'paused'];
+
+    expect(await playStates()).toEqual(drifting);
+    await page.clock.runFor(19_000);
+    expect(await playStates()).toEqual(drifting);
+    await page.clock.runFor(1_500);
+    await expect.poll(playStates).toEqual(resting);
+    // Held still where it was, and still lit.
+    const held = await times();
+    await page.waitForTimeout(300);
+    expect(await times()).toEqual(held);
+    await expect(page.locator('.launch-atlas-cta__lights')).toBeVisible();
+
+    // Hovered, it drifts on from there, and rests again once left.
+    await atlasLink(page).hover();
+    await expect.poll(playStates).toEqual(drifting);
+    await page.mouse.move(8, 400);
+    await expect.poll(playStates).toEqual(resting);
+
+    // Keyboard focus wakes it too.
+    await page
+      .getByRole('navigation', { name: 'Primary navigation' })
+      .getByRole('link', { name: 'View genomeOS on GitHub' })
+      .focus();
+    await page.keyboard.press('Tab');
+    await expect(atlasLink(page)).toBeFocused();
+    await expect.poll(playStates).toEqual(drifting);
+    await page.keyboard.press('Shift+Tab');
+    await expect.poll(playStates).toEqual(resting);
+  },
+);
+
+test(
   'in forced colours genomeOS Atlas keeps a system border and drops the aurora',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
@@ -333,7 +406,7 @@ test(
     const expectNoCaption = async (on: Page, label: string) => {
       await on.goto('/');
       const atlas = atlasLink(on);
-      const caption = atlas.locator('.launch-atlas-cta__caption');
+      const caption = on.locator('.launch-atlas-cta__caption');
       await expect(atlas, label).toHaveAccessibleDescription(
         'Explore the interactive app',
       );
@@ -446,9 +519,17 @@ test(
           return { left, right };
         };
         const cta = document.querySelector('.launch-atlas-cta')!;
+        const items = [...document.querySelectorAll('nav.desktop-nav li')].map(
+          (item) => item.getBoundingClientRect(),
+        );
         return {
+          arrow:
+            cta.querySelector('.launch-atlas-cta__arrow')!.getClientRects()
+              .length > 0,
           beforeMenu:
-            cta.nextElementSibling?.matches('details.mobile-nav') ?? false,
+            cta
+              .closest('.launch-atlas')!
+              .nextElementSibling?.matches('details.mobile-nav') ?? false,
           cta: edges(cta)!,
           inNav: cta.closest('nav') !== null,
           inner: edges(document.querySelector('.site-header__inner'))!,
@@ -456,10 +537,17 @@ test(
           nav: edges(
             document.querySelector('.site-header__inner > nav.desktop-nav'),
           ),
+          navGaps: items
+            .slice(1)
+            .map((item, index) => item.left - items[index].right),
         };
       });
 
-    for (const width of [1280, 1440, 1920]) {
+    // 1366 px: a common laptop width. 1377 px: where the full button came
+    // back at 86rem, 1.2 px further from GitHub than the nav's own gaps.
+    // 1392 and 1393 px: the last width with the narrower button (87rem) and
+    // the first with the full one.
+    for (const width of [1280, 1366, 1377, 1392, 1393, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/');
       for (const state of ['landing', 'compact'] as const) {
@@ -471,6 +559,13 @@ test(
         const centre = (row.cta.left + row.cta.right) / 2;
         const room = (row.nav!.right + row.inner.right) / 2;
         expect(Math.abs(centre - room), label).toBeLessThanOrEqual(2);
+        // Clearly further from GitHub than the links are from each other,
+        // so it reads as its own control, not one more nav link.
+        expect(
+          row.cta.left - row.nav!.right - Math.max(...row.navGaps),
+          label,
+        ).toBeGreaterThanOrEqual(4);
+        expect(row.arrow, label).toBe(width > 1392);
       }
     }
 
@@ -494,7 +589,7 @@ test('the aurora around genomeOS Atlas never widens the page, is not clipped, an
 }) => {
   const widths = isMobile
     ? [320, 360, 412]
-    : [737, 1100, 1152, 1153, 1280, 1328, 1329, 1440, 1920];
+    : [737, 1100, 1152, 1153, 1280, 1392, 1393, 1440, 1920];
   const measure = () =>
     page.evaluate(() => {
       const cta = document.querySelector('.launch-atlas-cta')!;
@@ -1149,10 +1244,10 @@ test(
     // width above the phone layout (46rem). 1025 px: the first above 64rem,
     // where the desktop nav used to start. 1152 px: the last Menu width
     // (72rem). 1153 px: the first desktop-nav width, the tightest row.
-    // 1280 px: a common laptop width. 1328 and 1329 px: the last width with
-    // the narrower genomeOS Atlas (83rem) and the first with the full one.
+    // 1280 px: a common laptop width. 1392 and 1393 px: the last width with
+    // the narrower genomeOS Atlas (87rem) and the first with the full one.
     const desktopNavFrom = 1153;
-    for (const width of [737, 1025, 1152, 1153, 1280, 1328, 1329]) {
+    for (const width of [737, 1025, 1152, 1153, 1280, 1392, 1393]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto('/project/');
       const row = await page.evaluate(() => {
@@ -1229,6 +1324,69 @@ test(
       expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
       for (const height of row.linkHeights)
         expect(height, `${width}`).toBeLessThan(36);
+    }
+  },
+);
+
+test(
+  'the Atlas nav keeps its labels on one line, GitHub on Technical docs, while the status chip loads',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // Hold the surface, so the chip keeps its longest copy: "Loading HbS
+    // (rs334)" over its download detail. With GitHub in the nav, Working
+    // groups and Technical docs wrapped beside it up to 1259 px, and GitHub
+    // sat 14.8 px below Technical docs' first line.
+    // The page's clock stands still, so the held request never reaches its
+    // 15 s timeout, however long a loaded machine takes to measure the row.
+    await page.clock.install();
+    await page.clock.pauseAt(Date.now() + 1_000);
+    await page.route('**/data/atlas/*.surface.json', () => {});
+    await page.setViewportSize({ width: 1153, height: 800 });
+    await page.goto('/app/');
+    const chip = page.locator('.atlas-navbar-status-slot .atlas-status');
+    await expect(chip).toContainText(/^Loading/);
+    await expect(chip.locator('small')).toHaveText(/\S/);
+    await page.evaluate(() => document.fonts.ready);
+
+    for (const width of [1153, 1160, 1200, 1240, 1259, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const label = `${width} px`;
+      const row = await page.evaluate(() => {
+        const nav = document.querySelector('nav.desktop-nav')!;
+        const textBox = (element: Element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const lines = new Set(
+            [...range.getClientRects()].map(({ top }) => Math.round(top)),
+          );
+          const { top, bottom } = range.getBoundingClientRect();
+          return { bottom, lines: lines.size, top };
+        };
+        const links = [...nav.querySelectorAll('a')];
+        const docs = links.find(
+          (link) => link.textContent!.trim() === 'Technical docs',
+        )!;
+        const inner = document.querySelector('.site-header__inner')!;
+        return {
+          docs: textBox(docs),
+          github: textBox(nav.querySelector('.github-link span')!),
+          // GitHub's text is its <span>, beside the icon.
+          lines: links.map(
+            (link) => textBox(link.querySelector('span') ?? link).lines,
+          ),
+          overflow: inner.scrollWidth - inner.clientWidth,
+        };
+      });
+      expect(row.lines, label).toEqual([1, 1, 1, 1, 1]);
+      for (const edge of ['top', 'bottom'] as const)
+        expect(
+          Math.abs(row.github[edge] - row.docs[edge]),
+          `${label}: text ${edge}`,
+        ).toBeLessThanOrEqual(0.5);
+      expect(row.overflow, label).toBeLessThanOrEqual(0);
+      // The chip's copy gives way instead, and still reads as loading.
+      await expect(chip, label).toContainText(/^Loading/);
+      await expect(chip, label).toBeVisible();
     }
   },
 );
