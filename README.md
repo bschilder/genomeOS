@@ -158,15 +158,16 @@ open http://127.0.0.1:8000/preview  # macOS; use xdg-open on Linux
 ```
 
 For a reproducible run, pin the image to a seven-character commit tag (the package page lists
-them) instead of `latest`:
+them) instead of `latest`. Replace `sha-xxxxxxx` below with one of those tags:
 
 ```bash
-docker pull ghcr.io/genomeos/genomeos:sha-<seven-character-commit>
+TAG=sha-xxxxxxx
+docker pull "ghcr.io/genomeos/genomeos:$TAG"
 docker run --rm --read-only --tmpfs /tmp \
   -e DATABASE_URL=sqlite:////tmp/genomeos.db \
   -e ATLAS_ARTIFACT_ROOT=/app/demo/artifacts \
   -p 127.0.0.1:8000:8080 \
-  ghcr.io/genomeos/genomeos:sha-<seven-character-commit>
+  "ghcr.io/genomeos/genomeos:$TAG"
 ```
 
 Images published before the repository moved to the genomeOS organization (for example
