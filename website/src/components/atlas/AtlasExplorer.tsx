@@ -143,7 +143,9 @@ export default function AtlasExplorer({
     appliedDisplay,
     cameraApplied,
     catalog,
-    controller: sceneController,
+    // #417's early return on a failed scene: nothing more is streamed into a stopped or missing
+    // globe while the failure panel is up (final review spec-8).
+    controller: failure ? null : sceneController,
     dataAttempt,
     onArtifactChange: () => {
       scene.current?.setSelection(null);
