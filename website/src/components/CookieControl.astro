@@ -2,7 +2,8 @@
 /**
  * The cookie control (#422): a small collapsed cookie icon fixed to the bottom-right corner of
  * every page, which expands into the analytics cookie settings. `src/lib/cookie-control.ts` wires
- * it; it opens by itself only as the first-visit opt-in prompt in EEA, UK and Swiss time zones.
+ * it; it opens by itself only as the first-visit opt-in prompt in the opt-in regions' time zones
+ * (`consent-policy.mjs`).
  * On /app/ the Atlas docks its own copy of the icon (AtlasCookieSettings.tsx), so the corner one
  * steps aside there and nothing covers the Atlas controls, legend, credits or phone sheets.
  *

@@ -1,9 +1,10 @@
 /**
  * Analytics consent for genome-os.org (#422; consent model refined by the owner on 2026-10-10).
  *
- * - Outside the EEA, the UK and Switzerland analytics is opt-out: on unless the visitor turns it
- *   off, or their browser sends Global Privacy Control (which US state laws such as California's,
- *   Colorado's and Connecticut's require honouring as an opt-out).
+ * - Outside the opt-in regions (the EEA, the UK, Switzerland, Quebec and Turkey; see
+ *   `consent-policy.mjs`) analytics is opt-out: on unless the visitor turns it off, or their
+ *   browser sends Global Privacy Control (which US state laws such as California's, Colorado's and
+ *   Connecticut's require honouring as an opt-out).
  * - In those regions it is opt-in: Google's IP region default is denied, and a visitor in one of
  *   their time zones is asked once per visit with an Accept/Decline prompt. Wherever analytics is
  *   denied in the browser, the page does not load gtag.js at all (basic consent mode).
@@ -43,7 +44,7 @@ export interface ConsentInputs {
 
 /**
  * The visitor's analytics consent: an explicit choice wins; else Global Privacy Control opts out;
- * else an EEA, UK or Swiss time zone is opt-in (denied until Accept); else analytics is on.
+ * else a time zone of an opt-in region is opt-in (denied until Accept); else analytics is on.
  */
 export function resolveConsent({
   choice,

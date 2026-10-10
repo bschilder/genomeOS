@@ -1,8 +1,9 @@
 // @ts-check
 /**
  * Google Analytics 4 for genome-os.org (#422, decision of 2026-10-10), with Google Consent Mode
- * v2 defaults per region: opt-in in the EEA, the UK and Switzerland, opt-out elsewhere, Global
- * Privacy Control honoured (consent model refined by the owner the same day).
+ * v2 defaults per region: opt-in in the EEA, the UK, Switzerland, Quebec and Turkey, opt-out
+ * elsewhere, Global Privacy Control honoured (consent model refined by the owner the same day;
+ * Quebec and Turkey added at review). The regions are in `consent-policy.mjs`.
  *
  * A build loads analytics only when its environment sets PUBLIC_GA_MEASUREMENT_ID, and only the
  * production Pages build does, from the repository variable GA_MEASUREMENT_ID. Local dev, the

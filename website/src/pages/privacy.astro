@@ -1,9 +1,10 @@
 ---
 /**
  * The privacy page (#422): what Google Analytics 4 collects on genome-os.org, which cookies it
- * sets and when (opt-in in the EEA, the UK and Switzerland; opt-out elsewhere, with Global Privacy
- * Control honoured), how long they and the data last, and how to change the choice. Every build
- * publishes it; a build without analytics (the /genomeOS/ fallback, local dev) says so first.
+ * sets and when (opt-in in the EEA, the UK, Switzerland, Quebec and Turkey; opt-out elsewhere,
+ * with Global Privacy Control honoured), how long they and the data last, and how to change the
+ * choice. Every build publishes it; a build without analytics (the /genomeOS/ fallback, local dev)
+ * says so first.
  */
 import BrandName from '../components/BrandName.astro';
 import CookieSettings from '../components/CookieSettings.astro';
@@ -48,15 +49,19 @@ const analytics = gaMeasurementId() !== null;
         </p>
         <ul>
           <li>
-            <strong>European Economic Area, UK and Switzerland: opt-in.</strong>
+            <strong
+              >European Economic Area, UK, Switzerland, Quebec and Turkey:
+              opt-in.</strong
+            >
             This includes the EU’s overseas regions, Åland, the Channel Islands, the
-            Isle of Man and Gibraltar. Until you choose <strong>Accept</strong>,
-            the site doesn’t load Google Analytics, so nothing is sent to
-            Google. Visitors in these time zones see a short Accept or Decline
-            prompt on their first visit. If Google places you in these regions
-            but your device is set to a time zone elsewhere, Google Analytics
-            loads without setting cookies and sends cookieless pings, which
-            Google uses only to estimate totals, until you choose.
+            Isle of Man and Gibraltar. Devices set to Eastern Time in Canada, which
+            covers Ontario as well as most of Quebec, are asked too. Until you choose
+            <strong>Accept</strong>, the site doesn’t load Google Analytics, so
+            nothing is sent to Google. Visitors in these time zones see a short
+            Accept or Decline prompt on their first visit. If Google places you
+            in these regions but your device is set to a time zone elsewhere,
+            Google Analytics loads without setting cookies and sends cookieless
+            pings, which Google uses only to estimate totals, until you choose.
           </li>
           <li>
             <strong>Everywhere else: opt-out.</strong> The cookies are set by default
@@ -92,7 +97,12 @@ const analytics = gaMeasurementId() !== null;
         </ul>
         <p>The Atlas also counts three actions, by public name only:</p>
         <ul>
-          <li>which dataset is opened;</li>
+          <li>
+            which dataset is opened, only once you have chosen <strong
+              >Accept</strong
+            > or turned analytics on yourself, wherever you are, because the datasets
+            a person opens can hint at a health interest;
+          </li>
           <li>switches between the globe, map and perspective views;</li>
           <li>which inspector is opened, for a map cell or an observation.</li>
         </ul>

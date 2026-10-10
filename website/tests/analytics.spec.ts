@@ -865,6 +865,53 @@ test.describe(
   },
 );
 
+// Quebec and Turkey were added to the opt-in regions at review. Chromium must report these zones
+// under a name the list holds (Montreal may come back as Toronto), and Ontario, which shares
+// America/Toronto, is asked too. The rest of Canada stays opt-out.
+for (const zone of [
+  'America/Toronto',
+  'America/Montreal',
+  'America/Blanc-Sablon',
+  'Europe/Istanbul',
+  'Asia/Istanbul',
+])
+  test.describe(`opt-in in ${zone}`, { tag: '@desktop-chromium' }, () => {
+    test.use({ timezoneId: zone });
+
+    test('the control opens as the opt-in prompt, with no config and no gtag.js until a choice', async ({
+      page,
+    }) => {
+      const requests = gtagRequests(page);
+      await page.goto('/');
+      await waitForCookieControl(page);
+      await expect(panel(page)).toBeVisible();
+      await expect(
+        panel(page).getByRole('button', { name: 'Accept' }),
+      ).toBeVisible();
+      expect(await consentUpdates(page)).toEqual(['denied']);
+      expect(await configured(page)).toBe(false);
+      expect(requests()).toBe(0);
+    });
+  });
+
+test.describe(
+  'opt-out elsewhere in Canada',
+  { tag: '@desktop-chromium' },
+  () => {
+    test.use({ timezoneId: 'America/Vancouver' });
+
+    test('the control stays collapsed and gtag.js loads', async ({ page }) => {
+      const requests = gtagRequests(page);
+      await page.goto('/');
+      await waitForCookieControl(page);
+      await expect(panel(page)).toBeHidden();
+      expect(await consentUpdates(page)).toEqual([]);
+      expect(await configured(page)).toBe(true);
+      await expect.poll(requests).toBe(1);
+    });
+  },
+);
+
 test.describe('privacy page', () => {
   test.use({ timezoneId: NEW_YORK });
 
@@ -888,7 +935,9 @@ test.describe('privacy page', () => {
     for (const text of [
       'Google Analytics 4',
       '_ga',
-      'European Economic Area, UK and Switzerland: opt-in.',
+      'European Economic Area, UK, Switzerland, Quebec and Turkey: opt-in.',
+      'Devices set to Eastern Time in Canada',
+      'only once you have chosen Accept or turned analytics on yourself',
       'Everywhere else: opt-out.',
       'Global Privacy Control',
       'does not log or store IP addresses',
@@ -916,11 +965,48 @@ test.describe('privacy page', () => {
 test.describe('Atlas events', { tag: '@desktop-chromium' }, () => {
   test.use({ timezoneId: NEW_YORK });
 
-  test('dataset opens and view switches each fire once, with public parameters only', async ({
+  test('a dataset open is sent only after an explicit opt-in, even where analytics is on by default', async ({
     page,
   }) => {
     test.setTimeout(90_000);
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/app/');
+    await waitForAtlasReady(page);
+    // New York is opt-out: analytics is on, but no choice was made, so the dataset stays in the page.
+    expect(await configured(page)).toBe(true);
+    const initial = await page
+      .locator('[data-atlas-active]')
+      .getAttribute('data-atlas-active');
+    expect(initial).toBeTruthy();
+    expect(await events(page, 'atlas_dataset_open')).toEqual([]);
+
+    // An explicit opt-in, as Accept or the switch stores it, counts from the next open.
+    await page.evaluate(
+      (key) => window.localStorage.setItem(key, 'granted'),
+      STORAGE_KEY,
+    );
+    const next =
+      initial === 'g6pd-deficiency' ? 'hbs-rs334' : 'g6pd-deficiency';
+    await page
+      .getByRole('button', { name: /Select dataset\. Current dataset:/ })
+      .click();
+    await page.locator(`[role="option"][data-map-id="${next}"]`).click();
+    await expect(page.locator(`[data-atlas-active="${next}"]`)).toBeVisible({
+      timeout: 45_000,
+    });
+    await expect
+      .poll(() => events(page, 'atlas_dataset_open'))
+      .toEqual([{ dataset_id: next }]);
+  });
+
+  test('after an explicit opt-in, dataset opens and view switches each fire once, with public parameters only', async ({
+    page,
+  }) => {
+    test.setTimeout(90_000);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.addInitScript((key) => {
+      window.localStorage.setItem(key, 'granted');
+    }, STORAGE_KEY);
     await page.goto('/app/');
     await waitForAtlasReady(page);
     const initial = await page

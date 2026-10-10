@@ -1,17 +1,22 @@
 // @ts-check
 /**
  * Where genome-os.org asks before it sets analytics cookies (#422; consent model refined by the
- * owner on 2026-10-10): opt-in in the EEA, the UK and Switzerland, opt-out everywhere else. "Just
- * to be safe", the opt-in places also include the parts of them that Google geolocates as
- * countries of their own (the EU's outermost regions and Åland) and the Crown dependencies and
- * Gibraltar, whose data protection laws follow the GDPR.
+ * owner on 2026-10-10): opt-in in the EEA, the UK, Switzerland, Quebec and Turkey, opt-out
+ * everywhere else. "Just to be safe", the opt-in places also include the parts of them that Google
+ * geolocates as countries of their own (the EU's outermost regions and Åland) and the Crown
+ * dependencies and Gibraltar, whose data protection laws follow the GDPR. Quebec (Law 25 keeps
+ * tracking technology off by default) and Turkey (the KVKK cookie guideline asks explicit consent
+ * for non-essential cookies) were added at review.
  *
- * Two lists describe the same places. Google applies `CONSENT_COUNTRIES` from the visitor's IP:
+ * Two lists describe these places. Google applies `CONSENT_COUNTRIES` from the visitor's IP:
  * there every consent signal defaults to denied, so no analytics cookie is set before an Accept.
  * The browser also reads its own time zone, with no network lookup, against `CONSENT_TIME_ZONES`:
  * a visitor in one of those zones is treated as opt-in too, and the cookie control opens as a short
- * Accept/Decline prompt on the first visit. Over-inclusion only asks a non-European for consent;
- * under-inclusion (a European in another zone) is still covered by Google's IP region default.
+ * Accept/Decline prompt on the first visit. Over-inclusion only asks a visitor elsewhere for
+ * consent; under-inclusion (a visitor in one of these places set to another zone) is still covered
+ * by Google's IP region default. Quebec shows both: browsers there report `America/Toronto`, which
+ * Ontario shares, so Ontario is asked too; and the Magdalen Islands keep Atlantic time
+ * (`America/Halifax`, shared with the Maritimes), so they rely on the IP default.
  *
  * Plain JavaScript because astro.config.mjs reads it through `ga.mjs`. The cookie control bundle
  * reads it too, so it holds nothing that names Google.
@@ -29,7 +34,8 @@ export const PROMPT_DISMISSED_KEY = 'genomeos-analytics-prompt-dismissed';
 /**
  * ISO 3166-1 alpha-2 codes of the EEA (the 27 EU states with Iceland, Liechtenstein and Norway),
  * the UK and Switzerland; then the EU territory that has a code of its own, so Google's IP lookup
- * reports it apart from its state; then the Crown dependencies and Gibraltar.
+ * reports it apart from its state; then the Crown dependencies and Gibraltar; then Turkey, and
+ * Quebec by its ISO 3166-2 subdivision code, which Consent Mode's `region` accepts.
  */
 export const CONSENT_COUNTRIES = /* @__PURE__ */ Object.freeze([
   // European Union
@@ -81,6 +87,9 @@ export const CONSENT_COUNTRIES = /* @__PURE__ */ Object.freeze([
   'GG',
   'IM',
   'GI',
+  // Beyond Europe's GDPR area, "just to be safe": Turkey (KVKK) and Quebec (Law 25)
+  'TR',
+  'CA-QC',
 ]);
 
 /**
@@ -88,8 +97,7 @@ export const CONSENT_COUNTRIES = /* @__PURE__ */ Object.freeze([
  * included. Browsers report a zone under its ICU name, which is sometimes an older spelling
  * (`Atlantic/Faeroe`) or a link (`Europe/Belfast` is London), so a zone's other names are listed
  * beside it. Zones of the rest of Europe are left out on purpose: Russia, Belarus, Ukraine,
- * Moldova, Turkey, the western Balkans outside the EU, Andorra, Monaco, San Marino and the
- * Vatican.
+ * Moldova, the western Balkans outside the EU, Andorra, Monaco, San Marino and the Vatican.
  */
 export const CONSENT_TIME_ZONES = /* @__PURE__ */ Object.freeze([
   'Europe/Vienna', // AT
@@ -147,6 +155,11 @@ export const CONSENT_TIME_ZONES = /* @__PURE__ */ Object.freeze([
   'Europe/Guernsey', // GG
   'Europe/Isle_of_Man', // IM
   'Europe/Gibraltar', // GI
+  'Europe/Istanbul', // TR
+  'Asia/Istanbul', // TR, a link to Europe/Istanbul
+  'America/Toronto', // CA-QC, most of Quebec; shared with Ontario, which is asked too
+  'America/Montreal', // CA-QC, a link to America/Toronto that some systems still report
+  'America/Blanc-Sablon', // CA-QC, the Lower North Shore
 ]);
 
 // Pure annotations let a build without analytics drop these lists with the unused control code.
