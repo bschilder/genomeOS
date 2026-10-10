@@ -160,7 +160,7 @@ const logo = isAtlasPage
    * the control that has focus or the content the next Tab goes on to from a
    * click. The window capture listener runs before the Atlas explorer's
    * Escape stack (a document capture listener): an open Menu is the innermost
-   * layer.
+   * layer, and global.css paints it as the topmost one.
    */
   for (const menu of document.querySelectorAll<HTMLDetailsElement>(
     'details.mobile-nav',

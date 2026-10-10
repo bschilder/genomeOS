@@ -98,6 +98,15 @@ svg {
     box-shadow 260ms ease;
 }
 
+/* An open Menu is the page's innermost layer (SiteHeader.astro), so it is
+ * painted as the topmost one too: above the Atlas pickers portaled to <body>
+ * (z-index 1002-1003, atlas.css and map-catalog.css), which the keyboard can
+ * leave open behind it. A press or focus outside closes the Menu, so nothing
+ * opens over it while it is open. */
+.site-header:has(.mobile-nav[open]) {
+  z-index: 1004;
+}
+
 .site-header__inner,
 .site-footer__inner,
 .section-shell {

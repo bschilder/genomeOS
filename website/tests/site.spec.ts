@@ -1389,6 +1389,69 @@ test(
   },
 );
 
+test(
+  'a Menu opened from the keyboard over the catalog picker paints above it and closes first',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    test.setTimeout(90_000);
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const menu = page.locator('details.mobile-nav');
+    const summary = menu.locator('summary');
+    const trigger = page.getByRole('button', {
+      name: /Select dataset\. Current dataset:/,
+    });
+    const catalog = page.getByRole('dialog', { name: 'Select dataset' });
+
+    await trigger.click();
+    await expect(
+      catalog.getByRole('searchbox', { name: 'Search maps' }),
+    ).toBeFocused();
+    // The picker is not modal, so the keyboard can leave it open for the Menu.
+    await summary.focus();
+    await page.keyboard.press('Enter');
+    await expect(menu).toHaveAttribute('open', '');
+    await expect(catalog).toBeVisible();
+
+    // The portaled picker (z-index 1003) painted over the Menu's panel.
+    const overlap = await page.evaluate(() => {
+      const panel = document
+        .querySelector('.mobile-nav nav')!
+        .getBoundingClientRect();
+      const picker = document
+        .querySelector('.atlas-map-picker')!
+        .getBoundingClientRect();
+      const left = Math.max(panel.left, picker.left);
+      const right = Math.min(panel.right, picker.right);
+      const top = Math.max(panel.top, picker.top);
+      const bottom = Math.min(panel.bottom, picker.bottom);
+      const hit = document.elementFromPoint(
+        (left + right) / 2,
+        (top + bottom) / 2,
+      );
+      return {
+        height: bottom - top,
+        menuOnTop: hit?.closest('details.mobile-nav') != null,
+        width: right - left,
+      };
+    });
+    expect(overlap.width).toBeGreaterThan(0);
+    expect(overlap.height).toBeGreaterThan(0);
+    expect(overlap.menuOnTop).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(menu).not.toHaveAttribute('open');
+    await expect(catalog).toBeVisible();
+    await expect(summary).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(catalog).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  },
+);
+
 test('at large text sizes Launch Atlas moves into the Menu, so the home logo keeps its size', async ({
   context,
   page,
