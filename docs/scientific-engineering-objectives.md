@@ -49,8 +49,11 @@ unstudied region.
 ### Governance
 
 Access terms and CARE-aligned notices are part of the data contract. Restricted data may inform a
-model only within its permitted environment and may not be exported. The unresolved policy on
-redistributing surfaces derived from indigenous-population panels blocks public release.
+model only within its permitted environment and may not be exported. Surfaces derived from
+indigenous-population panels may be released only on the conditions of the
+[#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083):
+attribution and Biocultural Notices preserved, estimates labelled as estimates, and every
+explicit source restriction honoured.
 
 ## Engineering composition rules
 

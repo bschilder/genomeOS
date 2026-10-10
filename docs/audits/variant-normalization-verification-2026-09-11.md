@@ -1,7 +1,7 @@
 # Variant-normalization independent verification — 2026-09-11
 
 Verifier: `agent:anthropic:claude-sonnet-5`, acting under the policy on
-[issue #242](https://github.com/bschilder/genomeOS/issues/242): an agent may verify a row
+[issue #242](https://github.com/genomeOS/genomeOS/issues/242): an agent may verify a row
 provided the verdict rests on links a human can independently follow and check. This document
 is that trail — every URL fetched, the raw value it returned, and the verdict — for the four
 **mapping** rows in `data/registry/variant_normalization.tsv` written by

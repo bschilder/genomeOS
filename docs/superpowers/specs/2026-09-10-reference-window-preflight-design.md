@@ -1,6 +1,6 @@
 # Reference-window selection and index preflight
 
-**Status:** adopted by the controller under existing owner authorization, including shared immutable types and portable native-fixture verification; bounded implementation for [#254](https://github.com/bschilder/genomeOS/issues/254), advancing #189. Implements Atlas §§4–8, 12 and global AF WP0/WP1. No genotype acquisition or fitting is authorized by completing this design.
+**Status:** adopted by the controller under existing owner authorization, including shared immutable types and portable native-fixture verification; bounded implementation for [#254](https://github.com/genomeOS/genomeOS/issues/254), advancing #189. Implements Atlas §§4–8, 12 and global AF WP0/WP1. No genotype acquisition or fitting is authorized by completing this design.
 
 ## 1. Scientific contract
 

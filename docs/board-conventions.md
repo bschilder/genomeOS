@@ -11,17 +11,17 @@ work. Every issue carries four labels and four board fields.
 | `P*:` | `P0:registry` `P1:observations` `P2:surfaces` `P3:burden` `P4:backend` `P5:map-ui` `launch` | Which sub-project of the [design spec](superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md). |
 | `skill:*` | `spatial-stats` `popgen` `clinical-genetics` `data-engineering` `frontend` `geospatial` `governance` `partnerships` | So an incoming contributor can filter to what they can actually do. |
 | `priority:*` | `critical` `high` `medium` `low` | See below. |
-| `needs-owner` | — | Nobody on the team currently has the skill this issue requires. |
 
 ## Priority semantics
 
 Priority is derived from the **dependency graph**, not from enthusiasm. It answers "what breaks
 if this is late", not "what would be nice".
 
-- **critical** — blocks other work, or *is* the definition of done. Twelve issues. Examples: the
-  registry schema (blocks every P0 adapter), the INLA-SPDE runtime decision (blocks all of P2),
-  the MAP survey adapter (without it `β_design` is unidentifiable, so P2 cannot start), and
-  golden test 1 (HbS parity — spec §8's definition of done).
+- **critical** — blocks other work, or *is* the definition of done. Examples from the first
+  board: the registry schema (blocked every P0 adapter), the inference-runtime decision (blocked
+  all of P2; settled as PyMC rather than INLA in #34), and the MAP survey adapter (without it
+  `β_design` is unidentifiable). All three are done. Golden test 1 (HbS parity — spec §8's
+  definition of done) remains critical, with the issues that block it.
 - **high** — the milestone is meaningless without it.
 - **medium** — wanted for the milestone.
 - **low** — safe to defer.
@@ -30,7 +30,7 @@ if this is late", not "what would be nice".
 
 **Status** — `Backlog` · `Ready` · `In progress` · `In review` · `Blocked` · `Done` ·
 `Not planned`. `Ready` means fully specified with code in the plan and unblocked — pick one up
-without asking. `Blocked` is set automatically for `needs-owner` issues.
+without asking.
 
 **Sub-project**, **Skill**, **Priority** mirror the labels so the board can group and sort by
 them. **Estimate** is a free number field, unset by default.

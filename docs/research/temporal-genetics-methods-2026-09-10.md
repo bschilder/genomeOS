@@ -123,7 +123,7 @@ version used for any published figure. Author scripts were read, not executed.
   fixation controls also passed. This differs from fixed-horizon rejection;
   its effect on estimates and attribution to published simulations remain open.
   [Caller](https://github.com/avaughn271/CLUES2/blob/b20dc5df6b8e6c93a1cfaf2ea6d0f09d04f4c52b/SimulationStudy/AncientGenotypes/PlotA.sh),
-  [reproduction qualification #261](https://github.com/bschilder/genomeOS/issues/261).
+  [reproduction qualification #261](https://github.com/genomeOS/genomeOS/issues/261).
 
 Independent review confirmed the algebra, source trace and deterministic replay.
 Exact-rational checks passed 75 frequency/selection/dominance combinations and 15

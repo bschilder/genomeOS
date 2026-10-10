@@ -1,6 +1,6 @@
 # Pointwise prior normalization for surface support
 
-Issue [#266](https://github.com/bschilder/genomeOS/issues/266) repairs the denominator of the
+Issue [#266](https://github.com/genomeOS/genomeOS/issues/266) repairs the denominator of the
 Atlas support statistic. Posterior contraction now compares the posterior standard deviation of
 latent frequency at each cell with the approximate latent prior standard deviation at that same
 cell. The old scalar came from the first observation location. For finite HSGP and inducing
@@ -8,7 +8,7 @@ representations, marginal prior uncertainty can vary with the basis or inducing 
 different location's denominator can report apparent learning even when the local distribution
 has not changed.
 
-![Geography-aware pointwise-prior normalization counterexample](https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/prior_normalization.png)
+![Geography-aware pointwise-prior normalization counterexample](https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/prior_normalization.png)
 
 The figure is a conditional no-update counterexample, not a fitted genetic surface. Its first panel
 shows the chain from evidence geography to approximation geometry: 684 retained public MAP HbS

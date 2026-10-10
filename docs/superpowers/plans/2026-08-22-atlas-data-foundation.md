@@ -1618,7 +1618,7 @@ Do this **before** creating labels/issues, so the board links to merged, citable
   - `@dwgoblue` — spec §7.1 (ascertainment correction), §9 (burden expressions), golden tests 2 and 3
   - `@JirachiWishmaster` — spec §10 (backend: DuckDB reads / BigQuery batch), §11 (deck.gl layers), §6 (H3 parquet vs raster)
   - `@ctbio123` — spec §13 (governance), §14.1 (redistribution position), §14.3–4 (PGG.SNV and 23andMe outreach)
-- [ ] Also tag them on [Discussion #4](https://github.com/bschilder/genomeOS/discussions/4) (prior art) and the use-case comments on Discussions #1 and #2, so review is distributed rather than all landing on one person.
+- [ ] Also tag them on [Discussion #4](https://github.com/genomeOS/genomeOS/discussions/4) (prior art) and the use-case comments on Discussions #1 and #2, so review is distributed rather than all landing on one person.
 - [ ] Merge **PR #5** (spec) then the plan PR, both with `--squash`, and delete the branches.
 - [ ] Verify `main` contains `docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md` and `docs/superpowers/plans/2026-08-22-atlas-data-foundation.md`.
 

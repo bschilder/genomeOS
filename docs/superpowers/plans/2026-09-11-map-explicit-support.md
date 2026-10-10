@@ -8,7 +8,7 @@
 
 **Tech stack:** Existing Python, pandas, pandera and Matplotlib; no dependency or frozen P1 schema change.
 
-**Spec:** [Issue190](https://github.com/bschilder/genomeOS/issues/190), including its equal-area-versus-bounding-radius clarification; Atlas design §§4–8,12; scientific-engineering objectives P0/P1; WP0/WP1 of the global modeling program. The original data-foundation Task7's fixed-radius example is superseded by the no-default invariant and issue190.
+**Spec:** [Issue190](https://github.com/genomeOS/genomeOS/issues/190), including its equal-area-versus-bounding-radius clarification; Atlas design §§4–8,12; scientific-engineering objectives P0/P1; WP0/WP1 of the global modeling program. The original data-foundation Task7's fixed-radius example is superseded by the no-default invariant and issue190.
 
 ## Scientific contract
 

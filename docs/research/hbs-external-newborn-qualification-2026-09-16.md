@@ -2,7 +2,7 @@
 
 **Date inspected:** 2026-09-16
 **Program:** global allele-frequency modeling WP0/WP1; issue
-[#189](https://github.com/bschilder/genomeOS/issues/189)
+[#189](https://github.com/genomeOS/genomeOS/issues/189)
 **Status:** development evidence only; no source admitted to P1 and no final external set sealed
 
 ## Scientific contract

@@ -278,7 +278,7 @@ inside both the split-manifest hash and the per-fold checkpoint integrity hash.
 
 ## Spatial-activity simulation preflight
 
-Issue [#384](https://github.com/bschilder/genomeOS/issues/384) adds a simulation-only preflight for
+Issue [#384](https://github.com/genomeOS/genomeOS/issues/384) adds a simulation-only preflight for
 a spatially varying activity probability. It reuses an existing one-variant benchmark's record
 identities, coordinates, denominators, cohort labels, dependency evidence, and geographic splits.
 It does not reuse the observed allele counts: every campaign count is newly generated from one of
@@ -414,7 +414,7 @@ real-data comparison remain open. WP3 covariate admission; WP4 statistical/share
 models; WP5 neural challengers; WP6 multiallelic, LD, and GPU work; and WP7 temporal/origin
 modeling remain outside these runners. The HbS, G6PD, and carrier-screening publication gates
 remain unchanged. The owner's resolved
-[#66 decision](https://github.com/bschilder/genomeOS/issues/66#issuecomment-5565166083) permits
+[#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083) permits
 redistribution of fitted surfaces with source attribution and biocultural notices, a clear
 observed/inferred distinction, and explicit source restrictions honored. That conditional policy
 permission does not qualify any source or publish any scientific result in this milestone.

@@ -1,6 +1,6 @@
 # Chinese genomic-resource participant-overlap audit
 
-- **Issue:** [#326](https://github.com/bschilder/genomeOS/issues/326)
+- **Issue:** [#326](https://github.com/genomeOS/genomeOS/issues/326)
 - **Audit date:** 2026-09-16
 - **Scope:** PGG.Han, ChinaMAP, WBBC, NyuWa, and CMDB
 

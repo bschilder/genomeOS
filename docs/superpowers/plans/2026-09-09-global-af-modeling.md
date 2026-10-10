@@ -8,7 +8,7 @@
 
 **Tech stack:** Existing Python/Pandas/NumPy/SciPy/PyMC stack, versioned JSON/Parquet research artifacts; optional neural/GPU dependencies only when their experimental gate opens.
 
-**Spec:** Owner-approved September 9 conversational plan; Atlas design §§4–8, 12–13; [research synthesis](../../research/genomeos-model-research-2026-09-09.md) and [full-text notes](../../research/genomeos-anandkumar-fulltext-notes-2026-09-09.md). Umbrella issue [#189](https://github.com/bschilder/genomeOS/issues/189).
+**Spec:** Owner-approved September 9 conversational plan; Atlas design §§4–8, 12–13; [research synthesis](../../research/genomeos-model-research-2026-09-09.md) and [full-text notes](../../research/genomeos-anandkumar-fulltext-notes-2026-09-09.md). Umbrella issue [#189](https://github.com/genomeOS/genomeOS/issues/189).
 
 ## Global constraints
 
@@ -137,7 +137,7 @@ The [CLUES2 main-article and supplement methods note](../../research/temporal-ge
 records the direct-likelihood/genealogy tradeoff, ascertainment approximation,
 fixed-topology validation limits and proposed temporal controls. The supplement
 has been read. A pinned-source audit supports its frequency-symbol interpretation
-and traced population-size conversion, while [#261](https://github.com/bschilder/genomeOS/issues/261)
+and traced population-size conversion, while [#261](https://github.com/genomeOS/genomeOS/issues/261)
 requires reconciling simulator endpoint and frequency ascertainment before
 reproduction. Numerical reproduction remains open and no temporal implementation
 is admitted by the note.
@@ -219,7 +219,7 @@ Preserve raw AC/AN/date tokens when reading TSV until the pre-coercion guard has
 - [x] RED: CLI subprocess against hand-readable fixtures, reproducible hashes/bytes, explicit B0 identity and nonpublication label, missing arguments/metadata, changing held-out AC cannot alter training posterior, zero/missing distinction, invalid source IDs, pre-existing outputs, and failed-fold nonzero exit.
 - [x] GREEN: implement thin I/O adapter with pure fitting helper in validation/benchmark module or a focused baseline module; no science in argument parsing/storage. Reviewed through `c83d4bb`; public `B0InfeasibleError` centralizes the scientific refusal, actual imported source paths are checked, and exact generated-output bytes are fingerprinted before writing the manifest last.
 - [x] Run checkpoint CI, smoke, privacy/staged-path review and existing golden/regression suites; record environmental or baseline failures honestly. Initial runner checkpoint `9d27454`: full pytest 620 passed with five existing inducing-point warnings. Production review fixes `3fa9336`: 201 integrated/golden tests passed. Portable test fix `c83d4bb`: 18 runner tests and 40 smoke tests passed; lint, contract, module, privacy and whitespace gates passed. These are checkpoint results, not final Task 5 validation.
-- [x] Finalize the initial Task 1–5 slice with stable-tree CI and a PR advancing, not closing, #189. [PR #197](https://github.com/bschilder/genomeOS/pull/197), merged as `33aa2e1d26fb84172bbe0df990dddf2c83a68fac`, bundled the reviewed Task 5 handoff and explicitly retained the unimplemented WP0/WP1 empirical gates and WP2–WP7. Its merged tree passed 778 tests with 11 expected CUDA-only skips out of 789 collected, plus the focused, smoke, lint, contract, module-size, and privacy gates. The PR states that it advances #189, promotes no scientific surface or dataset, and provides no evidence that a new model beats the current GP.
+- [x] Finalize the initial Task 1–5 slice with stable-tree CI and a PR advancing, not closing, #189. [PR #197](https://github.com/genomeOS/genomeOS/pull/197), merged as `33aa2e1d26fb84172bbe0df990dddf2c83a68fac`, bundled the reviewed Task 5 handoff and explicitly retained the unimplemented WP0/WP1 empirical gates and WP2–WP7. Its merged tree passed 778 tests with 11 expected CUDA-only skips out of 789 collected, plus the focused, smoke, lint, contract, module-size, and privacy gates. The PR states that it advances #189, promotes no scientific surface or dataset, and provides no evidence that a new model beats the current GP.
 
 ### Task 5: Optional GPU CDF backend and complete-workflow measurement
 

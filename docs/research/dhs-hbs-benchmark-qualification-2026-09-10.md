@@ -1,7 +1,7 @@
 # DHS Nigeria HbS benchmark qualification
 
 September 10, 2026; bounded WP0 note for the global allele-frequency program
-[#189](https://github.com/bschilder/genomeOS/issues/189). Status:
+[#189](https://github.com/genomeOS/genomeOS/issues/189). Status:
 `automated_proposal` / `pending`.
 
 ## Scientific contract and decision

@@ -5,7 +5,7 @@
 Vaduganathan M, Mensah GA, Turco JV, Fuster V, Roth GA. *The Global Burden of
 Cardiovascular Diseases and Risk: A Compass for Future Health*. J Am Coll Cardiol.
 2022;80(25):2361–2371. [DOI:10.1016/j.jacc.2022.11.005](https://doi.org/10.1016/j.jacc.2022.11.005).
-Supplied by the owner September 9, 2026 for the [#189 modeling program](https://github.com/bschilder/genomeOS/issues/189).
+Supplied by the owner September 9, 2026 for the [#189 modeling program](https://github.com/genomeOS/genomeOS/issues/189).
 
 Read the complete supplied 11-page PDF, including methods, risk-factor sections, conclusions,
 funding/disclosures and all 84 bibliography entries. Visually inspected the methods page 2362,

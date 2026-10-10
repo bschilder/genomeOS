@@ -1,6 +1,6 @@
 # Synthetic count-scoring GPU probe
 
-September 9, 2026; [research program #189](https://github.com/bschilder/genomeOS/issues/189).
+September 9, 2026; [research program #189](https://github.com/genomeOS/genomeOS/issues/189).
 
 ## Question and interpretation
 

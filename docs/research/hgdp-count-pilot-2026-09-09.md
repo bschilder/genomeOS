@@ -1,6 +1,6 @@
 # Original-callset allele-count qualification pilot
 
-September 9, 2026; advances [#189](https://github.com/bschilder/genomeOS/issues/189).
+September 9, 2026; advances [#189](https://github.com/genomeOS/genomeOS/issues/189).
 This follows the [cohort/dependency qualification](hgdp-cohort-dependency-qualification-2026-09-09.md).
 It establishes real count-preparation evidence, not an AF prediction improvement.
 

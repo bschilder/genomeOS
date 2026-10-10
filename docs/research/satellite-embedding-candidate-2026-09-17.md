@@ -1,6 +1,6 @@
 # Satellite Embedding candidate record — 2026-09-17
 
-**Scope:** issue [#290](https://github.com/bschilder/genomeOS/issues/290), global-modeling WP3,
+**Scope:** issue [#290](https://github.com/genomeOS/genomeOS/issues/290), global-modeling WP3,
 Atlas design §7. This note records a candidate source and its terms. It does not report a raster
 extraction, an allele-frequency model input, predictive improvement, or benchmark admission.
 
@@ -44,7 +44,7 @@ Sources:
 
 - [Earth Engine Satellite Embedding catalog](https://developers.google.com/earth-engine/datasets/catalog/GOOGLE_SATELLITE_EMBEDDING_V1_ANNUAL)
 - [CC BY 4.0 deed and legal-code link](https://creativecommons.org/licenses/by/4.0/)
-- [WP3 source-neutral qualification contract](https://github.com/bschilder/genomeOS/issues/290)
+- [WP3 source-neutral qualification contract](https://github.com/genomeOS/genomeOS/issues/290)
 
 ## Reproducible inspection
 

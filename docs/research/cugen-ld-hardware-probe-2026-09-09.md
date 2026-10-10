@@ -4,7 +4,7 @@
 
 Objective: test whether the owner's pinned CuGen can supply correctly identified, training-only
 unphased ALT-genotype correlations for a later multivariant AF experiment (design §7–§8;
-[WP6 / #195](https://github.com/bschilder/genomeOS/issues/195)). Acceptance evidence is exact
+[WP6 / #195](https://github.com/genomeOS/genomeOS/issues/195)). Acceptance evidence is exact
 sample/pair identity and counts, independent numerical agreement, and held-out-mutation
 invariance. The interfaces exercised are public `cugen.write.write_cugen`,
 `cugen.subset.subset_cugen_file` and `cugen.ld.ld_matrix`, outside the serving path.
@@ -14,7 +14,7 @@ fresh-process runs reproduce four near-fixed-allele R-budget failures, including
 failures. Every corresponding CuGen CPU result passes. This is synthetic engineering evidence,
 not an AF accuracy benchmark, production integration, joint-covariance qualification or permission
 to export population data. The downstream consumer is the still-incomplete pilot, not the map.
-The numerical defect is tracked in [#205](https://github.com/bschilder/genomeOS/issues/205).
+The numerical defect is tracked in [#205](https://github.com/genomeOS/genomeOS/issues/205).
 
 ## Exact implementation and environment
 
@@ -131,7 +131,7 @@ Correctness must precede speed comparisons; the timings in these logs are diagno
 controlled full-workflow throughput benchmarks.
 
 The warnings captured by each call are retained in the logs, including pandas deprecations and
-the CPU reader ResourceWarning tracked separately in [#201](https://github.com/bschilder/genomeOS/issues/201).
+the CPU reader ResourceWarning tracked separately in [#201](https://github.com/genomeOS/genomeOS/issues/201).
 Empty stderr does not mean warning-free: the diagnostic catches and records warning categories.
 Runtime timings differ between runs, but removing only `elapsed_seconds` and `wall_seconds`
 from the JSON objects yields identical complete records. Repeats check reproducibility, not

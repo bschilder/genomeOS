@@ -17,7 +17,7 @@ workstream, and the gate list — and points back here. It routes; this file rul
 4. The plan for your sub-project, e.g.
    [`docs/superpowers/plans/2026-08-22-atlas-data-foundation.md`](docs/superpowers/plans/2026-08-22-atlas-data-foundation.md)
    (P0 + P1). Plans are task-by-task with tests specified; follow them rather than improvising.
-5. [Issue #3](https://github.com/bschilder/genomeOS/issues/3) if you are touching data ingestion —
+5. [Issue #3](https://github.com/genomeOS/genomeOS/issues/3) if you are touching data ingestion —
    it explains what every source is for and what its access terms are.
 6. [`docs/literature-evidence-curation.md`](docs/literature-evidence-curation.md) and its linked
    schema-tested examples if you are extracting or importing publication evidence.
@@ -39,7 +39,7 @@ a dataset, method, coordinate, default, or success criterion when the specified 
 
 ## Check the issues before you start — open *and* closed
 
-The [issue tracker](https://github.com/bschilder/genomeOS/issues) is the project's record of what
+The [issue tracker](https://github.com/genomeOS/genomeOS/issues) is the project's record of what
 has been done, what was decided and why, and what still needs doing. Search it before writing
 anything.
 
@@ -47,8 +47,10 @@ anything.
 gh issue list --state all --search "registry adapter"   # or the GitHub UI
 ```
 
-- **Open issues are the work queue** — 64 of them across 4 milestones, each with a sub-project,
-  a skill, and a priority. Everything planned for v1 is already logged.
+- **Open issues are the work queue**, grouped into four milestones and labelled with a
+  sub-project, a skill, and a priority. Everything planned for v1 is already logged; much of the
+  P2 modelling research opened since sits outside the milestones, so filter by label as well as
+  by milestone.
 - **Closed issues carry the decisions.** Closed as *completed* means the work exists — read it
   rather than redoing it, and note that its approach is probably the house pattern. Closed as
   *not planned* means it was considered and rejected; reopening that needs an argument in the
@@ -66,7 +68,7 @@ gh issue list --state all --search "registry adapter"   # or the GitHub UI
   [`docs/overview.md`](docs/overview.md) first: P6–P12 are deliberately out of scope for v1, and
   their absence is a decision rather than an oversight.
 - **Improving the design, the dataset scores in
-  [#3](https://github.com/bschilder/genomeOS/issues/3), or the statistics?** Very welcome — comment
+  [#3](https://github.com/genomeOS/genomeOS/issues/3), or the statistics?** Very welcome — comment
   on the relevant issue or open a new one.
 - New issues are auto-added to the board as `Backlog`. Apply the four label families if you can;
   if you cannot, say so in the issue body so it can be triaged.
@@ -180,9 +182,13 @@ The heavy Atlas dependencies (pandera, pandas, pyarrow, duckdb, h3) live in the 
 PyMC/PyTensor in a `surfaces` extra, and rasterio in a `geo` extra, so the API container carries
 none of them. Install everything with `.[dev,atlas,surfaces,geo,figures]`.
 
-**Inference engine:** PyMC with a Hilbert-space GP (HSGP), *not* R-INLA-SPDE, despite what
-design §7 names. The reasoning and the rejected alternatives are in #34; do not reintroduce an R
-toolchain without reopening that decision.
+**Inference engine:** PyMC (NumPyro NUTS), *not* R-INLA-SPDE, despite what design §7 names. The
+reasoning and the rejected alternatives are in #34; do not reintroduce an R toolchain without
+reopening that decision. Published surfaces and the HbS parity run use an inducing-point GP on H3
+cells (#105; `scripts/build_surfaces.py` sets `approximation="inducing"`). HSGP, the approximation
+#34 chose, remains available in `genomeos/surfaces/config.py`. The likelihood is beta-binomial by
+default (#83). Amending §7 itself, including the Matérn-3/2 versus 5/2 kernel question, is #85
+and wants expert review.
 
 ## Commands
 
@@ -210,15 +216,22 @@ never be presented as scientific results.
 Rebuild the Atlas stores from fixtures (the end-to-end check):
 
 ```bash
+rm -rf data/registry-fixture-v1 data/observations   # releases are immutable; see below
 python scripts/build_registry.py --hgdp tests/fixtures/hgdp_populations.tsv \
   --release-version 0.1.0 --out data/registry-fixture-v1
 python scripts/build_observations.py --registry data/registry-fixture-v1 \
   --gnomad tests/fixtures/gnomad_hgdp_1kg_freqs.tsv \
   --map-surveys tests/fixtures/map_hbs_curated_synthetic.csv \
-  --literature-evidence tests/fixtures/literature/promotable/evidence.tsv \
-  --literature-field-evidence tests/fixtures/literature/promotable/field_evidence.tsv \
   --out data/observations
 ```
+
+It should report `registry 0.1.0+sha256.…: 6 populations, 6 aliases`, four counted MAP refusals,
+and `observations v0.1.0: 11 rows, 2 variants`. Do not add the literature fixtures to this
+command: the promotable rows resolve through a literature alias (`Sami`) that `build_registry.py`
+cannot yet add, so `build_observations.py` correctly refuses them with `UnmappedPopulationError`.
+`tests/test_build_scripts.py` builds a registry that carries those aliases and covers literature
+promotion end to end. `build_registry.py` refuses an existing `--out` by design, because registry
+releases are immutable, so the first line clears these local, gitignored outputs before a re-run.
 
 **If you change a schema, run `python scripts/freeze_contract.py` and commit the `contract/`
 diff.** That diff is the review surface for schema change; CI fails if it is stale.
@@ -237,7 +250,7 @@ Linux CI and on a pod:
 ```bash
 uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -r requirements.lock
-python -m pip install -e '.' --no-deps
+uv pip install -e . --no-deps    # a uv venv has no pip, so `python -m pip` fails here
 ```
 
 Regenerate it when a dependency changes, and commit the diff. **`--upgrade` is not optional**, and
@@ -316,9 +329,15 @@ These are hard constraints, not preferences:
 
 - **All of Us data may inform models but may never be served by our backend** — it cannot leave
   the Researcher Workbench.
-- **Redistribution of derived surfaces from indigenous-population panels is an open question**
-  ([#66](https://github.com/bschilder/genomeOS/issues/66)). Do not publish or commit derived
-  artifacts from HGDP, SGDP, AADR or AFND as standalone datasets until it is answered.
+- **Derived surfaces from indigenous-population panels are publishable, on conditions**
+  ([#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083)).
+  Fitted surfaces derived from HGDP, SGDP, AADR and AFND may be published and redistributed only
+  with source attribution and Biocultural Notices preserved, model outputs identified as estimates
+  rather than observations, and every explicit redistribution restriction honoured. CARE is part
+  of the provenance and responsible-use framework, not by itself a publication veto. Source terms
+  still bind: a panel whose access terms limit use, such as controlled access restricted to
+  population-history research, cannot be published as a derived surface (see the follow-up on #66
+  and #3 §H).
 - Registry entries carry provenance and a Biocultural Notice field, per the CARE Principles.
   Never drop these columns for convenience.
 - Check and record source terms before promotion. A completed check that finds no explicit licence
@@ -339,9 +358,9 @@ everything that has to come out. Full rules in
   directions.
 - Every external resource in the publish allowlist carries a `commercial_use` block naming its
   `finding` and its `restricted_fields`. The exporter refuses a missing or self-contradictory one.
-- `KNOWN_NON_COMMERCIAL_FIELDS` in `scripts/export_atlas_web.py` is a tripwire: a field already
-  known to be restricted may ship **marked**, and may never ship **unmarked**. Never delete an entry
-  to make an export pass.
+- `KNOWN_NON_COMMERCIAL_FIELDS` in `genomeos/publication/commercial_use.py` (re-exported by
+  `scripts/export_atlas_web.py`) is a tripwire: a field already known to be restricted may ship
+  **marked**, and may never ship **unmarked**. Never delete an entry to make an export pass.
 - `not_checked` is publishable and stays honest. Refusing it would push a contributor to invent a
   licence finding, which the publication-evidence safeguards above forbid. The gate lists unchecked
   sources as unresolved instead.
@@ -381,7 +400,7 @@ Nothing is committed directly to `main`.**
 - **Show the map.** Once a change affects something renderable — observations, a surface, a
   mask, a burden layer — put a figure in the PR or issue rather than describing it. Generate it
   with a script under `scripts/plot_*.py`, commit the PNG under `docs/figures/`, and embed it
-  with a raw URL (`https://raw.githubusercontent.com/bschilder/genomeOS/main/docs/figures/...`).
+  with a raw URL (`https://raw.githubusercontent.com/genomeOS/genomeOS/main/docs/figures/...`).
   A committed figure is reviewable, diffable and regenerable; a pasted screenshot is none of those.
 - **Review figures obey the same invariants as the product.** Never draw a fitted surface and
   measured observations as one layer (§4), always show where there is no data rather than

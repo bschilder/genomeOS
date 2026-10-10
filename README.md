@@ -77,13 +77,13 @@ invariants rather than added as disclaimers:
 And the bar for v1 is reproducing published science, not shipping a demo: the pipeline must
 independently arrive at the *Lancet* sickle-cell numbers, at Howes et al.'s G6PD numbers, and at
 carrier rates that national screening programmes have already measured directly. Failing those
-tests blocks publication of anything else.
+tests blocks publication of every other variant's burden layer.
 
 ## Status
 
 | | |
 |---|---|
-| **Atlas** | P0/P1 data contracts and adapters, P2 surface kernels, P3 burden kernels, and a fixture-backed P4 read path are implemented. The diagnostic preview proves browser → API → DuckDB → immutable Parquet; it is not the product map. |
+| **Atlas** | P0/P1 data contracts and adapters, P2 surface kernels and P3 burden kernels are implemented. A diagnostic P4 read path is deployed on Cloud Run ([#147](https://github.com/genomeOS/genomeOS/pull/147)) and serves the MAP HbS/G6PD surfaces from a read-only GCS bucket; its preview proves browser → API → DuckDB → immutable Parquet and is not the product map. The [globe explorer](https://genome-os.org/app/) shows measured observations and fitted surfaces for a catalog of 30 maps, read from a static export rather than the API. The v1 gate is not met yet: HbS parity against Piel et al. currently fails ([#45](https://github.com/genomeOS/genomeOS/issues/45)), and the design holds back every burden layer until it passes. |
 | **Pan-UKB evidence API** | Running. Provenance-first API over Pan-UK Biobank metadata and selectively indexed ancestry-stratified GWAS associations — the trait and effect-size layer of the atlas. Full summary-statistics files stay in public object storage and are queried by genomic region through a [Tabix](https://www.htslib.org/doc/tabix.html) boundary. |
 
 ## Documentation

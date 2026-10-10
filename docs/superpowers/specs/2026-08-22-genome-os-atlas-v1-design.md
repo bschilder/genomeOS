@@ -4,6 +4,27 @@
 **Date:** 2026-08-22
 **Scope:** sub-projects P0–P5 (the Mendelian burden map). P6+ are named here only to fix their boundaries.
 
+**Amendments since approval.** The text below is kept as approved. These notes record where later
+decisions departed from it, so read each section together with the decision it names:
+
+- **Inference engine (§3, §5, §7, §10).** Fits use PyMC (NumPyro NUTS), not INLA-SPDE
+  ([#34](https://github.com/genomeOS/genomeOS/issues/34)). Published surfaces and the HbS parity
+  run use an inducing-point GP on H3 cells ([#105](https://github.com/genomeOS/genomeOS/pull/105));
+  HSGP, the approximation #34 chose, remains available. The implementation uses a Matérn-5/2
+  kernel where §7 names Matérn-3/2. It uses a beta-binomial likelihood by default where §7 names
+  a binomial ([#83](https://github.com/genomeOS/genomeOS/issues/83)); the binomial remains
+  selectable. Amending §7 itself, including whether 5/2 is the right smoothness assumption, is
+  [#85](https://github.com/genomeOS/genomeOS/issues/85) and wants expert review.
+- **Renderer (§3, §5, §11).** The P5 client is a CesiumJS globe in the project's Astro site. It
+  supersedes the Next.js + deck.gl + MapLibre choice
+  ([Cesium explorer design](2026-09-06-cesium-globe-explorer-design.md),
+  [#55](https://github.com/genomeOS/genomeOS/issues/55)) and leaves the P0–P4 contracts unchanged.
+- **Redistribution (§13, §14 item 1).** Answered by the
+  [#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083). Derived
+  surfaces from HGDP, SGDP, AADR and AFND may be published with attribution and Biocultural
+  Notices preserved, estimates labelled as estimates, and every explicit source restriction
+  honoured.
+
 ---
 
 ## 1. Objective
@@ -299,4 +320,4 @@ Left to P12's own spec: whether the agent may fit *new* surfaces on demand — e
 
 ## 17. References
 
-Marcus & Novembre 2017 (GGV, *Bioinformatics*) · Piel et al. 2010 (*Nat Commun*) · Piel et al. 2013 (*Lancet*) · Howes et al. (G6PD) · Novembre & Stephens 2008 (*Nat Genet*) · Petkova et al. 2016 (EEMS, *Nat Genet*) · Marcus et al. 2021 (FEEMS, *eLife*) · Battey et al. 2020 (Locator, *eLife*) · Nunes et al. 2014 (GENE[RATE], *Tissue Antigens*) · Koenig et al. 2024 (harmonised HGDP+1kGP, *Genome Research*) · Mallick et al. 2024 (AADR) · Gonzalez-Galarza et al. 2020 (AFND, *NAR*) · Nextstrain (Hadfield et al. 2018) · Full annotated review: [Discussion #4](https://github.com/bschilder/genomeOS/discussions/4) · Scored dataset assessment: [Issue #3](https://github.com/bschilder/genomeOS/issues/3)
+Marcus & Novembre 2017 (GGV, *Bioinformatics*) · Piel et al. 2010 (*Nat Commun*) · Piel et al. 2013 (*Lancet*) · Howes et al. (G6PD) · Novembre & Stephens 2008 (*Nat Genet*) · Petkova et al. 2016 (EEMS, *Nat Genet*) · Marcus et al. 2021 (FEEMS, *eLife*) · Battey et al. 2020 (Locator, *eLife*) · Nunes et al. 2014 (GENE[RATE], *Tissue Antigens*) · Koenig et al. 2024 (harmonised HGDP+1kGP, *Genome Research*) · Mallick et al. 2024 (AADR) · Gonzalez-Galarza et al. 2020 (AFND, *NAR*) · Nextstrain (Hadfield et al. 2018) · Full annotated review: [Discussion #4](https://github.com/genomeOS/genomeOS/discussions/4) · Scored dataset assessment: [Issue #3](https://github.com/genomeOS/genomeOS/issues/3)

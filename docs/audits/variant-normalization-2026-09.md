@@ -6,7 +6,7 @@ Design: [`2026-09-10-variant-normalization-registry-design.md`](../superpowers/s
 **Who did the work.** Every row in this batch was resolved by an agent
 (`agent:anthropic:claude-opus-5`) on 2026-09-11 UTC. Every value below was retrieved from a live
 service in that session; nothing was recalled. All four rows are `verification_status: pending`
-and stay that way until [#242](https://github.com/bschilder/genomeOS/issues/242) decides who may
+and stay that way until [#242](https://github.com/genomeOS/genomeOS/issues/242) decides who may
 verify an agent-resolved row. **Until they are verified the four loci are not eligible for a
 coordinate-keyed external resource** (spec §9). That is enforced, not merely stated:
 `normalized_identity` returns `None` for a **mapping** row — one whose `variant_id` differs from
@@ -226,7 +226,7 @@ exact violation corrected one round earlier — an agent asserting a human's ins
 HbS's external resources (a user-visible regression to already-published output).
 
 The four cytokine rows are unaffected: they are mapping rows, they are `pending`, and they remain
-ineligible until [#242](https://github.com/bschilder/genomeOS/issues/242) settles who may verify
+ineligible until [#242](https://github.com/genomeOS/genomeOS/issues/242) settles who may verify
 them. `tests/test_export_atlas_web.py::test_every_declared_external_resource_resolves_against_the_real_registry`
 now joins the real allowlist to the real registry, so the next time a declared resource loses its
 resolvable row — or a resource is declared for a locus still pending — a test fails rather than an

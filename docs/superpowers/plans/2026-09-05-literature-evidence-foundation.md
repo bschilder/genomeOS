@@ -179,13 +179,13 @@
 - [x] Open one HBB round-trip issue tied to HbS parity and one G6PD literature-ingestion issue tied to X-linked/parity acceptance. Do not claim those scientific validations are complete.
 - [x] Record all resulting issue URLs/numbers in the PR body.
 
-Tracker results: [#7](https://github.com/bschilder/genomeOS/issues/7),
-[#8](https://github.com/bschilder/genomeOS/issues/8),
-[#45](https://github.com/bschilder/genomeOS/issues/45),
-[#117](https://github.com/bschilder/genomeOS/issues/117),
-[#149](https://github.com/bschilder/genomeOS/issues/149),
-[#150](https://github.com/bschilder/genomeOS/issues/150), and
-[#151](https://github.com/bschilder/genomeOS/issues/151).
+Tracker results: [#7](https://github.com/genomeOS/genomeOS/issues/7),
+[#8](https://github.com/genomeOS/genomeOS/issues/8),
+[#45](https://github.com/genomeOS/genomeOS/issues/45),
+[#117](https://github.com/genomeOS/genomeOS/issues/117),
+[#149](https://github.com/genomeOS/genomeOS/issues/149),
+[#150](https://github.com/genomeOS/genomeOS/issues/150), and
+[#151](https://github.com/genomeOS/genomeOS/issues/151).
 
 ### Task 11: Verify, review, commit, and open the pull request
 
@@ -211,5 +211,5 @@ pytest
 Review result: the review checklist was applied directly because the active collaboration policy
 prohibited spawning a reviewer subagent. It found and fixed reproducible search identities,
 placeholder locator and durable review-reference validation, immutable/reconciled ingest reports,
-and deterministic retained-ledger ordering before PR [#152](https://github.com/bschilder/genomeOS/pull/152)
+and deterministic retained-ledger ordering before PR [#152](https://github.com/genomeOS/genomeOS/pull/152)
 was opened.

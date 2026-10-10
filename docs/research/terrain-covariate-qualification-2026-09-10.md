@@ -1,7 +1,7 @@
 # Terrain covariate qualification: source before model
 
 Status: `automated_proposal` / `pending`, 2026-09-10. Advances WP3 of
-[#189](https://github.com/bschilder/genomeOS/issues/189), not a completed
+[#189](https://github.com/genomeOS/genomeOS/issues/189), not a completed
 covariate admission. No raster extraction, model fit or predictive gain is claimed.
 Implements research preparation for Atlas design §§4–7, 12 and the
 [global modeling plan](../superpowers/plans/2026-09-09-global-af-modeling.md).

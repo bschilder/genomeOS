@@ -2,7 +2,7 @@
 
 ## Status and scope
 
-This is the next focused architectural slice of the owner-approved [global AF program](../plans/2026-09-09-global-af-modeling.md), implementing the observation-prediction prerequisite in [#191](https://github.com/bschilder/genomeOS/issues/191). It follows the initial benchmark/scoring slice; it does not replace its outstanding hardware, review or PR gates. The owner explicitly authorized continued implementation without routine approval pauses on September 9.
+This is the next focused architectural slice of the owner-approved [global AF program](../plans/2026-09-09-global-af-modeling.md), implementing the observation-prediction prerequisite in [#191](https://github.com/genomeOS/genomeOS/issues/191). It follows the initial benchmark/scoring slice; it does not replace its outstanding hardware, review or PR gates. The owner explicitly authorized continued implementation without routine approval pauses on September 9.
 
 Atlas design §§4–5, 7.1, 8 and 12 apply. The primary program target remains present-day residents, but a prediction of a recorded survey is not itself evidence that its recruitment represents residents. This slice adds no data, new fitted likelihood, covariate, production surface, serving inference or publication authorization.
 
@@ -57,7 +57,7 @@ Required fields:
 
 The arrays describe conditional mean/dispersion given each combined posterior/new-effect draw. They are not replicated counts. Numerical endpoints produced by `expit` are retained without arbitrary epsilon clipping. The downstream scorer still applies its documented special-function numerical limits; mathematically positive parameters do not guarantee numerically evaluable beta-binomial probabilities.
 
-**Arithmetic-domain clarification ([#200](https://github.com/bschilder/genomeOS/issues/200)):**
+**Arithmetic-domain clarification ([#200](https://github.com/genomeOS/genomeOS/issues/200)):**
 finite input arrays do not guarantee finite additions or scale products. Refuse nonfinite
 composition intermediates with an explicit numerical-domain error before `expit` can hide them
 as plausible endpoints. Do not add clipping or an implicit higher-precision fallback. This may
@@ -119,7 +119,7 @@ Preserve separately fingerprinted fresh-parent and parent-loaded-cache controls.
 fresh-parent/fresh-new and cached-parent/cached-new comparisons test version compatibility;
 do not replace the former with the latter or weaken either with a numerical tolerance. Record the
 pre-existing execution-mode discrepancy and investigate its cause separately in
-[#198](https://github.com/bschilder/genomeOS/issues/198), without claiming that this refactor
+[#198](https://github.com/genomeOS/genomeOS/issues/198), without claiming that this refactor
 fixes it. New-interface save/load equality remains its own Task 3 requirement.
 
 **Save-path clarification, September 9:** Task 3's stronger clean-process test exposed a

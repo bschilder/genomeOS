@@ -133,7 +133,7 @@ The other eight configurations were not launched. Both successful directories
 and terminal failure records remain preserved locally as superseded attempts.
 An earlier successful engineering run at `a69f594` is also preserved.
 
-Issue [#209](https://github.com/bschilder/genomeOS/issues/209) records the
+Issue [#209](https://github.com/genomeOS/genomeOS/issues/209) records the
 independent synthetic Decimal-oracle reproduction. Summing the shorter support
 tail could still mean summing a probability nearly equal to one. The repair
 switches to the small-probability complement using a one-half crossover,

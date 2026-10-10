@@ -1,6 +1,6 @@
 # Local allele-frequency input qualification audit
 
-September 9, 2026; research program [#189](https://github.com/bschilder/genomeOS/issues/189).
+September 9, 2026; research program [#189](https://github.com/genomeOS/genomeOS/issues/189).
 This is a read-only inventory of available metadata, not independent source review or a
 certification of permissions, residency, study independence, or prediction accuracy.
 
@@ -57,11 +57,11 @@ build when those inputs are absent. `data/store/artifacts/*/cells.parquet` conta
 - Geography needs more than valid numeric coordinates. MAP currently substitutes a fixed area
   when extent is missing, unbounded or unrecognized. That assumed radius is not a guaranteed
   recruitment footprint for a buffered split. This was filed separately as
-  [#190](https://github.com/bschilder/genomeOS/issues/190); no adapter or artifact was changed.
+  [#190](https://github.com/genomeOS/genomeOS/issues/190); no adapter or artifact was changed.
 - Reuse-review state and biocultural notices are not carried in browser observation exports.
   Read the contributing source records before qualification; public visibility is not export
   permission. The owner's resolved
-  [#66 decision](https://github.com/bschilder/genomeOS/issues/66#issuecomment-5565166083) allows
+  [#66 decision](https://github.com/genomeOS/genomeOS/issues/66#issuecomment-5565166083) allows
   fitted-surface redistribution with attribution and biocultural notices, clear identification of
   inference versus observation, and explicit source restrictions honored. That conditional policy
   permission does not replace source qualification; this milestone publishes no scientific surface.
