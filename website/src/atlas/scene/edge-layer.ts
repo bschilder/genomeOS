@@ -212,9 +212,15 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
       sliceOptions(signal),
     );
   };
-  /** Moves every ring drawn so far, in both renderers, to `factor`. */
+  /**
+   * Moves every ring drawn so far, in both renderers, to `factor`. A renderer already drawn at
+   * `factor` is left alone: rewriting its rings changes nothing but makes Cesium re-pack the
+   * whole collection on the next frame, and the scene forces this call before every artifact
+   * switch. The drawn factor, not `factor`, decides, because a throttled call can leave `factor`
+   * ahead of what is drawn, and the final forced call is what catches up.
+   */
   const raise = () => {
-    if (buffer) {
+    if (buffer && bufferFactor !== factor) {
       const polyline = new BufferPolyline();
       for (let index = 0; index < buffer.primitiveCount; index += 1) {
         buffer.get(index, polyline);
@@ -222,7 +228,7 @@ export function createEdgeLayer(options: EdgeLayerOptions): EdgeLayer {
       }
       bufferFactor = factor;
     }
-    if (projected) {
+    if (projected && projectedFactor !== factor) {
       projectedLines.forEach((line, index) => {
         line.positions = cartesiansOf(positionsOf(rings[index], factor));
       });

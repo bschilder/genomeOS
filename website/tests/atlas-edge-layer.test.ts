@@ -415,6 +415,34 @@ describe('cell outlines built across several slices', () => {
     },
   );
 
+  it('moves no ring when a forced elevation change finds every renderer at that factor', async () => {
+    // The scene forces setElevationFactor before every artifact switch. A forced call at the
+    // drawn factor used to rewrite all ~77k rings, and Cesium re-packed the whole collection on
+    // the next frame: a 0.3-0.5 s frame per desktop switch, 1.2-1.7 s on a 4x phone.
+    stubCesiumBrowserImageTypes();
+    const setPositions = vi.spyOn(BufferPolyline.prototype, 'setPositions');
+    const layer = createEdgeLayer({ requestRender: vi.fn() });
+    await layer.build(sourceOf([edgeBuffers(0, RINGS)]), '#ffffff', 'globe', 0);
+    await layer.setMode('map');
+    const projected = layer.collection.get(1) as PolylineCollection;
+    const drawn = RINGS.map((_, index) => projected.get(index).positions);
+    setPositions.mockClear();
+
+    layer.setElevationFactor(0, true);
+    expect(setPositions).not.toHaveBeenCalled();
+    RINGS.forEach((_, index) =>
+      expect(projected.get(index).positions).toBe(drawn[index]),
+    );
+
+    // A real change still moves both renderers.
+    layer.setElevationFactor(2, true);
+    expect(setPositions).toHaveBeenCalledTimes(RINGS.length);
+    RINGS.forEach((_, index) =>
+      expect(projected.get(index).positions).not.toBe(drawn[index]),
+    );
+    setPositions.mockRestore();
+  });
+
   it('shows projected outlines when the view switches to map while the build adds rings', async () => {
     stubCesiumBrowserImageTypes();
     const { atNextYield, slice } = interleaved();
