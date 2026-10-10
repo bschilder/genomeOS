@@ -185,6 +185,37 @@ describe('AtlasWorkerClient', () => {
     );
   });
 
+  it('reports a crash once, to every listener, including one added afterwards', async () => {
+    // A dead worker cannot recover in this document, so the explorer routes it to the reload
+    // panel (final review spec-3; Cesium design §12).
+    const worker = new InProcessWorker();
+    const { client: atlas } = client(worker);
+    const early = vi.fn();
+    const removed = vi.fn();
+    atlas.onCrash(early);
+    atlas.onCrash(removed)();
+    worker.crash('boom');
+    worker.crash('again');
+    expect(early).toHaveBeenCalledTimes(1);
+    expect(early.mock.calls[0][0]).toMatchObject({
+      message: 'Atlas data worker failed: boom',
+    });
+    expect(removed).not.toHaveBeenCalled();
+    const late = vi.fn();
+    atlas.onCrash(late);
+    expect(late).toHaveBeenCalledTimes(1);
+  });
+
+  it('never reports a crash for a worker that could not start, whose requests fail instead', async () => {
+    const atlas = AtlasWorkerClient.unavailable(new Error('blocked by CSP'));
+    const crashed = vi.fn();
+    atlas.onCrash(crashed);
+    await expect(
+      atlas.loadGrid(toBuffer(goldenBytes(entry.url)), { entry, gridSha256 }),
+    ).rejects.toThrow('could not start: blocked by CSP');
+    expect(crashed).not.toHaveBeenCalled();
+  });
+
   it('fails a retry after a worker crash instead of posting it to the dead worker', async () => {
     const worker = new InProcessWorker({
       ...ATLAS_WORKER_HANDLERS,

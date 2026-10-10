@@ -9,11 +9,14 @@ import type { AtlasWorkerClient } from '../../atlas/worker/client';
 
 /**
  * Why the globe is unavailable (Cesium globe design §12). `webgl`: no WebGL, or Cesium failed to
- * start. `download`: the scene chunk failed to load. Chromium keeps a failed dynamic import in the
- * page's module map and rejects every later `import()` of that URL without a request, so only a
- * page reload recovers. `render`: a frame threw and the scene's render loop stopped
- * (`AtlasSceneController.onRenderError`); Cesium's document-wide geometry workers keep a failed
- * import, so that too recovers only through a reload. This hook reports the first two.
+ * start. `download`: the scene chunk failed to load, or the Atlas data worker died after it
+ * started (its module script failed to download, or it threw; `AtlasWorkerClient.onCrash`).
+ * Chromium keeps a failed dynamic import in the page's module map and rejects every later
+ * `import()` of that URL without a request, and the page's one data worker cannot be restarted
+ * under the scene and provider that share it, so only a page reload recovers. `render`: a frame
+ * threw and the scene's render loop stopped (`AtlasSceneController.onRenderError`); Cesium's
+ * document-wide geometry workers keep a failed import, so that too recovers only through a
+ * reload. This hook reports `webgl` and the scene-chunk `download`; the explorer reports the rest.
  */
 export type SceneFailure = 'webgl' | 'download' | 'render';
 

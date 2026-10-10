@@ -103,15 +103,22 @@ class UnavailableWorker extends EventTarget {
 /**
  * A worker `error` event or `terminate()` is final: the client stops the worker, fails every
  * pending request and rejects every later one with the same error without posting it. A dead
- * worker so ends each load, and each "Retry data", in a failure, never an endless "Loading" (RF5).
+ * worker so ends each load in a failure, never an endless "Loading" (RF5). A worker that started
+ * and then died (its module script failed to download, or it threw) is also reported through
+ * `onCrash`: only a new page starts a new worker, so the explorer offers a reload instead of a
+ * "Retry data" that would fail the same way (final review spec-3).
  */
 export class AtlasWorkerClient {
+  readonly #crashListeners = new Set<(error: Error) => void>();
   readonly #pending = new Map<number, Pending>();
   readonly #renders = new Map<string, DecodedRender>();
   readonly #timings = new Set<(timing: StepTiming) => void>();
   readonly #worker: Worker;
+  #crash: Error | null = null;
   #failure: Error | null = null;
   #nextId = 1;
+  /** False for the `unavailable` stand-in: a worker that never started cannot crash. */
+  #started = true;
 
   constructor(worker: Worker = createDataWorker()) {
     this.#worker = worker;
@@ -119,13 +126,16 @@ export class AtlasWorkerClient {
       this.#receive(event.data),
     );
     // A script that fails to load fires a bare Event, so `message` may be undefined.
-    worker.addEventListener('error', (event: ErrorEvent) =>
+    worker.addEventListener('error', (event: ErrorEvent) => {
       this.#die(
         new Error(
           `Atlas data worker failed: ${event.message || 'unknown error'}`,
         ),
-      ),
-    );
+      );
+      if (!this.#started || this.#crash) return;
+      this.#crash = this.#failure;
+      for (const listener of [...this.#crashListeners]) listener(this.#crash!);
+    });
     // One undeliverable response with an unknown id; the worker itself is still running.
     worker.addEventListener('messageerror', () =>
       this.#failAll(new Error('Atlas data worker sent an unreadable message')),
@@ -135,9 +145,23 @@ export class AtlasWorkerClient {
   /** A client whose requests reject with `reason` (used when `new Worker` throws). */
   static unavailable(reason: unknown): AtlasWorkerClient {
     const message = reason instanceof Error ? reason.message : String(reason);
-    return new AtlasWorkerClient(
+    const client = new AtlasWorkerClient(
       new UnavailableWorker(message) as unknown as Worker,
     );
+    client.#started = false;
+    return client;
+  }
+
+  /**
+   * Called once when the running worker dies; a listener added later hears it at once. Never
+   * called for a worker that could not start (`unavailable`) or after `terminate()`.
+   */
+  onCrash(listener: (error: Error) => void): () => void {
+    this.#crashListeners.add(listener);
+    if (this.#crash) listener(this.#crash);
+    return () => {
+      this.#crashListeners.delete(listener);
+    };
   }
 
   async loadGrid(

@@ -1826,6 +1826,39 @@ test('Retry globe recovers from a failed scene-chunk download', async ({
   await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
 });
 
+test('Retry globe recovers from a data worker whose script failed to download', async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  // A dead data worker fails every later request, and only a new page starts a new one, so the
+  // explorer offers the reload panel instead of a "Retry data" that would fail the same way.
+  let workerRequests = 0;
+  await page.route(/\/_astro\/atlas-data\.worker-[^/]+\.js$/, async (route) => {
+    workerRequests += 1;
+    if (workerRequests === 1) await route.abort('failed');
+    else await route.fallback();
+  });
+  await page.goto('/app/?metric=post_sd');
+  const failure = page
+    .getByRole('alert')
+    .filter({ hasText: 'The globe could not load' });
+  await expect(failure).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole('button', { name: 'Retry data' })).toHaveCount(0);
+  await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+    'data-atlas-ready',
+    'false',
+  );
+  await Promise.all([
+    page.waitForEvent('load'),
+    failure.getByRole('button', { name: 'Retry globe' }).click(),
+  ]);
+  await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+    timeout: 45_000,
+  });
+  expect(workerRequests).toBe(2);
+  await expect(page).toHaveURL(/[?&]metric=post_sd(?:&|$)/);
+});
+
 test('polygon map validates a selected model cell before loading Google Maps', async ({
   page,
 }) => {
