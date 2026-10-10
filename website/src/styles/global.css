@@ -184,6 +184,9 @@ svg {
   --lockup-compact-width: calc(2.6rem * 1395 / 300);
   position: fixed;
   inset: 0 0 auto;
+  /* A phone browser widens its layout viewport, which a fixed box spans, when
+   * page copy overflows (large text); the screen's width keeps Menu on it. */
+  max-width: 100vw;
 }
 
 /* The landing bar: its min-height plus the 1px bottom border. */
@@ -534,6 +537,34 @@ svg {
   .site-footer__inner {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+/* The Menu's copy of Launch Atlas, for the query below. */
+.mobile-nav__launch {
+  display: none;
+}
+
+/*
+ * A row too narrow for the lockup beside both Launch Atlas and Menu: page
+ * zoom (a 390 px phone at 200% is 195 CSS px) or text zoom (a 32 px default
+ * font moves this query to 586 px). Below 18.3rem the formula above would
+ * leave the lockup under 5.5rem wide (16.3 root rem of row, at 1.125 media
+ * rem each), shrinking to nothing as the row narrows, and the home link to a
+ * bare focus ring. So Launch Atlas moves into the Menu and the lockup takes
+ * its room: the row keeps only Menu (~3.9rem) and one gap beside it.
+ */
+@media (max-width: 18.3rem) {
+  .site-header--lockup .launch-atlas-cta {
+    display: none;
+  }
+
+  .site-header--lockup {
+    --lockup-landing-width: min(14rem, 100vw - 2 * var(--space-page) - 5rem);
+  }
+
+  .mobile-nav__launch {
+    display: list-item;
   }
 }
 

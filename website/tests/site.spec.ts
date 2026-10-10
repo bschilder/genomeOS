@@ -1189,6 +1189,65 @@ test('the Menu panel scrolls inside short viewports and closes on Escape or when
   ).toHaveCount(1);
 });
 
+test('at large text sizes Launch Atlas moves into the Menu, so the home logo keeps its size', async ({
+  context,
+  page,
+}) => {
+  const header = page.locator('[data-site-header]');
+  const cta = header.locator('.launch-atlas-cta');
+  const launchInMenu = page
+    .getByRole('navigation', { name: 'Mobile navigation' })
+    .getByRole('link', { name: 'Launch Atlas', exact: true });
+  const row = () =>
+    page.evaluate(() => {
+      const box = (selector: string) =>
+        document.querySelector(selector)!.getBoundingClientRect();
+      const inner = document.querySelector('.site-header__inner')!;
+      return {
+        logoWidth: box('.wordmark__logo').width,
+        menuRight: box('.mobile-nav summary').right,
+        overflow: inner.scrollWidth - inner.clientWidth,
+        screen: document.documentElement.clientWidth,
+      };
+    });
+
+  // At the default text size the action stays beside the Menu, not in it.
+  await page.setViewportSize({ width: 360, height: 780 });
+  await page.goto('/');
+  await expect(cta).toBeVisible();
+  await header.locator('.mobile-nav summary').click();
+  await expect(launchInMenu).toHaveCount(0);
+
+  // Text-only zoom: Chromium's default font size, which a browser's text-size
+  // setting changes (32 px is 200%). The lockup used to shrink to 1x0 at
+  // 390 px and 0x0 at 360 px, leaving the home link a bare focus ring.
+  // Page zoom narrows the viewport instead: a 390 px phone at 200% is 195 CSS
+  // px wide, where the lockup was 1x0 too.
+  const session = await context.newCDPSession(page);
+  for (const [fontSize, width, minLogoWidth] of [
+    [32, 390, 110],
+    [32, 360, 85],
+    [16, 195, 55],
+  ] as const) {
+    await session.send('Page.setFontSizes', {
+      fontSizes: { standard: fontSize },
+    });
+    await page.setViewportSize({ width, height: 780 });
+    await page.goto('/');
+    const label = `${width} px at ${fontSize} px text`;
+    await expect(cta, label).toBeHidden();
+    const measured = await row();
+    expect(measured.logoWidth, label).toBeGreaterThanOrEqual(minLogoWidth);
+    expect(measured.overflow, label).toBeLessThanOrEqual(0);
+    // On the screen at load. Some page copy is wider than the screen at these
+    // sizes, which on a phone widens the layout viewport a fixed box spans.
+    expect(measured.menuRight, label).toBeLessThanOrEqual(measured.screen);
+    await header.locator('.mobile-nav summary').click();
+    await expect(launchInMenu, label).toBeVisible();
+    await expect(launchInMenu, label).toHaveAttribute('href', '/app/');
+  }
+});
+
 test('404 page offers three recovery routes', async ({ page }) => {
   await page.goto('/404.html');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(

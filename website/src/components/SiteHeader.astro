@@ -123,6 +123,14 @@ const logo = isAtlasPage
         <nav aria-label="Mobile navigation">
           <ul>
             {
+              /* Shown only when the row is too narrow for the action itself (global.css). */
+              !isAtlasPage && (
+                <li class="mobile-nav__launch">
+                  <a href={sitePath('/app/')}>Launch Atlas</a>
+                </li>
+              )
+            }
+            {
               links.map(({ label, href }) => (
                 <li>
                   <a
