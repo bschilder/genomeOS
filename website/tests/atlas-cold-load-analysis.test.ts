@@ -105,7 +105,7 @@ describe('cold-load profiles', () => {
           observationsVisibleMs: 4_000,
           surfaceVisibleMs: 6_000,
           atlasLongFrameMs: 800,
-          revealMs: 1_000,
+          revealMs: 1_100,
         },
       ],
       [
@@ -117,8 +117,8 @@ describe('cold-load profiles', () => {
         4,
         SLOW_4G,
         {
-          observationsVisibleMs: 13_000,
-          surfaceVisibleMs: 18_000,
+          observationsVisibleMs: 12_000,
+          surfaceVisibleMs: 17_500,
           atlasLongFrameMs: 800,
           revealMs: null,
         },

@@ -316,7 +316,7 @@ committed as `docs/figures/atlas-mobile-{before,after}.png`.
 | -------------- | ---------------------- | ----------------- | ---------------- |
 | Desktop        | ≤ 1.5 s                | ≤ 2.5 s           | 9.6–12.9 s       |
 | Mobile Fast 4G | ≤ 4 s                  | ≤ 6 s             | 33 s             |
-| Mobile Slow 4G | ≤ 13 s                 | ≤ 18 s            | fails            |
+| Mobile Slow 4G | ≤ 12 s                 | ≤ 17.5 s          | fails            |
 
 The PR includes a bytes ledger per milestone (gzip bytes on the link ÷ bandwidth + serial round
 trips × latency + CPU) showing each budget is achievable, and the Slow 4G budgets are tightened in
@@ -324,11 +324,30 @@ the PR if the measurement allows. Additionally:
 
 - no request timeout or error on any profile;
 - **no Atlas main-thread long animation frame > 200 ms on desktop or > 800 ms on mobile** within the
-  window; surface reveal on mobile Fast 4G completes in ≤ 1 s from the first chunk, and the spec
+  window; surface reveal on mobile Fast 4G completes in ≤ 1.1 s from the first chunk, and the spec
   reports reveal frame count, total reveal time and the longest reveal frame;
 - warm layer switch stays < 2 s (`atlas-performance.spec.ts`), with ≥ 45 fps interaction;
 - a real mid-range Android cold load (Chrome remote debugging) is recorded in the PR as ground truth
   when a device is available; its absence is stated, not hidden.
+
+(Amended under R30 by the owner's ruling R-reveal, in Part B's scoped re-review, 2026-10-10. Three
+budgets change, each set from the measured medians on the shipped code tip: headed Chrome 154,
+ANGLE Metal on an Apple M3 Pro, the harness above.
+
+- **Fast 4G reveal: ≤ 1 s → ≤ 1.1 s.** Eleven tip invocations started and ended below a 1-minute
+  load average of 8. Their reveal medians were 840–1,050 ms, and 3 of the 11 were over 1 s: 1,050,
+  1,026 and 1,017 ms. In the same-session interleaved comparison the tip's pooled median was
+  932 ms over 18 runs (941 ms over all 33 runs of the 11 invocations). The two earlier builds in
+  that comparison, the R84-slow4g priority change without the fix wave's last three fixes and the
+  fix wave's starting point, reached medians of 998 and 946 ms, with single runs up to 1,059 and
+  997 ms. So the 1 s line sat inside run-to-run noise rather than marking a regression. The margin is thin: 1.1 s is 50 ms above the
+  worst quiet-machine median, and a loaded machine still misses it (1,276 ms at load 5.7 → 25.3).
+- **Slow 4G `observations-visible`: ≤ 13 s → ≤ 12 s, and `surface-visible`: ≤ 18 s → ≤ 17.5 s,**
+  the tightening the paragraph above provides for. Rule: the worst quiet-machine median plus at
+  least 0.75 s, rounded up to the next 0.5 s. The worst medians were 11,129 and 16,681 ms, which
+  leaves 871 ms (7.8%) and 819 ms (4.9%). The loaded invocation's medians (11,266 / 17,348 ms)
+  also pass, but one of its `surface-visible` runs took 18,189 ms, so 17.5 s holds on a quiet
+  machine, which the formal run requires.)
 
 **Visual parity.** Same-input parity (the legacy main-thread builder fed `Math.fround` of the JSON
 `post_mean`/`post_sd`, i.e. exactly the render-tier inputs) on the committed fixtures and the
@@ -950,7 +969,8 @@ gzip'`).
 | SHA-256 in the worker with `@noble/hashes` | `crypto.subtle` is unavailable on the plain-HTTP origin | One small pinned dependency |
 | Part B generates `.gosa` in CI (git-ignored), not committed | Committing adds ~103 MB packed binaries to history forever | CI gains a Python step until Part C |
 | Two data bases; Natural Earth, places and `external/` stay in the repo | They are the only tracked copies and small | ~4 MB stays in the Pages bundle |
-| Slow 4G budgets 13 s / 18 s (not 9 / 14) | Bytes on a 180 KB/s, 562 ms link make 9/14 infeasible with Cesium on the path | Tightened in the PR if measurement allows |
+| Slow 4G budgets 12 s / 17.5 s (not 9 / 14); tightened from 13 s / 18 s under R30 (ruling R-reveal) | Bytes on a 180 KB/s, 562 ms link make 9/14 infeasible with Cesium on the path; the shipped tip's worst quiet-machine medians are 11,129 / 16,681 ms | 17.5 s holds on a quiet machine only: one loaded run took 18,189 ms |
+| Fast 4G reveal ≤ 1.1 s from the first chunk; amended from ≤ 1 s under R30 (owner ruling R-reveal) | Quiet-machine medians on the shipped tip are 840–1,050 ms and earlier builds reached 998 ms, so 1 s sat inside run-to-run noise | 50 ms margin over the worst quiet-machine median; a loaded machine still misses it |
 | Mobile budgets judged with workers throttled (or scaled ×4) | CDP page throttling does not slow dedicated workers | A real-device check is still recommended |
 | Natural Earth parsed in the worker and drawn time-sliced; `GeoJsonDataSource` dropped | Its single onload task exceeds every long-task budget | Geographic overlay code is rewritten |
 | GCS `edge` mode provisioned; `cloud-cdn` scripted only | DNS is at GoDaddy (human step) and the load balancer costs money monthly | `edge` URLs carry the bucket name in a build variable (not git) |
