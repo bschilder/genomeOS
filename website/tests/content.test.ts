@@ -87,9 +87,7 @@ describe('public site content', () => {
     expect(contribute).toContain('Ready');
     expect(contribute).toContain('needs-human-decision');
     expect(contribute).toContain('wants-expert-review');
-    expect(contribute).toContain(
-      'https://github.com/orgs/genomeOS/projects/1',
-    );
+    expect(contribute).toContain('https://github.com/orgs/genomeOS/projects/1');
     expect(contribute).toContain('/images/contribute-community.webp');
   });
 
