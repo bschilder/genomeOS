@@ -1537,6 +1537,11 @@ test('landscape phones get the shorter landing bar', async ({ page }) => {
       Math.abs(layout.headerBottom - layout.mainTop),
       label,
     ).toBeLessThanOrEqual(0.5);
+    // A 3.2rem lockup (57.6 px at the 112.5% root), not the desktop 3.6rem
+    // (64.8 px), keeps the shorter bar's margins.
+    const logo = await measureHeaderLogo(page);
+    expect(logo.height, label).toBeCloseTo(57.6, 0);
+    expect(logo.width, label).toBeCloseTo((57.6 * 1395) / 300, 0);
   }
 });
 
