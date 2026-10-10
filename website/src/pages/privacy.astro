@@ -1,0 +1,153 @@
+---
+/**
+ * The privacy page (#422): what Google Analytics 4 collects on genome-os.org, which cookies it
+ * sets and when (opt-in in the EEA, the UK and Switzerland; opt-out elsewhere, with Global Privacy
+ * Control honoured), and how to change the choice.
+ */
+import BrandName from '../components/BrandName.astro';
+import CookieSettings from '../components/CookieSettings.astro';
+import PageIntro from '../components/PageIntro.astro';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import { gaMeasurementId } from '../lib/ga.mjs';
+
+const analytics = gaMeasurementId() !== null;
+---
+
+<SiteLayout
+  title="Privacy"
+  description="How genome-os.org uses Google Analytics, which cookies it sets and when, and how to change your choice."
+>
+  <PageIntro
+    note="Privacy"
+    title="What we measure, and what we don't."
+    lede="genomeOS uses Google Analytics to see which pages and Atlas datasets people use, so we can improve them. There are no ads, and we never send what you look at on the map."
+  />
+
+  <section class="contribution-detail" aria-label="How analytics works">
+    <div class="section-shell contribution-detail__grid">
+      <article>
+        <h2>Cookies and your choice</h2>
+        <p>
+          Google Analytics 4 sets two first-party cookies, <code>_ga</code> and <code
+            >_ga_&lt;container&gt;</code
+          >, which tell one visit from the next. Whether they are set depends on
+          where you are:
+        </p>
+        <ul>
+          <li>
+            <strong>European Economic Area, UK and Switzerland: opt-in.</strong>
+            The cookies are set only after you choose <strong>Accept</strong>.
+            Until then Google receives cookieless pings that it uses only to
+            estimate totals. Visitors in these time zones see a short Accept or
+            Decline prompt on their first visit.
+          </li>
+          <li>
+            <strong>Everywhere else: opt-out.</strong> The cookies are set by default
+            unless you turn them off, or your browser sends a <a
+              href="https://globalprivacycontrol.org/"
+              target="_blank"
+              rel="noopener noreferrer">Global Privacy Control</a
+            > signal, which we honour as an opt-out.
+          </li>
+        </ul>
+        <p>
+          Your choice is kept in your browser’s local storage, not in a cookie,
+          and applies on every page until you change it. Turning analytics off
+          also removes the analytics cookies.
+        </p>
+      </article>
+      <article>
+        <h2>What is collected</h2>
+        <ul>
+          <li>the pages you visit, by path only, never the query after it;</li>
+          <li>
+            the page or site that linked you here, also without its query;
+          </li>
+          <li>
+            your approximate location (city, region and country), worked out
+            from your IP address; Google Analytics 4 does not log or store IP
+            addresses;
+          </li>
+          <li>
+            your device, browser, operating system, language and screen size.
+          </li>
+        </ul>
+        <p>The Atlas also counts three actions, by public name only:</p>
+        <ul>
+          <li>which dataset is opened;</li>
+          <li>switches between the globe, map and perspective views;</li>
+          <li>which inspector is opened, for a map cell or an observation.</li>
+        </ul>
+        <p>
+          They never include the places you look at or click, or anything else
+          about you.
+        </p>
+      </article>
+      <article>
+        <h2>What is not</h2>
+        <ul>
+          <li>No advertising, and no ad personalisation.</li>
+          <li>
+            Google signals are off, so visits are not linked to Google accounts
+            or across devices.
+          </li>
+          <li>No names, accounts or other personal details.</li>
+        </ul>
+        <p>
+          Map imagery and the Atlas’s optional data lookups load straight from
+          their providers, such as OpenStreetMap and Cesium ion, under their own
+          policies.
+        </p>
+      </article>
+      <article id="your-choice">
+        <h2>Changing your choice</h2>
+        <p>
+          Every page has a small cookie icon in a bottom corner (in the Atlas,
+          it sits in the credits under the map). It opens your cookie settings,
+          with a switch for analytics cookies that you can change at any time.
+          The <strong>Cookie settings</strong> link at the foot of each page opens
+          the same panel. Blocking Google Analytics in your browser or content blocker
+          also stops it; the site works the same without it.
+        </p>
+        {
+          analytics && (
+            <p>
+              <CookieSettings class="privacy-cookie-settings" />
+            </p>
+          )
+        }
+        <p>
+          Google runs the service, and the <BrandName /> maintainers see only its
+          aggregate reports. Google’s <a
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer">privacy policy</a
+          > and its page on <a
+            href="https://policies.google.com/technologies/partner-sites"
+            target="_blank"
+            rel="noopener noreferrer"
+            >how Google uses information from sites that use its services</a
+          > apply to it.
+        </p>
+      </article>
+    </div>
+  </section>
+</SiteLayout>
+
+<style>
+  :global(.privacy-cookie-settings) {
+    min-height: 44px;
+    padding: 0.45rem 1rem;
+    border: 1px solid rgb(112 230 255 / 55%);
+    border-radius: 0.5rem;
+    background: rgb(112 230 255 / 10%);
+    color: var(--color-starlight);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  :global(.privacy-cookie-settings:hover) {
+    background: rgb(112 230 255 / 20%);
+  }
+</style>

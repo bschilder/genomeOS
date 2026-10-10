@@ -1,0 +1,52 @@
+---
+/**
+ * Starlight's docs footer plus the site's Privacy and Cookie settings links and the cookie control
+ * (#422), so the docs carry the same analytics controls as the site layout.
+ */
+import Default from '@astrojs/starlight/components/Footer.astro';
+
+import CookieControl from '../CookieControl.astro';
+import CookieSettings from '../CookieSettings.astro';
+import { sitePath } from '../../lib/paths';
+---
+
+<Default />
+<nav class="docs-site-links" aria-label="Site policies">
+  <a href={sitePath('/privacy/')}>Privacy</a>
+  <CookieSettings class="docs-site-links__button" />
+</nav>
+<CookieControl />
+
+<style>
+  @layer starlight.core {
+    .docs-site-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.5rem;
+      justify-content: center;
+      margin-block: 0 1.5rem;
+      font-size: var(--sl-text-sm);
+    }
+
+    .docs-site-links a,
+    .docs-site-links :global(.docs-site-links__button) {
+      min-height: 24px;
+      margin: 0;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      border: 0;
+      background: none;
+      color: var(--sl-color-gray-3);
+      font: inherit;
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+      cursor: pointer;
+    }
+
+    .docs-site-links a:hover,
+    .docs-site-links :global(.docs-site-links__button:hover) {
+      color: var(--sl-color-white);
+    }
+  }
+</style>

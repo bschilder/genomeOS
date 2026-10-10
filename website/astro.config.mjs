@@ -31,6 +31,7 @@ export default defineConfig({
       disable404Route: true,
       components: {
         EditLink: './src/components/starlight/EditLink.astro',
+        Footer: './src/components/starlight/Footer.astro',
         SocialIcons: './src/components/starlight/SocialIcons.astro',
       },
       customCss: [

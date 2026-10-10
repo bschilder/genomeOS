@@ -1,0 +1,28 @@
+---
+/**
+ * A Cookie settings control for footers and the privacy page (#422): it opens the cookie control's
+ * panel (CookieControl.astro) for any visitor. Only a build that loads analytics renders it.
+ */
+import { gaMeasurementId } from '../lib/ga.mjs';
+
+interface Props {
+  class?: string;
+}
+
+const { class: className } = Astro.props;
+const enabled = gaMeasurementId() !== null;
+---
+
+{
+  enabled && (
+    <button
+      type="button"
+      class={className}
+      aria-controls="cookie-settings-panel"
+      aria-expanded="false"
+      data-cookie-settings
+    >
+      Cookie settings
+    </button>
+  )
+}

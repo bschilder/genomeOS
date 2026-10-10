@@ -1,0 +1,329 @@
+---
+/**
+ * The cookie control (#422): a small collapsed cookie icon fixed to the bottom-right corner of
+ * every page, which expands into the analytics cookie settings. `src/lib/cookie-control.ts` wires
+ * it; it opens by itself only as the first-visit opt-in prompt in EEA, UK and Swiss time zones.
+ * On /app/ the Atlas docks its own copy of the icon (AtlasCookieSettings.tsx), so the corner one
+ * steps aside there and nothing covers the Atlas controls, legend, credits or phone sheets.
+ *
+ * Renders nothing unless the build loads analytics. Place it at the end of <body>. Self-contained
+ * global styles under `.cookie-control`: the site layout, the Starlight docs and /app/polygon/
+ * each load different stylesheets.
+ */
+import { gaMeasurementId } from '../lib/ga.mjs';
+import { COOKIE_GLYPH_PATHS } from '../lib/cookie-glyph';
+import { sitePath } from '../lib/paths';
+
+const enabled = gaMeasurementId() !== null;
+---
+
+{
+  enabled && (
+    <div class="cookie-control" data-cookie-control>
+      <button
+        type="button"
+        class="cookie-control__toggle"
+        aria-label="Cookie settings"
+        aria-controls="cookie-settings-panel"
+        aria-expanded="false"
+        data-cookie-toggle
+      >
+        <svg class="cookie-glyph" viewBox="0 0 24 24" aria-hidden="true">
+          {COOKIE_GLYPH_PATHS.map((d) => (
+            <path d={d} />
+          ))}
+        </svg>
+      </button>
+      <section
+        class="cookie-panel"
+        id="cookie-settings-panel"
+        aria-labelledby="cookie-settings-title"
+        tabindex="-1"
+        hidden
+        data-cookie-panel
+      >
+        <p class="cookie-panel__title" id="cookie-settings-title">
+          Cookie settings
+        </p>
+        <p class="cookie-panel__text">
+          Google Analytics cookies help us count visits and see which Atlas
+          datasets are used. No ads.
+        </p>
+        <div class="cookie-panel__prompt" data-cookie-prompt hidden>
+          <button
+            type="button"
+            class="cookie-panel__choice"
+            data-consent-choice="granted"
+          >
+            Accept
+          </button>
+          <button
+            type="button"
+            class="cookie-panel__choice"
+            data-consent-choice="denied"
+          >
+            Decline
+          </button>
+        </div>
+        <div class="cookie-panel__setting" data-cookie-setting>
+          <span id="cookie-settings-switch-label">Analytics cookies</span>
+          <button
+            type="button"
+            class="cookie-switch"
+            role="switch"
+            aria-checked="true"
+            aria-labelledby="cookie-settings-switch-label"
+            data-cookie-switch
+          >
+            <span class="cookie-switch__track" aria-hidden="true">
+              <span class="cookie-switch__thumb" />
+            </span>
+            <span
+              class="cookie-switch__state"
+              aria-hidden="true"
+              data-cookie-switch-state
+            >
+              On
+            </span>
+          </button>
+        </div>
+        <p class="cookie-panel__note" data-cookie-gpc hidden>
+          Off because your browser sends Global Privacy Control.
+        </p>
+        <a class="cookie-panel__link" href={sitePath('/privacy/')}>
+          Privacy
+        </a>
+      </section>
+    </div>
+  )
+}
+
+<script>
+  import { initCookieControl } from '../lib/cookie-control';
+
+  // A constant: a build without analytics drops the control's code.
+  if (import.meta.env.PUBLIC_GA_MEASUREMENT_ID) initCookieControl();
+</script>
+
+<style is:global>
+  .cookie-control [hidden] {
+    display: none !important;
+  }
+
+  .cookie-glyph {
+    display: block;
+    width: 16px;
+    height: 16px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Quiet at rest (the glyph still clears 3:1), lit on hover, focus and while open. */
+  .cookie-control__toggle {
+    position: fixed;
+    z-index: 55;
+    right: max(0.75rem, env(safe-area-inset-right));
+    bottom: max(0.75rem, env(safe-area-inset-bottom));
+    width: 30px;
+    height: 30px;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid rgb(112 230 255 / 22%);
+    border-radius: 50%;
+    background: rgb(7 24 49 / 72%);
+    box-shadow: 0 0.35rem 1.2rem rgb(0 0 0 / 28%);
+    color: rgb(220 232 246 / 62%);
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+  }
+
+  .cookie-control__toggle:hover,
+  .cookie-control[data-open] .cookie-control__toggle {
+    border-color: rgb(112 230 255 / 55%);
+    background: rgb(7 24 49 / 94%);
+    color: #f2f8ff;
+  }
+
+  /* /app/ docks the icon in the Atlas instead (AtlasCookieSettings.tsx). */
+  body:has([data-cookie-dock]) .cookie-control__toggle {
+    display: none;
+  }
+
+  .cookie-control__toggle:focus-visible,
+  .cookie-panel:focus-visible,
+  .cookie-panel a:focus-visible,
+  .cookie-panel button:focus-visible {
+    border-radius: 0.5rem;
+    outline: 2px solid #70e6ff;
+    outline-offset: 3px;
+    box-shadow: 0 0 0 3px rgb(112 230 255 / 30%);
+  }
+
+  .cookie-control__toggle:focus-visible {
+    border-radius: 50%;
+    color: #f2f8ff;
+  }
+
+  /* cookie-control.ts places it beside its icon; this is the corner default. */
+  .cookie-panel {
+    position: fixed;
+    z-index: 60;
+    right: max(0.75rem, env(safe-area-inset-right));
+    bottom: calc(max(0.75rem, env(safe-area-inset-bottom)) + 38px);
+    width: min(20rem, calc(100vw - 24px));
+    max-height: calc(100vh - 6rem);
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0.85rem 1rem 0.9rem;
+    overflow: auto;
+    display: grid;
+    gap: 0.65rem;
+    border: 1px solid rgb(112 230 255 / 28%);
+    border-radius: 0.75rem;
+    background: #071831;
+    box-shadow: 0 1rem 3rem rgb(0 0 0 / 45%);
+    color: #f2f8ff;
+    font-family: 'Figtree Variable', 'Avenir Next', sans-serif;
+    font-size: 1rem;
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .cookie-panel p {
+    margin: 0;
+  }
+
+  .cookie-panel__title {
+    font-weight: 700;
+  }
+
+  .cookie-panel__text,
+  .cookie-panel__note {
+    color: #c9d7e8;
+  }
+
+  /* Accept and Decline look the same: neither choice is the easy one. */
+  .cookie-panel__prompt {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+  }
+
+  .cookie-panel__choice {
+    min-height: 40px;
+    margin: 0;
+    padding: 0.35rem 0.9rem;
+    border: 1px solid rgb(112 230 255 / 55%);
+    border-radius: 0.5rem;
+    background: rgb(112 230 255 / 10%);
+    color: #f2f8ff;
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .cookie-panel__choice:hover {
+    background: rgb(112 230 255 / 20%);
+  }
+
+  .cookie-panel__setting {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-weight: 650;
+  }
+
+  .cookie-switch {
+    min-height: 32px;
+    margin: 0;
+    padding: 0.2rem 0.25rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .cookie-switch__track {
+    position: relative;
+    width: 2.5rem;
+    height: 1.4rem;
+    box-sizing: border-box;
+    border: 1px solid rgb(165 185 211 / 70%);
+    border-radius: 999px;
+    background: rgb(165 185 211 / 16%);
+  }
+
+  .cookie-switch__thumb {
+    position: absolute;
+    top: 50%;
+    left: 0.18rem;
+    width: 0.95rem;
+    height: 0.95rem;
+    border-radius: 50%;
+    background: #c9d7e8;
+    transform: translateY(-50%);
+  }
+
+  .cookie-switch[aria-checked='true'] .cookie-switch__track {
+    border-color: #70e6ff;
+    background: rgb(112 230 255 / 32%);
+  }
+
+  .cookie-switch[aria-checked='true'] .cookie-switch__thumb {
+    left: calc(100% - 1.13rem);
+    background: #f2f8ff;
+  }
+
+  .cookie-switch__state {
+    min-width: 1.75em;
+    color: #dce8f6;
+    text-align: left;
+  }
+
+  .cookie-panel a {
+    justify-self: start;
+    color: #70e6ff;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  .cookie-panel a:hover {
+    color: #f2f8ff;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cookie-control__toggle {
+      transition:
+        color 160ms ease,
+        background-color 160ms ease,
+        border-color 160ms ease;
+    }
+
+    .cookie-switch__thumb {
+      transition: left 160ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .cookie-panel {
+      animation: cookie-panel-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    @keyframes cookie-panel-in {
+      from {
+        opacity: 0;
+        translate: 0 0.35rem;
+      }
+    }
+  }
+</style>

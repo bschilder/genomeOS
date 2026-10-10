@@ -1,5 +1,6 @@
 ---
 import Analytics from '../../components/Analytics.astro';
+import CookieControl from '../../components/CookieControl.astro';
 
 const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
 ---
@@ -185,5 +186,6 @@ const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
 
       void renderPolygon();
     </script>
+    <CookieControl />
   </body>
 </html>

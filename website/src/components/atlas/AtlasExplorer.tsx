@@ -43,6 +43,7 @@ import {
   type StateCorrection,
 } from '../../atlas/url-state';
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
+import { AtlasCookieSettings } from './AtlasCookieSettings';
 import { AtlasDataCredit } from './AtlasDataCredit';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus } from './AtlasStatus';
@@ -751,6 +752,7 @@ export default function AtlasExplorer({
             )}
           </PanelSheet>
           <AtlasDataCredit />
+          <AtlasCookieSettings placement="corner" />
         </div>
       </ExplorerPanelsProvider>
     </EscapeStackProvider>

@@ -7,4 +7,5 @@ export const topLevelRoutes = [
   '/contribute/',
   '/app/',
   '/docs/',
+  '/privacy/',
 ] as const;

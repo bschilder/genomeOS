@@ -1,6 +1,8 @@
 ---
-import GitHubLink from './GitHubLink.astro';
 import BrandName from './BrandName.astro';
+import CookieSettings from './CookieSettings.astro';
+import GitHubLink from './GitHubLink.astro';
+import { sitePath } from '../lib/paths';
 
 const year = new Date().getFullYear();
 ---
@@ -8,6 +10,10 @@ const year = new Date().getFullYear();
 <footer class="site-footer">
   <div class="site-footer__inner">
     <p>© {year} <BrandName /></p>
+    <nav class="site-footer__links" aria-label="Site policies">
+      <a href={sitePath('/privacy/')}>Privacy</a>
+      <CookieSettings class="site-footer__button" />
+    </nav>
     <GitHubLink />
   </div>
 </footer>
