@@ -13,7 +13,10 @@
  * for that one pass so depth always comes from the displayed surface. The
  * pass also queries under a cache key of its own and is followed by one
  * ordinary pick that puts the pointer's pick depth back, so its translucent
- * hit never becomes a camera pivot (§B.7).
+ * hit should not become a camera pivot (§B.7). That is verified against
+ * Cesium fakes only (ledger Task 61): the real-engine probe Task 61 asked for
+ * (hover, pause and wheel; hover and wheel; a same-cell nudge, at factor 5
+ * against a factor-0 reference) has not been run.
  */
 
 import {
