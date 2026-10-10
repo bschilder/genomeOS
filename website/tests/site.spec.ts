@@ -1332,20 +1332,30 @@ test(
   'the Atlas nav keeps its labels on one line, GitHub on Technical docs, while the status chip loads',
   { tag: '@desktop-chromium' },
   async ({ page }) => {
-    // Hold the surface, so the chip keeps its longest copy: "Loading HbS
-    // (rs334)" over its download detail. With GitHub in the nav, Working
-    // groups and Technical docs wrapped beside it up to 1259 px, and GitHub
-    // sat 14.8 px below Technical docs' first line.
-    // The page's clock stands still, so the held request never reaches its
-    // 15 s timeout, however long a loaded machine takes to measure the row.
-    await page.clock.install();
-    await page.clock.pauseAt(Date.now() + 1_000);
-    await page.route('**/data/atlas/*.surface.json', () => {});
+    // Hold the default map's surface, so the chip keeps its loading copy, a
+    // label over its detail line beside its progress meter. With GitHub in the
+    // nav, Working groups and Technical docs wrapped beside it up to 1259 px,
+    // and GitHub sat 14.8 px below Technical docs' first line. The e2e build
+    // stretches the request stall window to 120 s, so the held tier never
+    // times out while a loaded machine measures the row.
+    // The chip reads "Loading HbS (rs334)" until the globe starts drawing the
+    // map, then "Rendering HbS (rs334)" over "Building measured points" while
+    // the surface is still on its way; the download's progress and the
+    // drawing's share one activity, so either can be the copy showing.
+    const loading = /^(Loading|Rendering) HbS \(rs334\)/;
+    const render = await delayArtifactTier(
+      page,
+      'hbs-rs334',
+      'render',
+      Number.POSITIVE_INFINITY,
+    );
     await page.setViewportSize({ width: 1153, height: 800 });
     await page.goto('/app/');
     const chip = page.locator('.atlas-navbar-status-slot .atlas-status');
-    await expect(chip).toContainText(/^Loading/);
+    await expect(chip).toContainText(loading);
     await expect(chip.locator('small')).toHaveText(/\S/);
+    await expect(chip.getByRole('progressbar')).toBeVisible();
+    await expect.poll(() => render.hits()).toBe(1);
     await page.evaluate(() => document.fonts.ready);
 
     for (const width of [1153, 1160, 1200, 1240, 1259, 1280]) {
@@ -1385,9 +1395,17 @@ test(
         ).toBeLessThanOrEqual(0.5);
       expect(row.overflow, label).toBeLessThanOrEqual(0);
       // The chip's copy gives way instead, and still reads as loading.
-      await expect(chip, label).toContainText(/^Loading/);
+      await expect(chip, label).toContainText(loading);
+      await expect(chip.locator('small'), label).toHaveText(/\S/);
       await expect(chip, label).toBeVisible();
     }
+    // Still the held load: one request, and the map not ready.
+    expect(render.hits()).toBe(1);
+    await expect(page.locator('.atlas-explorer')).toHaveAttribute(
+      'data-atlas-ready',
+      'false',
+    );
+    render.release();
   },
 );
 
