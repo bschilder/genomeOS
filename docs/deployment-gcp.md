@@ -55,18 +55,28 @@ and #49.
 
 After the `ci` workflow succeeds for a commit on `main`, the `container`
 workflow publishes the API/read-path image for both `linux/amd64` and
-`linux/arm64`:
+`linux/arm64`. To pull an immutable revision, replace `sha-xxxxxxx` with its
+seven-character commit tag:
 
 ```bash
-docker pull ghcr.io/bschilder/genomeos:latest
-docker pull ghcr.io/bschilder/genomeos:sha-<seven-character-commit>
+docker pull ghcr.io/genomeos/genomeos:latest
+TAG=sha-xxxxxxx
+docker pull "ghcr.io/genomeos/genomeos:$TAG"
 ```
 
 `latest` is the convenient discovery tag. Deployments must use the immutable
-`sha-...` tag so a cited service revision cannot change underneath them. Each
+`sha-...` tag so a cited service revision cannot change underneath them. Tags
+published before the repository moved to the genomeOS organization were not
+copied; a revision cited from that period stays pullable at
+`ghcr.io/bschilder/genomeos:sha-...`. Each
 manifest includes OCI source and revision labels, an SBOM, and provenance
 attestations. The image is only published after the same root Dockerfile has
 passed the container HTTP smoke in `ci`.
+
+If `docker pull` without a GitHub login is refused, check the package's
+visibility. GitHub creates a new container package as private, and linking it
+to the repository carries over access permissions but not visibility. An
+organization owner makes it public under Package settings, then Danger zone.
 
 Cloud Run mounts the artifact bucket read-only at `/mnt/atlas` in the second-generation
 execution environment. Publish every version below `catalogs/<artifact-version>/`, upload

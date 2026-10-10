@@ -9,11 +9,11 @@ from pathlib import Path
 
 _README_BADGE = re.compile(r"\[!\[Coverage\]\([^)]*\)\]\([^)]*\)")
 _COVERAGE_IMAGE = (
-    "https://raw.githubusercontent.com/bschilder/genomeOS/main/"
+    "https://raw.githubusercontent.com/genomeOS/genomeOS/main/"
     "website/public/_static/coverage.svg"
 )
 _COVERAGE_DESTINATION = (
-    "https://github.com/bschilder/genomeOS/blob/main/"
+    "https://github.com/genomeOS/genomeOS/blob/main/"
     "website/public/_static/coverage.svg"
 )
 

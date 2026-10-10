@@ -31,14 +31,14 @@ Read [the system overview](./system-overview/) for how those contracts compose.
 
 ## Start with the authoritative sources
 
-- <a href="https://github.com/bschilder/genomeOS/blob/main/docs/overview.md" target="_blank" rel="noopener noreferrer">Project overview</a> — the
+- <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/overview.md" target="_blank" rel="noopener noreferrer">Project overview</a> — the
   non-technical problem, multi-scale vision, and safeguards.
-- <a href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">Scientific and engineering objectives</a>
+- <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">Scientific and engineering objectives</a>
   — the objectives, interfaces, evidence required for acceptance, and conditions that make the
   system decline to publish a number.
-- <a href="https://github.com/bschilder/genomeOS/blob/main/docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md" target="_blank" rel="noopener noreferrer">Atlas v1 design</a>
+- <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/superpowers/specs/2026-08-22-genome-os-atlas-v1-design.md" target="_blank" rel="noopener noreferrer">Atlas v1 design</a>
   — method and architecture detail.
-- <a href="https://github.com/bschilder/genomeOS/blob/main/AGENTS.md" target="_blank" rel="noopener noreferrer">Repository contributor contract</a> —
+- <a href="https://github.com/genomeOS/genomeOS/blob/main/AGENTS.md" target="_blank" rel="noopener noreferrer">Repository contributor contract</a> —
   the rules every human or agent follows before changing code or data.
 
 These guides summarize. Frozen schemas, design documents, plans, and issue decisions remain

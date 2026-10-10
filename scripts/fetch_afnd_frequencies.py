@@ -45,7 +45,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 BASE = "www.allelefrequencies.net"
-USER_AGENT = "genomeOS-registry/0.1 (+https://github.com/bschilder/genomeOS; research use)"
+USER_AGENT = "genomeOS-registry/0.1 (+https://github.com/genomeOS/genomeOS; research use)"
 
 #: Each group's search endpoint and the query parameter naming its locus.
 GROUPS: dict[str, tuple[str, str]] = {

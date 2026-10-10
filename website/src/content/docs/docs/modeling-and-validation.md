@@ -31,6 +31,6 @@ training, statistical diagnostics, correction for how participants were recruite
 all matter. A model that cannot beat an appropriate baseline or reproduce known science is refused.
 
 The current inference decision is PyMC with a Hilbert-space Gaussian process. Read
-<a href="https://github.com/bschilder/genomeOS/issues/34" target="_blank" rel="noopener noreferrer">Issue #34</a> before proposing a different runtime,
-and use the <a href="https://github.com/bschilder/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific objectives</a>
+<a href="https://github.com/genomeOS/genomeOS/issues/34" target="_blank" rel="noopener noreferrer">Issue #34</a> before proposing a different runtime,
+and use the <a href="https://github.com/genomeOS/genomeOS/blob/main/docs/scientific-engineering-objectives.md" target="_blank" rel="noopener noreferrer">scientific objectives</a>
 to keep alternative models on the same acceptance contract.
