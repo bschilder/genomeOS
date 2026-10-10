@@ -54,6 +54,29 @@ describe('homepage contract', () => {
     ).toBeGreaterThanOrEqual(6);
   });
 
+  it('names the header Atlas link genomeOS Atlas and describes it with its caption', () => {
+    const link = html.match(/<a class="launch-atlas-cta"[^>]*>[\s\S]*?<\/a>/);
+    expect(link?.[0]).toContain('href="/app/"');
+    expect(link?.[0]).toContain('aria-describedby="launch-atlas-caption"');
+    // Its text is its name alone, for crawlers and plain-text copies too.
+    expect(
+      link?.[0]
+        .replace(/<[^>]+>/g, '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    ).toBe('genomeOS Atlas');
+    // The caption follows the link: the description only, hidden from the
+    // name and read once.
+    expect(html).toMatch(
+      /<\/a>\s*<span class="launch-atlas-cta__caption" id="launch-atlas-caption" aria-hidden="true">Explore the interactive app<\/span>/,
+    );
+    // The Menu's copy, in the wordmark type like every visible genomeOS.
+    expect(html).toMatch(
+      /<li class="mobile-nav__launch"><a href="\/app\/">\s*<span class="brand-name">genomeOS<\/span> Atlas\s*<\/a><\/li>/,
+    );
+    expect(visibleText).not.toContain('Launch Atlas');
+  });
+
   it('offers keyboard bypass and an accessible repository link', () => {
     expect(html).toContain('Skip to main content');
     expect(html).toContain('aria-label="View genomeOS on GitHub"');

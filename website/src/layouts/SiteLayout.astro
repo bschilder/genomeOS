@@ -4,6 +4,7 @@ import CookieControl from '../components/CookieControl.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import MotionController from '../components/MotionController.astro';
+import { FAVICON_SVG, rasterIconLinks } from '../lib/favicons';
 import { sitePath } from '../lib/paths';
 import '../styles/global.css';
 import '../styles/pages.css';
@@ -45,7 +46,8 @@ const socialImage = new URL(
     <title>{fullTitle}</title>
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
-    <link rel="icon" type="image/svg+xml" href={sitePath('/favicon.svg')} />
+    <link rel="icon" type="image/svg+xml" href={sitePath(FAVICON_SVG)} />
+    {rasterIconLinks().map((link) => <link {...link} />)}
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="genomeOS" />
     <meta property="og:title" content={fullTitle} />

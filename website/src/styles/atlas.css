@@ -2319,9 +2319,9 @@ body:has(.atlas-explorer) .skip-link {
  * preference blocks so reduced motion, high contrast and coarse pointers
  * still win over them (§A.1.12). */
 @media (max-width: 52rem) {
+  /* 0.96rem tall is ~105 px wide: the room the old 1rem text wordmark took. */
   body:has(.atlas-explorer) .wordmark {
-    font-size: 1rem;
-    letter-spacing: 0.08em;
+    --wordmark-height: 0.96rem;
   }
 
   body:has(.atlas-explorer) .site-header__actions {

@@ -20,6 +20,14 @@ html {
   color: var(--color-starlight);
   font-family: var(--font-body);
   scroll-behavior: smooth;
+  /*
+   * A linked section or a focused control stops this far below the top, clear
+   * of the fixed header (.site-header--lockup). Its landing height, not the
+   * compact one, because a target near the top of the page (the skip link's
+   * #main-content) leaves the bar at landing size; the extra 1rem keeps the
+   * target off the bar's edge.
+   */
+  scroll-padding-top: calc(var(--site-header-height) + 1px + 1rem);
 }
 
 body {
@@ -71,6 +79,12 @@ svg {
   transform: translateY(0);
 }
 
+/* The site header's bar at the top of a page (the hero fills the rest of the
+ * first screen). The Atlas keeps its own 4.75rem bar. */
+:root {
+  --site-header-height: 5.5rem;
+}
+
 .site-header {
   position: sticky;
   z-index: 40;
@@ -82,6 +96,15 @@ svg {
     background-color 260ms ease,
     border-color 260ms ease,
     box-shadow 260ms ease;
+}
+
+/* An open Menu is the page's innermost layer (SiteHeader.astro), so it is
+ * painted as the topmost one too: above the Atlas pickers portaled to <body>
+ * (z-index 1002-1003, atlas.css and map-catalog.css), which the keyboard can
+ * leave open behind it. A press or focus outside closes the Menu, so nothing
+ * opens over it while it is open. */
+.site-header:has(.mobile-nav[open]) {
+  z-index: 1004;
 }
 
 .site-header__inner,
@@ -100,14 +123,30 @@ svg {
   transition: min-height 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
+/*
+ * On the Atlas the header logo is the wordmark crop of the genomeOS Foundation
+ * artwork (public/brand/genomeos-wordmark-dark.svg). CSS sets its height; its
+ * width follows from the img's width/height attributes, so nothing shifts
+ * while the SVG loads. Other pages show the lockup (.site-header--lockup).
+ */
+.site-header__brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+}
+
 .wordmark {
-  color: var(--color-starlight);
-  font-family: var(--font-display);
-  font-size: 1.28rem;
-  font-weight: 380;
-  letter-spacing: 0.13em;
+  --wordmark-height: 1.6rem;
+  --wordmark-scale: 1;
+  flex: none;
   text-decoration: none;
-  transition: font-size 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.wordmark__logo {
+  width: auto;
+  max-width: none;
+  height: calc(var(--wordmark-height) * var(--wordmark-scale));
+  transition: height 260ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
 .brand-name {
@@ -128,7 +167,77 @@ svg {
 }
 
 .site-header--compact .wordmark {
-  font-size: 1.16rem;
+  --wordmark-scale: 0.9;
+}
+
+/*
+ * Every page but the Atlas: the genomeOS + FOUNDATION lockup
+ * (public/brand/genomeos-lockup-dark.svg, 1395 x 300 user units). At the top
+ * of the page the bar is --site-header-height tall and the lockup 3.6rem,
+ * which puts the FOUNDATION capitals (41.1 of the 300 units) at ~8.9 px.
+ * Once the page scrolls (MotionController) both shrink to the compact bar.
+ *
+ * Nothing else moves while they do. The header is fixed, out of the flow, and
+ * .site-header-spacer holds the landing bar's height in its place, so a size
+ * change never reaches the page below: no scroll-anchoring correction, which
+ * on phones moved scrollY back across the threshold and made the bar flicker.
+ * The brand slot keeps the landing width, so the nav does not slide over.
+ *
+ * Widths are set and heights follow from the aspect ratio, so a row too
+ * narrow for the full size shrinks the logo instead of overflowing.
+ */
+.site-header--lockup {
+  --header-ease: cubic-bezier(0.2, 0.75, 0.25, 1);
+  --compact-header-height: 3.9rem;
+  --lockup-landing-width: calc(3.6rem * 1395 / 300);
+  --lockup-compact-width: calc(2.6rem * 1395 / 300);
+  position: fixed;
+  inset: 0 0 auto;
+  /* A phone browser widens its layout viewport, which a fixed box spans, when
+   * page copy overflows (large text); the screen's width keeps Menu on it. */
+  max-width: 100vw;
+}
+
+/* The landing bar: its min-height plus the 1px bottom border. */
+.site-header-spacer {
+  height: calc(var(--site-header-height) + 1px);
+}
+
+.site-header--lockup .site-header__inner {
+  min-height: var(--site-header-height);
+  gap: 1.25rem;
+  transition: min-height 200ms var(--header-ease);
+}
+
+.site-header--lockup.site-header--compact .site-header__inner {
+  min-height: var(--compact-header-height);
+}
+
+/* Only the logo gives way, so a nav label never wraps to make room for it. */
+.site-header--lockup .site-header__inner > :not(.site-header__brand) {
+  flex-shrink: 0;
+}
+
+.site-header--lockup .site-header__brand {
+  min-width: 0;
+  flex: 0 1 var(--lockup-landing-width);
+}
+
+.site-header--lockup .wordmark {
+  --lockup-width: var(--lockup-landing-width);
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.site-header--lockup.site-header--compact .wordmark {
+  --lockup-width: var(--lockup-compact-width);
+}
+
+.site-header--lockup .wordmark__logo {
+  width: var(--lockup-width);
+  max-width: 100%;
+  height: auto;
+  transition: width 200ms var(--header-ease);
 }
 
 .desktop-nav,
@@ -139,83 +248,256 @@ svg {
   gap: 0.8rem;
 }
 
+/*
+ * The nav never shrinks, so its labels keep to one line and GitHub's text to
+ * Technical docs' line. In a tight row something else gives way: the lockup
+ * on most pages (above), and on the Atlas the status chip, whose copy
+ * ellipsizes. With GitHub in the nav, the Atlas row's loading messages
+ * otherwise wrapped Working groups and Technical docs, up to ~1259 px.
+ */
+.site-header__inner > .desktop-nav {
+  flex-shrink: 0;
+}
+
 .atlas-navbar-status-slot:empty {
   display: none;
 }
 
+/*
+ * genomeOS Atlas: a black pill lit by aurora curtains (the site's aurora,
+ * ion and genome colours) that drift on their own clocks and spill past its
+ * edges. The curtains sit behind the pill's black fill, so only the light
+ * leaking around the rim shows.
+ */
 .launch-atlas-cta {
-  padding: 0.56rem 0.78rem 0.56rem 0.88rem;
+  position: relative;
+  isolation: isolate;
+  padding: 0.6rem 0.95rem 0.6rem 0.62rem;
   display: inline-flex;
   align-items: center;
-  gap: 0.48rem;
-  overflow: hidden;
-  border: 1px solid rgb(205 255 247 / 72%);
-  border-radius: 0.5rem;
-  background: linear-gradient(135deg, #86f3d8 0%, #62ddf4 100%);
-  color: #03111f;
-  box-shadow:
-    0 0.4rem 1.35rem rgb(78 225 221 / 20%),
-    inset 0 1px rgb(255 255 255 / 52%);
+  gap: 0.5rem;
+  border-radius: 999px;
+  color: var(--color-starlight);
   font-size: 0.94rem;
-  font-weight: 820;
+  font-weight: 720;
   line-height: 1;
   text-decoration: none;
   white-space: nowrap;
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
+}
+
+.launch-atlas-cta::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  border: 1px solid transparent;
+  border-radius: inherit;
+  background:
+    linear-gradient(#000, #000) padding-box,
+    linear-gradient(
+        100deg,
+        rgb(114 231 193 / 70%),
+        rgb(18 255 255 / 45%),
+        rgb(138 92 255 / 70%)
+      )
+      border-box;
+  content: '';
+}
+
+.launch-atlas-cta__lights {
+  position: absolute;
+  z-index: -2;
+  inset: -0.72rem -1rem;
+  border-radius: 999px;
+  filter: blur(10px) saturate(1.3);
+  pointer-events: none;
   transition:
-    background 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+    filter 260ms ease,
+    inset 260ms ease;
+}
+
+.launch-atlas-cta__lights i {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+
+.launch-atlas-cta__lights i:nth-child(1) {
+  left: 0;
+  width: 55%;
+  background: radial-gradient(closest-side, #72e7c1, transparent);
+  animation: launch-aurora-a 8s ease-in-out infinite alternate;
+}
+
+.launch-atlas-cta__lights i:nth-child(2) {
+  left: 30%;
+  width: 45%;
+  background: radial-gradient(closest-side, #12ffff, transparent);
+  animation: launch-aurora-b 10.5s ease-in-out infinite alternate;
+}
+
+.launch-atlas-cta__lights i:nth-child(3) {
+  right: 0;
+  width: 50%;
+  background: radial-gradient(closest-side, #8a5cff, transparent);
+  animation: launch-aurora-c 12.5s ease-in-out infinite alternate;
+}
+
+@keyframes launch-aurora-a {
+  0% {
+    opacity: 0.55;
+    transform: translateX(-6%) scaleY(0.75);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+    transform: translateX(70%) scaleY(1.15);
+  }
+}
+
+@keyframes launch-aurora-b {
+  0% {
+    opacity: 0.8;
+    transform: translateX(40%) scaleY(1.1);
+  }
+  50% {
+    opacity: 0.35;
+  }
+  100% {
+    opacity: 0.9;
+    transform: translateX(-60%) scaleY(0.8);
+  }
+}
+
+@keyframes launch-aurora-c {
+  0% {
+    opacity: 0.7;
+    transform: translateX(0) scaleY(0.9);
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.5;
+    transform: translateX(-80%) scaleY(1.2);
+  }
+}
+
+/*
+ * After its first drift (SiteHeader.astro) the aurora holds still wherever it
+ * is, still lit, and drifts on from there while the button is hovered or
+ * focused. A paused curtain leaves the compositor no frame to draw.
+ */
+.launch-atlas-cta--resting:not(:hover, :focus-visible)
+  .launch-atlas-cta__lights
+  i {
+  animation-play-state: paused;
 }
 
 .launch-atlas-cta:hover,
 .launch-atlas-cta:focus-visible,
 .launch-atlas-cta[aria-current='page'] {
-  background: linear-gradient(135deg, #b1ffe8 0%, #78e8ff 100%);
-  box-shadow:
-    0 0.55rem 1.7rem rgb(78 225 221 / 32%),
-    inset 0 1px rgb(255 255 255 / 64%);
   transform: translateY(-1px);
+}
+
+/* No wider than the 1.25rem the row keeps beside the button (below). */
+.launch-atlas-cta:hover .launch-atlas-cta__lights,
+.launch-atlas-cta:focus-visible .launch-atlas-cta__lights {
+  inset: -0.95rem -1.25rem;
+  filter: blur(12px) saturate(1.4) brightness(1.4);
 }
 
 .launch-atlas-cta:focus-visible {
   outline: 2px solid var(--color-starlight);
-  outline-offset: 3px;
+  outline-offset: 4px;
 }
 
-.launch-atlas-cta__rocket {
-  width: 1.12rem;
-  height: 1.12rem;
+.launch-atlas-cta__mark {
+  width: 1.3rem;
+  height: 1.3rem;
+  flex: none;
+}
+
+.launch-atlas-cta__label .brand-name {
+  font-weight: 400;
+}
+
+.launch-atlas-cta__arrow {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
   fill: none;
-  stroke: #465565;
+  stroke: var(--color-ion);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
-  transform-origin: center;
+  stroke-width: 2.2;
+  transition: transform 220ms cubic-bezier(0.2, 0.75, 0.25, 1);
 }
 
-.launch-atlas-cta:hover .launch-atlas-cta__rocket,
-.launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
-  animation: launch-rocket 620ms cubic-bezier(0.22, 1, 0.36, 1) both;
+.launch-atlas-cta:hover .launch-atlas-cta__arrow,
+.launch-atlas-cta:focus-visible .launch-atlas-cta__arrow {
+  transform: translateX(3px);
 }
 
-@keyframes launch-rocket {
-  0% {
-    transform: translate(0, 0) rotate(0);
-  }
-  42% {
-    opacity: 1;
-    transform: translate(0.3rem, -0.34rem) rotate(4deg);
-  }
-  43% {
-    opacity: 0;
-  }
-  44% {
-    opacity: 0;
-    transform: translate(-0.34rem, 0.34rem) rotate(4deg);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(0, 0) rotate(0);
+/*
+ * "Explore the interactive app": a quiet caption that slides down from under
+ * the button and fades in on hover or keyboard focus, after a short pause so
+ * a passing cursor does not flash it, and leaves at once. It floats over the
+ * page, so the row never changes size, and takes no pointer events. Centred
+ * under the button, it is narrower than the full button and stays inside the
+ * row beside the narrower one (1153-1392 px). Phones and touch screens do
+ * without it (below); it is the link's description either way. It follows
+ * the link, not inside it, and .launch-atlas, as wide as the link, places it.
+ */
+.launch-atlas {
+  position: relative;
+  display: flex;
+}
+
+.launch-atlas-cta__caption {
+  position: absolute;
+  z-index: 1;
+  top: calc(100% + 0.55rem);
+  left: 50%;
+  padding: 0.32rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: rgb(2 7 18 / 95%);
+  box-shadow: 0 0.5rem 1.4rem rgb(0 0 0 / 40%);
+  color: var(--color-muted);
+  font-size: 0.84rem;
+  font-weight: 450;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translate(-50%, -0.4rem);
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0s linear 140ms;
+}
+
+.launch-atlas-cta:hover + .launch-atlas-cta__caption,
+.launch-atlas-cta:focus-visible + .launch-atlas-cta__caption {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 200ms ease 120ms,
+    transform 200ms cubic-bezier(0.2, 0.75, 0.25, 1) 120ms,
+    visibility 0s linear 120ms;
+}
+
+@media (max-width: 46rem), (hover: none) {
+  .launch-atlas-cta__caption {
+    display: none;
   }
 }
 
@@ -224,6 +506,17 @@ svg {
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+/*
+ * Each item centres its link, as the list centres the items. On a line of
+ * its own, GitHub's inline-flex link took its baseline from the icon, its
+ * first item, so it sat with the icon's bottom edge on the text baseline and
+ * its label 3.8 px above the others.
+ */
+.desktop-nav li {
+  display: flex;
+  align-items: center;
 }
 
 .desktop-nav a {
@@ -253,7 +546,76 @@ svg {
   fill: currentcolor;
 }
 
+/* In the primary nav, GitHub reads as the last nav link. */
+.desktop-nav .github-link {
+  font-weight: inherit;
+}
+
+/*
+ * With the full nav showing, genomeOS Atlas stands on its own, centred in the
+ * room the nav leaves on the right. The Atlas page keeps its status chip at
+ * the end of the row, and narrower rows keep the button beside Menu.
+ */
+.site-header__actions {
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+@media (min-width: 72.01rem) {
+  /*
+   * An end padding equal to the 1.25rem row gap before the actions puts the
+   * button's centre midway between the nav and the row's end, and keeps the
+   * aurora's spill (up to 1.25rem) inside the row.
+   */
+  .site-header--lockup .site-header__actions {
+    justify-content: center;
+    padding-inline-end: 1.25rem;
+  }
+
+  /*
+   * More room after the lockup and between the links where the row has it:
+   * the gap after the lockup is the row's 1.25rem at 1153 px, 2.8rem at
+   * 1440 and 3.5rem from 1572; the links' gap is 21 px at 1153, 38 at 1440
+   * and 2.25rem from 1482. At the first desktop-nav widths the row is
+   * full, and the lockup is what gives way (FOUNDATION stays above 7 px).
+   */
+  .site-header--lockup .site-header__inner > .desktop-nav {
+    margin-inline-start: clamp(0rem, 9.7vw - 6.22rem, 2.25rem);
+  }
+
+  .site-header--lockup .desktop-nav ul {
+    gap: clamp(1rem, 5.9vw - 2.6rem, 2.25rem);
+  }
+}
+
+/*
+ * Up to 87rem (1153-1392 px) the button drops its arrow and tightens, keeping
+ * the globe mark and its name. The full one would shrink the lockup below
+ * its large size (3.6rem at 1280 px) and, at 1153 px, below a legible one.
+ * Up to 1392 px it would also stand hardly further from GitHub than the nav
+ * links stand from each other (36 px against 34 at 1377 px), and read as one
+ * more of them; from 1393 px it is 40 px against 35, as the narrower one is
+ * at 1280 px (33 against 29).
+ */
+@media (min-width: 72.01rem) and (max-width: 87rem) {
+  .site-header--lockup .launch-atlas-cta {
+    padding: 0.55rem 0.75rem 0.55rem 0.5rem;
+    gap: 0.4rem;
+    font-size: 0.84rem;
+  }
+
+  .site-header--lockup .launch-atlas-cta__mark {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+
+  .site-header--lockup .launch-atlas-cta__arrow {
+    display: none;
+  }
+}
+
 .mobile-nav {
+  position: relative;
   display: none;
 }
 
@@ -266,9 +628,23 @@ svg {
   min-height: 9rem;
   padding-block: 2rem;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 2rem;
+}
+
+.site-footer__brand {
+  display: grid;
+  justify-items: start;
+  gap: 0.9rem;
+}
+
+/* Wide enough that the tagline stays legible (its glyphs are ~10% of the
+ * lockup's height); a phone footer column caps it. A definite width keeps the
+ * brand column's max-content at 22rem, not the SVG's 1380 px natural width. */
+.site-footer__logo {
+  width: 22rem;
+  height: auto;
 }
 
 .site-footer p {
@@ -318,60 +694,106 @@ svg {
   border: 0;
 }
 
-@media (max-width: 64rem) {
+/* The Menu disclosure's styles; the queries below decide where it shows. */
+.mobile-nav summary {
+  cursor: pointer;
+  color: var(--color-starlight);
+  font-weight: 650;
+  list-style: none;
+}
+.mobile-nav summary::-webkit-details-marker {
+  display: none;
+}
+.mobile-nav summary::after {
+  content: '+';
+  margin-left: 0.5rem;
+  color: var(--color-ion);
+}
+.mobile-nav[open] summary::after {
+  content: '−';
+}
+/* The header never scrolls with the page, so a panel taller than the space
+ * below it scrolls itself: it starts above the landing bar's bottom edge and
+ * ends at least 1rem above the viewport's (vh where dvh is unsupported). */
+.mobile-nav nav {
+  position: absolute;
+  top: 2.7rem;
+  right: 0;
+  width: min(19rem, calc(100vw - 2 * var(--space-page)));
+  max-height: max(6rem, 100vh - var(--site-header-height) - 1rem);
+  max-height: max(6rem, 100dvh - var(--site-header-height) - 1rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 1.2rem;
+  border: 1px solid var(--color-line);
+  background: var(--color-orbit);
+  box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 44%);
+}
+.mobile-nav ul {
+  display: grid;
+  gap: 0.8rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+.mobile-nav a {
+  color: var(--color-starlight);
+  text-decoration: none;
+}
+
+/*
+ * The Menu stands in for the desktop nav up to 72rem: 1152 px, since media
+ * queries count rem at 16 px, not the 112.5% root. On the lockup pages the
+ * desktop nav left the lockup 156 px wide at 1025 px (FOUNDATION 4.6 px, and
+ * smaller than the compact logo); at 1153 px it is 264 px. The Atlas follows
+ * the same line: beside its status chip, the SVG wordmark (31 px wider than
+ * the old text one) wrapped "Working groups" and "Technical docs" onto two
+ * lines up to 1058 px.
+ */
+@media (max-width: 72rem) {
   .desktop-nav {
     display: none;
   }
   .mobile-nav {
     display: block;
-    position: relative;
-  }
-  .mobile-nav summary {
-    cursor: pointer;
-    color: var(--color-starlight);
-    font-weight: 650;
-    list-style: none;
-  }
-  .mobile-nav summary::-webkit-details-marker {
-    display: none;
-  }
-  .mobile-nav summary::after {
-    content: '+';
-    margin-left: 0.5rem;
-    color: var(--color-ion);
-  }
-  .mobile-nav[open] summary::after {
-    content: '−';
-  }
-  .mobile-nav nav {
-    position: absolute;
-    top: 2.7rem;
-    right: 0;
-    width: min(19rem, calc(100vw - 2 * var(--space-page)));
-    padding: 1.2rem;
-    border: 1px solid var(--color-line);
-    background: var(--color-orbit);
-    box-shadow: 0 1.4rem 4rem rgb(0 0 0 / 44%);
-  }
-  .mobile-nav ul {
-    display: grid;
-    gap: 0.8rem;
-    margin: 0 0 1rem;
-    padding: 0;
-    list-style: none;
-  }
-  .mobile-nav a {
-    color: var(--color-starlight);
-    text-decoration: none;
   }
 }
 
 @media (max-width: 46rem) {
-  .launch-atlas-cta {
-    padding-inline: 0.7rem;
+  :root {
+    --site-header-height: 4.75rem;
   }
 
-  .launch-atlas-cta > span {
+  /* About the old 1.28rem text wordmark's width, so the phone header fits at 360 px. */
+  .wordmark {
+    --wordmark-height: 1.3rem;
+  }
+
+  /* The lockup takes the row's width left beside genomeOS Atlas and Menu
+   * (~132 px) after a 1rem gap, up to 14rem. Flex shrinking still covers a
+   * wider Menu label or a classic scrollbar inside 100vw. */
+  .site-header--lockup .site-header__inner {
+    gap: 1rem;
+  }
+
+  .site-header--lockup {
+    --lockup-landing-width: min(14rem, 100vw - 2 * var(--space-page) - 8.4rem);
+    --lockup-compact-width: calc(0.9 * var(--lockup-landing-width));
+  }
+
+  .launch-atlas-cta {
+    padding: 0.55rem;
+  }
+
+  .launch-atlas-cta__lights {
+    inset: -0.72rem;
+  }
+
+  .launch-atlas-cta__arrow {
+    display: none;
+  }
+
+  .launch-atlas-cta__label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -381,7 +803,7 @@ svg {
   }
 
   .hero {
-    min-height: min(43rem, calc(100svh - 4.75rem));
+    min-height: min(43rem, calc(100svh - var(--site-header-height)));
   }
   .hero__image {
     background-position: 69% center;
@@ -410,6 +832,50 @@ svg {
   }
 }
 
+/* Landscape phones (iPhone 13 at 750x342, Pixel 7 at 863x360) are wide enough
+ * for the desktop row but too short for its 5.5rem bar: 27-29% of the screen.
+ * They get the phone bar's height, and a 3.2rem lockup (FOUNDATION ~7.9 px)
+ * keeps the landing bar's margins; the row is otherwise the desktop one. */
+@media (max-height: 30rem) {
+  :root {
+    --site-header-height: 4.75rem;
+  }
+}
+
+@media (max-height: 30rem) and (min-width: 46.01rem) {
+  .site-header--lockup {
+    --lockup-landing-width: calc(3.2rem * 1395 / 300);
+  }
+}
+
+/* The Menu's copy of genomeOS Atlas, for the query below. */
+.mobile-nav__launch {
+  display: none;
+}
+
+/*
+ * A row too narrow for the lockup beside both genomeOS Atlas and Menu: page
+ * zoom (a 390 px phone at 200% is 195 CSS px) or text zoom (a 32 px default
+ * font moves this query to 586 px). Below 18.3rem the formula above would
+ * leave the lockup under 5.5rem wide (16.3 root rem of row, at 1.125 media
+ * rem each), shrinking to nothing as the row narrows, and the home link to a
+ * bare focus ring. So genomeOS Atlas moves into the Menu and the lockup takes
+ * its room: the row keeps only Menu (~3.9rem) and one gap beside it.
+ */
+@media (max-width: 18.3rem) {
+  .site-header--lockup .launch-atlas {
+    display: none;
+  }
+
+  .site-header--lockup {
+    --lockup-landing-width: min(14rem, 100vw - 2 * var(--space-page) - 5rem);
+  }
+
+  .mobile-nav__launch {
+    display: list-item;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
@@ -419,12 +885,52 @@ svg {
   }
   .site-header,
   .site-header__inner,
-  .wordmark,
-  .launch-atlas-cta {
+  .wordmark__logo,
+  .launch-atlas-cta,
+  .site-header--lockup .site-header__inner,
+  .site-header--lockup .wordmark__logo {
     transition: none;
   }
-  .launch-atlas-cta:hover .launch-atlas-cta__rocket,
-  .launch-atlas-cta:focus-visible .launch-atlas-cta__rocket {
+  /* As specific as each curtain's own animation rule, so this one wins. */
+  .launch-atlas-cta__lights i:nth-child(n) {
     animation: none;
+  }
+  .launch-atlas-cta__lights,
+  .launch-atlas-cta__arrow {
+    transition: none;
+  }
+  /* The caption appears in place, after the same pause, without sliding. */
+  .launch-atlas-cta__caption,
+  .launch-atlas-cta:hover + .launch-atlas-cta__caption,
+  .launch-atlas-cta:focus-visible + .launch-atlas-cta__caption {
+    transform: translateX(-50%);
+    transition-duration: 0s;
+  }
+}
+
+/* The logo is the dark-theme artwork (light glyphs on transparency), so it
+ * keeps its dark ground when a forced palette repaints the header. */
+@media (forced-colors: active) {
+  .wordmark__logo,
+  .site-footer__logo {
+    forced-color-adjust: none;
+    background: var(--color-void);
+  }
+  /* The aurora is decoration; a plain system-coloured border marks the button. */
+  .launch-atlas-cta {
+    border: 1px solid LinkText;
+  }
+  .launch-atlas-cta__lights {
+    display: none;
+  }
+}
+
+/* A fixed header would repeat on every printed page; print it once, in flow. */
+@media print {
+  .site-header--lockup {
+    position: static;
+  }
+  .site-header-spacer {
+    display: none;
   }
 }
