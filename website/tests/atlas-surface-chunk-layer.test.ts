@@ -293,6 +293,47 @@ describe('surface chunk group', () => {
     expect(fadeTogether(null, null)).toBeNull();
   });
 
+  it('gives both members of a unit the same opacity on every animated frame', async () => {
+    const fake = (opacity: number) => ({
+      collection: { show: true },
+      isReady: () => true,
+      opacity,
+      readyCount: () => 1,
+      setOpacity(value: number) {
+        this.opacity = value;
+      },
+      totalCount: () => 1,
+    });
+    const [surfaceIn, pointsIn, surfaceOut, pointsOut] = [0, 0, 1, 1].map(fake);
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      frames.push(callback),
+    );
+    const viewer = {
+      scene: { postRender: {}, primitives: {}, requestRender: vi.fn() },
+    };
+    const done = animateSwap(
+      viewer as never,
+      fadeTogether(surfaceIn, pointsIn)!,
+      fadeTogether(surfaceOut, pointsOut),
+      false,
+      true,
+    );
+    frames.shift()!(performance.now() + 150);
+    const progress = surfaceIn.opacity;
+    expect(progress).toBeGreaterThan(0);
+    expect(progress).toBeLessThan(1);
+    expect(pointsIn.opacity).toBe(progress);
+    expect([surfaceOut.opacity, pointsOut.opacity]).toEqual([
+      1 - progress,
+      1 - progress,
+    ]);
+    while (frames.length > 0) frames.shift()!(performance.now() + 1_000);
+    await done;
+    expect([surfaceIn.opacity, pointsIn.opacity]).toEqual([1, 1]);
+    expect([surfaceOut.opacity, pointsOut.opacity]).toEqual([0, 0]);
+  });
+
   it('removes every member of an outgoing unit when the swap does not retain it', async () => {
     const [incoming, surfaceOut, pointsOut] = [0, 1, 1].map(fakeGroup);
     const remove = vi.fn(() => true);

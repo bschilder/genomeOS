@@ -31,10 +31,51 @@ import type {
   BuildChunksBody,
   ChunkMessage,
 } from '../src/atlas/worker/protocol';
+import type { ObservationPrimitiveGroup } from '../src/atlas/scene/observation-layer';
+import type { SurfaceChunkGroup } from '../src/atlas/scene/surface-chunk-layer';
 import { chunkMessage } from './helpers/chunk-buffers';
 import { stubCesiumBrowserImageTypes } from './helpers/cesium-stubs';
 import { columnarSurface } from './helpers/columnar-surface';
 import { FakeEvent, flushTasks } from './helpers/scene-fakes';
+
+// Every group the layers build, so a test can read the opacity the swap gives each one. The
+// wrappers pass straight through to the real factories.
+const built = vi.hoisted(() => ({
+  observations: [] as ObservationPrimitiveGroup[],
+  surfaces: [] as SurfaceChunkGroup[],
+}));
+vi.mock('../src/atlas/scene/observation-layer', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../src/atlas/scene/observation-layer')
+    >();
+  return {
+    ...actual,
+    buildObservationLayer: (
+      ...args: Parameters<typeof actual.buildObservationLayer>
+    ) => {
+      const group = actual.buildObservationLayer(...args);
+      built.observations.push(group);
+      return group;
+    },
+  };
+});
+vi.mock('../src/atlas/scene/surface-chunk-layer', async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import('../src/atlas/scene/surface-chunk-layer')
+    >();
+  return {
+    ...actual,
+    createSurfaceChunkGroup: (
+      ...args: Parameters<typeof actual.createSurfaceChunkGroup>
+    ) => {
+      const group = actual.createSurfaceChunkGroup(...args);
+      built.surfaces.push(group);
+      return group;
+    },
+  };
+});
 
 const CELL = '83754efffffffff';
 const [LAT, LON] = cellToLatLng(CELL);
@@ -243,7 +284,11 @@ function harness(overrides: Partial<ScientificStyle> = {}) {
   };
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  built.observations.length = 0;
+  built.surfaces.length = 0;
+});
 
 describe('cold progressive reveal', () => {
   it('shows observations first, then chunks with their masks, and commits once complete', async () => {
@@ -638,6 +683,48 @@ describe('atomic replacement', () => {
     await h.pump(1);
     expect(h.commits.at(-1)).toBe(keyOf('kir-3ds1'));
     expect(readyCount()).toBe(2);
+  });
+
+  it('fades the incoming surface and observations together against the outgoing pair (animated swap)', async () => {
+    // Spec §B.6.8: every replacement is one atomic swap. With motion on, each frame of the
+    // 300 ms fade gives the incoming surface and its observations the same opacity p and the
+    // outgoing pair 1 - p; reduced motion would hide a non-atomic swap (both jump to 1 at once).
+    const h = harness({ reducedMotion: false });
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
+      animationFrames.push(callback),
+    );
+    await h.show('hbs-rs334');
+    expect(built.surfaces).toHaveLength(1);
+    expect(built.observations).toHaveLength(1);
+    const [surfaceOut] = built.surfaces;
+    const [pointsOut] = built.observations;
+
+    const swap = h.layers.setArtifact(h.load('g6pd-deficiency'));
+    for (let index = 0; index < 4 && animationFrames.length === 0; index += 1)
+      await h.pump();
+    expect(animationFrames).not.toHaveLength(0);
+    const surfaceIn = built.surfaces.at(-1)!;
+    const pointsIn = built.observations.at(-1)!;
+    expect([surfaceIn, pointsIn]).not.toContain(surfaceOut);
+    expect(pointsIn).not.toBe(pointsOut);
+    // Built hidden: nothing of the replacement shows before the fade starts.
+    expect([surfaceIn.opacity(), pointsIn.opacity()]).toEqual([0, 0]);
+
+    animationFrames.shift()!(performance.now() + 150);
+    const progress = surfaceIn.opacity();
+    expect(progress).toBeGreaterThan(0);
+    expect(progress).toBeLessThan(1);
+    expect(pointsIn.opacity()).toBe(progress);
+    expect(surfaceOut.opacity()).toBeCloseTo(1 - progress, 12);
+    expect(pointsOut.opacity()).toBeCloseTo(1 - progress, 12);
+
+    while (animationFrames.length > 0)
+      animationFrames.shift()!(performance.now() + 1_000);
+    await swap;
+    expect([surfaceIn.opacity(), pointsIn.opacity()]).toEqual([1, 1]);
+    expect([surfaceOut.opacity(), pointsOut.opacity()]).toEqual([0, 0]);
+    expect(h.commits.at(-1)).toBe(keyOf('g6pd-deficiency'));
   });
 
   it('recolours a palette change in the worker and reuses cached groups', async () => {
