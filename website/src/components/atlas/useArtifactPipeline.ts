@@ -169,6 +169,16 @@ export function useArtifactPipeline(
           return;
         setFailures((current) => ({ ...current, [key]: failure }));
         if (failure !== 'invalid') return;
+        // Task 66 ruling: remove and announce only the artifact picks resolve to that is also the
+        // one requested. During an A→B switch A stays displayed until B's commit; acting on A's
+        // late failure then would put A's error over B and take over B's activity, so
+        // data-atlas-ready would stay "false" on a healthy B. A recorded failure is cleared when
+        // the artifact is shown again (its surface-visible starts a fresh loadDetail).
+        if (
+          targetRef.current?.artifactKey !== key ||
+          latestRequest.current?.entry.artifactKey !== key
+        )
+          return;
         const {
           activity,
           controller: scene,

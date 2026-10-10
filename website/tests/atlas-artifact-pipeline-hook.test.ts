@@ -444,4 +444,56 @@ describe('artifact pipeline detail tier', () => {
     expect(setError).not.toHaveBeenCalled();
     expect(activity.fail).not.toHaveBeenCalled();
   });
+
+  it('does not stall the incoming artifact when the still-displayed one has a corrupt detail tier', async () => {
+    // Task 66 ruling (progress.md:1030): during an A→B switch A stays displayed until B's commit,
+    // so A's late detail failure must neither remove anything nor take over B's activity, or
+    // data-atlas-ready stays "false" on a healthy B under A's error (final review correctness-2).
+    const { activity, onArtifactChange, provider, render, setError } =
+      mountPipeline();
+    // useAtlasActivity's rule: only the latest begin() may finish.
+    let latest = 0;
+    let status = 'loading';
+    activity.begin.mockImplementation(() => {
+      latest += 1;
+      status = 'loading';
+      return latest;
+    });
+    activity.finish.mockImplementation((id: number) => {
+      if (id === latest) status = 'ready';
+    });
+    const scene = fakeScene();
+    render('a', scene);
+    await settle();
+    scene.results[0].resolve();
+    await settle();
+    scene.commit(keys.a);
+    scene.mark('surface-visible');
+    expect(status).toBe('ready');
+    expect(provider.details[0].id).toBe('a');
+
+    // The user picks B; B's handoff reaches the scene and is still building.
+    render('b', scene);
+    await settle();
+    expect(scene.loads.at(-1)?.artifactKey).toBe(keys.b);
+    setError.mockClear();
+    onArtifactChange.mockClear();
+
+    // A's detail tier (still displayed, its request not yet aborted) turns out corrupt.
+    provider.details[0].request.reject(
+      new AtlasWorkerError('checksum', 'detail tier checksum mismatch', null),
+    );
+    await settle();
+    expect(scene.removeSurface).not.toHaveBeenCalled();
+    expect(onArtifactChange).not.toHaveBeenCalled();
+    expect(setError).not.toHaveBeenCalled();
+    expect(activity.fail).not.toHaveBeenCalled();
+
+    // B finishes and commits normally, and the map is marked ready.
+    scene.results[1].resolve();
+    await settle();
+    scene.commit(keys.b);
+    render('b', scene);
+    expect(status).toBe('ready');
+  });
 });
