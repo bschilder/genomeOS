@@ -28,7 +28,14 @@ describe('Atlas e2e build wiring', () => {
     for (const [name, script] of Object.entries(npm))
       if (name !== 'build:e2e')
         expect(script, name).not.toContain('PUBLIC_ATLAS_REQUEST_STALL_MS');
-    expect(npm['test:e2e']).toBe('npm run build:e2e && playwright test');
+    // #422: only the browser tests build with a (placeholder) Measurement ID; the fixture stubs
+    // gtag.js, and the capture scripts reuse build:e2e without analytics.
+    expect(npm['test:e2e']).toBe(
+      'PUBLIC_GA_MEASUREMENT_ID=G-TEST123 npm run build:e2e && playwright test',
+    );
+    for (const [name, script] of Object.entries(npm))
+      if (name !== 'test:e2e')
+        expect(script, name).not.toContain('PUBLIC_GA_MEASUREMENT_ID');
     expect(npm['capture:atlas']).toBe(
       'npm run build:e2e && node scripts/capture-atlas.mjs',
     );
@@ -54,6 +61,16 @@ describe('Atlas e2e build wiring', () => {
       "ATLAS_CATALOG_PATH: 'public/data/atlas/catalog.json'",
     );
     expect(setup).toContain("PUBLIC_ATLAS_REQUEST_STALL_MS: ''");
+    expect(setup).toContain("PUBLIC_GA_MEASUREMENT_ID: ''");
+  });
+
+  it('keeps analytics out of the /genomeOS/ fallback build', () => {
+    expect(
+      readFileSync(
+        path.join(websiteRoot, 'scripts/build-fallback.mjs'),
+        'utf8',
+      ),
+    ).toContain("PUBLIC_GA_MEASUREMENT_ID: ''");
   });
 
   it('collects only *.test.ts files so Playwright specs never run under vitest', () => {

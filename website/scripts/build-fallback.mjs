@@ -9,6 +9,8 @@ execFileSync(npm, ['run', 'build'], {
     BASE_PATH: '/genomeOS',
     OUT_DIR: 'dist-fallback',
     ASTRO_TELEMETRY_DISABLED: '1',
+    // #422: the /genomeOS/ fallback never reports to Google Analytics.
+    PUBLIC_GA_MEASUREMENT_ID: '',
   },
   stdio: 'inherit',
 });

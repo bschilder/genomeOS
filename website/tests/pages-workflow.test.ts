@@ -60,6 +60,22 @@ describe('Pages workflow browser shards', () => {
     expect(job('build')).toContain('needs: [validate, e2e]');
   });
 
+  it('passes the GA Measurement ID to the production build step only (#422)', () => {
+    const variable = 'PUBLIC_GA_MEASUREMENT_ID: ${{ vars.GA_MEASUREMENT_ID }}';
+    expect(pagesWorkflow.split('PUBLIC_GA_MEASUREMENT_ID')).toHaveLength(2);
+    expect(pagesWorkflow.split('GA_MEASUREMENT_ID')).toHaveLength(3);
+    const build = job('build');
+    const step = build.slice(
+      build.indexOf('      - name: Build production site\n'),
+      build.indexOf('      - name: Refuse broken production links\n'),
+    );
+    expect(step).toContain('run: npm run build\n');
+    expect(step).toContain(variable);
+    for (const name of ['validate', 'e2e', 'deploy'])
+      expect(job(name), name).not.toContain('GA_MEASUREMENT_ID');
+    expect(pagesWorkflow).not.toMatch(/goatcounter/i);
+  });
+
   it('serves both Playwright suites through serve:test on PLAYWRIGHT_PORT', () => {
     const scripts = (
       JSON.parse(read('website/package.json')) as {

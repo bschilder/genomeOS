@@ -1,4 +1,6 @@
 ---
+import Analytics from '../../components/Analytics.astro';
+
 const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
 ---
 
@@ -9,6 +11,7 @@ const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex" />
     <title>Selected cell boundary | genomeOS</title>
+    <Analytics />
     <style>
       :root {
         color-scheme: dark;

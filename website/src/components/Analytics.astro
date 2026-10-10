@@ -1,0 +1,20 @@
+---
+/**
+ * Google Analytics head tags for a site-layout page or /app/polygon/ (#422): the consent-default
+ * bootstrap, then gtag.js. Renders nothing unless the build sets PUBLIC_GA_MEASUREMENT_ID;
+ * Starlight docs pages get the same tags from astro.config.mjs.
+ */
+import { gaHead } from '../lib/ga.mjs';
+
+const tags = gaHead();
+---
+
+{
+  tags.map(({ attrs, content }) =>
+    content === undefined ? (
+      <script is:inline {...attrs} />
+    ) : (
+      <script is:inline set:html={content} />
+    ),
+  )
+}

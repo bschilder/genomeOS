@@ -17,6 +17,11 @@ import type { Page, Route } from '@playwright/test';
 
 export type ArtifactTier = 'grid' | 'render' | 'detail' | 'observations';
 
+/** gtag.js requests, which the fixture answers with `GTAG_STUB_SCRIPT` (#422). */
+export const GTAG_SCRIPT_PATTERN = 'https://www.googletagmanager.com/**';
+/** The stub gtag.js: it marks that it loaded and leaves the queue to the page. */
+export const GTAG_STUB_SCRIPT = 'window.__gtagStubLoaded = true;';
+
 /** The catalog fields browser tests read (a structural subset of `atlasCatalogSchema`). */
 export interface FixtureCatalog {
   grids: Record<string, { url: string }>;
@@ -191,6 +196,15 @@ export async function installAtlasBrowserFixture(
     [...objects.keys()].find((key) => urlMatchesKey(url, key));
   await page.route('https://tile.openstreetmap.org/**', (route) =>
     route.abort(),
+  );
+  // #422: `npm run test:e2e` builds with a placeholder Measurement ID. gtag.js is an empty stub,
+  // so the page's own gtag queue (window.dataLayer) records every call and nothing reaches Google.
+  await page.route(GTAG_SCRIPT_PATTERN, (route) =>
+    route.fulfill({
+      body: GTAG_STUB_SCRIPT,
+      contentType: 'text/javascript',
+      status: 200,
+    }),
   );
   await page.route(
     (url) => keyFor(url) !== undefined,
