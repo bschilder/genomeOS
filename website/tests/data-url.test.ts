@@ -80,9 +80,9 @@ describe('resolveDataUrl', () => {
       resolveDataUrl(
         GRID_KEY,
         '/genomeOS/data/atlas/',
-        'https://bschilder.github.io/genomeOS/app/',
+        'https://genomeos.github.io/genomeOS/app/',
       ),
-    ).toBe(`https://bschilder.github.io/genomeOS/data/atlas/${GRID_KEY}`);
+    ).toBe(`https://genomeos.github.io/genomeOS/data/atlas/${GRID_KEY}`);
   });
 
   it('ignores the document origin for an absolute base', () => {
