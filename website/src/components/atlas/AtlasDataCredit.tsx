@@ -1,8 +1,11 @@
 /**
  * The data provenance credit (Atlas design §11). On phones it shortens to
  * "Data: genomeOS" and docks under the Cesium credits as one wrapping credit
- * block above the active sheet (mobile sheets design 2026-10-07 §A.1.7).
+ * block above the active sheet (mobile sheets design 2026-10-07 §A.1.7), and
+ * ends with the cookie settings icon in a build that loads analytics (#422).
  */
+
+import { AtlasCookieSettings } from './AtlasCookieSettings';
 
 export function AtlasDataCredit() {
   return (
@@ -19,6 +22,7 @@ export function AtlasDataCredit() {
         <span className="brand-name">genomeOS</span>
         <span className="atlas-data-credit__long"> public dataset</span>
       </a>
+      <AtlasCookieSettings placement="credit" />
     </p>
   );
 }

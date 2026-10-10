@@ -1,4 +1,6 @@
 ---
+import Analytics from '../../components/Analytics.astro';
+import CookieControl from '../../components/CookieControl.astro';
 import { FAVICON_SVG, rasterIconLinks } from '../../lib/favicons';
 import { sitePath } from '../../lib/paths';
 
@@ -14,6 +16,7 @@ const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
     <title>Selected cell boundary | genomeOS</title>
     <link rel="icon" type="image/svg+xml" href={sitePath(FAVICON_SVG)} />
     {rasterIconLinks().map((link) => <link {...link} />)}
+    <Analytics />
     <style>
       :root {
         color-scheme: dark;
@@ -187,5 +190,6 @@ const googleMapsApiKey = process.env.GOOGLE_MAPS_TOKEN ?? '';
 
       void renderPolygon();
     </script>
+    <CookieControl corner="map" />
   </body>
 </html>

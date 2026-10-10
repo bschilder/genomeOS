@@ -1,4 +1,6 @@
 ---
+import Analytics from '../components/Analytics.astro';
+import CookieControl from '../components/CookieControl.astro';
 import SiteFooter from '../components/SiteFooter.astro';
 import SiteHeader from '../components/SiteHeader.astro';
 import MotionController from '../components/MotionController.astro';
@@ -59,6 +61,7 @@ const socialImage = new URL(
     <meta name="twitter:image" content={socialImage} />
     <meta name="twitter:image:alt" content={imageAlt} />
     <slot name="head" />
+    <Analytics />
   </head>
   <body>
     <a class="skip-link" href="#main-content">Skip to main content</a>
@@ -68,5 +71,6 @@ const socialImage = new URL(
     </main>
     <SiteFooter />
     <MotionController />
+    <CookieControl />
   </body>
 </html>

@@ -654,6 +654,34 @@ svg {
   font-size: 1rem;
 }
 
+.site-footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+}
+
+.site-footer__links a,
+.site-footer__button {
+  min-height: 24px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  background: none;
+  color: var(--color-muted);
+  font: inherit;
+  font-size: 1rem;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  cursor: pointer;
+}
+
+.site-footer__links a:hover,
+.site-footer__button:hover {
+  color: var(--color-starlight);
+}
+
 .visually-hidden {
   position: absolute;
   width: 1px;

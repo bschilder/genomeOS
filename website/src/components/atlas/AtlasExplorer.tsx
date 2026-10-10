@@ -43,6 +43,7 @@ import {
   type StateCorrection,
 } from '../../atlas/url-state';
 import { defaultPalette, type Metric } from '../../atlas/visual-encoding';
+import { AtlasCookieSettings } from './AtlasCookieSettings';
 import { AtlasDataCredit } from './AtlasDataCredit';
 import { AtlasLegend } from './AtlasLegend';
 import { AtlasStatus } from './AtlasStatus';
@@ -53,6 +54,7 @@ import { InspectorPanel, type InspectorSelection } from './InspectorPanel';
 import { PanelSheet } from './PanelSheet';
 import { useArtifactPipeline } from './useArtifactPipeline';
 import { nextPaint, useAtlasActivity } from './useAtlasActivity';
+import { useAtlasAnalytics } from './useAtlasAnalytics';
 import { EscapeStackProvider } from './useEscapeStack';
 import { ExplorerPanelsProvider } from './useExplorerPanels';
 import { useObservationPlaces } from './useObservationPlaces';
@@ -206,6 +208,13 @@ export default function AtlasExplorer({
       return null;
     return nearestPlaceContext(candidate.value, placeCatalog);
   };
+  // #422: the inspector counts as open exactly when the PanelSheet below renders it.
+  useAtlasAnalytics({
+    catalog,
+    entityId: state?.entityId,
+    inspector: inspectorArtifact && selection ? selection.kind : undefined,
+    view: state?.view,
+  });
   useEffect(() => atlasWorker().onCrash(() => setWorkerCrashed(true)), []);
 
   useEffect(() => {
@@ -751,6 +760,7 @@ export default function AtlasExplorer({
             )}
           </PanelSheet>
           <AtlasDataCredit />
+          <AtlasCookieSettings placement="corner" />
         </div>
       </ExplorerPanelsProvider>
     </EscapeStackProvider>
