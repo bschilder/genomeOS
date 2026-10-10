@@ -20,6 +20,14 @@ html {
   color: var(--color-starlight);
   font-family: var(--font-body);
   scroll-behavior: smooth;
+  /*
+   * A linked section or a focused control stops this far below the top, clear
+   * of the fixed header (.site-header--lockup). Its landing height, not the
+   * compact one, because a target near the top of the page (the skip link's
+   * #main-content) leaves the bar at landing size; the extra 1rem keeps the
+   * target off the bar's edge.
+   */
+  scroll-padding-top: calc(var(--site-header-height) + 1px + 1rem);
 }
 
 body {

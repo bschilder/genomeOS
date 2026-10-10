@@ -597,6 +597,86 @@ for (const route of ['/', '/project/', '/contribute/']) {
   });
 }
 
+/** The target's top and the fixed header's bottom, in viewport pixels. */
+const clearanceBelowHeader = (target: Locator) =>
+  target.evaluate((element) => ({
+    headerBottom: document
+      .querySelector('[data-site-header]')!
+      .getBoundingClientRect().bottom,
+    top: element.getBoundingClientRect().top,
+  }));
+
+test('linked sections land below the fixed header, not under it', async ({
+  page,
+}) => {
+  // Shared links to section headings, opened fresh, at the reported sizes:
+  // without scroll padding each heading ended at the viewport top, 71 px of
+  // it under the compact bar.
+  for (const [route, id, width, height] of [
+    ['/project/', 'safeguards-title', 1440, 900],
+    ['/', 'metrics-title', 390, 844],
+    ['/project/', 'pipeline-title', 844, 390],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto(`${route}#${id}`);
+    await expect(page.locator('[data-site-header]')).toHaveClass(
+      /site-header--compact/,
+    );
+    // The bar's 200 ms resize and any reveal under the target settle first.
+    await page.waitForTimeout(1_000);
+    const { headerBottom, top } = await clearanceBelowHeader(
+      page.locator(`#${id}`),
+    );
+    expect(top, `${route}#${id} at ${width}x${height}`).toBeGreaterThanOrEqual(
+      headerBottom - 0.5,
+    );
+  }
+
+  // The skip link's target starts right below the landing bar's spacer, so
+  // following it leaves the page at the top with nothing under the bar.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto('/contribute/');
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.skip-link')).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page).toHaveURL(/#main-content$/);
+  await page.waitForTimeout(1_000);
+  const main = await clearanceBelowHeader(page.locator('#main-content'));
+  expect(main.top).toBeGreaterThanOrEqual(main.headerBottom - 0.5);
+});
+
+test('keyboard focus moving back up the page stays clear of the fixed header', async ({
+  page,
+}) => {
+  // Instant scrolling and an instant header, so each focus step settles at once.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize({ width: 844, height: 390 });
+  for (const route of ['/404.html', '/contribute/']) {
+    await page.goto(route);
+    await page.locator('.site-footer a').last().focus();
+    const hidden: string[] = [];
+    // Shift+Tab back through main until focus reaches the header.
+    for (let step = 0; step < 40; step += 1) {
+      await page.keyboard.press('Shift+Tab');
+      const focused = await page.evaluate(() => {
+        const element = document.activeElement!;
+        const header = document.querySelector('[data-site-header]')!;
+        return {
+          headerBottom: header.getBoundingClientRect().bottom,
+          inHeader: header.contains(element),
+          inMain: element.closest('main') !== null,
+          label: (element.textContent ?? '').trim().slice(0, 40),
+          top: element.getBoundingClientRect().top,
+        };
+      });
+      if (focused.inHeader) break;
+      if (focused.inMain && focused.top < focused.headerBottom - 0.5)
+        hidden.push(`${focused.label} (top ${Math.round(focused.top)})`);
+    }
+    expect(hidden, route).toEqual([]);
+  }
+});
+
 test(
   'the header shrinks the lockup instead of wrapping the nav at narrow desktop widths',
   { tag: '@desktop-chromium' },
