@@ -451,26 +451,20 @@ svg {
   text-decoration: none;
 }
 
-@media (max-width: 64rem) {
+/*
+ * The Menu stands in for the desktop nav up to 72rem: 1152 px, since media
+ * queries count rem at 16 px, not the 112.5% root. On the lockup pages the
+ * desktop nav left the lockup 156 px wide at 1025 px (FOUNDATION 4.6 px, and
+ * smaller than the compact logo); at 1153 px it is 264 px. The Atlas follows
+ * the same line: beside its status chip, the SVG wordmark (31 px wider than
+ * the old text one) wrapped "Working groups" and "Technical docs" onto two
+ * lines up to 1058 px.
+ */
+@media (max-width: 72rem) {
   .desktop-nav {
     display: none;
   }
   .mobile-nav {
-    display: block;
-  }
-}
-
-/*
- * The lockup pages keep the Menu up to 72rem: 1152 px, since media queries
- * count rem at 16 px, not the 112.5% root (so 64rem is 1024 px). With the
- * desktop nav, the row left the lockup 156 px wide at 1025 px (FOUNDATION
- * 4.6 px, and smaller than the compact logo); at 1153 px it is 264 px.
- */
-@media (max-width: 72rem) {
-  .site-header--lockup .desktop-nav {
-    display: none;
-  }
-  .site-header--lockup .mobile-nav {
     display: block;
   }
 }

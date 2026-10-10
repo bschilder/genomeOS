@@ -683,9 +683,8 @@ test(
   async ({ page }) => {
     // Media queries count rem at 16 px, not the 112.5% root. 737 px: the first
     // width above the phone layout (46rem). 1025 px: the first above 64rem,
-    // where the Atlas header gains the desktop nav. 1152 px: the lockup pages'
-    // last Menu width (72rem). 1153 px: their first desktop-nav width, the
-    // tightest row.
+    // where the desktop nav used to start. 1152 px: the last Menu width
+    // (72rem). 1153 px: the first desktop-nav width, the tightest row.
     const desktopNavFrom = 1153;
     for (const width of [737, 1025, 1152, 1153]) {
       await page.setViewportSize({ width, height: 800 });
@@ -727,6 +726,43 @@ test(
         expect(compact.height, `${width}`).toBeCloseTo(46.8, 0);
       }).toPass({ timeout: 5_000 });
       expect(landing.height, `${width}`).toBeGreaterThan(46.8 * 1.1);
+    }
+  },
+);
+
+test(
+  'the Atlas header shows the Menu up to 72rem too, so its nav labels never wrap',
+  { tag: '@desktop-chromium' },
+  async ({ page }) => {
+    // With the desktop nav from 1025 px, the wider Atlas SVG wordmark wrapped
+    // "Working groups" and "Technical docs" onto two lines up to 1058 px.
+    await page.setViewportSize({ width: 1025, height: 800 });
+    await page.goto('/app/');
+    await expect(page.locator('[data-atlas-ready="true"]')).toBeVisible({
+      timeout: 45_000,
+    });
+    const desktopNavFrom = 1153;
+    for (const width of [1025, 1058, 1152, 1153, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      const row = await page.evaluate(() => {
+        const inner = document.querySelector('.site-header__inner')!;
+        const shown = (selector: string) =>
+          document.querySelector(selector)!.getClientRects().length > 0;
+        return {
+          clientWidth: inner.clientWidth,
+          desktopNav: shown('.site-header__inner > nav.desktop-nav'),
+          linkHeights: [...document.querySelectorAll('nav.desktop-nav a')]
+            .filter((link) => link.getClientRects().length > 0)
+            .map((link) => link.getBoundingClientRect().height),
+          menu: shown('.mobile-nav summary'),
+          scrollWidth: inner.scrollWidth,
+        };
+      });
+      expect(row.desktopNav, `${width}`).toBe(width >= desktopNavFrom);
+      expect(row.menu, `${width}`).toBe(width < desktopNavFrom);
+      expect(row.scrollWidth, `${width}`).toBeLessThanOrEqual(row.clientWidth);
+      for (const height of row.linkHeights)
+        expect(height, `${width}`).toBeLessThan(36);
     }
   },
 );
